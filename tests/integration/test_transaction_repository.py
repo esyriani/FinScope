@@ -2,13 +2,14 @@
 
 import json
 import pytest
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,
     get_transaction_tag_names,
+    set_transaction_tags,
 )
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_description
 from finance_app.modules.transactions.repository import (
@@ -101,6 +102,52 @@ def test_assign_manual_category_updates_transaction_tags_and_optional_rule(db_co
         "source": "manual",
     }
     assert get_rule_tags_by_rule_id(db_conn, [result.saved_rule_id])[result.saved_rule_id] == ["Tax"]
+
+
+def test_assign_manual_category_saves_rule_and_approves_unchanged_transaction(db_conn, repository_transaction):
+    """Verify saving a rule approves the current transaction even when category data is unchanged."""
+    transaction_id, merchant_id = repository_transaction
+    db_conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id == transaction_id)
+        .values(
+            category="Food",
+            category_id=resolve_category_id(db_conn, "Food"),
+            category_source="rule",
+            needs_review=0,
+            reviewed_at=None,
+        )
+    )
+    set_transaction_tags(db_conn, transaction_id, ["Tax"], source="rule")
+
+    result = assign_manual_category(
+        db_conn,
+        transaction_id,
+        "Food",
+        tag_names=["Tax"],
+        rule_keyword="STORE",
+        amount_min=10,
+        amount_max=20,
+        rule_merchant_id=merchant_id,
+    )
+
+    tx = db_conn.execute(
+        select(
+            transactions_table.c.category,
+            transactions_table.c.category_source,
+            transactions_table.c.needs_review,
+            transactions_table.c.reviewed_at,
+        ).where(transactions_table.c.id == transaction_id)
+    ).mappings().fetchone()
+
+    assert result.updated is True
+    assert result.transaction_changed is False
+    assert result.saved_rule_id is not None
+    assert tx["category"] == "Food"
+    assert tx["category_source"] == "rule"
+    assert tx["needs_review"] == 0
+    assert tx["reviewed_at"] is not None
+    assert get_transaction_tag_names(db_conn, transaction_id) == ["Tax"]
 
 
 def test_mark_transaction_verified_updates_review_status(db_conn, repository_transaction):

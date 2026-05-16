@@ -59,9 +59,14 @@
                             </thead>
                             <tbody>
                                 {% for category in categories %}
-                                <tr data-row-edit-target="#edit-category-{{ category.id }}">
+                                <tr data-row-edit-target="{% if category.is_builtin %}#view-category-{{ category.id }}{% else %}#edit-category-{{ category.id }}{% endif %}">
                                     <td>
-                                        <div class="fw-semibold">{{ category.name }}</div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="fw-semibold">{{ category.name }}</div>
+                                            {% if category.is_builtin %}
+                                                <span class="badge text-bg-secondary">{{ _("Built-in") }}</span>
+                                            {% endif %}
+                                        </div>
                                         {% if category.description %}
                                             <div class="text-muted small">{{ category.description }}</div>
                                         {% endif %}
@@ -70,40 +75,54 @@
                                     <td class="text-muted small" data-sort-value="{{ category.rule_count }}">{{ category.rule_count }}</td>
                                     <td class="text-end">
                                         <div class="action-cluster justify-content-end" data-row-action>
-                                            <button
-                                                class="btn btn-sm btn-outline-primary btn-icon-only"
-                                                type="button"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#edit-category-{{ category.id }}"
-                                                aria-label="{{ _('Edit category {name}', name=category.name) }}"
-                                                title="{{ _('Edit') }}"
-                                                data-bs-tooltip
-                                            >
-                                                <i class="bi bi-pencil-square" aria-hidden="true"></i>
-                                            </button>
-                                            {% if category.transaction_count == 0 and category.rule_count == 0 %}
-                                                <button
-                                                    class="btn btn-sm btn-outline-danger btn-icon-only"
-                                                    type="button"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#delete-category-{{ category.id }}"
-                                                    aria-label="{{ _('Delete category {name}', name=category.name) }}"
-                                                    title="{{ _('Delete') }}"
-                                                    data-bs-tooltip
-                                                >
-                                                    <i class="bi bi-trash" aria-hidden="true"></i>
-                                                </button>
-                                            {% else %}
+                                            {% if category.is_builtin %}
                                                 <button
                                                     class="btn btn-sm btn-outline-secondary btn-icon-only"
                                                     type="button"
-                                                    disabled
-                                                    aria-label="{{ _('Category {name} cannot be deleted because it is in use', name=category.name) }}"
-                                                    title="{{ _('In use') }}"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#view-category-{{ category.id }}"
+                                                    aria-label="{{ _('View category {name}', name=category.name) }}"
+                                                    title="{{ _('View') }}"
                                                     data-bs-tooltip
                                                 >
-                                                    <i class="bi bi-lock" aria-hidden="true"></i>
+                                                    <i class="bi bi-eye" aria-hidden="true"></i>
                                                 </button>
+                                            {% else %}
+                                                <button
+                                                    class="btn btn-sm btn-outline-primary btn-icon-only"
+                                                    type="button"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#edit-category-{{ category.id }}"
+                                                    aria-label="{{ _('Edit category {name}', name=category.name) }}"
+                                                    title="{{ _('Edit') }}"
+                                                    data-bs-tooltip
+                                                >
+                                                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                                </button>
+                                                {% if category.transaction_count == 0 and category.rule_count == 0 %}
+                                                    <button
+                                                        class="btn btn-sm btn-outline-danger btn-icon-only"
+                                                        type="button"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#delete-category-{{ category.id }}"
+                                                        aria-label="{{ _('Delete category {name}', name=category.name) }}"
+                                                        title="{{ _('Delete') }}"
+                                                        data-bs-tooltip
+                                                    >
+                                                        <i class="bi bi-trash" aria-hidden="true"></i>
+                                                    </button>
+                                                {% else %}
+                                                    <button
+                                                        class="btn btn-sm btn-outline-secondary btn-icon-only"
+                                                        type="button"
+                                                        disabled
+                                                        aria-label="{{ _('Category {name} cannot be deleted because it is in use', name=category.name) }}"
+                                                        title="{{ _('In use') }}"
+                                                        data-bs-tooltip
+                                                    >
+                                                        <i class="bi bi-lock" aria-hidden="true"></i>
+                                                    </button>
+                                                {% endif %}
                                             {% endif %}
                                         </div>
                                     </td>
@@ -267,7 +286,7 @@
     </div>
 </div>
 
-{% for category in categories %}
+{% for category in categories if not category.is_builtin %}
 <div class="modal fade" id="edit-category-{{ category.id }}" tabindex="-1" aria-labelledby="edit-category-{{ category.id }}-title" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -302,7 +321,40 @@
 </div>
 {% endfor %}
 
-{% for category in categories if category.transaction_count == 0 and category.rule_count == 0 %}
+{% for category in categories if category.is_builtin %}
+<div class="modal fade" id="view-category-{{ category.id }}" tabindex="-1" aria-labelledby="view-category-{{ category.id }}-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="view-category-{{ category.id }}-title">{{ _("Built-in category") }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-secondary" role="status">
+                    {{ _("This category is managed by FinScope and cannot be edited or deleted.") }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="view-category-{{ category.id }}-name">{{ _("Name") }}</label>
+                    <input id="view-category-{{ category.id }}-name" class="form-control" type="text" value="{{ category.name }}" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="view-category-{{ category.id }}-description">{{ _("Description") }}</label>
+                    <textarea id="view-category-{{ category.id }}-description" class="form-control" rows="3" readonly>{{ category.description }}</textarea>
+                </div>
+                <div>
+                    <label class="form-label" for="view-category-{{ category.id }}-instruction">{{ _("LLM instruction") }}</label>
+                    <textarea id="view-category-{{ category.id }}-instruction" class="form-control" rows="5" readonly>{{ category.instruction }}</textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Close") }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% for category in categories if not category.is_builtin and category.transaction_count == 0 and category.rule_count == 0 %}
 <div class="modal fade" id="delete-category-{{ category.id }}" tabindex="-1" aria-labelledby="delete-category-{{ category.id }}-title" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">

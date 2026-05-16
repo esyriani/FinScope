@@ -144,34 +144,35 @@
 
 {% macro rule_save_mode_control(prefix, field_name, save_value, no_value, legend, save_title, save_detail, no_title, no_detail, default_value=None) %}
 {% set selected_value = default_value if default_value is not none else save_value %}
-<fieldset class="rule-fieldset">
+<fieldset class="rule-fieldset" data-rule-save-mode-control data-rule-save-value="{{ save_value }}">
     <legend class="form-label">{{ _(legend) }}</legend>
     <div class="rule-choice-grid">
-        <input class="btn-check" type="radio" name="{{ field_name }}" id="{{ prefix }}-save-rule" value="{{ save_value }}" {% if selected_value == save_value %}checked{% endif %}>
-        <label class="rule-choice" for="{{ prefix }}-save-rule">
-            <span class="rule-choice-icon">R</span>
-            <span class="rule-choice-text">
-                <span class="rule-choice-title">{{ _(save_title) }}</span>
-                <span class="rule-choice-detail">{{ _(save_detail) }}</span>
-            </span>
-        </label>
-
-        <input class="btn-check" type="radio" name="{{ field_name }}" id="{{ prefix }}-no-rule" value="{{ no_value }}" {% if selected_value == no_value %}checked{% endif %}>
+        <input class="btn-check" type="radio" name="{{ field_name }}" id="{{ prefix }}-no-rule" value="{{ no_value }}" data-rule-save-mode {% if selected_value == no_value %}checked{% endif %}>
         <label class="rule-choice" for="{{ prefix }}-no-rule">
-            <span class="rule-choice-icon">1</span>
+            <span class="rule-choice-icon"><i class="bi bi-check2-circle" aria-hidden="true"></i></span>
             <span class="rule-choice-text">
                 <span class="rule-choice-title">{{ _(no_title) }}</span>
                 <span class="rule-choice-detail">{{ _(no_detail) }}</span>
+            </span>
+        </label>
+
+        <input class="btn-check" type="radio" name="{{ field_name }}" id="{{ prefix }}-save-rule" value="{{ save_value }}" data-rule-save-mode {% if selected_value == save_value %}checked{% endif %}>
+        <label class="rule-choice" for="{{ prefix }}-save-rule">
+            <span class="rule-choice-icon"><i class="bi bi-tags" aria-hidden="true"></i></span>
+            <span class="rule-choice-text">
+                <span class="rule-choice-title">{{ _(save_title) }}</span>
+                <span class="rule-choice-detail">{{ _(save_detail) }}</span>
             </span>
         </label>
     </div>
 </fieldset>
 {% endmacro %}
 
-{% macro amount_rule_control(prefix, amount_min=None, amount_max=None) %}
+{% macro amount_rule_control(prefix, amount_min=None, amount_max=None, exact_value=None) %}
 {% set has_amount = amount_min is not none or amount_max is not none %}
 {% set is_exact = amount_min is not none and amount_max is not none and amount_min == amount_max %}
 {% set is_range = has_amount and not is_exact %}
+{% set exact_amount_value = exact_value if exact_value is not none else amount_min if is_exact else "" %}
 <fieldset class="amount-rule-control" data-rule-amount-control>
     <legend class="form-label">{{ _("Amount match") }}</legend>
     <input type="hidden" name="amount_min" value="{{ '' if amount_min is none else amount_min }}" data-rule-amount-min>
@@ -228,7 +229,7 @@
                 type="text"
                 inputmode="decimal"
                 data-rule-exact-amount
-                value="{{ amount_min if is_exact else '' }}"
+                value="{{ exact_amount_value }}"
                 placeholder="{{ _('Example: -1680.00') }}"
             >
         </div>

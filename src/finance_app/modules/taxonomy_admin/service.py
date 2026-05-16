@@ -11,6 +11,7 @@ from finance_app.database.tables import (
     transaction_tags as transaction_tags_table,
     transactions as transactions_table,
 )
+from finance_app.modules.categories.builtins import is_builtin_category_name
 from finance_app.modules.categories.repository import rename_category
 from finance_app.modules.categories.taxonomy import (
     clean_color,
@@ -37,6 +38,9 @@ def build_taxonomy_context():
 def create_category_from_form(form):
     """Create category from form."""
     values = parse_category_form(form)
+    if is_builtin_category_name(values["name"]):
+        raise ValueError("Built-in categories are managed by FinScope.")
+
     with db_core_transaction() as conn:
         category = upsert_category_metadata(
             conn,
@@ -58,6 +62,8 @@ def update_category_from_form(form):
         current = fetch_category_by_id(conn, category_id)
         if current is None:
             raise ValueError("Category was not found.")
+        if current["builtin_key"]:
+            raise ValueError("Built-in categories cannot be modified.")
 
         if current["name"] != values["name"]:
             renamed = rename_category(conn, current["name"], values["name"])
@@ -145,6 +151,8 @@ def delete_category_from_form(form):
         category = fetch_category_by_id(conn, category_id)
         if category is None:
             raise ValueError("Category was not found.")
+        if category["builtin_key"]:
+            raise ValueError("Built-in categories cannot be deleted.")
 
         usage = fetch_category_usage(conn, category_id, category["name"])
         if usage["transaction_count"] or usage["rule_count"]:
@@ -180,16 +188,24 @@ def fetch_category_rows(conn):
         .correlate(categories_table)
         .scalar_subquery()
     )
-    return conn.execute(
+    rows = conn.execute(
         select(
             categories_table.c.id,
             categories_table.c.name,
+            categories_table.c.builtin_key,
             func.coalesce(categories_table.c.description, "").label("description"),
             func.coalesce(categories_table.c.instruction, "").label("instruction"),
             transaction_count.label("transaction_count"),
             rule_count.label("rule_count"),
         ).order_by(func.lower(categories_table.c.name), categories_table.c.name)
     ).mappings().fetchall()
+    return [
+        {
+            **dict(row),
+            "is_builtin": bool(row["builtin_key"]),
+        }
+        for row in rows
+    ]
 
 
 def fetch_tag_rows(conn):
@@ -235,6 +251,7 @@ def fetch_category_by_id(conn, category_id):
         select(
             categories_table.c.id,
             categories_table.c.name,
+            categories_table.c.builtin_key,
             categories_table.c.description,
             categories_table.c.instruction,
         ).where(categories_table.c.id == category_id)

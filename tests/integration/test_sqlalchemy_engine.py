@@ -281,7 +281,7 @@ def test_init_db_uses_core_metadata_for_sqlite_url(tmp_path):
         inspector = inspect(engine)
         assert "transactions" in inspector.get_table_names()
         with engine.connect() as conn:
-            assert conn.execute(text("SELECT value FROM settings WHERE key = 'unknown_category'")).scalar_one()
+            assert conn.execute(text("SELECT builtin_key FROM categories WHERE name = 'UNKNOWN'")).scalar_one() == "unknown"
             assert conn.execute(text("SELECT COUNT(*) FROM statement_types")).scalar_one() > 0
             assert conn.execute(text("SELECT COUNT(*) FROM categories")).scalar_one() > 0
 

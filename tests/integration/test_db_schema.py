@@ -34,7 +34,7 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.service import rename_category
-from finance_app.modules.settings.runtime import update_unknown_category
+from finance_app.modules.settings.runtime import get_unknown_category
 
 
 @pytest.fixture
@@ -414,42 +414,23 @@ def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
     assert (rule["category_id"], rule["category"]) == (income_id, "Earnings")
 
 
-def test_unknown_category_rename_preserves_stable_id(schema_conn):
-    """Verify unknown-category rename preserves stable IDs and cached labels."""
+def test_builtin_categories_are_seeded_and_protected(schema_conn):
+    """Verify built-in categories use stable keys and cannot be renamed."""
     unknown_id = category_id(schema_conn, "UNKNOWN")
-    schema_conn.execute(
-        insert(transactions_table).values(
-            tx_date="2026-01-01",
-            description="UNKNOWN SHOP",
-            amount=12,
-            category_id=unknown_id,
-            category="UNKNOWN",
-            fingerprint="tx-unknown",
-        )
-    )
-    schema_conn.execute(
-        insert(category_rules_table).values(
-            keyword="UNKNOWN SHOP",
-            category_id=unknown_id,
-            category="UNKNOWN",
-        )
-    )
+    transfers_id = category_id(schema_conn, "Transfers")
 
-    updated = update_unknown_category(schema_conn, "UNCATEGORIZED")
-
-    category = schema_conn.execute(
-        select(categories_table.c.id, categories_table.c.name)
-        .where(categories_table.c.id == unknown_id)
-    ).mappings().one()
-    transaction = schema_conn.execute(
-        select(transactions_table.c.category_id, transactions_table.c.category)
-        .where(transactions_table.c.fingerprint == "tx-unknown")
-    ).mappings().one()
-    rule = schema_conn.execute(
-        select(category_rules_table.c.category_id, category_rules_table.c.category)
-        .where(category_rules_table.c.keyword == "UNKNOWN SHOP")
-    ).mappings().one()
-    assert updated == "UNCATEGORIZED"
-    assert (category["id"], category["name"]) == (unknown_id, "UNCATEGORIZED")
-    assert (transaction["category_id"], transaction["category"]) == (unknown_id, "UNCATEGORIZED")
-    assert (rule["category_id"], rule["category"]) == (unknown_id, "UNCATEGORIZED")
+    rows = {
+        row["name"]: row
+        for row in schema_conn.execute(
+            select(
+                categories_table.c.id,
+                categories_table.c.name,
+                categories_table.c.builtin_key,
+            ).where(categories_table.c.id.in_((unknown_id, transfers_id)))
+        ).mappings()
+    }
+    assert rows["UNKNOWN"]["builtin_key"] == "unknown"
+    assert rows["Transfers"]["builtin_key"] == "transfers"
+    assert rename_category(schema_conn, "UNKNOWN", "UNCATEGORIZED") is None
+    assert rename_category(schema_conn, "Transfers", "Balance movement") is None
+    assert get_unknown_category(schema_conn) == "UNKNOWN"

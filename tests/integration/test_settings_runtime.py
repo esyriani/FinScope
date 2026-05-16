@@ -15,9 +15,9 @@ from finance_app.modules.settings.runtime import (
     normalize_statement_parser_type,
     seed_runtime_settings,
     sync_statement_types,
-    update_unknown_category,
     upsert_setting,
 )
+from finance_app.modules.categories.service import rename_category
 
 
 def test_seeded_runtime_settings_default_to_dark_theme(db_conn):
@@ -50,7 +50,7 @@ def test_runtime_settings_helpers_support_core_connections(app, db_conn):
             ],
         )
         assert get_statement_type_by_parser_type(conn, "bank_account")["name"] == "Core bank account"
-        assert update_unknown_category(conn, "CORE UNKNOWN") == "CORE UNKNOWN"
+        upsert_setting(conn, "unknown_category", "CORE UNKNOWN")
 
     active = {
         row["name"]: row["parser_type"]
@@ -58,7 +58,7 @@ def test_runtime_settings_helpers_support_core_connections(app, db_conn):
     }
     assert get_all_settings(db_conn)["theme_mode"] == "light"
     assert get_setting_with_fallback("theme_mode", "dark") == "light"
-    assert get_unknown_category(db_conn) == "CORE UNKNOWN"
+    assert get_unknown_category(db_conn) == "UNKNOWN"
     assert active == {
         "Core bank account": "bank_account",
         "Core rewards card": "credit_card",
@@ -150,31 +150,32 @@ def test_statement_parser_type_validation_defaults_unknown_values(db_conn):
     assert get_statement_type_options(db_conn)[0]["parser_type"] == "credit_card"
 
 
-def test_update_unknown_category_renames_stable_category_and_refreshes_caches(db_conn):
-    """Verify unknown-category renames preserve the category id used by transactions and rules."""
+def test_unknown_category_is_fixed_and_protected(db_conn):
+    """Verify legacy settings cannot rename the built-in Unknown category."""
     unknown_id = db_conn.execute(
         """
-        SELECT id
+        SELECT id, builtin_key
         FROM categories
         WHERE name = 'UNKNOWN'
         """
-    ).fetchone()["id"]
+    ).fetchone()
     db_conn.execute(
         """
         INSERT INTO transactions (tx_date, description, amount, category_id, fingerprint)
         VALUES ('2026-01-02', 'UNKNOWN SHOP', 12.34, ?, 'unknown-rename-tx')
         """,
-        (unknown_id,),
+        (unknown_id["id"],),
     )
     db_conn.execute(
         """
         INSERT INTO category_rules (keyword, category_id)
         VALUES ('UNKNOWN SHOP', ?)
         """,
-        (unknown_id,),
+        (unknown_id["id"],),
     )
 
-    updated = update_unknown_category(db_conn, "UNCATEGORIZED")
+    upsert_setting(db_conn, "unknown_category", "UNCATEGORIZED")
+    renamed = rename_category(db_conn, "UNKNOWN", "UNCATEGORIZED")
     db_conn.commit()
 
     category = db_conn.execute(
@@ -183,7 +184,7 @@ def test_update_unknown_category_renames_stable_category_and_refreshes_caches(db
         FROM categories
         WHERE id = ?
         """,
-        (unknown_id,),
+        (unknown_id["id"],),
     ).fetchone()
     transaction = db_conn.execute(
         """
@@ -200,14 +201,9 @@ def test_update_unknown_category_renames_stable_category_and_refreshes_caches(db
         """
     ).fetchone()
 
-    assert updated == "UNCATEGORIZED"
-    assert tuple(category) == (unknown_id, "UNCATEGORIZED")
-    assert tuple(transaction) == (unknown_id, "UNCATEGORIZED")
-    assert tuple(rule) == (unknown_id, "UNCATEGORIZED")
-    assert get_unknown_category(db_conn) == "UNCATEGORIZED"
-
-
-def test_update_unknown_category_defaults_blank_values(db_conn):
-    """Verify blank unknown-category values normalize to the application default."""
-    assert update_unknown_category(db_conn, "   ") == "UNKNOWN"
+    assert unknown_id["builtin_key"] == "unknown"
+    assert renamed is None
+    assert tuple(category) == (unknown_id["id"], "UNKNOWN")
+    assert tuple(transaction) == (unknown_id["id"], None)
+    assert tuple(rule) == (unknown_id["id"], None)
     assert get_unknown_category(db_conn) == "UNKNOWN"

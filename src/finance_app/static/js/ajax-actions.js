@@ -103,6 +103,7 @@ function runAjaxRefreshInitializers(root = document) {
     setupAjaxRefreshForms(root);
     window.setupTooltips?.();
     window.setupTagMultiselects?.(root);
+    window.setupRuleSaveModeControls?.(root);
     window.setupRuleAmountControls?.(root);
     window.setupRulePreviewForms?.(root);
     window.setupReviewTransactionSelectors?.(root);

@@ -350,8 +350,15 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, db
     assert b">AI</span>" in response.data
     assert b"91%" in response.data
     assert b"data-category-description-select" in response.data
+    assert b'value="transaction_only" data-rule-save-mode checked' in response.data
+    assert b"data-rule-save-only" in response.data
+    assert b"modal-dialog-fit-content" in response.data
+    assert b'value="12.34"' in response.data
+    assert b"data-rule-exact-amount" in response.data
     assert b"Food and drink, including groceries" in response.data
     assert b"Marks transactions that may be useful for tax preparation" in response.data
+    body = response.get_data(as_text=True)
+    assert body.index("This transaction only") < body.index("Save rule")
 
 
 def test_dashboard_route_does_not_render_assignment_tooltips(client, db_conn):

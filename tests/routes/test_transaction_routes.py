@@ -109,6 +109,71 @@ def test_update_transaction_category_route_can_update_transaction_only(client, d
     assert rule_count == 0
 
 
+def test_update_transaction_category_route_does_not_verify_unchanged_transaction(client, db_conn):
+    """Verify unchanged category submissions do not mark a transaction verified."""
+    tx_id = insert_transaction(
+        db_conn,
+        fingerprint="route-tx-unchanged",
+        category="Food",
+        needs_review=0,
+    )
+
+    response = client.post(
+        f"/transactions/{tx_id}/category",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "category": "Food",
+            "rule_action": "transaction_only",
+        },
+        follow_redirects=True,
+    )
+
+    tx = transaction_state(db_conn, tx_id)
+    assert response.status_code == 200
+    assert b"No transaction changes to save." in response.data
+    assert tx["category"] == "Food"
+    assert tx["needs_review"] == 0
+    assert tx["reviewed_at"] is None
+
+
+def test_update_transaction_category_route_approves_unchanged_transaction_when_saving_rule(client, db_conn):
+    """Verify saving a rule counts as explicit approval for the current transaction."""
+    tx_id = insert_transaction(
+        db_conn,
+        fingerprint="route-tx-unchanged-rule",
+        category="Food",
+        needs_review=0,
+    )
+
+    response = client.post(
+        f"/transactions/{tx_id}/category",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "category": "Food",
+            "rule_action": "save",
+            "keyword": "Metro Grocery",
+            "amount_min": "12.34",
+            "amount_max": "12.34",
+        },
+        follow_redirects=True,
+    )
+
+    tx = transaction_state(db_conn, tx_id)
+    rule = db_conn.execute(
+        """
+        SELECT keyword, category, amount_min, amount_max
+        FROM category_rules
+        WHERE keyword = 'METRO GROCERY'
+        """
+    ).fetchone()
+    assert response.status_code == 200
+    assert b"Rule saved for: METRO GROCERY at amount 12.34" in response.data
+    assert tx["category"] == "Food"
+    assert tx["needs_review"] == 0
+    assert tx["reviewed_at"] is not None
+    assert tuple(rule) == ("METRO GROCERY", "Food", 12.34, 12.34)
+
+
 def test_update_transaction_category_route_validates_missing_transaction_and_amounts(client, db_conn):
     """Verify category route handles missing rows and invalid amount bounds."""
     tx_id = insert_transaction(db_conn, fingerprint="route-invalid-amount")
@@ -152,7 +217,7 @@ def test_verify_transaction_route_marks_transaction_reviewed(client, db_conn):
 
     tx = transaction_state(db_conn, tx_id)
     assert response.status_code == 200
-    assert b"Transaction marked verified." in response.data
+    assert b"Transaction approved." in response.data
     assert tx["needs_review"] == 0
     assert tx["reviewed_at"] is not None
 

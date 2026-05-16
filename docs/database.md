@@ -12,6 +12,48 @@ Money amounts are modeled in SQLAlchemy Core as fixed-scale `Numeric(14, 2)` val
 
 Persisted enum-like text values, such as import statuses, parser types, category sources, rule sources, and recurring pattern statuses, are defined in `src/finance_app/core/constants.py`. The schema derives `CHECK` constraints from those constants so Python validation and SQLite constraints stay aligned.
 
+## Choosing a database
+
+FinScope selects the active database from a SQLAlchemy database URL. The URL can be provided in `src/finance_app/config.ini` or with an environment variable.
+
+Database URL priority:
+
+1. `FINANCE_DATABASE_URL`, when set.
+2. `database.url` in `src/finance_app/config.ini`, when non-empty.
+3. A generated SQLite URL from the configured database path.
+
+SQLite path priority, used only when no database URL is provided:
+
+1. `FINANCE_DB_PATH`, when set.
+2. `database.path` in `src/finance_app/config.ini`, when present.
+3. `database.path` in `src/finance_app/config.example.ini`.
+
+Use the default SQLite database by leaving `database.url` blank:
+
+```ini
+[database]
+url =
+path = ../../runtime/finance.db
+```
+
+Use an explicit SQLite database by setting a SQLite SQLAlchemy URL:
+
+```ini
+[database]
+url = sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finance.db
+path = ../../runtime/finance.db
+```
+
+Use MySQL by setting a MySQL SQLAlchemy URL:
+
+```ini
+[database]
+url = mysql+pymysql://user:password@127.0.0.1:3306/finscope
+path = ../../runtime/finance.db
+```
+
+When `database.url` points to MySQL or another non-SQLite database, `database.path` is not active. The external database and user must already exist; FinScope initializes the schema and seed rows inside the selected database.
+
 ## Interactive schema
 
 The interactive database schema is available at [db-schema.html](db-schema.html). It is a dynamic HTML page generated with DBSchema from `finance.db`.
@@ -89,6 +131,7 @@ Maps cleaned statement variants to canonical merchants.
 Stores transaction category definitions.
 
 - `name`: Unique category name.
+- `builtin_key`: Stable FinScope-managed key for protected built-in categories such as `UNKNOWN` and `Transfers`; null for user-managed categories.
 - `description`: Optional explanatory text for users.
 - `instruction`: Optional LLM instruction used during automated categorization.
 - `created_at`: Creation timestamp.

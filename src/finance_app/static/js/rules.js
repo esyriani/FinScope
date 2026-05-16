@@ -1,3 +1,46 @@
+function setupRuleSaveModeControls(root = document) {
+    const controls = Array.from(root.querySelectorAll("[data-rule-save-mode-control]"));
+
+    controls.forEach((control) => {
+        if (control.dataset.ruleSaveModeReady === "true") {
+            return;
+        }
+
+        control.dataset.ruleSaveModeReady = "true";
+        const form = control.closest("form");
+        const saveValue = control.dataset.ruleSaveValue || "";
+        const modeInputs = Array.from(control.querySelectorAll("[data-rule-save-mode]"));
+        const ruleOnlySections = form
+            ? Array.from(form.querySelectorAll("[data-rule-save-only]"))
+            : [];
+
+        if (!form || !saveValue || !modeInputs.length || !ruleOnlySections.length) {
+            return;
+        }
+
+        function selectedValue() {
+            return modeInputs.find((input) => input.checked)?.value || "";
+        }
+
+        function syncRuleOnlySections() {
+            const isSavingRule = selectedValue() === saveValue;
+
+            ruleOnlySections.forEach((section) => {
+                section.toggleAttribute("hidden", !isSavingRule);
+                section.querySelectorAll("input, select, textarea, button").forEach((input) => {
+                    input.disabled = !isSavingRule;
+                });
+            });
+        }
+
+        modeInputs.forEach((input) => input.addEventListener("change", syncRuleOnlySections));
+        syncRuleOnlySections();
+    });
+}
+
+setupRuleSaveModeControls();
+window.setupRuleSaveModeControls = setupRuleSaveModeControls;
+
 function setupRuleAmountControls(root = document) {
     const controls = Array.from(root.querySelectorAll("[data-rule-amount-control]"));
 

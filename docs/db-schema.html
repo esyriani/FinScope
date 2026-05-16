@@ -143,7 +143,7 @@
 <a name='layout1' style='position:sticky; top:0;'></a><h4>Diagram</h4>
 <input type='text' placeholder='Highlight in Diagram' oninput='searchSVG(this.value)' class='text-start my-1 py-0'/>
 <div class='svgContainer'>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'   width='1368' height='1060' viewBox='0 0 1368 1060' >
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'   width='1368' height='1079' viewBox='0 0 1368 1079' >
   <script type='text/ecmascript'>
   <![CDATA[
   function hghl(el) { for ( var i in el ){ var elem = document.getElementById(el[i]); if ( elem != null ) elem.setAttribute('class','highlight');  }  }
@@ -378,18 +378,18 @@
     <path d='M 4.750,2.375 L 9.500,4.750 L 4.750,7.125 z' style='stroke-width:1;' class='filled'/>
   </marker>
   <linearGradient id='ttl_3986C1' x1='0%' y1='0%' x2='100%' y2='0%' >
-     <stop offset='0%' stop-color='#FFFFFF' /> 
-     <stop offset='100%' stop-color='#DFE2E5' /> 
+     <stop offset='0%' stop-color='#6CACDE' /> 
+     <stop offset='100%' stop-color='#A0C2DD' /> 
   </linearGradient>
   <linearGradient id='tbg_3986C1' x1='0%' y1='0%' x2='100%' y2='0%' >
-     <stop offset='0%' stop-color='#C3DBEE' /> 
-     <stop offset='100%' stop-color='#EBEFF3' /> 
+     <stop offset='0%' stop-color='#E3E4E5' /> 
+     <stop offset='100%' stop-color='#F4F5F7' /> 
   </linearGradient>
 </defs>
 
 <!-- == Shape Colors == -->
 <!-- == Desktop == -->
-<rect x='0' y='0' width='1368' height='1060' rx='10' ry='10' style='fill:url(#layoutBgA); stroke:#ccc; stroke-width:.7px; cursor:move;' />
+<rect x='0' y='0' width='1368' height='1079' rx='10' ry='10' style='fill:url(#layoutBgA); stroke:#ccc; stroke-width:.7px; cursor:move;' />
 
 <!-- == Legend == -->
 <g transform='translate(10,10)'>
@@ -398,10 +398,70 @@
 Zoom with CTRL+whell mouse button, pan by dragging the diagram with the right-mouse button</title></g>
   <g><title>DbSchema Database Designer</title><use x='20' y='40' href='#logo'/></g>  <text x='20' y='30' class='legendTitle' >Diagram</text> 
   <text x='57' y='47' class='legendSubTitle'><tspan>Read schema comments as mouse-over tooltips</tspan></text>
-  <a href='https://dbschema.com'><text x='57' y='61' class='legendSubTitle'><tspan>DbSchema.com © 2026-05-13 Wise Coders<title>DbSchema.com © 2026-05-13 Wise Coders</title></tspan></text></a> 
+  <a href='https://dbschema.com'><text x='57' y='61' class='legendSubTitle'><tspan>DbSchema.com © 2026-05-16 Wise Coders<title>DbSchema.com © 2026-05-16 Wise Coders</title></tspan></text></a> 
 </g>
 
 <g transform='translate(0,110)'>
+<!-- == Fk 'accounts_FK_accounts accounts' == -->
+<path id='accounts_FK_accounts accounts'  onmouseover="hghl(['accounts_FK_accounts accounts','Default.accounts.paid_from_account_id','Default.accounts.id'])" onmouseout="uhghl(['accounts_FK_accounts accounts','Default.accounts.paid_from_account_id','Default.accounts.id'])" transform='translate(10,0)' class='unhighlight' d='M 1026,855L 1036,855Q 1045,855 1045,865L 1045,884Q 1045,893 1036,893L 1017,893Q 1007,893 1007,884L 1007,874' >
+	<title>&#x1F517;  Foreign Key FK_accounts accounts
+accounts &#10132; accounts ( paid_from_account_id -&gt; id )
+on delete setNull</title>
+</path>
+<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 1026,855L 1036,855Q 1045,855 1045,865L 1045,884Q 1045,893 1036,893L 1017,893Q 1007,893 1007,884L 1007,874' ><title>&#x1F517;  Foreign Key FK_accounts accounts
+accounts &#10132; accounts ( paid_from_account_id -&gt; id )
+on delete setNull</title></path>
+<text x='1035' y='849' transform='rotate(0 1035,849)' class='relName'>paid&#95;from&#95;account&#95;id</text>
+<!-- == Fk 'category_rule_tags_FK_category_rule_tags category_rules' == -->
+<path id='category_rule_tags_FK_category_rule_tags category_rules'  onmouseover="hghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rule_tags.rule_id','Default.category_rules.id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rule_tags.rule_id','Default.category_rules.id'])" transform='translate(10,0)' class='unhighlight' d='M 551,95L 456,95' >
+	<title>&#x1F517;  Foreign Key FK_category_rule_tags category_rules
+category_rule_tags &#10132; category_rules ( rule_id -&gt; id )
+on delete cascade</title>
+</path>
+<path transform='translate(10,0)' marker-start='url(#OneMore)' marker-end='url(#Arrow)'    d='M 551,95L 456,95' ><title>&#x1F517;  Foreign Key FK_category_rule_tags category_rules
+category_rule_tags &#10132; category_rules ( rule_id -&gt; id )
+on delete cascade</title></path>
+<text x='521' y='89' transform='rotate(0 521,89)' class='relName'>rule&#95;id</text>
+<!-- == Fk 'category_rule_tags_FK_category_rule_tags tags' == -->
+<path id='category_rule_tags_FK_category_rule_tags tags'  onmouseover="hghl(['category_rule_tags_FK_category_rule_tags tags','Default.category_rule_tags.tag_id','Default.tags.id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags tags','Default.category_rule_tags.tag_id','Default.tags.id'])" transform='translate(10,0)' class='unhighlight' d='M 722,133L 979,133Q 988,133 988,143L 988,152' >
+	<title>&#x1F517;  Foreign Key FK_category_rule_tags tags
+category_rule_tags &#10132; tags ( tag_id -&gt; id )
+on delete cascade</title>
+</path>
+<path transform='translate(10,0)' marker-start='url(#OneMore)' marker-end='url(#Arrow)'    d='M 722,133L 979,133Q 988,133 988,143L 988,152' ><title>&#x1F517;  Foreign Key FK_category_rule_tags tags
+category_rule_tags &#10132; tags ( tag_id -&gt; id )
+on delete cascade</title></path>
+<text x='731' y='127' transform='rotate(0 731,127)' class='relName'>tag&#95;id</text>
+<!-- == Fk 'category_rules_FK_category_rules merchants' == -->
+<path id='category_rules_FK_category_rules merchants'  onmouseover="hghl(['category_rules_FK_category_rules merchants','Default.category_rules.merchant_id','Default.merchants.id'])" onmouseout="uhghl(['category_rules_FK_category_rules merchants','Default.category_rules.merchant_id','Default.merchants.id'])" transform='translate(10,0)' class='unhighlight' d='M 304,437L 304,561Q 304,570 295,570L 238,570Q 228,570 228,580L 228,589' >
+	<title>&#x1F517;  Foreign Key FK_category_rules merchants
+category_rules &#10132; merchants ( merchant_id -&gt; id )
+on delete setNull</title>
+</path>
+<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 304,437L 304,561Q 304,570 295,570L 238,570Q 228,570 228,580L 228,589' ><title>&#x1F517;  Foreign Key FK_category_rules merchants
+category_rules &#10132; merchants ( merchant_id -&gt; id )
+on delete setNull</title></path>
+<text x='316' y='437' transform='rotate(90 316,437)' class='relName'>merchant&#95;id</text>
+<!-- == Fk 'category_rules_FK_category_rules categories' == -->
+<path id='category_rules_FK_category_rules categories'  onmouseover="hghl(['category_rules_FK_category_rules categories','Default.category_rules.category_id','Default.categories.id'])" onmouseout="uhghl(['category_rules_FK_category_rules categories','Default.category_rules.category_id','Default.categories.id'])" transform='translate(10,0)' class='unhighlight' d='M 456,228L 532,228' >
+	<title>&#x1F517;  Foreign Key FK_category_rules categories
+category_rules &#10132; categories ( category_id -&gt; id )
+on delete setNull</title>
+</path>
+<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 456,228L 532,228' ><title>&#x1F517;  Foreign Key FK_category_rules categories
+category_rules &#10132; categories ( category_id -&gt; id )
+on delete setNull</title></path>
+<text x='465' y='222' transform='rotate(0 465,222)' class='relName'>category&#95;id</text>
+<!-- == Fk 'category_rules_fk_category_rules_account_id_accounts' == -->
+<path id='category_rules_fk_category_rules_account_id_accounts'  onmouseover="hghl(['category_rules_fk_category_rules_account_id_accounts','Default.category_rules.account_id','Default.accounts.id'])" onmouseout="uhghl(['category_rules_fk_category_rules_account_id_accounts','Default.category_rules.account_id','Default.accounts.id'])" transform='translate(10,0)' class='unhighlight' d='M 456,418L 789,418Q 798,418 798,428L 798,751Q 798,760 808,760L 817,760' >
+	<title>&#x1F517;  Foreign Key fk_category_rules_account_id_accounts
+category_rules &#10132; accounts ( account_id -&gt; id )
+on delete setNull</title>
+</path>
+<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 456,418L 789,418Q 798,418 798,428L 798,751Q 798,760 808,760L 817,760' ><title>&#x1F517;  Foreign Key fk_category_rules_account_id_accounts
+category_rules &#10132; accounts ( account_id -&gt; id )
+on delete setNull</title></path>
+<text x='465' y='412' transform='rotate(0 465,412)' class='relName'>account&#95;id</text>
 <!-- == Fk 'merchant_aliases_FK_merchant_aliases merchants' == -->
 <path id='merchant_aliases_FK_merchant_aliases merchants'  onmouseover="hghl(['merchant_aliases_FK_merchant_aliases merchants','Default.merchant_aliases.merchant_id','Default.merchants.id'])" onmouseout="uhghl(['merchant_aliases_FK_merchant_aliases merchants','Default.merchant_aliases.merchant_id','Default.merchants.id'])" transform='translate(10,0)' class='unhighlight' d='M 361,684L 247,684' >
 	<title>&#x1F517;  Foreign Key FK_merchant_aliases merchants
@@ -422,46 +482,26 @@ on delete setNull</title>
 recurring_patterns &#10132; merchants ( merchant_id -&gt; id )
 on delete setNull</title></path>
 <text x='88' y='494' transform='rotate(90 88,494)' class='relName'>merchant&#95;id</text>
-<!-- == Fk 'category_rules_FK_category_rules merchants' == -->
-<path id='category_rules_FK_category_rules merchants'  onmouseover="hghl(['category_rules_FK_category_rules merchants','Default.category_rules.merchant_id','Default.merchants.id'])" onmouseout="uhghl(['category_rules_FK_category_rules merchants','Default.category_rules.merchant_id','Default.merchants.id'])" transform='translate(10,0)' class='unhighlight' d='M 304,323L 304,561Q 304,570 295,570L 238,570Q 228,570 228,580L 228,589' >
-	<title>&#x1F517;  Foreign Key FK_category_rules merchants
-category_rules &#10132; merchants ( merchant_id -&gt; id )
-on delete setNull</title>
+<!-- == Fk 'statements_FK_statements accounts' == -->
+<path id='statements_FK_statements accounts'  onmouseover="hghl(['statements_FK_statements accounts','Default.statements.account_id','Default.accounts.id'])" onmouseout="uhghl(['statements_FK_statements accounts','Default.statements.account_id','Default.accounts.id'])" transform='translate(10,0)' class='unhighlight' d='M 1102,760L 1026,760' >
+	<title>&#x1F517;  Foreign Key FK_statements accounts
+statements &#10132; accounts ( account_id -&gt; id )
+</title>
 </path>
-<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 304,323L 304,561Q 304,570 295,570L 238,570Q 228,570 228,580L 228,589' ><title>&#x1F517;  Foreign Key FK_category_rules merchants
-category_rules &#10132; merchants ( merchant_id -&gt; id )
-on delete setNull</title></path>
-<text x='316' y='323' transform='rotate(90 316,323)' class='relName'>merchant&#95;id</text>
-<!-- == Fk 'category_rules_FK_category_rules categories' == -->
-<path id='category_rules_FK_category_rules categories'  onmouseover="hghl(['category_rules_FK_category_rules categories','Default.category_rules.category_id','Default.categories.id'])" onmouseout="uhghl(['category_rules_FK_category_rules categories','Default.category_rules.category_id','Default.categories.id'])" transform='translate(10,0)' class='unhighlight' d='M 418,228L 532,228' >
-	<title>&#x1F517;  Foreign Key FK_category_rules categories
-category_rules &#10132; categories ( category_id -&gt; id )
-on delete setNull</title>
+<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 1102,760L 1026,760' ><title>&#x1F517;  Foreign Key FK_statements accounts
+statements &#10132; accounts ( account_id -&gt; id )
+</title></path>
+<text x='1047' y='754' transform='rotate(0 1047,754)' class='relName'>account&#95;id</text>
+<!-- == Fk 'statements_FK_statements statement_types' == -->
+<path id='statements_FK_statements statement_types'  onmouseover="hghl(['statements_FK_statements statement_types','Default.statements.statement_type_id','Default.statement_types.id'])" onmouseout="uhghl(['statements_FK_statements statement_types','Default.statements.statement_type_id','Default.statement_types.id'])" transform='translate(10,0)' class='unhighlight' d='M 1102,456L 1045,456' >
+	<title>&#x1F517;  Foreign Key FK_statements statement_types
+statements &#10132; statement_types ( statement_type_id -&gt; id )
+</title>
 </path>
-<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 418,228L 532,228' ><title>&#x1F517;  Foreign Key FK_category_rules categories
-category_rules &#10132; categories ( category_id -&gt; id )
-on delete setNull</title></path>
-<text x='427' y='222' transform='rotate(0 427,222)' class='relName'>category&#95;id</text>
-<!-- == Fk 'category_rule_tags_FK_category_rule_tags category_rules' == -->
-<path id='category_rule_tags_FK_category_rule_tags category_rules'  onmouseover="hghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rule_tags.rule_id','Default.category_rules.id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rule_tags.rule_id','Default.category_rules.id'])" transform='translate(10,0)' class='unhighlight' d='M 551,95L 418,95' >
-	<title>&#x1F517;  Foreign Key FK_category_rule_tags category_rules
-category_rule_tags &#10132; category_rules ( rule_id -&gt; id )
-on delete cascade</title>
-</path>
-<path transform='translate(10,0)' marker-start='url(#OneMore)' marker-end='url(#Arrow)'    d='M 551,95L 418,95' ><title>&#x1F517;  Foreign Key FK_category_rule_tags category_rules
-category_rule_tags &#10132; category_rules ( rule_id -&gt; id )
-on delete cascade</title></path>
-<text x='521' y='89' transform='rotate(0 521,89)' class='relName'>rule&#95;id</text>
-<!-- == Fk 'category_rule_tags_FK_category_rule_tags tags' == -->
-<path id='category_rule_tags_FK_category_rule_tags tags'  onmouseover="hghl(['category_rule_tags_FK_category_rule_tags tags','Default.category_rule_tags.tag_id','Default.tags.id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags tags','Default.category_rule_tags.tag_id','Default.tags.id'])" transform='translate(10,0)' class='unhighlight' d='M 722,133L 979,133Q 988,133 988,143L 988,152' >
-	<title>&#x1F517;  Foreign Key FK_category_rule_tags tags
-category_rule_tags &#10132; tags ( tag_id -&gt; id )
-on delete cascade</title>
-</path>
-<path transform='translate(10,0)' marker-start='url(#OneMore)' marker-end='url(#Arrow)'    d='M 722,133L 979,133Q 988,133 988,143L 988,152' ><title>&#x1F517;  Foreign Key FK_category_rule_tags tags
-category_rule_tags &#10132; tags ( tag_id -&gt; id )
-on delete cascade</title></path>
-<text x='731' y='127' transform='rotate(0 731,127)' class='relName'>tag&#95;id</text>
+<path transform='translate(10,0)' marker-start='url(#OneMore)' marker-end='url(#Arrow)'    d='M 1102,456L 1045,456' ><title>&#x1F517;  Foreign Key FK_statements statement_types
+statements &#10132; statement_types ( statement_type_id -&gt; id )
+</title></path>
+<text x='1003' y='450' transform='rotate(0 1003,450)' class='relName'>statement&#95;type&#95;id</text>
 <!-- == Fk 'transaction_tags_FK_transaction_tags transactions' == -->
 <path id='transaction_tags_FK_transaction_tags transactions'  onmouseover="hghl(['transaction_tags_FK_transaction_tags transactions','Default.transaction_tags.transaction_id','Default.transactions.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags transactions','Default.transaction_tags.transaction_id','Default.transactions.id'])" transform='translate(10,0)' class='unhighlight' d='M 779,342L 779,485Q 779,494 770,494L 760,494' >
 	<title>&#x1F517;  Foreign Key FK_transaction_tags transactions
@@ -483,12 +523,12 @@ transaction_tags &#10132; tags ( tag_id -&gt; id )
 on delete cascade</title></path>
 <text x='902' y='203' transform='rotate(0 902,203)' class='relName'>tag&#95;id</text>
 <!-- == Fk 'transaction_tags_FK_transaction_tags category_rules' == -->
-<path id='transaction_tags_FK_transaction_tags category_rules'  onmouseover="hghl(['transaction_tags_FK_transaction_tags category_rules','Default.transaction_tags.rule_id','Default.category_rules.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags category_rules','Default.transaction_tags.rule_id','Default.category_rules.id'])" transform='translate(10,0)' class='unhighlight' d='M 722,190L 418,190' >
+<path id='transaction_tags_FK_transaction_tags category_rules'  onmouseover="hghl(['transaction_tags_FK_transaction_tags category_rules','Default.transaction_tags.rule_id','Default.category_rules.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags category_rules','Default.transaction_tags.rule_id','Default.category_rules.id'])" transform='translate(10,0)' class='unhighlight' d='M 722,190L 456,190' >
 	<title>&#x1F517;  Foreign Key FK_transaction_tags category_rules
 transaction_tags &#10132; category_rules ( rule_id -&gt; id )
 on delete setNull</title>
 </path>
-<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 722,190L 418,190' ><title>&#x1F517;  Foreign Key FK_transaction_tags category_rules
+<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 722,190L 456,190' ><title>&#x1F517;  Foreign Key FK_transaction_tags category_rules
 transaction_tags &#10132; category_rules ( rule_id -&gt; id )
 on delete setNull</title></path>
 <text x='692' y='184' transform='rotate(0 692,184)' class='relName'>rule&#95;id</text>
@@ -523,79 +563,118 @@ transactions &#10132; merchants ( merchant_id -&gt; id )
 on delete setNull</title></path>
 <text x='487' y='621' transform='rotate(0 487,621)' class='relName'>merchant&#95;id</text>
 <!-- == Fk 'transactions_FK_transactions categories' == -->
-<path id='transactions_FK_transactions categories'  onmouseover="hghl(['transactions_FK_transactions categories','Default.transactions.category_id','Default.categories.id'])" onmouseout="uhghl(['transactions_FK_transactions categories','Default.transactions.category_id','Default.categories.id'])" transform='translate(10,0)' class='unhighlight' d='M 589,456L 589,380' >
+<path id='transactions_FK_transactions categories'  onmouseover="hghl(['transactions_FK_transactions categories','Default.transactions.category_id','Default.categories.id'])" onmouseout="uhghl(['transactions_FK_transactions categories','Default.transactions.category_id','Default.categories.id'])" transform='translate(10,0)' class='unhighlight' d='M 589,456L 589,399' >
 	<title>&#x1F517;  Foreign Key FK_transactions categories
 transactions &#10132; categories ( category_id -&gt; id )
 on delete setNull</title>
 </path>
-<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 589,456L 589,380' ><title>&#x1F517;  Foreign Key FK_transactions categories
+<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 589,456L 589,399' ><title>&#x1F517;  Foreign Key FK_transactions categories
 transactions &#10132; categories ( category_id -&gt; id )
 on delete setNull</title></path>
 <text x='592' y='453' transform='rotate(270 592,453)' class='relName'>category&#95;id</text>
 <!-- == Fk 'transactions_FK_transactions category_rules' == -->
-<path id='transactions_FK_transactions category_rules'  onmouseover="hghl(['transactions_FK_transactions category_rules','Default.transactions.category_rule_id','Default.category_rules.id'])" onmouseout="uhghl(['transactions_FK_transactions category_rules','Default.transactions.category_rule_id','Default.category_rules.id'])" transform='translate(10,0)' class='unhighlight' d='M 551,475L 409,475Q 399,475 399,466L 399,323' >
+<path id='transactions_FK_transactions category_rules'  onmouseover="hghl(['transactions_FK_transactions category_rules','Default.transactions.category_rule_id','Default.category_rules.id'])" onmouseout="uhghl(['transactions_FK_transactions category_rules','Default.transactions.category_rule_id','Default.category_rules.id'])" transform='translate(10,0)' class='unhighlight' d='M 551,475L 447,475Q 437,475 437,466L 437,437' >
 	<title>&#x1F517;  Foreign Key FK_transactions category_rules
 transactions &#10132; category_rules ( category_rule_id -&gt; id )
 on delete setNull</title>
 </path>
-<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 551,475L 409,475Q 399,475 399,466L 399,323' ><title>&#x1F517;  Foreign Key FK_transactions category_rules
+<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 551,475L 447,475Q 437,475 437,466L 437,437' ><title>&#x1F517;  Foreign Key FK_transactions category_rules
 transactions &#10132; category_rules ( category_rule_id -&gt; id )
 on delete setNull</title></path>
 <text x='463' y='469' transform='rotate(0 463,469)' class='relName'>category&#95;rule&#95;id</text>
-<!-- == Fk 'statements_FK_statements accounts' == -->
-<path id='statements_FK_statements accounts'  onmouseover="hghl(['statements_FK_statements accounts','Default.statements.account_id','Default.accounts.id'])" onmouseout="uhghl(['statements_FK_statements accounts','Default.statements.account_id','Default.accounts.id'])" transform='translate(10,0)' class='unhighlight' d='M 1102,760L 1026,760' >
-	<title>&#x1F517;  Foreign Key FK_statements accounts
-statements &#10132; accounts ( account_id -&gt; id )
-</title>
-</path>
-<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 1102,760L 1026,760' ><title>&#x1F517;  Foreign Key FK_statements accounts
-statements &#10132; accounts ( account_id -&gt; id )
-</title></path>
-<text x='1047' y='754' transform='rotate(0 1047,754)' class='relName'>account&#95;id</text>
-<!-- == Fk 'statements_FK_statements statement_types' == -->
-<path id='statements_FK_statements statement_types'  onmouseover="hghl(['statements_FK_statements statement_types','Default.statements.statement_type_id','Default.statement_types.id'])" onmouseout="uhghl(['statements_FK_statements statement_types','Default.statements.statement_type_id','Default.statement_types.id'])" transform='translate(10,0)' class='unhighlight' d='M 1102,456L 1045,456' >
-	<title>&#x1F517;  Foreign Key FK_statements statement_types
-statements &#10132; statement_types ( statement_type_id -&gt; id )
-</title>
-</path>
-<path transform='translate(10,0)' marker-start='url(#OneMore)' marker-end='url(#Arrow)'    d='M 1102,456L 1045,456' ><title>&#x1F517;  Foreign Key FK_statements statement_types
-statements &#10132; statement_types ( statement_type_id -&gt; id )
-</title></path>
-<text x='1003' y='450' transform='rotate(0 1003,450)' class='relName'>statement&#95;type&#95;id</text>
-<!-- == Fk 'accounts_FK_accounts accounts' == -->
-<path id='accounts_FK_accounts accounts'  onmouseover="hghl(['accounts_FK_accounts accounts','Default.accounts.paid_from_account_id','Default.accounts.id'])" onmouseout="uhghl(['accounts_FK_accounts accounts','Default.accounts.paid_from_account_id','Default.accounts.id'])" transform='translate(10,0)' class='unhighlight' d='M 1026,855L 1036,855Q 1045,855 1045,865L 1045,884Q 1045,893 1036,893L 1017,893Q 1007,893 1007,884L 1007,874' >
-	<title>&#x1F517;  Foreign Key FK_accounts accounts
-accounts &#10132; accounts ( paid_from_account_id -&gt; id )
-on delete setNull</title>
-</path>
-<path transform='translate(10,0)' marker-start='url(#ZeroMore)' marker-end='url(#Arrow)'  class='dotted '  d='M 1026,855L 1036,855Q 1045,855 1045,865L 1045,884Q 1045,893 1036,893L 1017,893Q 1007,893 1007,884L 1007,874' ><title>&#x1F517;  Foreign Key FK_accounts accounts
-accounts &#10132; accounts ( paid_from_account_id -&gt; id )
-on delete setNull</title></path>
-<text x='1035' y='849' transform='rotate(0 1035,849)' class='relName'>paid&#95;from&#95;account&#95;id</text>
-<!-- == Table 'categories' == -->
-<rect id='depict_Default&#46;categories' class='entity' style='stroke:none;' x='551' y='219' width='133' height='152' rx='5' ry='5' />
-<path d='M 551 252 L 551 223 Q 551 219 556 219 L 679 219 Q 684 219 684 223 L 684 252 L551 252 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='551' y='219' width='133' height='152' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.categories'><g><title>Table Default.categories</title><text id='depict&#45;Default&#46;categories' x='582' y='241' class='tableHeader' style='fill:#414448;'>categories</text></g></a>
-  <use x='552' y='262' href='#nn'/><g><title>&#x1F511;  Pk pk_categories ( id ) </title><use x='553' y='261' href='#pk'/></g><a href='#Default.categories.id'><g><title>&#10697;  id
+<!-- == Table 'accounts' == -->
+<rect id='depict_Default&#46;accounts' class='entity' style='stroke:#F9FAFC' x='836' y='732' width='190' height='133' rx='4' ry='4' />
+<rect x='836' y='732' width='190' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='836' y='736' width='190' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.accounts'><g><title>Table Default.accounts</title><text id='depict&#45;Default&#46;accounts' x='900' y='754' class='tableHeader' style='fill:#414448;'>accounts</text></g></a>
+  <use x='837' y='775' href='#nn'/><g><title>&#x1F511;  Pk pk_accounts ( id ) </title><use x='838' y='774' href='#pk'/></g><a href='#Default.accounts.id'><g><title>&#10697;  id
      * integer
- &#8601; category_rules( category_id )
- &#8601; transactions( category_id )</title><text id='Default&#46;categories&#46;id' x='574' y='275' onmouseover="hghl(['category_rules_FK_category_rules categories','Default.category_rules.category_id','transactions_FK_transactions categories','Default.transactions.category_id'])" onmouseout="uhghl(['category_rules_FK_category_rules categories','Default.category_rules.category_id','transactions_FK_transactions categories','Default.transactions.category_id'])" class='colPk'>id</text></g></a>
-<a href='#Default.categories.id'><g><title>&#x1F517;  Referred by category_rules ( category_id -&gt; id ) 
-Referred by transactions ( category_id -&gt; id ) </title><use x='670' y='261' href='#ref'/></g></a>
-  <use x='552' y='281' href='#nn'/><g><title>&#x1F50D;  idx_categories_name ( name ) </title><use x='553' y='280' href='#idx'/></g><a href='#Default.categories.name'><g><title>&#10697;  name
-     * text</title><text id='Default&#46;categories&#46;name' x='574' y='294'>name</text></g></a>
-<text x='680' y='290' text-anchor='end' class='colType'>t</text>  <a href='#Default.categories.description'><g><title>&#10697;  description
-     text</title><text id='Default&#46;categories&#46;description' x='574' y='313'>description</text></g></a>
-<text x='680' y='309' text-anchor='end' class='colType'>t</text>  <a href='#Default.categories.instruction'><g><title>&#10697;  instruction
-     text</title><text id='Default&#46;categories&#46;instruction' x='574' y='332'>instruction</text></g></a>
-<text x='680' y='328' text-anchor='end' class='colType'>t</text>  <use x='552' y='338' href='#nn'/><a href='#Default.categories.created_at'><g><title>&#10697;  created_at
-     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;categories&#46;created&#95;at' x='574' y='351'>created&#95;at</text></g></a>
-<text x='680' y='347' text-anchor='end' class='colType'>t</text>
+ &#8601; accounts( paid_from_account_id )
+ &#8601; statements( account_id )
+ &#8601; transactions( account_id )
+ &#8601; category_rules( account_id )</title><text id='Default&#46;accounts&#46;id' x='859' y='788' onmouseover="hghl(['accounts_FK_accounts accounts','Default.accounts.paid_from_account_id','statements_FK_statements accounts','Default.statements.account_id','transactions_FK_transactions accounts','Default.transactions.account_id','category_rules_fk_category_rules_account_id_accounts','Default.category_rules.account_id'])" onmouseout="uhghl(['accounts_FK_accounts accounts','Default.accounts.paid_from_account_id','statements_FK_statements accounts','Default.statements.account_id','transactions_FK_transactions accounts','Default.transactions.account_id','category_rules_fk_category_rules_account_id_accounts','Default.category_rules.account_id'])" class='colPk'>id</text></g></a>
+<a href='#Default.accounts.id'><g><title>&#x1F517;  Referred by accounts ( paid_from_account_id -&gt; id ) 
+Referred by statements ( account_id -&gt; id ) 
+Referred by transactions ( account_id -&gt; id ) 
+Referred by category_rules ( account_id -&gt; id ) </title><use x='1012' y='774' href='#ref'/></g></a>
+  <use x='837' y='794' href='#nn'/><g><title>&#x1F50D;  Unq uq_accounts_name ( name ) </title><use x='838' y='793' href='#unq'/></g><a href='#Default.accounts.name'><g><title>&#10697;  name
+     * text</title><text id='Default&#46;accounts&#46;name' x='859' y='807'>name</text></g></a>
+<text x='1022' y='803' text-anchor='end' class='colType'>t</text>  <use x='837' y='813' href='#nn'/><a href='#Default.accounts.account_type'><g><title>&#10697;  account_type
+     * text default &apos;checking&apos;</title><text id='Default&#46;accounts&#46;account&#95;type' x='859' y='826'>account&#95;type</text></g></a>
+<text x='1022' y='822' text-anchor='end' class='colType'>t</text>  <a href='#Default.accounts.paid_from_account_id'><g><title>&#10697;  paid_from_account_id
+     integer
+ &#8599; accounts( id )</title><text id='Default&#46;accounts&#46;paid&#95;from&#95;account&#95;id' x='859' y='845' onmouseover="hghl(['accounts_FK_accounts accounts','Default.accounts.id'])" onmouseout="uhghl(['accounts_FK_accounts accounts','Default.accounts.id'])">paid&#95;from&#95;account&#95;id</text></g></a>
+<a href='#Default.accounts.paid_from_account_id'><g><title>&#x1F517;  References accounts ( paid_from_account_id -&gt; id ) </title><use x='1012' y='831' href='#fk'/></g></a>
+
+<!-- == Table 'category_rule_tags' == -->
+<rect id='depict_Default&#46;category&#95;rule&#95;tags' class='entity' style='stroke:#F9FAFC' x='570' y='48' width='152' height='95' rx='4' ry='4' />
+<rect x='570' y='48' width='152' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='570' y='52' width='152' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.category_rule_tags'><g><title>Table Default.category_rule_tags</title><text id='depict&#45;Default&#46;category&#95;rule&#95;tags' x='586' y='70' class='tableHeader' style='fill:#414448;'>category&#95;rule&#95;tags</text></g></a>
+  <use x='571' y='91' href='#nn'/><g><title>&#x1F511;  Pk pk_category_rule_tags ( rule_id, tag_id ) </title><use x='572' y='90' href='#pk'/></g><a href='#Default.category_rule_tags.rule_id'><g><title>&#10697;  rule_id
+     * integer
+ &#8599; category_rules( id )</title><text id='Default&#46;category&#95;rule&#95;tags&#46;rule&#95;id' x='593' y='104' onmouseover="hghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rules.id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rules.id'])" class='colPk'>rule&#95;id</text></g></a>
+<a href='#Default.category_rule_tags.rule_id'><g><title>&#x1F517;  References category_rules ( rule_id -&gt; id ) </title><use x='708' y='90' href='#fk'/></g></a>
+  <use x='571' y='110' href='#nn'/><g><title>&#x1F511;  Pk pk_category_rule_tags ( rule_id, tag_id ) &#x1F50D;  idx_category_rule_tags_tag ( tag_id ) </title><use x='572' y='109' href='#pk'/></g><a href='#Default.category_rule_tags.tag_id'><g><title>&#10697;  tag_id
+     * integer
+ &#8599; tags( id )</title><text id='Default&#46;category&#95;rule&#95;tags&#46;tag&#95;id' x='593' y='123' onmouseover="hghl(['category_rule_tags_FK_category_rule_tags tags','Default.tags.id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags tags','Default.tags.id'])" class='colPk'>tag&#95;id</text></g></a>
+<a href='#Default.category_rule_tags.tag_id'><g><title>&#x1F517;  References tags ( tag_id -&gt; id ) </title><use x='708' y='109' href='#fk'/></g></a>
+
+<!-- == Table 'category_rules' == -->
+<rect id='depict_Default&#46;category&#95;rules' class='entity' style='stroke:#F9FAFC' x='285' y='67' width='171' height='361' rx='4' ry='4' />
+<rect x='285' y='67' width='171' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='285' y='71' width='171' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.category_rules'><g><title>Table Default.category_rules</title><text id='depict&#45;Default&#46;category&#95;rules' x='323' y='89' class='tableHeader' style='fill:#414448;'>category&#95;rules</text></g></a>
+  <use x='286' y='110' href='#nn'/><g><title>&#x1F511;  Pk pk_category_rules ( id ) </title><use x='287' y='109' href='#pk'/></g><a href='#Default.category_rules.id'><g><title>&#10697;  id
+     * integer
+ &#8601; category_rule_tags( rule_id )
+ &#8601; transaction_tags( rule_id )
+ &#8601; transactions( category_rule_id )</title><text id='Default&#46;category&#95;rules&#46;id' x='308' y='123' onmouseover="hghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rule_tags.rule_id','transaction_tags_FK_transaction_tags category_rules','Default.transaction_tags.rule_id','transactions_FK_transactions category_rules','Default.transactions.category_rule_id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rule_tags.rule_id','transaction_tags_FK_transaction_tags category_rules','Default.transaction_tags.rule_id','transactions_FK_transactions category_rules','Default.transactions.category_rule_id'])" class='colPk'>id</text></g></a>
+<a href='#Default.category_rules.id'><g><title>&#x1F517;  Referred by category_rule_tags ( rule_id -&gt; id ) 
+Referred by transaction_tags ( rule_id -&gt; id ) 
+Referred by transactions ( category_rule_id -&gt; id ) </title><use x='442' y='109' href='#ref'/></g></a>
+  <g><title>&#x1F50D;  idx_category_rules_account ( account_id ) </title><use x='287' y='128' href='#idx'/></g><a href='#Default.category_rules.account_id'><g><title>&#10697;  account_id
+     integer
+ &#8599; accounts( id )</title><text id='Default&#46;category&#95;rules&#46;account&#95;id' x='308' y='142' onmouseover="hghl(['category_rules_fk_category_rules_account_id_accounts','Default.accounts.id'])" onmouseout="uhghl(['category_rules_fk_category_rules_account_id_accounts','Default.accounts.id'])">account&#95;id</text></g></a>
+<a href='#Default.category_rules.account_id'><g><title>&#x1F517;  References accounts ( account_id -&gt; id ) </title><use x='442' y='128' href='#fk'/></g></a>
+  <g><title>&#x1F50D;  idx_category_rules_merchant ( merchant_id ) &#x1F50D;  Unq uq_category_rules_merchant_amount ( merchant_id, account_id_key, direction, amount_min_key, amount_max_key ) </title><use x='287' y='147' href='#unq'/></g><a href='#Default.category_rules.merchant_id'><g><title>&#10697;  merchant_id
+     integer
+ &#8599; merchants( id )</title><text id='Default&#46;category&#95;rules&#46;merchant&#95;id' x='308' y='161' onmouseover="hghl(['category_rules_FK_category_rules merchants','Default.merchants.id'])" onmouseout="uhghl(['category_rules_FK_category_rules merchants','Default.merchants.id'])">merchant&#95;id</text></g></a>
+<a href='#Default.category_rules.merchant_id'><g><title>&#x1F517;  References merchants ( merchant_id -&gt; id ) </title><use x='442' y='147' href='#fk'/></g></a>
+  <use x='286' y='167' href='#nn'/><g><title>&#x1F50D;  idx_category_rules_keyword ( keyword ) </title><use x='287' y='166' href='#idx'/></g><a href='#Default.category_rules.keyword'><g><title>&#10697;  keyword
+     * text</title><text id='Default&#46;category&#95;rules&#46;keyword' x='308' y='180'>keyword</text></g></a>
+<text x='452' y='176' text-anchor='end' class='colType'>t</text>  <a href='#Default.category_rules.category'><g><title>&#10697;  category
+     text</title><text id='Default&#46;category&#95;rules&#46;category' x='308' y='199'>category</text></g></a>
+<text x='452' y='195' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  idx_category_rules_category_id ( category_id ) </title><use x='287' y='204' href='#idx'/></g><a href='#Default.category_rules.category_id'><g><title>&#10697;  category_id
+     integer
+ &#8599; categories( id )</title><text id='Default&#46;category&#95;rules&#46;category&#95;id' x='308' y='218' onmouseover="hghl(['category_rules_FK_category_rules categories','Default.categories.id'])" onmouseout="uhghl(['category_rules_FK_category_rules categories','Default.categories.id'])">category&#95;id</text></g></a>
+<a href='#Default.category_rules.category_id'><g><title>&#x1F517;  References categories ( category_id -&gt; id ) </title><use x='442' y='204' href='#fk'/></g></a>
+  <g><title>&#x1F50D;  idx_category_rules_amount_bounds ( amount_min, amount_max ) </title><use x='287' y='223' href='#idx'/></g><a href='#Default.category_rules.amount_min'><g><title>&#10697;  amount_min
+     numeric(14,2)</title><text id='Default&#46;category&#95;rules&#46;amount&#95;min' x='308' y='237'>amount&#95;min</text></g></a>
+<text x='452' y='233' text-anchor='end' class='colType'>&#35;</text>  <g><title>&#x1F50D;  idx_category_rules_amount_bounds ( amount_min, amount_max ) </title><use x='287' y='242' href='#idx'/></g><a href='#Default.category_rules.amount_max'><g><title>&#10697;  amount_max
+     numeric(14,2)</title><text id='Default&#46;category&#95;rules&#46;amount&#95;max' x='308' y='256'>amount&#95;max</text></g></a>
+<text x='452' y='252' text-anchor='end' class='colType'>&#35;</text>  <use x='286' y='262' href='#nn'/><g><title>&#x1F50D;  Unq uq_category_rules_keyword_amount ( keyword_scope_key, account_id_key, direction, amount_min_key, amount_max_key ) &#x1F50D;  Unq uq_category_rules_merchant_amount ( merchant_id, account_id_key, direction, amount_min_key, amount_max_key ) &#x1F50D;  idx_category_rules_direction ( direction ) </title><use x='287' y='261' href='#unq'/></g><a href='#Default.category_rules.direction'><g><title>&#10697;  direction
+     * text default &apos;any&apos;</title><text id='Default&#46;category&#95;rules&#46;direction' x='308' y='275'>direction</text></g></a>
+<text x='452' y='271' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  Unq uq_category_rules_keyword_amount ( keyword_scope_key, account_id_key, direction, amount_min_key, amount_max_key ) </title><use x='287' y='280' href='#unq'/></g><a href='#Default.category_rules.keyword_scope_key'><g><title>&#10697;  keyword_scope_key
+     text</title><text id='Default&#46;category&#95;rules&#46;keyword&#95;scope&#95;key' x='308' y='294'>keyword&#95;scope&#95;key</text></g></a>
+<text x='452' y='290' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  Unq uq_category_rules_keyword_amount ( keyword_scope_key, account_id_key, direction, amount_min_key, amount_max_key ) &#x1F50D;  Unq uq_category_rules_merchant_amount ( merchant_id, account_id_key, direction, amount_min_key, amount_max_key ) </title><use x='287' y='299' href='#unq'/></g><a href='#Default.category_rules.account_id_key'><g><title>&#10697;  account_id_key
+     integer</title><text id='Default&#46;category&#95;rules&#46;account&#95;id&#95;key' x='308' y='313'>account&#95;id&#95;key</text></g></a>
+<text x='452' y='309' text-anchor='end' class='colType'>&#35;</text>  <g><title>&#x1F50D;  Unq uq_category_rules_keyword_amount ( keyword_scope_key, account_id_key, direction, amount_min_key, amount_max_key ) &#x1F50D;  Unq uq_category_rules_merchant_amount ( merchant_id, account_id_key, direction, amount_min_key, amount_max_key ) </title><use x='287' y='318' href='#unq'/></g><a href='#Default.category_rules.amount_min_key'><g><title>&#10697;  amount_min_key
+     numeric(14,2)</title><text id='Default&#46;category&#95;rules&#46;amount&#95;min&#95;key' x='308' y='332'>amount&#95;min&#95;key</text></g></a>
+<text x='452' y='328' text-anchor='end' class='colType'>&#35;</text>  <g><title>&#x1F50D;  Unq uq_category_rules_keyword_amount ( keyword_scope_key, account_id_key, direction, amount_min_key, amount_max_key ) &#x1F50D;  Unq uq_category_rules_merchant_amount ( merchant_id, account_id_key, direction, amount_min_key, amount_max_key ) </title><use x='287' y='337' href='#unq'/></g><a href='#Default.category_rules.amount_max_key'><g><title>&#10697;  amount_max_key
+     numeric(14,2)</title><text id='Default&#46;category&#95;rules&#46;amount&#95;max&#95;key' x='308' y='351'>amount&#95;max&#95;key</text></g></a>
+<text x='452' y='347' text-anchor='end' class='colType'>&#35;</text>  <use x='286' y='357' href='#nn'/><g><title>&#x1F50D;  idx_category_rules_source_approval ( source, ai_approved ) </title><use x='287' y='356' href='#idx'/></g><a href='#Default.category_rules.source'><g><title>&#10697;  source
+     * text default &apos;manual&apos;</title><text id='Default&#46;category&#95;rules&#46;source' x='308' y='370'>source</text></g></a>
+<text x='452' y='366' text-anchor='end' class='colType'>t</text>  <use x='286' y='376' href='#nn'/><a href='#Default.category_rules.created_at'><g><title>&#10697;  created_at
+     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;category&#95;rules&#46;created&#95;at' x='308' y='389'>created&#95;at</text></g></a>
+<text x='452' y='385' text-anchor='end' class='colType'>t</text>  <use x='286' y='395' href='#nn'/><g><title>&#x1F50D;  idx_category_rules_source_approval ( source, ai_approved ) </title><use x='287' y='394' href='#idx'/></g><a href='#Default.category_rules.ai_approved'><g><title>&#10697;  ai_approved
+     * integer default 0</title><text id='Default&#46;category&#95;rules&#46;ai&#95;approved' x='308' y='408'>ai&#95;approved</text></g></a>
+<text x='452' y='404' text-anchor='end' class='colType'>&#35;</text><text x='304' y='423'>--more--</text>
+
 <!-- == Table 'merchant_aliases' == -->
-<rect id='depict_Default&#46;merchant&#95;aliases' class='entity' style='stroke:none;' x='380' y='675' width='133' height='209' rx='5' ry='5' />
-<path d='M 380 708 L 380 679 Q 380 675 385 675 L 508 675 Q 513 675 513 679 L 513 708 L380 708 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='380' y='675' width='133' height='209' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
+<rect id='depict_Default&#46;merchant&#95;aliases' class='entity' style='stroke:#F9FAFC' x='380' y='675' width='133' height='209' rx='4' ry='4' />
+<rect x='380' y='675' width='133' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='380' y='679' width='133' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
 <a href='#Default.merchant_aliases'><g><title>Table Default.merchant_aliases</title><text id='depict&#45;Default&#46;merchant&#95;aliases' x='391' y='697' class='tableHeader' style='fill:#414448;'>merchant&#95;aliases</text></g></a>
   <use x='381' y='718' href='#nn'/><g><title>&#x1F511;  Pk pk_merchant_aliases ( id ) </title><use x='382' y='717' href='#pk'/></g><a href='#Default.merchant_aliases.id'><g><title>&#10697;  id
      * integer</title><text id='Default&#46;merchant&#95;aliases&#46;id' x='403' y='731' class='colPk'>id</text></g></a>
@@ -603,7 +682,7 @@ Referred by transactions ( category_id -&gt; id ) </title><use x='670' y='261' h
      * integer
  &#8599; merchants( id )</title><text id='Default&#46;merchant&#95;aliases&#46;merchant&#95;id' x='403' y='750' onmouseover="hghl(['merchant_aliases_FK_merchant_aliases merchants','Default.merchants.id'])" onmouseout="uhghl(['merchant_aliases_FK_merchant_aliases merchants','Default.merchants.id'])">merchant&#95;id</text></g></a>
 <a href='#Default.merchant_aliases.merchant_id'><g><title>&#x1F517;  References merchants ( merchant_id -&gt; id ) </title><use x='499' y='736' href='#fk'/></g></a>
-  <use x='381' y='756' href='#nn'/><g><title>&#x1F50D;  Unq unq_merchant_aliases_alias_key ( alias_key ) </title><use x='382' y='755' href='#unq'/></g><a href='#Default.merchant_aliases.alias_key'><g><title>&#10697;  alias_key
+  <use x='381' y='756' href='#nn'/><g><title>&#x1F50D;  Unq uq_merchant_aliases_alias_key ( alias_key ) </title><use x='382' y='755' href='#unq'/></g><a href='#Default.merchant_aliases.alias_key'><g><title>&#10697;  alias_key
      * text</title><text id='Default&#46;merchant&#95;aliases&#46;alias&#95;key' x='403' y='769'>alias&#95;key</text></g></a>
 <text x='509' y='765' text-anchor='end' class='colType'>t</text>  <a href='#Default.merchant_aliases.raw_example'><g><title>&#10697;  raw_example
      text</title><text id='Default&#46;merchant&#95;aliases&#46;raw&#95;example' x='403' y='788'>raw&#95;example</text></g></a>
@@ -617,9 +696,9 @@ Referred by transactions ( category_id -&gt; id ) </title><use x='670' y='261' h
      * text default CURRENT_TIMESTAMP</title><text id='Default&#46;merchant&#95;aliases&#46;updated&#95;at' x='403' y='864'>updated&#95;at</text></g></a>
 <text x='509' y='860' text-anchor='end' class='colType'>t</text>
 <!-- == Table 'merchants' == -->
-<rect id='depict_Default&#46;merchants' class='entity' style='stroke:none;' x='57' y='599' width='190' height='209' rx='5' ry='5' />
-<path d='M 57 632 L 57 603 Q 57 599 62 599 L 242 599 Q 247 599 247 603 L 247 632 L57 632 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='57' y='599' width='190' height='209' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
+<rect id='depict_Default&#46;merchants' class='entity' style='stroke:#F9FAFC' x='57' y='599' width='190' height='209' rx='4' ry='4' />
+<rect x='57' y='599' width='190' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='57' y='603' width='190' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
 <a href='#Default.merchants'><g><title>Table Default.merchants</title><text id='depict&#45;Default&#46;merchants' x='116' y='621' class='tableHeader' style='fill:#414448;'>merchants</text></g></a>
   <use x='58' y='642' href='#nn'/><g><title>&#x1F511;  Pk pk_merchants ( id ) </title><use x='59' y='641' href='#pk'/></g><a href='#Default.merchants.id'><g><title>&#10697;  id
      * integer
@@ -631,7 +710,7 @@ Referred by transactions ( category_id -&gt; id ) </title><use x='670' y='261' h
 Referred by merchant_aliases ( merchant_id -&gt; id ) 
 Referred by recurring_patterns ( merchant_id -&gt; id ) 
 Referred by transactions ( merchant_id -&gt; id ) </title><use x='233' y='641' href='#ref'/></g></a>
-  <use x='58' y='661' href='#nn'/><g><title>&#x1F50D;  Unq unq_merchants_canonical_key ( canonical_key ) </title><use x='59' y='660' href='#unq'/></g><a href='#Default.merchants.canonical_key'><g><title>&#10697;  canonical_key
+  <use x='58' y='661' href='#nn'/><g><title>&#x1F50D;  Unq uq_merchants_canonical_key ( canonical_key ) </title><use x='59' y='660' href='#unq'/></g><a href='#Default.merchants.canonical_key'><g><title>&#10697;  canonical_key
      * text</title><text id='Default&#46;merchants&#46;canonical&#95;key' x='80' y='674'>canonical&#95;key</text></g></a>
 <text x='243' y='670' text-anchor='end' class='colType'>t</text>  <use x='58' y='680' href='#nn'/><a href='#Default.merchants.system_name'><g><title>&#10697;  system_name
      * text</title><text id='Default&#46;merchants&#46;system&#95;name' x='80' y='693'>system&#95;name</text></g></a>
@@ -647,19 +726,19 @@ Referred by transactions ( merchant_id -&gt; id ) </title><use x='233' y='641' h
      * text default CURRENT_TIMESTAMP</title><text id='Default&#46;merchants&#46;updated&#95;at' x='80' y='788'>updated&#95;at</text></g></a>
 <text x='243' y='784' text-anchor='end' class='colType'>t</text>
 <!-- == Table 'recurring_patterns' == -->
-<rect id='depict_Default&#46;recurring&#95;patterns' class='entity' style='stroke:none;' x='57' y='181' width='190' height='304' rx='5' ry='5' />
-<path d='M 57 214 L 57 185 Q 57 181 62 181 L 242 181 Q 247 181 247 185 L 247 214 L57 214 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='57' y='181' width='190' height='304' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
+<rect id='depict_Default&#46;recurring&#95;patterns' class='entity' style='stroke:#F9FAFC' x='57' y='181' width='190' height='304' rx='4' ry='4' />
+<rect x='57' y='181' width='190' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='57' y='185' width='190' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
 <a href='#Default.recurring_patterns'><g><title>Table Default.recurring_patterns</title><text id='depict&#45;Default&#46;recurring&#95;patterns' x='93' y='203' class='tableHeader' style='fill:#414448;'>recurring&#95;patterns</text></g></a>
   <use x='58' y='224' href='#nn'/><g><title>&#x1F511;  Pk pk_recurring_patterns ( pattern_key ) </title><use x='59' y='223' href='#pk'/></g><a href='#Default.recurring_patterns.pattern_key'><g><title>&#10697;  pattern_key
      * text</title><text id='Default&#46;recurring&#95;patterns&#46;pattern&#95;key' x='80' y='237' class='colPk'>pattern&#95;key</text></g></a>
-<text x='243' y='233' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  Unq idx_recurring_patterns_merchant_type ( merchant_id, type ) </title><use x='59' y='242' href='#unq'/></g><a href='#Default.recurring_patterns.merchant_id'><g><title>&#10697;  merchant_id
+<text x='243' y='233' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  Unq uq_recurring_patterns_merchant_type ( merchant_id, type ) </title><use x='59' y='242' href='#unq'/></g><a href='#Default.recurring_patterns.merchant_id'><g><title>&#10697;  merchant_id
      integer
  &#8599; merchants( id )</title><text id='Default&#46;recurring&#95;patterns&#46;merchant&#95;id' x='80' y='256' onmouseover="hghl(['recurring_patterns_FK_recurring_patterns merchants','Default.merchants.id'])" onmouseout="uhghl(['recurring_patterns_FK_recurring_patterns merchants','Default.merchants.id'])">merchant&#95;id</text></g></a>
 <a href='#Default.recurring_patterns.merchant_id'><g><title>&#x1F517;  References merchants ( merchant_id -&gt; id ) </title><use x='233' y='242' href='#fk'/></g></a>
   <use x='58' y='262' href='#nn'/><a href='#Default.recurring_patterns.merchant'><g><title>&#10697;  merchant
      * text</title><text id='Default&#46;recurring&#95;patterns&#46;merchant' x='80' y='275'>merchant</text></g></a>
-<text x='243' y='271' text-anchor='end' class='colType'>t</text>  <use x='58' y='281' href='#nn'/><g><title>&#x1F50D;  Unq idx_recurring_patterns_merchant_type ( merchant_id, type ) </title><use x='59' y='280' href='#unq'/></g><a href='#Default.recurring_patterns.type'><g><title>&#10697;  type
+<text x='243' y='271' text-anchor='end' class='colType'>t</text>  <use x='58' y='281' href='#nn'/><g><title>&#x1F50D;  Unq uq_recurring_patterns_merchant_type ( merchant_id, type ) </title><use x='59' y='280' href='#unq'/></g><a href='#Default.recurring_patterns.type'><g><title>&#10697;  type
      * text</title><text id='Default&#46;recurring&#95;patterns&#46;type' x='80' y='294'>type</text></g></a>
 <text x='243' y='290' text-anchor='end' class='colType'>t</text>  <use x='58' y='300' href='#nn'/><g><title>&#x1F50D;  idx_recurring_patterns_status ( user_status, active ) </title><use x='59' y='299' href='#idx'/></g><a href='#Default.recurring_patterns.user_status'><g><title>&#10697;  user_status
      * text default &apos;detected&apos;</title><text id='Default&#46;recurring&#95;patterns&#46;user&#95;status' x='80' y='313'>user&#95;status</text></g></a>
@@ -668,11 +747,11 @@ Referred by transactions ( merchant_id -&gt; id ) </title><use x='233' y='641' h
 <text x='243' y='328' text-anchor='end' class='colType'>t</text>  <a href='#Default.recurring_patterns.expected_day'><g><title>&#10697;  expected_day
      integer</title><text id='Default&#46;recurring&#95;patterns&#46;expected&#95;day' x='80' y='351'>expected&#95;day</text></g></a>
 <text x='243' y='347' text-anchor='end' class='colType'>&#35;</text>  <a href='#Default.recurring_patterns.typical_amount'><g><title>&#10697;  typical_amount
-     real</title><text id='Default&#46;recurring&#95;patterns&#46;typical&#95;amount' x='80' y='370'>typical&#95;amount</text></g></a>
+     numeric(14,2)</title><text id='Default&#46;recurring&#95;patterns&#46;typical&#95;amount' x='80' y='370'>typical&#95;amount</text></g></a>
 <text x='243' y='366' text-anchor='end' class='colType'>&#35;</text>  <a href='#Default.recurring_patterns.date_tolerance_days'><g><title>&#10697;  date_tolerance_days
      integer</title><text id='Default&#46;recurring&#95;patterns&#46;date&#95;tolerance&#95;days' x='80' y='389'>date&#95;tolerance&#95;days</text></g></a>
 <text x='243' y='385' text-anchor='end' class='colType'>&#35;</text>  <a href='#Default.recurring_patterns.amount_tolerance'><g><title>&#10697;  amount_tolerance
-     real</title><text id='Default&#46;recurring&#95;patterns&#46;amount&#95;tolerance' x='80' y='408'>amount&#95;tolerance</text></g></a>
+     numeric(14,2)</title><text id='Default&#46;recurring&#95;patterns&#46;amount&#95;tolerance' x='80' y='408'>amount&#95;tolerance</text></g></a>
 <text x='243' y='404' text-anchor='end' class='colType'>&#35;</text>  <use x='58' y='414' href='#nn'/><g><title>&#x1F50D;  idx_recurring_patterns_status ( user_status, active ) </title><use x='59' y='413' href='#idx'/></g><a href='#Default.recurring_patterns.active'><g><title>&#10697;  active
      * integer default 1</title><text id='Default&#46;recurring&#95;patterns&#46;active' x='80' y='427'>active</text></g></a>
 <text x='243' y='423' text-anchor='end' class='colType'>&#35;</text>  <use x='58' y='433' href='#nn'/><a href='#Default.recurring_patterns.created_at'><g><title>&#10697;  created_at
@@ -680,161 +759,42 @@ Referred by transactions ( merchant_id -&gt; id ) </title><use x='233' y='641' h
 <text x='243' y='442' text-anchor='end' class='colType'>t</text>  <use x='58' y='452' href='#nn'/><a href='#Default.recurring_patterns.updated_at'><g><title>&#10697;  updated_at
      * text default CURRENT_TIMESTAMP</title><text id='Default&#46;recurring&#95;patterns&#46;updated&#95;at' x='80' y='465'>updated&#95;at</text></g></a>
 <text x='243' y='461' text-anchor='end' class='colType'>t</text>
-<!-- == Table 'tags' == -->
-<rect id='depict_Default&#46;tags' class='entity' style='stroke:none;' x='969' y='162' width='133' height='171' rx='5' ry='5' />
-<path d='M 969 195 L 969 166 Q 969 162 974 162 L 1097 162 Q 1102 162 1102 166 L 1102 195 L969 195 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='969' y='162' width='133' height='171' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.tags'><g><title>Table Default.tags</title><text id='depict&#45;Default&#46;tags' x='1018' y='184' class='tableHeader' style='fill:#414448;'>tags</text></g></a>
-  <use x='970' y='205' href='#nn'/><g><title>&#x1F511;  Pk pk_tags ( id ) </title><use x='971' y='204' href='#pk'/></g><a href='#Default.tags.id'><g><title>&#10697;  id
+<!-- == Table 'settings' == -->
+<rect id='depict_Default&#46;settings' class='entity' style='stroke:#F9FAFC' x='95' y='67' width='95' height='95' rx='4' ry='4' />
+<rect x='95' y='67' width='95' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='95' y='71' width='95' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.settings'><g><title>Table Default.settings</title><text id='depict&#45;Default&#46;settings' x='114' y='89' class='tableHeader' style='fill:#414448;'>settings</text></g></a>
+  <use x='96' y='110' href='#nn'/><g><title>&#x1F511;  Pk pk_settings ( key ) </title><use x='97' y='109' href='#pk'/></g><a href='#Default.settings.key'><g><title>&#10697;  key
+     * text</title><text id='Default&#46;settings&#46;key' x='118' y='123' class='colPk'>key</text></g></a>
+<text x='186' y='119' text-anchor='end' class='colType'>t</text>  <use x='96' y='129' href='#nn'/><a href='#Default.settings.value'><g><title>&#10697;  value
+     * text</title><text id='Default&#46;settings&#46;value' x='118' y='142'>value</text></g></a>
+<text x='186' y='138' text-anchor='end' class='colType'>t</text>
+<!-- == Table 'statement_types' == -->
+<rect id='depict_Default&#46;statement&#95;types' class='entity' style='stroke:#F9FAFC' x='855' y='371' width='190' height='190' rx='4' ry='4' />
+<rect x='855' y='371' width='190' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='855' y='375' width='190' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.statement_types'><g><title>Table Default.statement_types</title><text id='depict&#45;Default&#46;statement&#95;types' x='897' y='393' class='tableHeader' style='fill:#414448;'>statement&#95;types</text></g></a>
+  <use x='856' y='414' href='#nn'/><g><title>&#x1F511;  Pk pk_statement_types ( id ) </title><use x='857' y='413' href='#pk'/></g><a href='#Default.statement_types.id'><g><title>&#10697;  id
      * integer
- &#8601; category_rule_tags( tag_id )
- &#8601; transaction_tags( tag_id )</title><text id='Default&#46;tags&#46;id' x='992' y='218' onmouseover="hghl(['category_rule_tags_FK_category_rule_tags tags','Default.category_rule_tags.tag_id','transaction_tags_FK_transaction_tags tags','Default.transaction_tags.tag_id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags tags','Default.category_rule_tags.tag_id','transaction_tags_FK_transaction_tags tags','Default.transaction_tags.tag_id'])" class='colPk'>id</text></g></a>
-<a href='#Default.tags.id'><g><title>&#x1F517;  Referred by category_rule_tags ( tag_id -&gt; id ) 
-Referred by transaction_tags ( tag_id -&gt; id ) </title><use x='1088' y='204' href='#ref'/></g></a>
-  <use x='970' y='224' href='#nn'/><g><title>&#x1F50D;  idx_tags_name ( name ) </title><use x='971' y='223' href='#idx'/></g><a href='#Default.tags.name'><g><title>&#10697;  name
-     * text</title><text id='Default&#46;tags&#46;name' x='992' y='237'>name</text></g></a>
-<text x='1098' y='233' text-anchor='end' class='colType'>t</text>  <a href='#Default.tags.description'><g><title>&#10697;  description
-     text</title><text id='Default&#46;tags&#46;description' x='992' y='256'>description</text></g></a>
-<text x='1098' y='252' text-anchor='end' class='colType'>t</text>  <a href='#Default.tags.instruction'><g><title>&#10697;  instruction
-     text</title><text id='Default&#46;tags&#46;instruction' x='992' y='275'>instruction</text></g></a>
-<text x='1098' y='271' text-anchor='end' class='colType'>t</text>  <a href='#Default.tags.color'><g><title>&#10697;  color
-     text</title><text id='Default&#46;tags&#46;color' x='992' y='294'>color</text></g></a>
-<text x='1098' y='290' text-anchor='end' class='colType'>t</text>  <use x='970' y='300' href='#nn'/><a href='#Default.tags.created_at'><g><title>&#10697;  created_at
-     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;tags&#46;created&#95;at' x='992' y='313'>created&#95;at</text></g></a>
-<text x='1098' y='309' text-anchor='end' class='colType'>t</text>
-<!-- == Table 'category_rules' == -->
-<rect id='depict_Default&#46;category&#95;rules' class='entity' style='stroke:none;' x='285' y='67' width='133' height='247' rx='5' ry='5' />
-<path d='M 285 100 L 285 71 Q 285 67 290 67 L 413 67 Q 418 67 418 71 L 418 100 L285 100 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='285' y='67' width='133' height='247' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.category_rules'><g><title>Table Default.category_rules</title><text id='depict&#45;Default&#46;category&#95;rules' x='304' y='89' class='tableHeader' style='fill:#414448;'>category&#95;rules</text></g></a>
-  <use x='286' y='110' href='#nn'/><g><title>&#x1F511;  Pk pk_category_rules ( id ) </title><use x='287' y='109' href='#pk'/></g><a href='#Default.category_rules.id'><g><title>&#10697;  id
-     * integer
- &#8601; category_rule_tags( rule_id )
- &#8601; transaction_tags( rule_id )
- &#8601; transactions( category_rule_id )</title><text id='Default&#46;category&#95;rules&#46;id' x='308' y='123' onmouseover="hghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rule_tags.rule_id','transaction_tags_FK_transaction_tags category_rules','Default.transaction_tags.rule_id','transactions_FK_transactions category_rules','Default.transactions.category_rule_id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rule_tags.rule_id','transaction_tags_FK_transaction_tags category_rules','Default.transaction_tags.rule_id','transactions_FK_transactions category_rules','Default.transactions.category_rule_id'])" class='colPk'>id</text></g></a>
-<a href='#Default.category_rules.id'><g><title>&#x1F517;  Referred by category_rule_tags ( rule_id -&gt; id ) 
-Referred by transaction_tags ( rule_id -&gt; id ) 
-Referred by transactions ( category_rule_id -&gt; id ) </title><use x='404' y='109' href='#ref'/></g></a>
-  <g><title>&#x1F50D;  idx_category_rules_merchant ( merchant_id ) &#x1F50D;  Unq idx_category_rules_merchant_amount_unique ( merchant_id, IFNULL(amount_min, -999999999999.0), IFNULL(amount_max, -999999999999.0) ) </title><use x='287' y='128' href='#unq'/></g><a href='#Default.category_rules.merchant_id'><g><title>&#10697;  merchant_id
-     integer
- &#8599; merchants( id )</title><text id='Default&#46;category&#95;rules&#46;merchant&#95;id' x='308' y='142' onmouseover="hghl(['category_rules_FK_category_rules merchants','Default.merchants.id'])" onmouseout="uhghl(['category_rules_FK_category_rules merchants','Default.merchants.id'])">merchant&#95;id</text></g></a>
-<a href='#Default.category_rules.merchant_id'><g><title>&#x1F517;  References merchants ( merchant_id -&gt; id ) </title><use x='404' y='128' href='#fk'/></g></a>
-  <use x='286' y='148' href='#nn'/><g><title>&#x1F50D;  idx_category_rules_keyword ( keyword ) &#x1F50D;  Unq idx_category_rules_keyword_amount_unique ( keyword, IFNULL(amount_min, -999999999999.0), IFNULL(amount_max, -999999999999.0) ) </title><use x='287' y='147' href='#unq'/></g><a href='#Default.category_rules.keyword'><g><title>&#10697;  keyword
-     * text</title><text id='Default&#46;category&#95;rules&#46;keyword' x='308' y='161'>keyword</text></g></a>
-<text x='414' y='157' text-anchor='end' class='colType'>t</text>  <a href='#Default.category_rules.category'><g><title>&#10697;  category
-     text</title><text id='Default&#46;category&#95;rules&#46;category' x='308' y='180'>category</text></g></a>
-<text x='414' y='176' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  idx_category_rules_category_id ( category_id ) </title><use x='287' y='185' href='#idx'/></g><a href='#Default.category_rules.category_id'><g><title>&#10697;  category_id
-     integer
- &#8599; categories( id )</title><text id='Default&#46;category&#95;rules&#46;category&#95;id' x='308' y='199' onmouseover="hghl(['category_rules_FK_category_rules categories','Default.categories.id'])" onmouseout="uhghl(['category_rules_FK_category_rules categories','Default.categories.id'])">category&#95;id</text></g></a>
-<a href='#Default.category_rules.category_id'><g><title>&#x1F517;  References categories ( category_id -&gt; id ) </title><use x='404' y='185' href='#fk'/></g></a>
-  <a href='#Default.category_rules.amount_min'><g><title>&#10697;  amount_min
-     real</title><text id='Default&#46;category&#95;rules&#46;amount&#95;min' x='308' y='218'>amount&#95;min</text></g></a>
-<text x='414' y='214' text-anchor='end' class='colType'>&#35;</text>  <a href='#Default.category_rules.amount_max'><g><title>&#10697;  amount_max
-     real</title><text id='Default&#46;category&#95;rules&#46;amount&#95;max' x='308' y='237'>amount&#95;max</text></g></a>
-<text x='414' y='233' text-anchor='end' class='colType'>&#35;</text>  <use x='286' y='243' href='#nn'/><g><title>&#x1F50D;  idx_category_rules_source_approval ( source, ai_approved ) </title><use x='287' y='242' href='#idx'/></g><a href='#Default.category_rules.source'><g><title>&#10697;  source
-     * text default &apos;manual&apos;</title><text id='Default&#46;category&#95;rules&#46;source' x='308' y='256'>source</text></g></a>
-<text x='414' y='252' text-anchor='end' class='colType'>t</text>  <use x='286' y='262' href='#nn'/><a href='#Default.category_rules.created_at'><g><title>&#10697;  created_at
-     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;category&#95;rules&#46;created&#95;at' x='308' y='275'>created&#95;at</text></g></a>
-<text x='414' y='271' text-anchor='end' class='colType'>t</text>  <use x='286' y='281' href='#nn'/><g><title>&#x1F50D;  idx_category_rules_source_approval ( source, ai_approved ) </title><use x='287' y='280' href='#idx'/></g><a href='#Default.category_rules.ai_approved'><g><title>&#10697;  ai_approved
-     * integer default 0</title><text id='Default&#46;category&#95;rules&#46;ai&#95;approved' x='308' y='294'>ai&#95;approved</text></g></a>
-<text x='414' y='290' text-anchor='end' class='colType'>&#35;</text><text x='304' y='309'>--more--</text>
-
-<!-- == Table 'category_rule_tags' == -->
-<rect id='depict_Default&#46;category&#95;rule&#95;tags' class='entity' style='stroke:none;' x='570' y='48' width='152' height='95' rx='5' ry='5' />
-<path d='M 570 81 L 570 52 Q 570 48 575 48 L 717 48 Q 722 48 722 52 L 722 81 L570 81 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='570' y='48' width='152' height='95' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.category_rule_tags'><g><title>Table Default.category_rule_tags</title><text id='depict&#45;Default&#46;category&#95;rule&#95;tags' x='586' y='70' class='tableHeader' style='fill:#414448;'>category&#95;rule&#95;tags</text></g></a>
-  <use x='571' y='91' href='#nn'/><g><title>&#x1F511;  Pk pk_category_rule_tags ( rule_id, tag_id ) </title><use x='572' y='90' href='#pk'/></g><a href='#Default.category_rule_tags.rule_id'><g><title>&#10697;  rule_id
-     * integer
- &#8599; category_rules( id )</title><text id='Default&#46;category&#95;rule&#95;tags&#46;rule&#95;id' x='593' y='104' onmouseover="hghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rules.id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags category_rules','Default.category_rules.id'])" class='colPk'>rule&#95;id</text></g></a>
-<a href='#Default.category_rule_tags.rule_id'><g><title>&#x1F517;  References category_rules ( rule_id -&gt; id ) </title><use x='708' y='90' href='#fk'/></g></a>
-  <use x='571' y='110' href='#nn'/><g><title>&#x1F511;  Pk pk_category_rule_tags ( rule_id, tag_id ) &#x1F50D;  idx_category_rule_tags_tag ( tag_id ) </title><use x='572' y='109' href='#pk'/></g><a href='#Default.category_rule_tags.tag_id'><g><title>&#10697;  tag_id
-     * integer
- &#8599; tags( id )</title><text id='Default&#46;category&#95;rule&#95;tags&#46;tag&#95;id' x='593' y='123' onmouseover="hghl(['category_rule_tags_FK_category_rule_tags tags','Default.tags.id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags tags','Default.tags.id'])" class='colPk'>tag&#95;id</text></g></a>
-<a href='#Default.category_rule_tags.tag_id'><g><title>&#x1F517;  References tags ( tag_id -&gt; id ) </title><use x='708' y='109' href='#fk'/></g></a>
-
-<!-- == Table 'transaction_tags' == -->
-<rect id='depict_Default&#46;transaction&#95;tags' class='entity' style='stroke:none;' x='741' y='181' width='152' height='152' rx='5' ry='5' />
-<path d='M 741 214 L 741 185 Q 741 181 746 181 L 888 181 Q 893 181 893 185 L 893 214 L741 214 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='741' y='181' width='152' height='152' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.transaction_tags'><g><title>Table Default.transaction_tags</title><text id='depict&#45;Default&#46;transaction&#95;tags' x='764' y='203' class='tableHeader' style='fill:#414448;'>transaction&#95;tags</text></g></a>
-  <use x='742' y='224' href='#nn'/><g><title>&#x1F511;  Pk pk_transaction_tags ( transaction_id, tag_id ) </title><use x='743' y='223' href='#pk'/></g><a href='#Default.transaction_tags.transaction_id'><g><title>&#10697;  transaction_id
-     * integer
- &#8599; transactions( id )</title><text id='Default&#46;transaction&#95;tags&#46;transaction&#95;id' x='764' y='237' onmouseover="hghl(['transaction_tags_FK_transaction_tags transactions','Default.transactions.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags transactions','Default.transactions.id'])" class='colPk'>transaction&#95;id</text></g></a>
-<a href='#Default.transaction_tags.transaction_id'><g><title>&#x1F517;  References transactions ( transaction_id -&gt; id ) </title><use x='879' y='223' href='#fk'/></g></a>
-  <use x='742' y='243' href='#nn'/><g><title>&#x1F511;  Pk pk_transaction_tags ( transaction_id, tag_id ) &#x1F50D;  idx_transaction_tags_tag ( tag_id ) </title><use x='743' y='242' href='#pk'/></g><a href='#Default.transaction_tags.tag_id'><g><title>&#10697;  tag_id
-     * integer
- &#8599; tags( id )</title><text id='Default&#46;transaction&#95;tags&#46;tag&#95;id' x='764' y='256' onmouseover="hghl(['transaction_tags_FK_transaction_tags tags','Default.tags.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags tags','Default.tags.id'])" class='colPk'>tag&#95;id</text></g></a>
-<a href='#Default.transaction_tags.tag_id'><g><title>&#x1F517;  References tags ( tag_id -&gt; id ) </title><use x='879' y='242' href='#fk'/></g></a>
-  <use x='742' y='262' href='#nn'/><a href='#Default.transaction_tags.source'><g><title>&#10697;  source
-     * text default &apos;unknown&apos;</title><text id='Default&#46;transaction&#95;tags&#46;source' x='764' y='275'>source</text></g></a>
-<text x='889' y='271' text-anchor='end' class='colType'>t</text>  <a href='#Default.transaction_tags.rule_id'><g><title>&#10697;  rule_id
-     integer
- &#8599; category_rules( id )</title><text id='Default&#46;transaction&#95;tags&#46;rule&#95;id' x='764' y='294' onmouseover="hghl(['transaction_tags_FK_transaction_tags category_rules','Default.category_rules.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags category_rules','Default.category_rules.id'])">rule&#95;id</text></g></a>
-<a href='#Default.transaction_tags.rule_id'><g><title>&#x1F517;  References category_rules ( rule_id -&gt; id ) </title><use x='879' y='280' href='#fk'/></g></a>
-  <use x='742' y='300' href='#nn'/><a href='#Default.transaction_tags.assigned_at'><g><title>&#10697;  assigned_at
-     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;transaction&#95;tags&#46;assigned&#95;at' x='764' y='313'>assigned&#95;at</text></g></a>
-<text x='889' y='309' text-anchor='end' class='colType'>t</text>
-<!-- == Table 'transactions' == -->
-<rect id='depict_Default&#46;transactions' class='entity' style='stroke:none;' x='570' y='466' width='190' height='418' rx='5' ry='5' />
-<path d='M 570 499 L 570 470 Q 570 466 575 466 L 755 466 Q 760 466 760 470 L 760 499 L570 499 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='570' y='466' width='190' height='418' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.transactions'><g><title>Table Default.transactions</title><text id='depict&#45;Default&#46;transactions' x='624' y='488' class='tableHeader' style='fill:#414448;'>transactions</text></g></a>
-  <use x='571' y='509' href='#nn'/><g><title>&#x1F511;  Pk pk_transactions ( id ) </title><use x='572' y='508' href='#pk'/></g><a href='#Default.transactions.id'><g><title>&#10697;  id
-     * integer
- &#8601; transaction_tags( transaction_id )</title><text id='Default&#46;transactions&#46;id' x='593' y='522' onmouseover="hghl(['transaction_tags_FK_transaction_tags transactions','Default.transaction_tags.transaction_id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags transactions','Default.transaction_tags.transaction_id'])" class='colPk'>id</text></g></a>
-<a href='#Default.transactions.id'><g><title>&#x1F517;  Referred by transaction_tags ( transaction_id -&gt; id ) </title><use x='746' y='508' href='#ref'/></g></a>
-  <g><title>&#x1F50D;  idx_transactions_statement ( statement_id ) </title><use x='572' y='527' href='#idx'/></g><a href='#Default.transactions.statement_id'><g><title>&#10697;  statement_id
-     integer
- &#8599; statements( id )</title><text id='Default&#46;transactions&#46;statement&#95;id' x='593' y='541' onmouseover="hghl(['transactions_FK_transactions statements','Default.statements.id'])" onmouseout="uhghl(['transactions_FK_transactions statements','Default.statements.id'])">statement&#95;id</text></g></a>
-<a href='#Default.transactions.statement_id'><g><title>&#x1F517;  References statements ( statement_id -&gt; id ) </title><use x='746' y='527' href='#fk'/></g></a>
-  <g><title>&#x1F50D;  idx_transactions_account ( account_id ) </title><use x='572' y='546' href='#idx'/></g><a href='#Default.transactions.account_id'><g><title>&#10697;  account_id
-     integer
- &#8599; accounts( id )</title><text id='Default&#46;transactions&#46;account&#95;id' x='593' y='560' onmouseover="hghl(['transactions_FK_transactions accounts','Default.accounts.id'])" onmouseout="uhghl(['transactions_FK_transactions accounts','Default.accounts.id'])">account&#95;id</text></g></a>
-<a href='#Default.transactions.account_id'><g><title>&#x1F517;  References accounts ( account_id -&gt; id ) </title><use x='746' y='546' href='#fk'/></g></a>
-  <g><title>&#x1F50D;  idx_transactions_merchant ( merchant_id ) </title><use x='572' y='565' href='#idx'/></g><a href='#Default.transactions.merchant_id'><g><title>&#10697;  merchant_id
-     integer
- &#8599; merchants( id )</title><text id='Default&#46;transactions&#46;merchant&#95;id' x='593' y='579' onmouseover="hghl(['transactions_FK_transactions merchants','Default.merchants.id'])" onmouseout="uhghl(['transactions_FK_transactions merchants','Default.merchants.id'])">merchant&#95;id</text></g></a>
-<a href='#Default.transactions.merchant_id'><g><title>&#x1F517;  References merchants ( merchant_id -&gt; id ) </title><use x='746' y='565' href='#fk'/></g></a>
-  <use x='571' y='585' href='#nn'/><g><title>&#x1F50D;  idx_transactions_date ( tx_date ) &#x1F50D;  idx_transactions_date_category ( tx_date, category ) &#x1F50D;  idx_transactions_dashboard_date_amount ( tx_date, amount ) </title><use x='572' y='584' href='#idx'/></g><a href='#Default.transactions.tx_date'><g><title>&#10697;  tx_date
-     * text</title><text id='Default&#46;transactions&#46;tx&#95;date' x='593' y='598'>tx&#95;date</text></g></a>
-<text x='756' y='594' text-anchor='end' class='colType'>t</text>  <use x='571' y='604' href='#nn'/><g><title>&#x1F50D;  idx_transactions_description ( description ) </title><use x='572' y='603' href='#idx'/></g><a href='#Default.transactions.description'><g><title>&#10697;  description
-     * text</title><text id='Default&#46;transactions&#46;description' x='593' y='617'>description</text></g></a>
-<text x='756' y='613' text-anchor='end' class='colType'>t</text>  <use x='571' y='623' href='#nn'/><g><title>&#x1F50D;  idx_transactions_amount ( amount ) &#x1F50D;  idx_transactions_dashboard_category_amount ( category, amount ) &#x1F50D;  idx_transactions_dashboard_date_amount ( tx_date, amount ) </title><use x='572' y='622' href='#idx'/></g><a href='#Default.transactions.amount'><g><title>&#10697;  amount
-     * real</title><text id='Default&#46;transactions&#46;amount' x='593' y='636'>amount</text></g></a>
-<text x='756' y='632' text-anchor='end' class='colType'>&#35;</text>  <g><title>&#x1F50D;  idx_transactions_category ( category ) &#x1F50D;  idx_transactions_date_category ( tx_date, category ) &#x1F50D;  idx_transactions_dashboard_category_amount ( category, amount ) </title><use x='572' y='641' href='#idx'/></g><a href='#Default.transactions.category'><g><title>&#10697;  category
-     text</title><text id='Default&#46;transactions&#46;category' x='593' y='655'>category</text></g></a>
-<text x='756' y='651' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  idx_transactions_category_id ( category_id ) </title><use x='572' y='660' href='#idx'/></g><a href='#Default.transactions.category_id'><g><title>&#10697;  category_id
-     integer
- &#8599; categories( id )</title><text id='Default&#46;transactions&#46;category&#95;id' x='593' y='674' onmouseover="hghl(['transactions_FK_transactions categories','Default.categories.id'])" onmouseout="uhghl(['transactions_FK_transactions categories','Default.categories.id'])">category&#95;id</text></g></a>
-<a href='#Default.transactions.category_id'><g><title>&#x1F517;  References categories ( category_id -&gt; id ) </title><use x='746' y='660' href='#fk'/></g></a>
-  <use x='571' y='680' href='#nn'/><g><title>&#x1F50D;  idx_transactions_needs_review ( needs_review ) </title><use x='572' y='679' href='#idx'/></g><a href='#Default.transactions.needs_review'><g><title>&#10697;  needs_review
-     * integer default 0</title><text id='Default&#46;transactions&#46;needs&#95;review' x='593' y='693'>needs&#95;review</text></g></a>
-<text x='756' y='689' text-anchor='end' class='colType'>&#35;</text>  <use x='571' y='699' href='#nn'/><g><title>&#x1F50D;  idx_transactions_category_source ( category_source ) </title><use x='572' y='698' href='#idx'/></g><a href='#Default.transactions.category_source'><g><title>&#10697;  category_source
-     * text default &apos;unknown&apos;</title><text id='Default&#46;transactions&#46;category&#95;source' x='593' y='712'>category&#95;source</text></g></a>
-<text x='756' y='708' text-anchor='end' class='colType'>t</text>  <a href='#Default.transactions.category_confidence'><g><title>&#10697;  category_confidence
-     real</title><text id='Default&#46;transactions&#46;category&#95;confidence' x='593' y='731'>category&#95;confidence</text></g></a>
-<text x='756' y='727' text-anchor='end' class='colType'>&#35;</text>  <a href='#Default.transactions.category_rule_id'><g><title>&#10697;  category_rule_id
-     integer
- &#8599; category_rules( id )</title><text id='Default&#46;transactions&#46;category&#95;rule&#95;id' x='593' y='750' onmouseover="hghl(['transactions_FK_transactions category_rules','Default.category_rules.id'])" onmouseout="uhghl(['transactions_FK_transactions category_rules','Default.category_rules.id'])">category&#95;rule&#95;id</text></g></a>
-<a href='#Default.transactions.category_rule_id'><g><title>&#x1F517;  References category_rules ( category_rule_id -&gt; id ) </title><use x='746' y='736' href='#fk'/></g></a>
-  <a href='#Default.transactions.categorized_at'><g><title>&#10697;  categorized_at
-     text</title><text id='Default&#46;transactions&#46;categorized&#95;at' x='593' y='769'>categorized&#95;at</text></g></a>
-<text x='756' y='765' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  idx_transactions_reviewed_at ( reviewed_at ) </title><use x='572' y='774' href='#idx'/></g><a href='#Default.transactions.reviewed_at'><g><title>&#10697;  reviewed_at
-     text</title><text id='Default&#46;transactions&#46;reviewed&#95;at' x='593' y='788'>reviewed&#95;at</text></g></a>
-<text x='756' y='784' text-anchor='end' class='colType'>t</text>  <use x='571' y='794' href='#nn'/><g><title>&#x1F50D;  idx_transactions_ignored ( ignored ) </title><use x='572' y='793' href='#idx'/></g><a href='#Default.transactions.ignored'><g><title>&#10697;  ignored
-     * integer default 0</title><text id='Default&#46;transactions&#46;ignored' x='593' y='807'>ignored</text></g></a>
-<text x='756' y='803' text-anchor='end' class='colType'>&#35;</text>  <use x='571' y='813' href='#nn'/><g><title>&#x1F50D;  idx_transactions_kind ( transaction_kind ) </title><use x='572' y='812' href='#idx'/></g><a href='#Default.transactions.transaction_kind'><g><title>&#10697;  transaction_kind
-     * text default &apos;expense&apos;</title><text id='Default&#46;transactions&#46;transaction&#95;kind' x='593' y='826'>transaction&#95;kind</text></g></a>
-<text x='756' y='822' text-anchor='end' class='colType'>t</text>  <use x='571' y='832' href='#nn'/><g><title>&#x1F50D;  Unq unq_transactions_fingerprint ( fingerprint ) </title><use x='572' y='831' href='#unq'/></g><a href='#Default.transactions.fingerprint'><g><title>&#10697;  fingerprint
-     * text</title><text id='Default&#46;transactions&#46;fingerprint' x='593' y='845'>fingerprint</text></g></a>
-<text x='756' y='841' text-anchor='end' class='colType'>t</text>  <use x='571' y='851' href='#nn'/><a href='#Default.transactions.created_at'><g><title>&#10697;  created_at
-     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;transactions&#46;created&#95;at' x='593' y='864'>created&#95;at</text></g></a>
-<text x='756' y='860' text-anchor='end' class='colType'>t</text>
+ &#8601; statements( statement_type_id )</title><text id='Default&#46;statement&#95;types&#46;id' x='878' y='427' onmouseover="hghl(['statements_FK_statements statement_types','Default.statements.statement_type_id'])" onmouseout="uhghl(['statements_FK_statements statement_types','Default.statements.statement_type_id'])" class='colPk'>id</text></g></a>
+<a href='#Default.statement_types.id'><g><title>&#x1F517;  Referred by statements ( statement_type_id -&gt; id ) </title><use x='1031' y='413' href='#ref'/></g></a>
+  <use x='856' y='433' href='#nn'/><g><title>&#x1F50D;  Unq uq_statement_types_name ( name ) &#x1F50D;  idx_statement_types_active ( active, name ) </title><use x='857' y='432' href='#unq'/></g><a href='#Default.statement_types.name'><g><title>&#10697;  name
+     * text</title><text id='Default&#46;statement&#95;types&#46;name' x='878' y='446'>name</text></g></a>
+<text x='1041' y='442' text-anchor='end' class='colType'>t</text>  <use x='856' y='452' href='#nn'/><a href='#Default.statement_types.parser_type'><g><title>&#10697;  parser_type
+     * text default &apos;credit_card&apos;</title><text id='Default&#46;statement&#95;types&#46;parser&#95;type' x='878' y='465'>parser&#95;type</text></g></a>
+<text x='1041' y='461' text-anchor='end' class='colType'>t</text>  <use x='856' y='471' href='#nn'/><a href='#Default.statement_types.import_mode'><g><title>&#10697;  import_mode
+     * text default &apos;ledger&apos;</title><text id='Default&#46;statement&#95;types&#46;import&#95;mode' x='878' y='484'>import&#95;mode</text></g></a>
+<text x='1041' y='480' text-anchor='end' class='colType'>t</text>  <use x='856' y='490' href='#nn'/><a href='#Default.statement_types.default_account_type'><g><title>&#10697;  default_account_type
+     * text default &apos;checking&apos;</title><text id='Default&#46;statement&#95;types&#46;default&#95;account&#95;type' x='878' y='503'>default&#95;account&#95;type</text></g></a>
+<text x='1041' y='499' text-anchor='end' class='colType'>t</text>  <use x='856' y='509' href='#nn'/><g><title>&#x1F50D;  idx_statement_types_active ( active, name ) </title><use x='857' y='508' href='#idx'/></g><a href='#Default.statement_types.active'><g><title>&#10697;  active
+     * integer default 1</title><text id='Default&#46;statement&#95;types&#46;active' x='878' y='522'>active</text></g></a>
+<text x='1041' y='518' text-anchor='end' class='colType'>&#35;</text>  <use x='856' y='528' href='#nn'/><a href='#Default.statement_types.created_at'><g><title>&#10697;  created_at
+     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;statement&#95;types&#46;created&#95;at' x='878' y='541'>created&#95;at</text></g></a>
+<text x='1041' y='537' text-anchor='end' class='colType'>t</text>
 <!-- == Table 'statements' == -->
-<rect id='depict_Default&#46;statements' class='entity' style='stroke:none;' x='1121' y='447' width='190' height='380' rx='5' ry='5' />
-<path d='M 1121 480 L 1121 451 Q 1121 447 1126 447 L 1306 447 Q 1311 447 1311 451 L 1311 480 L1121 480 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='1121' y='447' width='190' height='380' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
+<rect id='depict_Default&#46;statements' class='entity' style='stroke:#F9FAFC' x='1121' y='447' width='190' height='380' rx='4' ry='4' />
+<rect x='1121' y='447' width='190' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='1121' y='451' width='190' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
 <a href='#Default.statements'><g><title>Table Default.statements</title><text id='depict&#45;Default&#46;statements' x='1179' y='469' class='tableHeader' style='fill:#414448;'>statements</text></g></a>
   <use x='1122' y='490' href='#nn'/><g><title>&#x1F511;  Pk pk_statements ( id ) </title><use x='1123' y='489' href='#pk'/></g><a href='#Default.statements.id'><g><title>&#10697;  id
      * integer
@@ -850,7 +810,7 @@ Referred by transactions ( category_rule_id -&gt; id ) </title><use x='404' y='1
 <a href='#Default.statements.statement_type_id'><g><title>&#x1F517;  References statement_types ( statement_type_id -&gt; id ) </title><use x='1297' y='527' href='#fk'/></g></a>
   <use x='1122' y='547' href='#nn'/><a href='#Default.statements.filename'><g><title>&#10697;  filename
      * text</title><text id='Default&#46;statements&#46;filename' x='1144' y='560'>filename</text></g></a>
-<text x='1307' y='556' text-anchor='end' class='colType'>t</text>  <use x='1122' y='566' href='#nn'/><g><title>&#x1F50D;  Unq unq_statements_checksum ( checksum ) </title><use x='1123' y='565' href='#unq'/></g><a href='#Default.statements.checksum'><g><title>&#10697;  checksum
+<text x='1307' y='556' text-anchor='end' class='colType'>t</text>  <use x='1122' y='566' href='#nn'/><g><title>&#x1F50D;  Unq uq_statements_checksum ( checksum ) </title><use x='1123' y='565' href='#unq'/></g><a href='#Default.statements.checksum'><g><title>&#10697;  checksum
      * text</title><text id='Default&#46;statements&#46;checksum' x='1144' y='579'>checksum</text></g></a>
 <text x='1307' y='575' text-anchor='end' class='colType'>t</text>  <use x='1122' y='585' href='#nn'/><a href='#Default.statements.extension'><g><title>&#10697;  extension
      * text default &apos;&apos;</title><text id='Default&#46;statements&#46;extension' x='1144' y='598'>extension</text></g></a>
@@ -877,58 +837,130 @@ Referred by transactions ( category_rule_id -&gt; id ) </title><use x='404' y='1
 <text x='1307' y='784' text-anchor='end' class='colType'>&#35;</text>  <use x='1122' y='794' href='#nn'/><g><title>&#x1F50D;  idx_statements_uploaded_at ( uploaded_at ) </title><use x='1123' y='793' href='#idx'/></g><a href='#Default.statements.uploaded_at'><g><title>&#10697;  uploaded_at
      * text default CURRENT_TIMESTAMP</title><text id='Default&#46;statements&#46;uploaded&#95;at' x='1144' y='807'>uploaded&#95;at</text></g></a>
 <text x='1307' y='803' text-anchor='end' class='colType'>t</text>
-<!-- == Table 'accounts' == -->
-<rect id='depict_Default&#46;accounts' class='entity' style='stroke:none;' x='836' y='732' width='190' height='133' rx='5' ry='5' />
-<path d='M 836 765 L 836 736 Q 836 732 841 732 L 1021 732 Q 1026 732 1026 736 L 1026 765 L836 765 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='836' y='732' width='190' height='133' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.accounts'><g><title>Table Default.accounts</title><text id='depict&#45;Default&#46;accounts' x='900' y='754' class='tableHeader' style='fill:#414448;'>accounts</text></g></a>
-  <use x='837' y='775' href='#nn'/><g><title>&#x1F511;  Pk pk_accounts ( id ) </title><use x='838' y='774' href='#pk'/></g><a href='#Default.accounts.id'><g><title>&#10697;  id
+<!-- == Table 'tags' == -->
+<rect id='depict_Default&#46;tags' class='entity' style='stroke:#F9FAFC' x='969' y='162' width='133' height='171' rx='4' ry='4' />
+<rect x='969' y='162' width='133' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='969' y='166' width='133' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.tags'><g><title>Table Default.tags</title><text id='depict&#45;Default&#46;tags' x='1018' y='184' class='tableHeader' style='fill:#414448;'>tags</text></g></a>
+  <use x='970' y='205' href='#nn'/><g><title>&#x1F511;  Pk pk_tags ( id ) </title><use x='971' y='204' href='#pk'/></g><a href='#Default.tags.id'><g><title>&#10697;  id
      * integer
- &#8601; accounts( paid_from_account_id )
- &#8601; statements( account_id )
- &#8601; transactions( account_id )</title><text id='Default&#46;accounts&#46;id' x='859' y='788' onmouseover="hghl(['accounts_FK_accounts accounts','Default.accounts.paid_from_account_id','statements_FK_statements accounts','Default.statements.account_id','transactions_FK_transactions accounts','Default.transactions.account_id'])" onmouseout="uhghl(['accounts_FK_accounts accounts','Default.accounts.paid_from_account_id','statements_FK_statements accounts','Default.statements.account_id','transactions_FK_transactions accounts','Default.transactions.account_id'])" class='colPk'>id</text></g></a>
-<a href='#Default.accounts.id'><g><title>&#x1F517;  Referred by accounts ( paid_from_account_id -&gt; id ) 
-Referred by statements ( account_id -&gt; id ) 
-Referred by transactions ( account_id -&gt; id ) </title><use x='1012' y='774' href='#ref'/></g></a>
-  <use x='837' y='794' href='#nn'/><g><title>&#x1F50D;  Unq unq_accounts_name ( name ) </title><use x='838' y='793' href='#unq'/></g><a href='#Default.accounts.name'><g><title>&#10697;  name
-     * text</title><text id='Default&#46;accounts&#46;name' x='859' y='807'>name</text></g></a>
-<text x='1022' y='803' text-anchor='end' class='colType'>t</text>  <use x='837' y='813' href='#nn'/><a href='#Default.accounts.account_type'><g><title>&#10697;  account_type
-     * text default &apos;checking&apos;</title><text id='Default&#46;accounts&#46;account&#95;type' x='859' y='826'>account&#95;type</text></g></a>
-<text x='1022' y='822' text-anchor='end' class='colType'>t</text>  <a href='#Default.accounts.paid_from_account_id'><g><title>&#10697;  paid_from_account_id
+ &#8601; category_rule_tags( tag_id )
+ &#8601; transaction_tags( tag_id )</title><text id='Default&#46;tags&#46;id' x='992' y='218' onmouseover="hghl(['category_rule_tags_FK_category_rule_tags tags','Default.category_rule_tags.tag_id','transaction_tags_FK_transaction_tags tags','Default.transaction_tags.tag_id'])" onmouseout="uhghl(['category_rule_tags_FK_category_rule_tags tags','Default.category_rule_tags.tag_id','transaction_tags_FK_transaction_tags tags','Default.transaction_tags.tag_id'])" class='colPk'>id</text></g></a>
+<a href='#Default.tags.id'><g><title>&#x1F517;  Referred by category_rule_tags ( tag_id -&gt; id ) 
+Referred by transaction_tags ( tag_id -&gt; id ) </title><use x='1088' y='204' href='#ref'/></g></a>
+  <use x='970' y='224' href='#nn'/><g><title>&#x1F50D;  idx_tags_name ( name ) </title><use x='971' y='223' href='#idx'/></g><a href='#Default.tags.name'><g><title>&#10697;  name
+     * text</title><text id='Default&#46;tags&#46;name' x='992' y='237'>name</text></g></a>
+<text x='1098' y='233' text-anchor='end' class='colType'>t</text>  <a href='#Default.tags.description'><g><title>&#10697;  description
+     text</title><text id='Default&#46;tags&#46;description' x='992' y='256'>description</text></g></a>
+<text x='1098' y='252' text-anchor='end' class='colType'>t</text>  <a href='#Default.tags.instruction'><g><title>&#10697;  instruction
+     text</title><text id='Default&#46;tags&#46;instruction' x='992' y='275'>instruction</text></g></a>
+<text x='1098' y='271' text-anchor='end' class='colType'>t</text>  <a href='#Default.tags.color'><g><title>&#10697;  color
+     text</title><text id='Default&#46;tags&#46;color' x='992' y='294'>color</text></g></a>
+<text x='1098' y='290' text-anchor='end' class='colType'>t</text>  <use x='970' y='300' href='#nn'/><a href='#Default.tags.created_at'><g><title>&#10697;  created_at
+     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;tags&#46;created&#95;at' x='992' y='313'>created&#95;at</text></g></a>
+<text x='1098' y='309' text-anchor='end' class='colType'>t</text>
+<!-- == Table 'transaction_tags' == -->
+<rect id='depict_Default&#46;transaction&#95;tags' class='entity' style='stroke:#F9FAFC' x='741' y='181' width='152' height='152' rx='4' ry='4' />
+<rect x='741' y='181' width='152' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='741' y='185' width='152' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.transaction_tags'><g><title>Table Default.transaction_tags</title><text id='depict&#45;Default&#46;transaction&#95;tags' x='764' y='203' class='tableHeader' style='fill:#414448;'>transaction&#95;tags</text></g></a>
+  <use x='742' y='224' href='#nn'/><g><title>&#x1F511;  Pk pk_transaction_tags ( transaction_id, tag_id ) </title><use x='743' y='223' href='#pk'/></g><a href='#Default.transaction_tags.transaction_id'><g><title>&#10697;  transaction_id
+     * integer
+ &#8599; transactions( id )</title><text id='Default&#46;transaction&#95;tags&#46;transaction&#95;id' x='764' y='237' onmouseover="hghl(['transaction_tags_FK_transaction_tags transactions','Default.transactions.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags transactions','Default.transactions.id'])" class='colPk'>transaction&#95;id</text></g></a>
+<a href='#Default.transaction_tags.transaction_id'><g><title>&#x1F517;  References transactions ( transaction_id -&gt; id ) </title><use x='879' y='223' href='#fk'/></g></a>
+  <use x='742' y='243' href='#nn'/><g><title>&#x1F511;  Pk pk_transaction_tags ( transaction_id, tag_id ) &#x1F50D;  idx_transaction_tags_tag ( tag_id ) </title><use x='743' y='242' href='#pk'/></g><a href='#Default.transaction_tags.tag_id'><g><title>&#10697;  tag_id
+     * integer
+ &#8599; tags( id )</title><text id='Default&#46;transaction&#95;tags&#46;tag&#95;id' x='764' y='256' onmouseover="hghl(['transaction_tags_FK_transaction_tags tags','Default.tags.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags tags','Default.tags.id'])" class='colPk'>tag&#95;id</text></g></a>
+<a href='#Default.transaction_tags.tag_id'><g><title>&#x1F517;  References tags ( tag_id -&gt; id ) </title><use x='879' y='242' href='#fk'/></g></a>
+  <use x='742' y='262' href='#nn'/><a href='#Default.transaction_tags.source'><g><title>&#10697;  source
+     * text default &apos;unknown&apos;</title><text id='Default&#46;transaction&#95;tags&#46;source' x='764' y='275'>source</text></g></a>
+<text x='889' y='271' text-anchor='end' class='colType'>t</text>  <a href='#Default.transaction_tags.rule_id'><g><title>&#10697;  rule_id
      integer
- &#8599; accounts( id )</title><text id='Default&#46;accounts&#46;paid&#95;from&#95;account&#95;id' x='859' y='845' onmouseover="hghl(['accounts_FK_accounts accounts','Default.accounts.id'])" onmouseout="uhghl(['accounts_FK_accounts accounts','Default.accounts.id'])">paid&#95;from&#95;account&#95;id</text></g></a>
-<a href='#Default.accounts.paid_from_account_id'><g><title>&#x1F517;  References accounts ( paid_from_account_id -&gt; id ) </title><use x='1012' y='831' href='#fk'/></g></a>
-
-<!-- == Table 'statement_types' == -->
-<rect id='depict_Default&#46;statement&#95;types' class='entity' style='stroke:none;' x='855' y='371' width='190' height='190' rx='5' ry='5' />
-<path d='M 855 404 L 855 375 Q 855 371 860 371 L 1040 371 Q 1045 371 1045 375 L 1045 404 L855 404 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='855' y='371' width='190' height='190' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.statement_types'><g><title>Table Default.statement_types</title><text id='depict&#45;Default&#46;statement&#95;types' x='897' y='393' class='tableHeader' style='fill:#414448;'>statement&#95;types</text></g></a>
-  <use x='856' y='414' href='#nn'/><g><title>&#x1F511;  Pk pk_statement_types ( id ) </title><use x='857' y='413' href='#pk'/></g><a href='#Default.statement_types.id'><g><title>&#10697;  id
+ &#8599; category_rules( id )</title><text id='Default&#46;transaction&#95;tags&#46;rule&#95;id' x='764' y='294' onmouseover="hghl(['transaction_tags_FK_transaction_tags category_rules','Default.category_rules.id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags category_rules','Default.category_rules.id'])">rule&#95;id</text></g></a>
+<a href='#Default.transaction_tags.rule_id'><g><title>&#x1F517;  References category_rules ( rule_id -&gt; id ) </title><use x='879' y='280' href='#fk'/></g></a>
+  <use x='742' y='300' href='#nn'/><a href='#Default.transaction_tags.assigned_at'><g><title>&#10697;  assigned_at
+     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;transaction&#95;tags&#46;assigned&#95;at' x='764' y='313'>assigned&#95;at</text></g></a>
+<text x='889' y='309' text-anchor='end' class='colType'>t</text>
+<!-- == Table 'transactions' == -->
+<rect id='depict_Default&#46;transactions' class='entity' style='stroke:#F9FAFC' x='570' y='466' width='190' height='437' rx='4' ry='4' />
+<rect x='570' y='466' width='190' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='570' y='470' width='190' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.transactions'><g><title>Table Default.transactions</title><text id='depict&#45;Default&#46;transactions' x='624' y='488' class='tableHeader' style='fill:#414448;'>transactions</text></g></a>
+  <use x='571' y='509' href='#nn'/><g><title>&#x1F511;  Pk pk_transactions ( id ) </title><use x='572' y='508' href='#pk'/></g><a href='#Default.transactions.id'><g><title>&#10697;  id
      * integer
- &#8601; statements( statement_type_id )</title><text id='Default&#46;statement&#95;types&#46;id' x='878' y='427' onmouseover="hghl(['statements_FK_statements statement_types','Default.statements.statement_type_id'])" onmouseout="uhghl(['statements_FK_statements statement_types','Default.statements.statement_type_id'])" class='colPk'>id</text></g></a>
-<a href='#Default.statement_types.id'><g><title>&#x1F517;  Referred by statements ( statement_type_id -&gt; id ) </title><use x='1031' y='413' href='#ref'/></g></a>
-  <use x='856' y='433' href='#nn'/><g><title>&#x1F50D;  Unq unq_statement_types_name ( name ) &#x1F50D;  idx_statement_types_active ( active, name ) </title><use x='857' y='432' href='#unq'/></g><a href='#Default.statement_types.name'><g><title>&#10697;  name
-     * text</title><text id='Default&#46;statement&#95;types&#46;name' x='878' y='446'>name</text></g></a>
-<text x='1041' y='442' text-anchor='end' class='colType'>t</text>  <use x='856' y='452' href='#nn'/><a href='#Default.statement_types.parser_type'><g><title>&#10697;  parser_type
-     * text default &apos;credit_card&apos;</title><text id='Default&#46;statement&#95;types&#46;parser&#95;type' x='878' y='465'>parser&#95;type</text></g></a>
-<text x='1041' y='461' text-anchor='end' class='colType'>t</text>  <use x='856' y='471' href='#nn'/><a href='#Default.statement_types.import_mode'><g><title>&#10697;  import_mode
-     * text default &apos;ledger&apos;</title><text id='Default&#46;statement&#95;types&#46;import&#95;mode' x='878' y='484'>import&#95;mode</text></g></a>
-<text x='1041' y='480' text-anchor='end' class='colType'>t</text>  <use x='856' y='490' href='#nn'/><a href='#Default.statement_types.default_account_type'><g><title>&#10697;  default_account_type
-     * text default &apos;checking&apos;</title><text id='Default&#46;statement&#95;types&#46;default&#95;account&#95;type' x='878' y='503'>default&#95;account&#95;type</text></g></a>
-<text x='1041' y='499' text-anchor='end' class='colType'>t</text>  <use x='856' y='509' href='#nn'/><g><title>&#x1F50D;  idx_statement_types_active ( active, name ) </title><use x='857' y='508' href='#idx'/></g><a href='#Default.statement_types.active'><g><title>&#10697;  active
-     * integer default 1</title><text id='Default&#46;statement&#95;types&#46;active' x='878' y='522'>active</text></g></a>
-<text x='1041' y='518' text-anchor='end' class='colType'>&#35;</text>  <use x='856' y='528' href='#nn'/><a href='#Default.statement_types.created_at'><g><title>&#10697;  created_at
-     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;statement&#95;types&#46;created&#95;at' x='878' y='541'>created&#95;at</text></g></a>
-<text x='1041' y='537' text-anchor='end' class='colType'>t</text>
-<!-- == Table 'settings' == -->
-<rect id='depict_Default&#46;settings' class='entity' style='stroke:none;' x='95' y='67' width='95' height='76' rx='5' ry='5' />
-<path d='M 95 100 L 95 71 Q 95 67 100 67 L 185 67 Q 190 67 190 71 L 190 100 L95 100 ' style='fill:url(#tbg_3986C1);stroke:none;' />
-<rect class='entity' x='95' y='67' width='95' height='76' rx='5' ry='5' style='fill:none;stroke:#D5D8DC'/>
-<a href='#Default.settings'><g><title>Table Default.settings</title><text id='depict&#45;Default&#46;settings' x='114' y='89' class='tableHeader' style='fill:#414448;'>settings</text></g></a>
-  <use x='96' y='110' href='#nn'/><a href='#Default.settings.value'><g><title>&#10697;  value
-     * text</title><text id='Default&#46;settings&#46;value' x='118' y='123'>value</text></g></a>
-<text x='186' y='119' text-anchor='end' class='colType'>t</text>
+ &#8601; transaction_tags( transaction_id )</title><text id='Default&#46;transactions&#46;id' x='593' y='522' onmouseover="hghl(['transaction_tags_FK_transaction_tags transactions','Default.transaction_tags.transaction_id'])" onmouseout="uhghl(['transaction_tags_FK_transaction_tags transactions','Default.transaction_tags.transaction_id'])" class='colPk'>id</text></g></a>
+<a href='#Default.transactions.id'><g><title>&#x1F517;  Referred by transaction_tags ( transaction_id -&gt; id ) </title><use x='746' y='508' href='#ref'/></g></a>
+  <g><title>&#x1F50D;  idx_transactions_statement ( statement_id ) </title><use x='572' y='527' href='#idx'/></g><a href='#Default.transactions.statement_id'><g><title>&#10697;  statement_id
+     integer
+ &#8599; statements( id )</title><text id='Default&#46;transactions&#46;statement&#95;id' x='593' y='541' onmouseover="hghl(['transactions_FK_transactions statements','Default.statements.id'])" onmouseout="uhghl(['transactions_FK_transactions statements','Default.statements.id'])">statement&#95;id</text></g></a>
+<a href='#Default.transactions.statement_id'><g><title>&#x1F517;  References statements ( statement_id -&gt; id ) </title><use x='746' y='527' href='#fk'/></g></a>
+  <g><title>&#x1F50D;  idx_transactions_account ( account_id ) &#x1F50D;  idx_transactions_ignored_account ( ignored, account_id ) </title><use x='572' y='546' href='#idx'/></g><a href='#Default.transactions.account_id'><g><title>&#10697;  account_id
+     integer
+ &#8599; accounts( id )</title><text id='Default&#46;transactions&#46;account&#95;id' x='593' y='560' onmouseover="hghl(['transactions_FK_transactions accounts','Default.accounts.id'])" onmouseout="uhghl(['transactions_FK_transactions accounts','Default.accounts.id'])">account&#95;id</text></g></a>
+<a href='#Default.transactions.account_id'><g><title>&#x1F517;  References accounts ( account_id -&gt; id ) </title><use x='746' y='546' href='#fk'/></g></a>
+  <g><title>&#x1F50D;  idx_transactions_merchant ( merchant_id ) &#x1F50D;  idx_transactions_ignored_merchant ( ignored, merchant_id ) </title><use x='572' y='565' href='#idx'/></g><a href='#Default.transactions.merchant_id'><g><title>&#10697;  merchant_id
+     integer
+ &#8599; merchants( id )</title><text id='Default&#46;transactions&#46;merchant&#95;id' x='593' y='579' onmouseover="hghl(['transactions_FK_transactions merchants','Default.merchants.id'])" onmouseout="uhghl(['transactions_FK_transactions merchants','Default.merchants.id'])">merchant&#95;id</text></g></a>
+<a href='#Default.transactions.merchant_id'><g><title>&#x1F517;  References merchants ( merchant_id -&gt; id ) </title><use x='746' y='565' href='#fk'/></g></a>
+  <use x='571' y='585' href='#nn'/><g><title>&#x1F50D;  idx_transactions_date ( tx_date ) &#x1F50D;  idx_transactions_date_category ( tx_date, category ) &#x1F50D;  idx_transactions_dashboard_date_amount ( tx_date, amount ) &#x1F50D;  idx_transactions_ignored_date ( ignored, tx_date ) </title><use x='572' y='584' href='#idx'/></g><a href='#Default.transactions.tx_date'><g><title>&#10697;  tx_date
+     * text</title><text id='Default&#46;transactions&#46;tx&#95;date' x='593' y='598'>tx&#95;date</text></g></a>
+<text x='756' y='594' text-anchor='end' class='colType'>t</text>  <use x='571' y='604' href='#nn'/><g><title>&#x1F50D;  idx_transactions_description ( description ) </title><use x='572' y='603' href='#idx'/></g><a href='#Default.transactions.description'><g><title>&#10697;  description
+     * text</title><text id='Default&#46;transactions&#46;description' x='593' y='617'>description</text></g></a>
+<text x='756' y='613' text-anchor='end' class='colType'>t</text>  <use x='571' y='623' href='#nn'/><g><title>&#x1F50D;  idx_transactions_amount ( amount ) &#x1F50D;  idx_transactions_dashboard_category_amount ( category, amount ) &#x1F50D;  idx_transactions_dashboard_date_amount ( tx_date, amount ) </title><use x='572' y='622' href='#idx'/></g><a href='#Default.transactions.amount'><g><title>&#10697;  amount
+     * numeric(14,2)</title><text id='Default&#46;transactions&#46;amount' x='593' y='636'>amount</text></g></a>
+<text x='756' y='632' text-anchor='end' class='colType'>&#35;</text>  <g><title>&#x1F50D;  idx_transactions_category ( category ) &#x1F50D;  idx_transactions_date_category ( tx_date, category ) &#x1F50D;  idx_transactions_dashboard_category_amount ( category, amount ) </title><use x='572' y='641' href='#idx'/></g><a href='#Default.transactions.category'><g><title>&#10697;  category
+     text</title><text id='Default&#46;transactions&#46;category' x='593' y='655'>category</text></g></a>
+<text x='756' y='651' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  idx_transactions_category_id ( category_id ) &#x1F50D;  idx_transactions_ignored_category_id ( ignored, category_id ) </title><use x='572' y='660' href='#idx'/></g><a href='#Default.transactions.category_id'><g><title>&#10697;  category_id
+     integer
+ &#8599; categories( id )</title><text id='Default&#46;transactions&#46;category&#95;id' x='593' y='674' onmouseover="hghl(['transactions_FK_transactions categories','Default.categories.id'])" onmouseout="uhghl(['transactions_FK_transactions categories','Default.categories.id'])">category&#95;id</text></g></a>
+<a href='#Default.transactions.category_id'><g><title>&#x1F517;  References categories ( category_id -&gt; id ) </title><use x='746' y='660' href='#fk'/></g></a>
+  <use x='571' y='680' href='#nn'/><g><title>&#x1F50D;  idx_transactions_needs_review ( needs_review ) </title><use x='572' y='679' href='#idx'/></g><a href='#Default.transactions.needs_review'><g><title>&#10697;  needs_review
+     * integer default 0</title><text id='Default&#46;transactions&#46;needs&#95;review' x='593' y='693'>needs&#95;review</text></g></a>
+<text x='756' y='689' text-anchor='end' class='colType'>&#35;</text>  <use x='571' y='699' href='#nn'/><g><title>&#x1F50D;  idx_transactions_category_source ( category_source ) </title><use x='572' y='698' href='#idx'/></g><a href='#Default.transactions.category_source'><g><title>&#10697;  category_source
+     * text default &apos;unknown&apos;</title><text id='Default&#46;transactions&#46;category&#95;source' x='593' y='712'>category&#95;source</text></g></a>
+<text x='756' y='708' text-anchor='end' class='colType'>t</text>  <a href='#Default.transactions.category_confidence'><g><title>&#10697;  category_confidence
+     float</title><text id='Default&#46;transactions&#46;category&#95;confidence' x='593' y='731'>category&#95;confidence</text></g></a>
+<text x='756' y='727' text-anchor='end' class='colType'>&#35;</text>  <a href='#Default.transactions.category_rule_id'><g><title>&#10697;  category_rule_id
+     integer
+ &#8599; category_rules( id )</title><text id='Default&#46;transactions&#46;category&#95;rule&#95;id' x='593' y='750' onmouseover="hghl(['transactions_FK_transactions category_rules','Default.category_rules.id'])" onmouseout="uhghl(['transactions_FK_transactions category_rules','Default.category_rules.id'])">category&#95;rule&#95;id</text></g></a>
+<a href='#Default.transactions.category_rule_id'><g><title>&#x1F517;  References category_rules ( category_rule_id -&gt; id ) </title><use x='746' y='736' href='#fk'/></g></a>
+  <a href='#Default.transactions.category_metadata'><g><title>&#10697;  category_metadata
+     text</title><text id='Default&#46;transactions&#46;category&#95;metadata' x='593' y='769'>category&#95;metadata</text></g></a>
+<text x='756' y='765' text-anchor='end' class='colType'>t</text>  <a href='#Default.transactions.categorized_at'><g><title>&#10697;  categorized_at
+     text</title><text id='Default&#46;transactions&#46;categorized&#95;at' x='593' y='788'>categorized&#95;at</text></g></a>
+<text x='756' y='784' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  idx_transactions_reviewed_at ( reviewed_at ) </title><use x='572' y='793' href='#idx'/></g><a href='#Default.transactions.reviewed_at'><g><title>&#10697;  reviewed_at
+     text</title><text id='Default&#46;transactions&#46;reviewed&#95;at' x='593' y='807'>reviewed&#95;at</text></g></a>
+<text x='756' y='803' text-anchor='end' class='colType'>t</text>  <use x='571' y='813' href='#nn'/><g><title>&#x1F50D;  idx_transactions_ignored ( ignored ) &#x1F50D;  idx_transactions_ignored_merchant ( ignored, merchant_id ) &#x1F50D;  idx_transactions_ignored_account ( ignored, account_id ) &#x1F50D;  idx_transactions_ignored_category_id ( ignored, category_id ) &#x1F50D;  idx_transactions_ignored_date ( ignored, tx_date ) </title><use x='572' y='812' href='#idx'/></g><a href='#Default.transactions.ignored'><g><title>&#10697;  ignored
+     * integer default 0</title><text id='Default&#46;transactions&#46;ignored' x='593' y='826'>ignored</text></g></a>
+<text x='756' y='822' text-anchor='end' class='colType'>&#35;</text>  <use x='571' y='832' href='#nn'/><g><title>&#x1F50D;  idx_transactions_kind ( transaction_kind ) </title><use x='572' y='831' href='#idx'/></g><a href='#Default.transactions.transaction_kind'><g><title>&#10697;  transaction_kind
+     * text default &apos;expense&apos;</title><text id='Default&#46;transactions&#46;transaction&#95;kind' x='593' y='845'>transaction&#95;kind</text></g></a>
+<text x='756' y='841' text-anchor='end' class='colType'>t</text>  <use x='571' y='851' href='#nn'/><g><title>&#x1F50D;  Unq uq_transactions_fingerprint ( fingerprint ) </title><use x='572' y='850' href='#unq'/></g><a href='#Default.transactions.fingerprint'><g><title>&#10697;  fingerprint
+     * text</title><text id='Default&#46;transactions&#46;fingerprint' x='593' y='864'>fingerprint</text></g></a>
+<text x='756' y='860' text-anchor='end' class='colType'>t</text>  <use x='571' y='870' href='#nn'/><a href='#Default.transactions.created_at'><g><title>&#10697;  created_at
+     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;transactions&#46;created&#95;at' x='593' y='883'>created&#95;at</text></g></a>
+<text x='756' y='879' text-anchor='end' class='colType'>t</text>
+<!-- == Table 'categories' == -->
+<rect id='depict_Default&#46;categories' class='entity' style='stroke:#F9FAFC' x='551' y='219' width='133' height='171' rx='4' ry='4' />
+<rect x='551' y='219' width='133' height='8' rx='4' ry='4' style='stroke-width:0;fill:url(#ttl_3986C1);'/>
+<rect x='551' y='223' width='133' height='29' style='stroke-width:0;fill:url(#tbg_3986C1);'/>
+<a href='#Default.categories'><g><title>Table Default.categories</title><text id='depict&#45;Default&#46;categories' x='582' y='241' class='tableHeader' style='fill:#414448;'>categories</text></g></a>
+  <use x='552' y='262' href='#nn'/><g><title>&#x1F511;  Pk pk_categories ( id ) </title><use x='553' y='261' href='#pk'/></g><a href='#Default.categories.id'><g><title>&#10697;  id
+     * integer
+ &#8601; category_rules( category_id )
+ &#8601; transactions( category_id )</title><text id='Default&#46;categories&#46;id' x='574' y='275' onmouseover="hghl(['category_rules_FK_category_rules categories','Default.category_rules.category_id','transactions_FK_transactions categories','Default.transactions.category_id'])" onmouseout="uhghl(['category_rules_FK_category_rules categories','Default.category_rules.category_id','transactions_FK_transactions categories','Default.transactions.category_id'])" class='colPk'>id</text></g></a>
+<a href='#Default.categories.id'><g><title>&#x1F517;  Referred by category_rules ( category_id -&gt; id ) 
+Referred by transactions ( category_id -&gt; id ) </title><use x='670' y='261' href='#ref'/></g></a>
+  <use x='552' y='281' href='#nn'/><g><title>&#x1F50D;  idx_categories_name ( name ) </title><use x='553' y='280' href='#idx'/></g><a href='#Default.categories.name'><g><title>&#10697;  name
+     * text</title><text id='Default&#46;categories&#46;name' x='574' y='294'>name</text></g></a>
+<text x='680' y='290' text-anchor='end' class='colType'>t</text>  <a href='#Default.categories.description'><g><title>&#10697;  description
+     text</title><text id='Default&#46;categories&#46;description' x='574' y='313'>description</text></g></a>
+<text x='680' y='309' text-anchor='end' class='colType'>t</text>  <a href='#Default.categories.instruction'><g><title>&#10697;  instruction
+     text</title><text id='Default&#46;categories&#46;instruction' x='574' y='332'>instruction</text></g></a>
+<text x='680' y='328' text-anchor='end' class='colType'>t</text>  <use x='552' y='338' href='#nn'/><a href='#Default.categories.created_at'><g><title>&#10697;  created_at
+     * text default CURRENT_TIMESTAMP</title><text id='Default&#46;categories&#46;created&#95;at' x='574' y='351'>created&#95;at</text></g></a>
+<text x='680' y='347' text-anchor='end' class='colType'>t</text>  <g><title>&#x1F50D;  Unq uq_categories_builtin_key ( builtin_key ) </title><use x='553' y='356' href='#unq'/></g><a href='#Default.categories.builtin_key'><g><title>&#10697;  builtin_key
+     text</title><text id='Default&#46;categories&#46;builtin&#95;key' x='574' y='370'>builtin&#95;key</text></g></a>
+<text x='680' y='366' text-anchor='end' class='colType'>t</text>
 </g></svg></div>
 <script type='text/javascript'>
 var svgContainers = document.getElementsByClassName("svgContainer");
@@ -1058,7 +1090,7 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td><td>pk&#95;accounts</td>
 		<td>Primary Key ON id</td>
 	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>unq&#95;accounts&#95;name</td>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;accounts&#95;name</td>
 		<td>Unique Key ON name</td>
 	</tr>
 <tr><th colspan='3'>Foreign Key</th></tr>
@@ -1079,11 +1111,15 @@ function searchSVG( searchValue) {
 		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#ref'/></svg></td><td>FK_transactions accounts</td>
 		<td > id &#8601; <a href='#Default&#46;transactions'  onclick="window.scrollTo(370, 475);var nodes = document.getElementsByClassName('palpable');for (var i = 0; i < nodes.length; i++) { nodes[i].classList.remove('palpable');}; document.getElementById('depict_Default.transactions').classList.add('palpable'); return false;">&#10063; transactions</a>(account&#95;id) </td>
 	</tr>
+	<tr>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#ref'/></svg></td><td>fk_category_rules_account_id_accounts</td>
+		<td > id &#8601; <a href='#Default&#46;category&#95;rules'  onclick="window.scrollTo(85, 76);var nodes = document.getElementsByClassName('palpable');for (var i = 0; i < nodes.length; i++) { nodes[i].classList.remove('palpable');}; document.getElementById('depict_Default.category_rules').classList.add('palpable'); return false;">&#10063; category&#95;rules</a>(account&#95;id) on delete setNull </td>
+	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_accounts </td><td> account&#95;type IN &#40;&#39;checking&#39;&#44; &#39;credit&#95;card&#39;&#44; &#39;savings&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_accounts_accounts_account_type_allowed </td><td> account&#95;type IN &#40;&#39;checking&#39;&#44; &#39;credit&#95;card&#39;&#44; &#39;savings&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_accounts_001 </td><td> TRIM&#40;name&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_accounts_accounts_name_non_empty </td><td> trim&#40;name&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1119,12 +1155,20 @@ function searchSVG( searchValue) {
 		<td><a name='Default.categories.created_at'>created&#95;at</a></td>
 		<td class='dataType'> TEXT NOT NULL  DEFAULT CURRENT_TIMESTAMP </td>
 	</tr>
+	<tr>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td><a name='Default.categories.builtin_key'>builtin&#95;key</a></td>
+		<td class='dataType'> TEXT  </td>
+	</tr>
 <tr><th colspan='3'>Indexes</th></tr>
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td><td>pk&#95;categories</td>
 		<td>Primary Key ON id</td>
 	</tr>
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;categories&#95;name</td>
 		<td>Index ON name</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;categories&#95;builtin&#95;key</td>
+		<td>Unique Index ON builtin&#95;key</td>
 	</tr>
 <tr><th colspan='3'>Referring Foreign Key</th></tr>
 	<tr>
@@ -1137,8 +1181,7 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_categories </td><td> TRIM&#40;name&#41; &lt;&gt; &#39;&#39; </td>	</tr>
-<tr><th colspan='3'>Triggers</th></tr>
+		<td>&nbsp;</td><td> ck_categories_categories_name_non_empty </td><td> trim&#40;name&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1191,12 +1234,17 @@ function searchSVG( searchValue) {
 		<td class='dataType'> INTEGER NOT NULL AUTOINCREMENT </td>
 	</tr>
 	<tr>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#fk'/></svg></td>
+		<td><a name='Default.category_rules.account_id'>account&#95;id</a></td>
+		<td class='dataType'> INTEGER  </td>
+	</tr>
+	<tr>
 		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#fk'/></svg></td>
 		<td><a name='Default.category_rules.merchant_id'>merchant&#95;id</a></td>
 		<td class='dataType'> INTEGER  </td>
 	</tr>
 	<tr>
-		<td><span class='text-danger'>*</span><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td><span class='text-danger'>*</span><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td>
 		<td><a name='Default.category_rules.keyword'>keyword</a></td>
 		<td class='dataType'> TEXT NOT NULL  </td>
 	</tr>
@@ -1211,14 +1259,39 @@ function searchSVG( searchValue) {
 		<td class='dataType'> INTEGER  </td>
 	</tr>
 	<tr>
-		<td>&nbsp;</td>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td>
 		<td><a name='Default.category_rules.amount_min'>amount&#95;min</a></td>
-		<td class='dataType'> REAL  </td>
+		<td class='dataType'> NUMERIC&#40;14&#44;2&#41;  </td>
 	</tr>
 	<tr>
-		<td>&nbsp;</td>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td>
 		<td><a name='Default.category_rules.amount_max'>amount&#95;max</a></td>
-		<td class='dataType'> REAL  </td>
+		<td class='dataType'> NUMERIC&#40;14&#44;2&#41;  </td>
+	</tr>
+	<tr>
+		<td><span class='text-danger'>*</span><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td><a name='Default.category_rules.direction'>direction</a></td>
+		<td class='dataType'> TEXT NOT NULL  DEFAULT 'any' </td>
+	</tr>
+	<tr>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td><a name='Default.category_rules.keyword_scope_key'>keyword&#95;scope&#95;key</a></td>
+		<td class='dataType'> TEXT GENERATED  ALWAYS AS (CASE WHEN merchant_id IS NULL THEN keyword ELSE NULL END) </td>
+	</tr>
+	<tr>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td><a name='Default.category_rules.account_id_key'>account&#95;id&#95;key</a></td>
+		<td class='dataType'> INTEGER GENERATED  ALWAYS AS (COALESCE(account_id, -1)) </td>
+	</tr>
+	<tr>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td><a name='Default.category_rules.amount_min_key'>amount&#95;min&#95;key</a></td>
+		<td class='dataType'> NUMERIC&#40;14&#44;2&#41; GENERATED  ALWAYS AS (COALESCE(amount_min, -999999999999.00)) </td>
+	</tr>
+	<tr>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td><a name='Default.category_rules.amount_max_key'>amount&#95;max&#95;key</a></td>
+		<td class='dataType'> NUMERIC&#40;14&#44;2&#41; GENERATED  ALWAYS AS (COALESCE(amount_max, -999999999999.00)) </td>
 	</tr>
 	<tr>
 		<td><span class='text-danger'>*</span><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td>
@@ -1236,12 +1309,12 @@ function searchSVG( searchValue) {
 		<td class='dataType'> INTEGER NOT NULL  DEFAULT 0 </td>
 	</tr>
 	<tr>
-		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td>&nbsp;</td>
 		<td><a name='Default.category_rules.IFNULL%28amount_min%2C+-999999999999.0%29'>IFNULL&#40;amount&#95;min&#44; &#45;999999999999&#46;0&#41;</a></td>
 		<td class='dataType'> TEXT  </td>
 	</tr>
 	<tr>
-		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td>
+		<td>&nbsp;</td>
 		<td><a name='Default.category_rules.IFNULL%28amount_max%2C+-999999999999.0%29'>IFNULL&#40;amount&#95;max&#44; &#45;999999999999&#46;0&#41;</a></td>
 		<td class='dataType'> TEXT  </td>
 	</tr>
@@ -1268,14 +1341,23 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;category&#95;rules&#95;category&#95;id</td>
 		<td>Index ON category&#95;id</td>
 	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>idx&#95;category&#95;rules&#95;keyword&#95;amount&#95;unique</td>
-		<td>Unique Index ON keyword&#44; IFNULL&#40;amount&#95;min&#44; &#45;999999999999&#46;0&#41;&#44; IFNULL&#40;amount&#95;max&#44; &#45;999999999999&#46;0&#41;</td>
-	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>idx&#95;category&#95;rules&#95;merchant&#95;amount&#95;unique</td>
-		<td>Unique Index ON merchant&#95;id&#44; IFNULL&#40;amount&#95;min&#44; &#45;999999999999&#46;0&#41;&#44; IFNULL&#40;amount&#95;max&#44; &#45;999999999999&#46;0&#41;</td>
-	</tr>
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;category&#95;rules&#95;source&#95;approval</td>
 		<td>Index ON source&#44; ai&#95;approved</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;category&#95;rules&#95;keyword&#95;amount</td>
+		<td>Unique Key ON keyword&#95;scope&#95;key&#44; account&#95;id&#95;key&#44; direction&#44; amount&#95;min&#95;key&#44; amount&#95;max&#95;key</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;category&#95;rules&#95;merchant&#95;amount</td>
+		<td>Unique Key ON merchant&#95;id&#44; account&#95;id&#95;key&#44; direction&#44; amount&#95;min&#95;key&#44; amount&#95;max&#95;key</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;category&#95;rules&#95;account</td>
+		<td>Index ON account&#95;id</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;category&#95;rules&#95;direction</td>
+		<td>Index ON direction</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;category&#95;rules&#95;amount&#95;bounds</td>
+		<td>Index ON amount&#95;min&#44; amount&#95;max</td>
 	</tr>
 <tr><th colspan='3'>Foreign Key</th></tr>
 	<tr>
@@ -1285,6 +1367,10 @@ function searchSVG( searchValue) {
 	<tr>
 		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#fk'/></svg></td><td>FK_category_rules categories</td>
 		<td > category&#95;id &#8599; <a href='#Default&#46;categories'  onclick="window.scrollTo(351, 228);var nodes = document.getElementsByClassName('palpable');for (var i = 0; i < nodes.length; i++) { nodes[i].classList.remove('palpable');}; document.getElementById('depict_Default.categories').classList.add('palpable'); return false;">&#10063; categories</a>(id) on delete setNull </td>
+	</tr>
+	<tr>
+		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#fk'/></svg></td><td>fk_category_rules_account_id_accounts</td>
+		<td > account&#95;id &#8599; <a href='#Default&#46;accounts'  onclick="window.scrollTo(636, 741);var nodes = document.getElementsByClassName('palpable');for (var i = 0; i < nodes.length; i++) { nodes[i].classList.remove('palpable');}; document.getElementById('depict_Default.accounts').classList.add('palpable'); return false;">&#10063; accounts</a>(id) on delete setNull </td>
 	</tr>
 <tr><th colspan='3'>Referring Foreign Key</th></tr>
 	<tr>
@@ -1301,12 +1387,15 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_category_rules </td><td> TRIM&#40;keyword&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_category_rules_category_rules_source_allowed </td><td> source IN &#40;&#39;automatic&#39;&#44; &#39;default&#39;&#44; &#39;manual&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_category_rules_001 </td><td> source IN &#40;&#39;automatic&#39;&#44; &#39;default&#39;&#44; &#39;manual&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_category_rules_category_rules_ai_approved_bool </td><td> ai&#95;approved IN &#40;0&#44; 1&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_category_rules_002 </td><td> amount&#95;min IS NULL OR amount&#95;max IS NULL OR amount&#95;min &lt;&#61; amount&#95;max </td>	</tr>
-<tr><th colspan='3'>Triggers</th></tr>
+		<td>&nbsp;</td><td> ck_category_rules_category_rules_amount_range_order </td><td> amount&#95;min IS NULL OR amount&#95;max IS NULL OR amount&#95;min &lt;&#61; amount&#95;max </td>	</tr>
+	<tr>
+		<td>&nbsp;</td><td> ck_category_rules_category_rules_keyword_non_empty </td><td> trim&#40;keyword&#41; &#33;&#61; &#39;&#39; </td>	</tr>
+	<tr>
+		<td>&nbsp;</td><td> ck_category_rules_category_rules_direction_allowed </td><td> direction IN &#40;&#39;any&#39;&#44; &#39;credit&#39;&#44; &#39;debit&#39;&#41; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1361,7 +1450,7 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td><td>pk&#95;merchant&#95;aliases</td>
 		<td>Primary Key ON id</td>
 	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>unq&#95;merchant&#95;aliases&#95;alias&#95;key</td>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;merchant&#95;aliases&#95;alias&#95;key</td>
 		<td>Unique Key ON alias&#95;key</td>
 	</tr>
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;merchant&#95;aliases&#95;merchant</td>
@@ -1374,11 +1463,11 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_merchant_aliases </td><td> TRIM&#40;alias&#95;key&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_merchant_aliases_merchant_aliases_source_allowed </td><td> source IN &#40;&#39;alias&#39;&#44; &#39;fallback&#39;&#44; &#39;import&#39;&#44; &#39;rule&#39;&#44; &#39;system&#39;&#44; &#39;user&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_merchant_aliases_001 </td><td> source IN &#40;&#39;alias&#39;&#44; &#39;fallback&#39;&#44; &#39;import&#39;&#44; &#39;rule&#39;&#44; &#39;system&#39;&#44; &#39;user&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_merchant_aliases_merchant_aliases_confidence_allowed </td><td> confidence IN &#40;&#39;high&#39;&#44; &#39;low&#39;&#44; &#39;medium&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_merchant_aliases_002 </td><td> confidence IN &#40;&#39;high&#39;&#44; &#39;low&#39;&#44; &#39;medium&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_merchant_aliases_merchant_aliases_alias_key_non_empty </td><td> trim&#40;alias&#95;key&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1433,7 +1522,7 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td><td>pk&#95;merchants</td>
 		<td>Primary Key ON id</td>
 	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>unq&#95;merchants&#95;canonical&#95;key</td>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;merchants&#95;canonical&#95;key</td>
 		<td>Unique Key ON canonical&#95;key</td>
 	</tr>
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;merchants&#95;display&#95;name</td>
@@ -1458,15 +1547,15 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_merchants </td><td> TRIM&#40;canonical&#95;key&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_merchants_merchants_display_name_source_allowed </td><td> display&#95;name&#95;source IN &#40;&#39;system&#39;&#44; &#39;user&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_merchants_001 </td><td> TRIM&#40;system&#95;name&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_merchants_merchants_active_bool </td><td> active IN &#40;0&#44; 1&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_merchants_002 </td><td> TRIM&#40;display&#95;name&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_merchants_merchants_canonical_key_non_empty </td><td> trim&#40;canonical&#95;key&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_merchants_003 </td><td> display&#95;name&#95;source IN &#40;&#39;system&#39;&#44; &#39;user&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_merchants_merchants_system_name_non_empty </td><td> trim&#40;system&#95;name&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_merchants_004 </td><td> active IN &#40;0&#44; 1&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_merchants_merchants_display_name_non_empty </td><td> trim&#40;display&#95;name&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1515,7 +1604,7 @@ function searchSVG( searchValue) {
 	<tr>
 		<td>&nbsp;</td>
 		<td><a name='Default.recurring_patterns.typical_amount'>typical&#95;amount</a></td>
-		<td class='dataType'> REAL  </td>
+		<td class='dataType'> NUMERIC&#40;14&#44;2&#41;  </td>
 	</tr>
 	<tr>
 		<td>&nbsp;</td>
@@ -1525,7 +1614,7 @@ function searchSVG( searchValue) {
 	<tr>
 		<td>&nbsp;</td>
 		<td><a name='Default.recurring_patterns.amount_tolerance'>amount&#95;tolerance</a></td>
-		<td class='dataType'> REAL  </td>
+		<td class='dataType'> NUMERIC&#40;14&#44;2&#41;  </td>
 	</tr>
 	<tr>
 		<td><span class='text-danger'>*</span><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td>
@@ -1549,8 +1638,8 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;recurring&#95;patterns&#95;status</td>
 		<td>Index ON user&#95;status&#44; active</td>
 	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>idx&#95;recurring&#95;patterns&#95;merchant&#95;type</td>
-		<td>Unique Index ON merchant&#95;id&#44; type</td>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;recurring&#95;patterns&#95;merchant&#95;type</td>
+		<td>Unique Key ON merchant&#95;id&#44; type</td>
 	</tr>
 <tr><th colspan='3'>Foreign Key</th></tr>
 	<tr>
@@ -1559,19 +1648,19 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_recurring_patterns </td><td> type IN &#40;&#39;income&#39;&#44; &#39;spending&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_recurring_patterns_recurring_patterns_type_allowed </td><td> type IN &#40;&#39;income&#39;&#44; &#39;spending&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_recurring_patterns_001 </td><td> user&#95;status IN &#40;&#39;confirmed&#39;&#44; &#39;detected&#39;&#44; &#39;edited&#39;&#44; &#39;ignored&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_recurring_patterns_recurring_patterns_user_status_allowed </td><td> user&#95;status IN &#40;&#39;confirmed&#39;&#44; &#39;detected&#39;&#44; &#39;edited&#39;&#44; &#39;ignored&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_recurring_patterns_002 </td><td> active IN &#40;0&#44; 1&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_recurring_patterns_recurring_patterns_active_bool </td><td> active IN &#40;0&#44; 1&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_recurring_patterns_003 </td><td> expected&#95;day IS NULL OR &#40;expected&#95;day &gt;&#61; 1 AND expected&#95;day &lt;&#61; 31&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_recurring_patterns_recurring_patterns_expected_day_range </td><td> expected&#95;day IS NULL OR &#40;expected&#95;day &gt;&#61; 1 AND expected&#95;day &lt;&#61; 31&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_recurring_patterns_004 </td><td> date&#95;tolerance&#95;days IS NULL OR date&#95;tolerance&#95;days &gt;&#61; 0 </td>	</tr>
+		<td>&nbsp;</td><td> ck_recurring_patterns_recurring_patterns_date_tolerance_non_negative </td><td> date&#95;tolerance&#95;days IS NULL OR date&#95;tolerance&#95;days &gt;&#61; 0 </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_recurring_patterns_005 </td><td> amount&#95;tolerance IS NULL OR amount&#95;tolerance &gt;&#61; 0 </td>	</tr>
+		<td>&nbsp;</td><td> ck_recurring_patterns_recurring_patterns_amount_tolerance_non_negative </td><td> amount&#95;tolerance IS NULL OR amount&#95;tolerance &gt;&#61; 0 </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_recurring_patterns_006 </td><td> typical&#95;amount IS NULL OR typical&#95;amount &gt;&#61; 0 </td>	</tr>
+		<td>&nbsp;</td><td> ck_recurring_patterns_recurring_patterns_typical_amount_non_negative </td><td> typical&#95;amount IS NULL OR typical&#95;amount &gt;&#61; 0 </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1583,13 +1672,22 @@ function searchSVG( searchValue) {
 </thead>
 <tbody>
 	<tr>
+		<td><span class='text-danger'>*</span><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td>
+		<td><a name='Default.settings.key'>key</a></td>
+		<td class='dataType'> TEXT NOT NULL  </td>
+	</tr>
+	<tr>
 		<td><span class='text-danger'>*</span></td>
 		<td><a name='Default.settings.value'>value</a></td>
 		<td class='dataType'> TEXT NOT NULL  </td>
 	</tr>
+<tr><th colspan='3'>Indexes</th></tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td><td>pk&#95;settings</td>
+		<td>Primary Key ON key</td>
+	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_settings </td><td> TRIM&#40;key&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_settings_settings_key_non_empty </td><td> trim&#40;&quot;key&quot;&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1639,7 +1737,7 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td><td>pk&#95;statement&#95;types</td>
 		<td>Primary Key ON id</td>
 	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>unq&#95;statement&#95;types&#95;name</td>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;statement&#95;types&#95;name</td>
 		<td>Unique Key ON name</td>
 	</tr>
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;statement&#95;types&#95;active</td>
@@ -1652,15 +1750,15 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statement_types </td><td> TRIM&#40;name&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statement_types_statement_types_parser_type_allowed </td><td> parser&#95;type IN &#40;&#39;bank&#95;account&#39;&#44; &#39;credit&#95;card&#39;&#44; &#39;interac&#95;etransfer&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statement_types_001 </td><td> parser&#95;type IN &#40;&#39;bank&#95;account&#39;&#44; &#39;credit&#95;card&#39;&#44; &#39;interac&#95;etransfer&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statement_types_statement_types_import_mode_allowed </td><td> import&#95;mode IN &#40;&#39;enrichment&#39;&#44; &#39;ledger&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statement_types_002 </td><td> import&#95;mode IN &#40;&#39;enrichment&#39;&#44; &#39;ledger&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statement_types_statement_types_default_account_type_allowed </td><td> default&#95;account&#95;type IN &#40;&#39;checking&#39;&#44; &#39;credit&#95;card&#39;&#44; &#39;savings&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statement_types_003 </td><td> default&#95;account&#95;type IN &#40;&#39;checking&#39;&#44; &#39;credit&#95;card&#39;&#44; &#39;savings&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statement_types_statement_types_active_bool </td><td> active IN &#40;0&#44; 1&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statement_types_004 </td><td> active IN &#40;0&#44; 1&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statement_types_statement_types_name_non_empty </td><td> trim&#40;name&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1760,7 +1858,7 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td><td>pk&#95;statements</td>
 		<td>Primary Key ON id</td>
 	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>unq&#95;statements&#95;checksum</td>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;statements&#95;checksum</td>
 		<td>Unique Key ON checksum</td>
 	</tr>
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;statements&#95;account</td>
@@ -1788,21 +1886,21 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statements </td><td> TRIM&#40;filename&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statements_statements_import_status_allowed </td><td> import&#95;status IN &#40;&#39;completed&#39;&#44; &#39;failed&#39;&#44; &#39;pending&#39;&#44; &#39;queued&#39;&#44; &#39;running&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statements_001 </td><td> TRIM&#40;checksum&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statements_statements_interac_direction_allowed </td><td> interac&#95;direction IN &#40;&#39;auto&#39;&#44; &#39;received&#39;&#44; &#39;sent&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statements_002 </td><td> import&#95;status IN &#40;&#39;completed&#39;&#44; &#39;failed&#39;&#44; &#39;pending&#39;&#44; &#39;queued&#39;&#44; &#39;running&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statements_statements_imported_count_non_negative </td><td> imported&#95;count &gt;&#61; 0 </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statements_003 </td><td> interac&#95;direction IN &#40;&#39;auto&#39;&#44; &#39;received&#39;&#44; &#39;sent&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_statements_statements_skipped_count_non_negative </td><td> skipped&#95;count &gt;&#61; 0 </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statements_004 </td><td> imported&#95;count &gt;&#61; 0 </td>	</tr>
+		<td>&nbsp;</td><td> ck_statements_statements_ignored_count_non_negative </td><td> ignored&#95;count &gt;&#61; 0 </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statements_005 </td><td> skipped&#95;count &gt;&#61; 0 </td>	</tr>
+		<td>&nbsp;</td><td> ck_statements_statements_llm_candidate_count_non_negative </td><td> llm&#95;candidate&#95;count &gt;&#61; 0 </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statements_006 </td><td> ignored&#95;count &gt;&#61; 0 </td>	</tr>
+		<td>&nbsp;</td><td> ck_statements_statements_filename_non_empty </td><td> trim&#40;filename&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_statements_007 </td><td> llm&#95;candidate&#95;count &gt;&#61; 0 </td>	</tr>
+		<td>&nbsp;</td><td> ck_statements_statements_checksum_non_empty </td><td> trim&#40;checksum&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1861,7 +1959,7 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_tags </td><td> TRIM&#40;name&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_tags_tags_name_non_empty </td><td> trim&#40;name&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1919,7 +2017,7 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_transaction_tags </td><td> source IN &#40;&#39;ai&#39;&#44; &#39;manual&#39;&#44; &#39;rule&#39;&#44; &#39;unknown&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_transaction_tags_transaction_tags_source_allowed </td><td> source IN &#40;&#39;ai&#39;&#44; &#39;history&#39;&#44; &#39;manual&#39;&#44; &#39;rule&#39;&#44; &#39;unknown&#39;&#41; </td>	</tr>
 </tbody>
 </table></div></div>
 
@@ -1963,7 +2061,7 @@ function searchSVG( searchValue) {
 	<tr>
 		<td><span class='text-danger'>*</span><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td>
 		<td><a name='Default.transactions.amount'>amount</a></td>
-		<td class='dataType'> REAL NOT NULL  </td>
+		<td class='dataType'> NUMERIC&#40;14&#44;2&#41; NOT NULL  </td>
 	</tr>
 	<tr>
 		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td>
@@ -1988,12 +2086,17 @@ function searchSVG( searchValue) {
 	<tr>
 		<td>&nbsp;</td>
 		<td><a name='Default.transactions.category_confidence'>category&#95;confidence</a></td>
-		<td class='dataType'> REAL  </td>
+		<td class='dataType'> FLOAT  </td>
 	</tr>
 	<tr>
 		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#fk'/></svg></td>
 		<td><a name='Default.transactions.category_rule_id'>category&#95;rule&#95;id</a></td>
 		<td class='dataType'> INTEGER  </td>
+	</tr>
+	<tr>
+		<td>&nbsp;</td>
+		<td><a name='Default.transactions.category_metadata'>category&#95;metadata</a></td>
+		<td class='dataType'> TEXT  </td>
 	</tr>
 	<tr>
 		<td>&nbsp;</td>
@@ -2029,7 +2132,7 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#pk'/></svg></td><td>pk&#95;transactions</td>
 		<td>Primary Key ON id</td>
 	</tr>
-	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>unq&#95;transactions&#95;fingerprint</td>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#unq'/></svg></td><td>uq&#95;transactions&#95;fingerprint</td>
 		<td>Unique Key ON fingerprint</td>
 	</tr>
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;transactions&#95;date</td>
@@ -2080,6 +2183,18 @@ function searchSVG( searchValue) {
 	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;transactions&#95;kind</td>
 		<td>Index ON transaction&#95;kind</td>
 	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;transactions&#95;ignored&#95;merchant</td>
+		<td>Index ON ignored&#44; merchant&#95;id</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;transactions&#95;ignored&#95;account</td>
+		<td>Index ON ignored&#44; account&#95;id</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;transactions&#95;ignored&#95;category&#95;id</td>
+		<td>Index ON ignored&#44; category&#95;id</td>
+	</tr>
+	<tr>		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#idx'/></svg></td><td>idx&#95;transactions&#95;ignored&#95;date</td>
+		<td>Index ON ignored&#44; tx&#95;date</td>
+	</tr>
 <tr><th colspan='3'>Foreign Key</th></tr>
 	<tr>
 		<td><svg xmlns="http://www.w3.org/2000/svg" width='14' height='14'><use href='#fk'/></svg></td><td>FK_transactions statements</td>
@@ -2108,20 +2223,17 @@ function searchSVG( searchValue) {
 	</tr>
 <tr><th colspan='3'>Constraints</th></tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_transactions </td><td> TRIM&#40;tx&#95;date&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_transactions_transactions_needs_review_bool </td><td> needs&#95;review IN &#40;0&#44; 1&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_transactions_001 </td><td> TRIM&#40;description&#41; &lt;&gt; &#39;&#39; </td>	</tr>
+		<td>&nbsp;</td><td> ck_transactions_transactions_ignored_bool </td><td> ignored IN &#40;0&#44; 1&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_transactions_002 </td><td> needs&#95;review IN &#40;0&#44; 1&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_transactions_transactions_transaction_kind_allowed </td><td> transaction&#95;kind IN &#40;&#39;expense&#39;&#44; &#39;income&#39;&#44; &#39;payment&#39;&#44; &#39;refund&#39;&#44; &#39;transfer&#39;&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_transactions_003 </td><td> ignored IN &#40;0&#44; 1&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_transactions_transactions_category_confidence_probability </td><td> category&#95;confidence IS NULL OR &#40;category&#95;confidence &gt;&#61; 0 AND category&#95;confidence &lt;&#61; 1&#41; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_transactions_004 </td><td> transaction&#95;kind IN &#40;&#39;expense&#39;&#44; &#39;income&#39;&#44; &#39;payment&#39;&#44; &#39;refund&#39;&#44; &#39;transfer&#39;&#41; </td>	</tr>
+		<td>&nbsp;</td><td> ck_transactions_transactions_description_non_empty </td><td> trim&#40;description&#41; &#33;&#61; &#39;&#39; </td>	</tr>
 	<tr>
-		<td>&nbsp;</td><td> CK_transactions_005 </td><td> category&#95;source IN &#40;&#39;ai&#39;&#44; &#39;manual&#39;&#44; &#39;rule&#39;&#44; &#39;unknown&#39;&#41; </td>	</tr>
-	<tr>
-		<td>&nbsp;</td><td> CK_transactions_006 </td><td> category&#95;confidence IS NULL OR &#40;category&#95;confidence &gt;&#61; 0 AND category&#95;confidence &lt;&#61; 1&#41; </td>	</tr>
-<tr><th colspan='3'>Triggers</th></tr>
+		<td>&nbsp;</td><td> ck_transactions_transactions_category_source_allowed </td><td> category&#95;source IN &#40;&#39;ai&#39;&#44; &#39;history&#39;&#44; &#39;manual&#39;&#44; &#39;rule&#39;&#44; &#39;unknown&#39;&#41; </td>	</tr>
 </tbody>
 </table></div></div>
 

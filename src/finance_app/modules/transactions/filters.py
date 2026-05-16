@@ -42,6 +42,8 @@ from finance_app.modules.transactions.constants import (
     IGNORED_FILTER_IGNORED,
     IGNORED_FILTERS,
     REVIEW_FILTER_NEEDS_REVIEW,
+    REVIEW_FILTER_READY_TO_APPROVE,
+    REVIEW_FILTERS,
     REVIEW_FILTER_VERIFIED,
     TRANSACTION_SORT_ACCOUNT,
     TRANSACTION_SORT_AMOUNT,
@@ -93,13 +95,17 @@ def parse_transaction_filters(args, conn):
 
     period = normalize_date_period(args.get("period", DEFAULT_DATE_PERIOD).strip())
 
+    review = args.get("review", "").strip()
+    if review not in REVIEW_FILTERS:
+        review = ""
+
     return {
         "search": args.get("search", "").strip(),
         "category": args.get("category", "").strip(),
         "selected_categories": selected_categories,
         "selected_tags": selected_tags,
         "filter_mode": filter_mode,
-        "review": args.get("review", "").strip(),
+        "review": review,
         "category_status": category_status,
         "category_source": category_source,
         "amount_type": amount_type,
@@ -123,7 +129,11 @@ def transaction_sort(filters, unknown_category):
         TRANSACTION_SORT_DESCRIPTION: transactions_table.c.description,
         TRANSACTION_SORT_AMOUNT: transactions_table.c.amount,
         TRANSACTION_SORT_CATEGORY: func.coalesce(transactions_table.c.category, unknown_category),
-        TRANSACTION_SORT_REVIEW: transactions_table.c.needs_review,
+        TRANSACTION_SORT_REVIEW: case(
+            (transactions_table.c.needs_review == 1, 2),
+            (transactions_table.c.reviewed_at.is_(None), 1),
+            else_=0,
+        ),
         TRANSACTION_SORT_IGNORED: transactions_table.c.ignored,
     }
     return resolve_sort(filters["sort"], sort_columns, TRANSACTION_SORT_DATE)
@@ -165,8 +175,11 @@ def build_transaction_core_filters(filters, unknown_category, conn=None):
 
     if filters["review"] == REVIEW_FILTER_NEEDS_REVIEW:
         core_filters.add(transactions_table.c.needs_review == 1)
-    elif filters["review"] == REVIEW_FILTER_VERIFIED:
+    elif filters["review"] == REVIEW_FILTER_READY_TO_APPROVE:
         core_filters.add(transactions_table.c.needs_review == 0)
+        core_filters.add(transactions_table.c.reviewed_at.is_(None))
+    elif filters["review"] == REVIEW_FILTER_VERIFIED:
+        core_filters.add(transactions_table.c.reviewed_at.is_not(None))
 
     if filters["category_source"] == CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED:
         core_filters.add(transactions_table.c.reviewed_at.is_not(None))
@@ -219,8 +232,9 @@ def search_condition(search, unknown_category):
     account_name = func.coalesce(accounts_table.c.name, "Personal")
     category_value = func.coalesce(transactions_table.c.category, unknown_category)
     review_state = case(
-        (transactions_table.c.needs_review == 1, "verify"),
-        else_="verified",
+        (transactions_table.c.needs_review == 1, "needs review"),
+        (transactions_table.c.reviewed_at.is_not(None), "verified"),
+        else_="ready to approve",
     )
     ignored_state = case(
         (transactions_table.c.ignored == 1, "ignored"),

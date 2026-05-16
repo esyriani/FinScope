@@ -22,6 +22,7 @@ def test_parse_transaction_filters_normalizes_request_args(db_conn):
             ("category_source", "ai"),
             ("amount_type", "income"),
             ("ignored", "ignored"),
+            ("review", "ready_to_approve"),
             ("period", "all"),
             ("sort", "amount"),
             ("direction", "asc"),
@@ -41,6 +42,7 @@ def test_parse_transaction_filters_normalizes_request_args(db_conn):
     assert filters["category_source"] == "ai"
     assert filters["amount_type"] == "income"
     assert filters["ignored"] == "ignored"
+    assert filters["review"] == "ready_to_approve"
     assert filters["period"] == "all"
     assert filters["sort"] == "amount"
     assert filters["direction"] == "asc"
@@ -60,6 +62,7 @@ def test_parse_transaction_filters_defaults_invalid_values(db_conn):
                 ("category_source", "bad"),
                 ("amount_type", "bad"),
                 ("ignored", "bad"),
+                ("review", "bad"),
                 ("period", "bad"),
                 ("direction", "bad"),
                 ("page", "-1"),
@@ -73,6 +76,7 @@ def test_parse_transaction_filters_defaults_invalid_values(db_conn):
     assert filters["category_source"] == ""
     assert filters["amount_type"] == ""
     assert filters["ignored"] == "active"
+    assert filters["review"] == ""
     assert filters["period"] == "ytd"
     assert filters["direction"] == "desc"
     assert filters["page"] == 1
@@ -138,6 +142,21 @@ def test_build_transaction_core_filters_supports_credit_filter(db_conn):
     assert filters["amount_type"] == "credit"
     assert "transactions.amount <" in sql
     assert "transactions.transaction_kind IN" in sql
+
+
+def test_build_transaction_core_filters_supports_ready_to_approve_review_filter(db_conn):
+    """Verify ready-to-approve means categorized but not manually verified."""
+    filters = parse_transaction_filters(
+        MultiDict([("review", "ready_to_approve")]),
+        db_conn,
+    )
+
+    core_filters = build_transaction_core_filters(filters, "UNKNOWN")
+    sql = "\n".join(str(condition) for condition in core_filters.criteria())
+
+    assert filters["review"] == "ready_to_approve"
+    assert "transactions.needs_review" in sql
+    assert "transactions.reviewed_at IS NULL" in sql
 
 
 def test_transaction_sort_restricts_sort_expression():

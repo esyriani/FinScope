@@ -1,6 +1,6 @@
 # Taxonomy and categorization
 
-FinScope uses a database-backed taxonomy for categories and tags. The file `src/finance_app/categories.yml` provides the initial seed taxonomy during application setup, but it is not the runtime source of truth. Once the database has been initialized, categories and tags are managed through the application UI and stored in the database.
+FinScope uses a database-backed taxonomy for categories and tags. The file `src/finance_app/taxonomy.yml` provides the initial user-editable seed taxonomy during application setup, but it is not the runtime source of truth. Once the database has been initialized, categories and tags are managed through the application UI and stored in the database.
 
 The taxonomy system is central to FinScope. Categories and tags drive dashboards and analytics, recurring activity detection, categorization rules, merchant review workflows, reporting and filtering, historical categorization, and optional LLM-assisted categorization.
 
@@ -37,12 +37,12 @@ A good category remains meaningful over years of historical data. A good tag add
 Before running FinScope for the first time, users may customize:
 
 ```text
-src/finance_app/categories.yml
+src/finance_app/taxonomy.yml
 ```
 
-This file defines the initial categories and tags inserted into the database during initialization.
+This file defines the initial user-managed categories and tags inserted into the database during initialization. FinScope-managed built-in categories are defined in code, not in this file.
 
-After the application has been initialized, taxonomy changes can only be performed through the FinScope UI rather than by editing the file directly. Directly modifying `categories.yml` after the database already contains categories and tags does not automatically synchronize existing runtime data.
+After the application has been initialized, taxonomy changes can only be performed through the FinScope UI rather than by editing the file directly. Directly modifying `taxonomy.yml` after the database already contains categories and tags does not automatically synchronize existing runtime data.
 
 ## Taxonomy structure
 
@@ -96,15 +96,16 @@ Instructions may contain merchant examples, inclusion guidance,exclusion guidanc
 
 ### Unknown
 
-The special `Unknown` category is reserved for transactions that could not be confidently categorized automatically.
-Transactions assigned to `Unknown` should normally be reviewed manually. Users may assign a category directly to the transaction, or create a categorization rule.
+The built-in `UNKNOWN` category is reserved for transactions that could not be confidently categorized automatically.
+Transactions assigned to `UNKNOWN` should normally be reviewed manually. Users may assign a category directly to the transaction, or create a categorization rule. This category is managed by FinScope and cannot be renamed, edited, or deleted from the UI.
 
 > A high volume of unknown transactions reduces the usefulness and accuracy of analytics.
 
 ### Transfers
 
-The special `Transfers` category is reserved for internal money movements that may appear multiple times across statements.
+The built-in `Transfers` category is reserved for internal money movements that may appear multiple times across statements.
 Typical examples include paying a credit card balance, moving money between checking and savings accounts, or internal account rebalancing.
+This category is managed by FinScope and cannot be renamed, edited, or deleted from the UI.
 
 > Transfer transactions are excluded from income and spending analytics to avoid double-counting money movement as real financial activity.
 

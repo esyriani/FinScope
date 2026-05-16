@@ -23,13 +23,14 @@ from finance_app.modules.categories.taxonomy import (
 )
 
 
-def test_yaml_categories_and_tags_are_persisted(db_conn):
-    """Verify yaml categories and tags are persisted."""
+def test_taxonomy_categories_tags_and_builtins_are_persisted(db_conn):
+    """Verify taxonomy seed rows and built-in categories are persisted."""
     categories = {
         row["name"]: row
         for row in db_conn.execute(
             select(
                 categories_table.c.name,
+                categories_table.c.builtin_key,
                 categories_table.c.description,
                 categories_table.c.instruction,
             )
@@ -40,6 +41,10 @@ def test_yaml_categories_and_tags_are_persisted(db_conn):
 
     assert "Income" in categories
     assert "UNKNOWN" in categories
+    assert "Transfers" in categories
+    assert categories["UNKNOWN"]["builtin_key"] == "unknown"
+    assert categories["Transfers"]["builtin_key"] == "transfers"
+    assert categories["Income"]["builtin_key"] is None
     assert "salary" in categories["Income"]["instruction"].casefold()
     assert "Reimbursable" in tags
     assert "Government" in tags
@@ -53,7 +58,7 @@ def test_core_constants_do_not_define_taxonomy():
     assert not hasattr(constants, "ALLOWED_CATEGORIES")
 
 
-def test_category_options_seed_empty_db_from_yaml(db_conn):
+def test_category_options_seed_empty_db_from_taxonomy_file(db_conn):
     """Verify category options seed an empty taxonomy through Core writes."""
     db_conn.execute(delete(tags_table))
     db_conn.execute(delete(categories_table))
@@ -62,6 +67,7 @@ def test_category_options_seed_empty_db_from_yaml(db_conn):
 
     assert "Income" in category_options
     assert "UNKNOWN" in category_options
+    assert "Transfers" in category_options
     assert db_conn.execute(select(func.count()).select_from(categories_table)).scalar_one() > 1
 
 

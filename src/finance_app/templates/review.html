@@ -340,9 +340,11 @@
                         "Do not save a rule",
                         group.rule_save_default
                     ) }}
-                    {{ rule_keyword_control("review-rule-" ~ review_group_index, group.rule_keyword) }}
+                    <div data-rule-save-only>
+                        {{ rule_keyword_control("review-rule-" ~ review_group_index, group.rule_keyword) }}
 
-                    {{ amount_rule_control("review-rule-" ~ review_group_index, group.default_amount_min, group.default_amount_max) }}
+                        {{ amount_rule_control("review-rule-" ~ review_group_index, group.default_amount_min, group.default_amount_max) }}
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>

@@ -8,7 +8,6 @@ from finance_app.core.constants import (
     BASE_DIR,
     CATEGORY_SOURCE_UNKNOWN,
     TRANSACTION_TAG_SOURCES,
-    UNKNOWN_CATEGORY,
 )
 from finance_app.database.tables import (
     categories as categories_table,
@@ -17,9 +16,10 @@ from finance_app.database.tables import (
     transaction_tags as transaction_tags_table,
 )
 from finance_app.database.upsert import insert_or_select_unique_row
+from finance_app.modules.categories.builtins import BUILTIN_CATEGORIES, builtin_category_names
 
 
-CATEGORY_SEED_PATH = Path(BASE_DIR) / "categories.yml"
+CATEGORY_SEED_PATH = Path(BASE_DIR) / "taxonomy.yml"
 DEFAULT_TAG_COLOR = "#64748b"
 TAG_COLORS = {
     "Reimbursable": "#2563eb",
@@ -141,21 +141,27 @@ def tag_color_for_name(name):
 
 
 def seed_category_taxonomy(conn):
-    """Seed category taxonomy."""
+    """Seed built-in categories plus user-editable taxonomy rows."""
     seed = load_category_seed()
     categories = seed["categories"]
     tags = seed["tags"]
+    reserved_names = {
+        name.casefold()
+        for name in builtin_category_names()
+    }
 
-    if not any(item["name"].upper() == UNKNOWN_CATEGORY for item in categories):
-        categories.append(
-            {
-                "name": UNKNOWN_CATEGORY,
-                "description": "Transactions whose category is not known with sufficient confidence.",
-                "instruction": "Use when no listed category is clearly supported by the transaction description and available context.",
-            }
+    for category in BUILTIN_CATEGORIES:
+        upsert_category_metadata(
+            conn,
+            category["name"],
+            category.get("description"),
+            category.get("instruction"),
+            builtin_key=category["key"],
         )
 
     for category in categories:
+        if category["name"].casefold() in reserved_names:
+            continue
         upsert_category_metadata(
             conn,
             category["name"],
@@ -173,19 +179,35 @@ def seed_category_taxonomy(conn):
         )
 
 
-def upsert_category_metadata(conn, name, description="", instruction=""):
+def upsert_category_metadata(conn, name, description="", instruction="", builtin_key=None):
     """Insert or update category metadata."""
     category = clean_label(name)
     if not category:
         return None
 
-    category_select = select(categories_table.c.id).where(categories_table.c.name == category)
+    normalized_builtin_key = clean_label(builtin_key).casefold() if builtin_key else None
+    category_select = select(
+        categories_table.c.id,
+        categories_table.c.builtin_key,
+    ).where(
+        categories_table.c.builtin_key == normalized_builtin_key
+        if normalized_builtin_key
+        else categories_table.c.name == category
+    )
     existing = conn.execute(category_select).mappings().fetchone()
+    if existing is None and normalized_builtin_key:
+        category_select = select(
+            categories_table.c.id,
+            categories_table.c.builtin_key,
+        ).where(categories_table.c.name == category)
+        existing = conn.execute(category_select).mappings().fetchone()
+
     if existing is None:
         existing, inserted = insert_or_select_unique_row(
             conn,
             insert(categories_table).values(
                 name=category,
+                builtin_key=normalized_builtin_key,
                 description=description or "",
                 instruction=instruction or "",
             ),
@@ -195,10 +217,14 @@ def upsert_category_metadata(conn, name, description="", instruction=""):
             return category
 
     if existing is not None:
+        if existing["builtin_key"] and not normalized_builtin_key:
+            return category
         conn.execute(
             update(categories_table)
             .where(categories_table.c.id == existing["id"])
             .values(
+                name=category,
+                builtin_key=normalized_builtin_key or existing["builtin_key"],
                 description=description or "",
                 instruction=instruction or "",
             )

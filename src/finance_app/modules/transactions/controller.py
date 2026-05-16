@@ -51,7 +51,7 @@ def update_transaction_category(transaction_id):
             return redirect(next_url or url_for("transactions.transactions"))
 
         description = tx["description"].strip()
-        rule_action = request.form.get("rule_action", "save")
+        rule_action = request.form.get("rule_action", "transaction_only")
         merchant_key = ""
         amount_min = None
         amount_max = None
@@ -87,12 +87,15 @@ def update_transaction_category(transaction_id):
             return redirect(next_url or url_for("transactions.transactions"))
 
         if rule_action == "save":
+            prefix = "Category updated. Rule saved for:" if result.transaction_changed else "Rule saved for:"
             flash(
-                f"Category updated. Rule saved for: "
+                f"{prefix} "
                 f"{merchant_key}{amount_bounds_label(amount_min, amount_max)}"
             )
-        else:
+        elif result.transaction_changed:
             flash("Category updated for this transaction only.")
+        else:
+            flash("No transaction changes to save.")
     return redirect(next_url or url_for("transactions.transactions"))
 
 
@@ -103,7 +106,7 @@ def verify_transaction(transaction_id):
     with db_core_transaction() as conn:
         updated = mark_transaction_verified(conn, transaction_id)
 
-    flash("Transaction marked verified." if updated else "Transaction not found.")
+    flash("Transaction approved." if updated else "Transaction not found.")
     return redirect(next_url or url_for("transactions.transactions"))
 
 

@@ -7,7 +7,6 @@ from finance_app.core.constants import (
     STATEMENT_TYPE_PARSER_TYPES,
     THEME_MODE_DARK,
     THEME_MODE_LIGHT,
-    UNKNOWN_CATEGORY,
 )
 from finance_app.core.i18n import SUPPORTED_LANGUAGES, normalize_language
 from finance_app.database.engine import db_core_transaction
@@ -25,7 +24,6 @@ from finance_app.modules.settings.runtime import (
     get_statement_type_options,
     seed_runtime_settings,
     sync_statement_types,
-    update_unknown_category,
     upsert_setting,
 )
 
@@ -100,7 +98,6 @@ def build_settings_context():
             "recurrence_missed_cycles_before_inactive",
             str(RECURRENCE_DETECTION_DEFAULTS.missed_cycles_before_inactive),
         ),
-        "unknown_category": current.get("unknown_category", UNKNOWN_CATEGORY),
         "theme_mode": normalize_theme_mode(current.get("theme_mode", THEME_MODE_DARK)),
         "theme_mode_dark": THEME_MODE_DARK,
         "theme_mode_light": THEME_MODE_LIGHT,
@@ -125,7 +122,6 @@ def save_settings_from_form(form):
         for key in DECIMAL_SETTING_KEYS:
             upsert_setting(conn, key, format_decimal(values[key]))
 
-        update_unknown_category(conn, values["unknown_category"])
         sync_statement_types(conn, values["statement_types"])
 
 

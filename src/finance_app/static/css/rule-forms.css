@@ -3,6 +3,15 @@
     gap: 1rem;
 }
 
+.modal-dialog-fit-content {
+    height: auto;
+}
+
+.modal-dialog-fit-content .modal-body,
+.modal-dialog-fit-content .modal-content > form > .modal-body {
+    flex: 0 1 auto;
+}
+
 .rule-summary {
     background: var(--app-surface-soft);
     border: 1px solid var(--app-border);

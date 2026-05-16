@@ -128,9 +128,21 @@ def test_transactions_context_category_source_and_review_filters(db_conn):
     needs_review_context = build_transactions_context(
         MultiDict([("period", "all"), ("review", "needs_review")])
     )
+    ready_to_approve_context = build_transactions_context(
+        MultiDict([("period", "all"), ("review", "ready_to_approve")])
+    )
+    verified_context = build_transactions_context(
+        MultiDict([("period", "all"), ("review", "verified")])
+    )
 
     assert descriptions(ai_context) == ["Hydro Quebec"]
     assert ai_context["selected_category_source"] == "ai"
+    assert ai_context["review_filter_options"] == (
+        ("", "All"),
+        ("needs_review", "Needs review"),
+        ("ready_to_approve", "Ready to approve"),
+        ("verified", "Verified"),
+    )
     assert ai_context["category_source_filter_options"] == (
         ("", "All sources"),
         ("manual_reviewed", "Manual reviewed"),
@@ -143,6 +155,10 @@ def test_transactions_context_category_source_and_review_filters(db_conn):
     assert descriptions(manual_context) == ["Cafe Bistro"]
     assert descriptions(unknown_context) == ["Unknown Shop"]
     assert descriptions(needs_review_context) == ["Unknown Shop"]
+    assert ready_to_approve_context["selected_review"] == "ready_to_approve"
+    assert ready_to_approve_context["total_count"] == 3
+    assert verified_context["selected_review"] == "verified"
+    assert descriptions(verified_context) == ["Cafe Bistro"]
 
 
 def test_transactions_context_merchant_filters_and_tag_rendering(db_conn):

@@ -1,6 +1,6 @@
 """Runtime settings persistence helpers."""
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 
 from finance_app.core.constants import (
@@ -21,11 +21,8 @@ from finance_app.core.config import settings
 from finance_app.core.i18n import normalize_language
 from finance_app.database.engine import db_core_connection
 from finance_app.database.tables import (
-    categories as categories_table,
-    category_rules as category_rules_table,
     settings as settings_table,
     statement_types as statement_types_table,
-    transactions as transactions_table,
 )
 from finance_app.database.upsert import insert_or_select_unique_row
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
@@ -37,7 +34,6 @@ SETTINGS_DEFAULTS = {
     "home_top_category_limit": str(settings.default_home_top_category_limit),
     "merchant_table_limit": str(settings.default_merchant_table_limit),
     "rule_preview_limit": str(settings.default_rule_preview_limit),
-    "unknown_category": UNKNOWN_CATEGORY,
     "theme_mode": THEME_MODE_DARK,
     "ui_language": normalize_language(settings.locale),
     "llm_confidence_threshold": str(settings.default_llm_confidence_threshold),
@@ -363,9 +359,9 @@ def get_float_setting(conn, key, fallback, minimum=None, maximum=None):
 
 
 def get_unknown_category(conn):
-    """Return unknown category."""
-    text = str(get_setting(conn, "unknown_category") or "").strip()
-    return text or UNKNOWN_CATEGORY
+    """Return the fixed built-in category used for uncategorized rows."""
+    del conn
+    return UNKNOWN_CATEGORY
 
 
 def upsert_setting(conn, key, value):
@@ -386,51 +382,3 @@ def upsert_setting(conn, key, value):
     )
 
 
-def update_unknown_category(conn, new_unknown_category):
-    """Update unknown category."""
-    old_unknown_category = get_unknown_category(conn)
-    updated_unknown_category = str(new_unknown_category or "").strip() or UNKNOWN_CATEGORY
-
-    if updated_unknown_category == old_unknown_category:
-        upsert_setting(conn, "unknown_category", updated_unknown_category)
-        return updated_unknown_category
-
-    old_row = conn.execute(
-        select(categories_table.c.id).where(categories_table.c.name == old_unknown_category)
-    ).mappings().fetchone()
-
-    if old_row is None:
-        category_select = select(categories_table.c.id).where(categories_table.c.name == updated_unknown_category)
-        existing = conn.execute(category_select).fetchone()
-        if existing is None:
-            insert_or_select_unique_row(
-                conn,
-                insert(categories_table).values(name=updated_unknown_category),
-                category_select,
-            )
-    else:
-        existing = conn.execute(
-            select(categories_table.c.id).where(categories_table.c.name == updated_unknown_category)
-        ).mappings().fetchone()
-        if existing and existing["id"] != old_row["id"]:
-            for table in (transactions_table, category_rules_table):
-                conn.execute(
-                    update(table)
-                    .where(table.c.category_id == old_row["id"])
-                    .values(category_id=existing["id"], category=updated_unknown_category)
-                )
-            conn.execute(delete(categories_table).where(categories_table.c.id == old_row["id"]))
-        else:
-            for table in (transactions_table, category_rules_table):
-                conn.execute(
-                    update(table)
-                    .where(table.c.category_id == old_row["id"])
-                    .values(category=updated_unknown_category)
-                )
-            conn.execute(
-                update(categories_table)
-                .where(categories_table.c.id == old_row["id"])
-                .values(name=updated_unknown_category)
-            )
-    upsert_setting(conn, "unknown_category", updated_unknown_category)
-    return updated_unknown_category

@@ -66,6 +66,59 @@ def test_category_update_route_rejects_rename_conflict(client, db_conn):
     assert tuple(source) == ("Pets", None, None)
 
 
+def test_category_routes_protect_builtin_categories(client, db_conn):
+    """Verify built-in categories cannot be created over, edited, or deleted."""
+    token = set_csrf_token(client)
+    unknown = db_conn.execute(
+        """
+        SELECT id, name, builtin_key, description, instruction
+        FROM categories
+        WHERE builtin_key = 'unknown'
+        """
+    ).fetchone()
+
+    create_response = client.post(
+        "/taxonomy/categories/create",
+        data={
+            CSRF_FIELD_NAME: token,
+            "name": "UNKNOWN",
+            "description": "Override",
+            "instruction": "Override",
+        },
+        follow_redirects=True,
+    )
+    update_response = client.post(
+        "/taxonomy/categories/update",
+        data={
+            CSRF_FIELD_NAME: token,
+            "category_id": unknown["id"],
+            "name": "UNCATEGORIZED",
+            "description": "Override",
+            "instruction": "Override",
+        },
+        follow_redirects=True,
+    )
+    delete_response = client.post(
+        "/taxonomy/categories/delete",
+        data={CSRF_FIELD_NAME: token, "category_id": unknown["id"]},
+        follow_redirects=True,
+    )
+
+    current = db_conn.execute(
+        """
+        SELECT id, name, builtin_key, description, instruction
+        FROM categories
+        WHERE id = ?
+        """,
+        (unknown["id"],),
+    ).fetchone()
+    assert create_response.status_code == 200
+    assert b"Built-in categories are managed by FinScope." in create_response.data
+    assert b"Built-in categories cannot be modified." in update_response.data
+    assert b"Built-in categories cannot be deleted." in delete_response.data
+    assert tuple(current) == tuple(unknown)
+
+
 def test_tag_create_update_and_delete_routes(client, db_conn):
     """Verify tag create, update, and unused delete behavior."""
     token = set_csrf_token(client)

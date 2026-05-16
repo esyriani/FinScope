@@ -11,7 +11,7 @@ FinScope is a single-user Flask application with SQLite persistence, background 
 > Project owner: Eugene Syriani  
 > Current deployment target: local desktop  
 > License: [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`)  
-> Last modification: 2026-05-14
+> Last modification: 2026-05-16
 
 ![FinScope splash screen](docs/img/splash.png)
 
@@ -147,6 +147,30 @@ Common settings:
 | `setting_defaults.categorization_model` | `FINANCE_DEFAULT_CATEGORIZATION_MODEL` | Default LLM model name. |
 
 FinScope loads `src/finance_app/config.example.ini`, overlays `src/finance_app/config.ini` when present, then applies environment variable overrides.
+
+### Database selection
+
+Choose the active database with the SQLAlchemy URL in `database.url`:
+
+```ini
+[database]
+url =
+path = ../../runtime/finance.db
+```
+
+Selection priority:
+
+1. `FINANCE_DATABASE_URL`, when set.
+2. `database.url` in `src/finance_app/config.ini`, when non-empty.
+3. A generated SQLite URL from the configured database path.
+
+The database path used for the generated SQLite URL is chosen in this order:
+
+1. `FINANCE_DB_PATH`, when set.
+2. `database.path` in `src/finance_app/config.ini`, when present.
+3. `database.path` in `src/finance_app/config.example.ini`.
+
+Leave `database.url` blank for the default SQLite database. Set it to a SQLAlchemy URL such as `sqlite:///D:/path/to/finance.db` or `mysql+pymysql://user:password@127.0.0.1:3306/finscope` to select that database. When a non-SQLite URL is active, `database.path` is not the active database; it is only used as the fallback path if the URL is later removed.
 
 Interface language is a runtime setting stored in SQLite and managed from Settings. English source strings are the canonical message ids; French translations live in `src/finance_app/translations/fr.json`.
 

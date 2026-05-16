@@ -2,7 +2,7 @@
 
 import re
 
-from finance_app.core.constants import THEME_MODE_DARK, THEME_MODE_LIGHT, UNKNOWN_CATEGORY
+from finance_app.core.constants import THEME_MODE_DARK, THEME_MODE_LIGHT
 from finance_app.core.i18n import normalize_language
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 
@@ -65,7 +65,6 @@ def parse_settings_form(form, app_settings):
             RECURRENCE_DETECTION_DEFAULTS.missed_cycles_before_inactive,
             label="Recurring missed cycles before inactive",
         ),
-        "unknown_category": str(form.get("unknown_category", "")).strip() or UNKNOWN_CATEGORY,
         "theme_mode": normalize_theme_mode(form.get("theme_mode", THEME_MODE_DARK)),
         "ui_language": normalize_language(form.get("ui_language", app_settings.locale)),
         "statement_types": parse_statement_types_form(form),

@@ -2,7 +2,7 @@
 
 from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
 from finance_app.modules.settings import service as settings_service
-from finance_app.modules.settings.runtime import get_all_settings, get_statement_type_options
+from finance_app.modules.settings.runtime import get_all_settings, get_statement_type_options, get_unknown_category
 
 
 def set_csrf_token(client, token="test-csrf-token"):
@@ -29,7 +29,6 @@ def settings_form_data(conn, **overrides):
         "recurrence_amount_tolerance_absolute": "12.5",
         "recurrence_amount_tolerance_percent": "0.20",
         "recurrence_missed_cycles_before_inactive": "3",
-        "unknown_category": "UNCATEGORIZED",
         "theme_mode": "dark",
         "ui_language": "en",
         "statement_type_ids": [str(row["id"]) for row in statement_types],
@@ -97,7 +96,6 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert settings["recurrence_amount_tolerance_absolute"] == "12.5"
     assert settings["recurrence_amount_tolerance_percent"] == "0.20"
     assert settings["recurrence_missed_cycles_before_inactive"] == "3"
-    assert settings["unknown_category"] == "UNCATEGORIZED"
     assert settings["theme_mode"] == "dark"
     assert settings["ui_language"] == "en"
     assert active_names == {
@@ -130,9 +128,9 @@ def test_settings_post_rejects_invalid_numeric_values_without_partial_save(clien
     assert get_all_settings(db_conn)["default_table_page_size"] == original_settings["default_table_page_size"]
 
 
-def test_settings_post_normalizes_blank_unknown_category_to_default(client, db_conn):
-    """Verify that a blank unknown category does not persist an invalid label."""
-    form = settings_form_data(db_conn, unknown_category="   ", theme_mode="light")
+def test_settings_post_ignores_unknown_category_override(client, db_conn):
+    """Verify Unknown remains a fixed built-in category outside runtime settings."""
+    form = settings_form_data(db_conn, unknown_category="UNCATEGORIZED", theme_mode="light")
 
     response = client.post(
         "/settings",
@@ -142,9 +140,8 @@ def test_settings_post_normalizes_blank_unknown_category_to_default(client, db_c
 
     assert response.status_code == 200
     assert b"Settings saved." in response.data
-    settings = get_all_settings(db_conn)
-    assert settings["unknown_category"] == "UNKNOWN"
-    assert settings["theme_mode"] == "light"
+    assert get_unknown_category(db_conn) == "UNKNOWN"
+    assert get_all_settings(db_conn)["theme_mode"] == "light"
 
 
 def test_settings_post_saves_ui_language_and_renders_french(client, db_conn):

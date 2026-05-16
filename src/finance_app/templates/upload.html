@@ -214,7 +214,7 @@
                                 {{ _("ignored {count}", count=statement["ignored_count"]) }}
                             </div>
                             {% if statement["llm_candidate_count"] %}
-                                <div class="small text-muted">{{ _("LLM queued {count}", count=statement["llm_candidate_count"]) }}</div>
+                                <div class="small text-muted">{{ _("{count} queued for categorization", count=statement["llm_candidate_count"]) }}</div>
                             {% endif %}
                             {% if statement["import_error"] %}
                                 <div class="small text-danger">{{ statement["import_error"] }}</div>

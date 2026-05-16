@@ -37,7 +37,7 @@ EXPECTED_TABLE_COLUMNS = {
         "llm_candidate_count",
         "uploaded_at",
     ],
-    "categories": ["id", "name", "description", "instruction", "created_at"],
+    "categories": ["id", "name", "builtin_key", "description", "instruction", "created_at"],
     "merchants": [
         "id",
         "canonical_key",
@@ -161,6 +161,9 @@ EXPECTED_EXPLICIT_INDEXES = {
 }
 
 EXPECTED_UNIQUE_CONSTRAINTS = {
+    "categories": {
+        "uq_categories_builtin_key": ["builtin_key"],
+    },
     "category_rules": {
         "uq_category_rules_keyword_amount": [
             "keyword_scope_key",

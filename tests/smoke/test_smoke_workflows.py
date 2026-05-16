@@ -267,7 +267,7 @@ def test_smoke_mark_reviewed_removes_transaction_from_review_filter(client, db_c
 
     assert "Smoke Needs Review" in before.get_data(as_text=True)
     assert response.status_code == 200
-    assert "Transaction marked verified." in response.get_data(as_text=True)
+    assert "Transaction approved." in response.get_data(as_text=True)
     assert tx["needs_review"] == 0
     assert tx["reviewed_at"] is not None
     assert "Smoke Needs Review" not in after.get_data(as_text=True)

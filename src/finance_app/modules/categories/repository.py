@@ -259,9 +259,13 @@ def rename_category(conn, old_name, new_name):
         return new_category
 
     old_row = conn.execute(
-        select(categories_table.c.id).where(categories_table.c.name == old_category)
+        select(categories_table.c.id, categories_table.c.builtin_key).where(
+            categories_table.c.name == old_category
+        )
     ).mappings().fetchone()
     if old_row is None:
+        return None
+    if old_row["builtin_key"]:
         return None
 
     existing = conn.execute(
