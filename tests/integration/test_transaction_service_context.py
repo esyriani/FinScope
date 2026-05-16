@@ -135,7 +135,7 @@ def test_transactions_context_category_source_and_review_filters(db_conn):
         ("", "All sources"),
         ("manual_reviewed", "Manual reviewed"),
         ("rule", "Rule"),
-        ("history", "History"),
+        ("history", "Similarity"),
         ("ai", "AI"),
     )
     assert ai_context["transactions"][0]["category_source_label"] == "AI"

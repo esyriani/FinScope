@@ -256,7 +256,7 @@ def attach_data_quality_urls(
             selected_tags=selected_tags,
             category_source=CATEGORY_SOURCE_RULE,
         ),
-        "By history": dashboard_transactions_url(
+        "By similarity": dashboard_transactions_url(
             period,
             filter_mode,
             selected_categories,
@@ -618,7 +618,7 @@ def build_data_quality(summary):
             "rate": manually_reviewed_rate,
         },
         {
-            "label": "By history",
+            "label": "By similarity",
             "count": history_count,
             "rate": history_rate,
         },

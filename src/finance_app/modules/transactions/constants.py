@@ -21,7 +21,7 @@ CATEGORY_SOURCE_FILTER_OPTIONS = (
     ("", "All sources"),
     (CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED, "Manual reviewed"),
     (CATEGORY_SOURCE_RULE, "Rule"),
-    (CATEGORY_SOURCE_HISTORY, "History"),
+    (CATEGORY_SOURCE_HISTORY, "Similarity"),
     (CATEGORY_SOURCE_AI, "AI"),
 )
 

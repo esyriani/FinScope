@@ -2,7 +2,12 @@
 
 import json
 
-from finance_app.modules.categories.sources import category_metadata_json
+from finance_app.modules.categories.sources import category_metadata_json, category_source_label
+
+
+def test_category_source_label_uses_similarity_for_history_source():
+    """Verify the persisted history source is displayed as similarity."""
+    assert category_source_label("history") == "Similarity"
 
 
 def test_category_metadata_json_normalizes_decision_source_values():

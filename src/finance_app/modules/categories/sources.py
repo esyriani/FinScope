@@ -21,7 +21,7 @@ from finance_app.modules.categories.decision import (
 CATEGORY_SOURCE_LABELS = {
     CATEGORY_SOURCE_UNKNOWN: "Unknown",
     CATEGORY_SOURCE_RULE: "Rule",
-    CATEGORY_SOURCE_HISTORY: "History",
+    CATEGORY_SOURCE_HISTORY: "Similarity",
     CATEGORY_SOURCE_AI: "AI",
     CATEGORY_SOURCE_MANUAL: "Manual",
 }

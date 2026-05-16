@@ -329,7 +329,7 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
         "SELECT category FROM transactions WHERE id = ?",
         (ignored_id,),
     ).fetchone()
-    assert message == "LLM categorized 1 transaction."
+    assert message == "1 automatically categorized: 1 AI."
     assert tuple(updated) == (
         "Groceries",
         0,
@@ -403,7 +403,7 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
         (unknown_id,),
     ).fetchone()
     metadata = json.loads(row["category_metadata"])
-    assert message == "LLM categorized 0 transactions."
+    assert message == "0 automatically categorized."
     assert row["category"] == "UNKNOWN"
     assert row["needs_review"] == 1
     assert row["category_source"] == "unknown"
@@ -424,6 +424,19 @@ def test_categorize_statement_unknown_transactions_job_reports_no_work(app, db_c
 
     assert message == "No unknown transactions needed LLM categorization."
     assert calls == []
+
+
+def test_automatic_categorization_message_reports_source_breakdown():
+    """Verify background job summaries distinguish similarity and AI sources."""
+    message = upload_workflow.automatic_categorization_message(
+        76,
+        {
+            "history": 50,
+            "ai": 26,
+        },
+    )
+
+    assert message == "76 automatically categorized: 50 similarity, 26 AI."
 
 
 def test_retry_statement_import_route_queues_existing_statement(client, db_conn, monkeypatch):

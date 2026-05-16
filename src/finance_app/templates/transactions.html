@@ -83,7 +83,7 @@
         <form method="get" class="row g-3 align-items-end">
             <input type="hidden" name="sort" value="{{ sort }}">
             <input type="hidden" name="direction" value="{{ direction }}">
-            <div class="col-md-4">
+            <div class="col-md-8">
                 <label class="form-label" for="search">{{ _("Search") }}</label>
                 <input
                     id="search"
@@ -95,7 +95,16 @@
                 >
             </div>
 
-            <div class="col-md-3">
+            <div class="col-md-4">
+                <label class="form-label" for="period">{{ _("Period") }}</label>
+                <select id="period" class="form-select" name="period">
+                    {% for period_value, period_text in period_options %}
+                        <option value="{{ period_value }}" {% if selected_period == period_value %}selected{% endif %}>{{ _(period_text) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-5">
                 <label class="form-label" for="category">{{ _("Category") }}</label>
                 <select id="category" class="form-select" name="category">
                     <option value="">{{ _("All categories") }}</option>
@@ -110,7 +119,7 @@
                 </select>
             </div>
 
-            <div class="col-md-3">
+            <div class="col-md-7">
                 <label class="form-label" id="transaction-tags-label">{{ _("Tags") }}</label>
                 <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}">
                     <div
@@ -151,15 +160,6 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label" for="category_source">{{ _("Category source") }}</label>
-                <select id="category_source" class="form-select" name="category_source">
-                    {% for source_value, source_text in category_source_filter_options %}
-                        <option value="{{ source_value }}" {% if selected_category_source == source_value %}selected{% endif %}>{{ _(source_text) }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-md-3">
                 <label class="form-label" for="ignored">{{ _("Ignored") }}</label>
                 <select id="ignored" class="form-select" name="ignored">
                     {% for ignored_value, ignored_text in ignored_filter_options %}
@@ -169,17 +169,15 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label" for="period">{{ _("Period") }}</label>
-                <select id="period" class="form-select" name="period">
-                    {% for period_value, period_text in period_options %}
-                        <option value="{{ period_value }}" {% if selected_period == period_value %}selected{% endif %}>{{ _(period_text) }}</option>
+                <label class="form-label" for="category_source">{{ _("Category source") }}</label>
+                <select id="category_source" class="form-select" name="category_source">
+                    {% for source_value, source_text in category_source_filter_options %}
+                        <option value="{{ source_value }}" {% if selected_category_source == source_value %}selected{% endif %}>{{ _(source_text) }}</option>
                     {% endfor %}
                 </select>
             </div>
 
-            <div class="w-100"></div>
-
-            <div class="col-md-3 ms-md-auto filter-actions">
+            <div class="col-md-3 filter-actions justify-content-md-end">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
                 <a class="btn btn-outline-secondary" href="/transactions"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>

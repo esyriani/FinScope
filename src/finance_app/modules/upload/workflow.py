@@ -34,6 +34,8 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.sources import (
+    CATEGORY_SOURCE_AI,
+    CATEGORY_SOURCE_HISTORY,
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
     CATEGORY_SOURCE_UNKNOWN,
@@ -60,6 +62,16 @@ from finance_app.modules.transactions.importer import filter_new_transactions
 
 INTERAC_MATCH_DATE_TOLERANCE_DAYS = 5
 PAYMENT_MATCH_DATE_TOLERANCE_DAYS = 5
+AUTOMATIC_CATEGORIZATION_SOURCE_ORDER = (
+    CATEGORY_SOURCE_HISTORY,
+    CATEGORY_SOURCE_AI,
+    CATEGORY_SOURCE_RULE,
+)
+AUTOMATIC_CATEGORIZATION_SOURCE_LABELS = {
+    CATEGORY_SOURCE_HISTORY: "similarity",
+    CATEGORY_SOURCE_AI: "AI",
+    CATEGORY_SOURCE_RULE: "rule",
+}
 INTERAC_DESCRIPTION_MARKERS = {
     "sent": ("ENVOI", "SENT E-TRANSFER"),
     "received": ("RECEPT", "RECEIVED E-TRANSFER"),
@@ -861,6 +873,7 @@ def categorize_statement_unknown_transactions_job(statement_id):
 
         categorized = categorize_transactions(transactions, conn=conn, use_llm=True)
         updated_count = 0
+        source_counts = {}
         for tx in categorized:
             is_unknown_result = tx.get("category") in (None, unknown_category)
             if is_unknown_result and not tx.get("category_metadata"):
@@ -876,8 +889,39 @@ def categorize_statement_unknown_transactions_job(statement_id):
                     rule_id=tx.get("category_rule_id"),
                 )
                 updated_count += 1
+                source = tx.get("category_source") or CATEGORY_SOURCE_UNKNOWN
+                source_counts[source] = source_counts.get(source, 0) + 1
 
-    return f"LLM categorized {updated_count} transaction{'' if updated_count == 1 else 's'}."
+    return automatic_categorization_message(updated_count, source_counts)
+
+
+def automatic_categorization_message(updated_count, source_counts=None):
+    """Return a concise background-job summary for automatic categorization."""
+    if not updated_count:
+        return "0 automatically categorized."
+
+    breakdown = automatic_categorization_breakdown(source_counts or {})
+    suffix = f": {breakdown}" if breakdown else ""
+    return f"{updated_count} automatically categorized{suffix}."
+
+
+def automatic_categorization_breakdown(source_counts):
+    """Return a stable source-count breakdown for automatic categorization."""
+    parts = []
+    seen = set()
+    for source in AUTOMATIC_CATEGORIZATION_SOURCE_ORDER:
+        count = source_counts.get(source, 0)
+        if count:
+            parts.append(f"{count} {AUTOMATIC_CATEGORIZATION_SOURCE_LABELS[source]}")
+            seen.add(source)
+
+    for source in sorted(set(source_counts) - seen):
+        count = source_counts[source]
+        if count:
+            label = AUTOMATIC_CATEGORIZATION_SOURCE_LABELS.get(source, str(source or "other"))
+            parts.append(f"{count} {label}")
+
+    return ", ".join(parts)
 
 
 def statement_unknown_transaction_rows(conn, statement_id, unknown_category):

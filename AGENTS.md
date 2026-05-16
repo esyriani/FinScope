@@ -103,6 +103,8 @@ For ECharts:
 * Keep chart styling, labels, legends, tooltips, colors, and interaction behavior consistent across dashboards.
 * Preserve existing chart initialization and update patterns unless there is a clear reason to change them.
 
+Make sure you always use both french and english translations for user-facing strings.
+
 ## Architecture rules
 
 Maintain the existing architectural style throughout the codebase.
