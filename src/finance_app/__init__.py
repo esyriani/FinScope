@@ -1,0 +1,143 @@
+"""Flask application factory for FinScope."""
+
+from flask import Flask, g, request
+
+from finance_app.core.assets import register_asset_helpers
+from finance_app.core.config import settings
+from finance_app.core.constants import STATIC_DIR, TEMPLATE_DIR, THEME_MODE_DARK, THEME_MODE_LIGHT
+from finance_app.core.csrf import register_csrf
+from finance_app.core.filters import register_filters
+from finance_app.core.i18n import (
+    SUPPORTED_LANGUAGES,
+    client_translations,
+    gettext,
+    locale_for_language,
+    normalize_language,
+)
+from finance_app.database.engine import register_core_db
+from finance_app.modules import register_blueprints
+from finance_app.modules.settings.runtime import get_setting_with_fallback
+
+
+CLIENT_TRANSLATION_MESSAGES = (
+    "Amount changed",
+    "Annual",
+    "Amount difference: {difference}.",
+    "Actual",
+    "Biweekly",
+    "Best current-month match: {date}.",
+    "Cash flow",
+    "Categorize selected ({count})",
+    "Chart {number}",
+    "Could not save recurring pattern.",
+    "CSV",
+    "Checking account",
+    "Choose how imported rows are interpreted.",
+    "Confirm recurring",
+    "Confirmed recurring.",
+    "Credit card",
+    "Date",
+    "Date difference: {difference}.",
+    "days",
+    "Detected because this merchant appeared in {months} distinct months with a typical amount of {amount}.",
+    "Description",
+    "Difference",
+    "Edit",
+    "Excel",
+    "Enter a keyword to preview matches.",
+    "Export {label}",
+    "Frequency",
+    "High",
+    "Income",
+    "Income and credits",
+    "Inactive",
+    "Irregular recurring",
+    "Likely occurred",
+    "Loading preview...",
+    "Low",
+    "Medium",
+    "Monthly-like",
+    "Names appear in upload and statement history.",
+    "No active transactions match this rule.",
+    "No current-month merchant and direction match was found. Expected date uses a +/-{days} day tolerance.",
+    "No recent occurrences available.",
+    "No transactions selected. The category will apply to the whole group.",
+    "Net cash flow",
+    "Not recurring / Ignore",
+    "Occurred",
+    "Overdue",
+    "Personal",
+    "Preview unavailable.",
+    "Expected",
+    "Possibly inactive",
+    "Quarterly",
+    "Recurring activity",
+    "Recurring items - {date}",
+    "Recurring pattern changes saved.",
+    "Remove",
+    "Remove {label}",
+    "Spending",
+    "Table {number}",
+    "This pattern has missed multiple expected cycles.",
+    "This recurring pattern has saved user edits.",
+    "Tolerances: +/-{days} days and +/-{amount}.",
+    "Typical",
+    "Transactions - {date}",
+    "Weekly",
+    "{count} active matching transaction.",
+    "{count} active matching transactions.",
+    "{count} distinct month",
+    "{count} distinct months",
+    "{count} recurring item",
+    "{count} recurring items",
+    "{count} selected. The category will apply only to selected transactions.",
+)
+
+
+def create_app():
+    """Create and configure the Flask application."""
+    app = Flask(
+        __name__,
+        template_folder=TEMPLATE_DIR,
+        static_folder=STATIC_DIR,
+    )
+    app.secret_key = settings.secret_key
+    app.config["MAX_CONTENT_LENGTH"] = settings.max_content_length
+    app.config["FINANCE_SETTINGS"] = settings
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+    @app.before_request
+    def load_runtime_language():
+        """Load the selected UI language for the current request."""
+        if request.endpoint == "static":
+            g.ui_language = normalize_language(settings.locale)
+            return
+        language = get_setting_with_fallback("ui_language", settings.locale)
+        g.ui_language = normalize_language(language)
+
+    @app.context_processor
+    def inject_runtime_settings():
+        """Expose runtime UI settings to every template render."""
+        theme_mode = get_setting_with_fallback("theme_mode", THEME_MODE_DARK)
+        ui_language = normalize_language(getattr(g, "ui_language", settings.locale))
+        return {
+            "ui_theme": (
+                THEME_MODE_DARK
+                if str(theme_mode).strip().lower() == THEME_MODE_DARK
+                else THEME_MODE_LIGHT
+            ),
+            "ui_language": ui_language,
+            "ui_locale": locale_for_language(ui_language),
+            "supported_languages": SUPPORTED_LANGUAGES,
+            "_": gettext,
+            "client_i18n": client_translations(ui_language, CLIENT_TRANSLATION_MESSAGES),
+        }
+
+    register_filters(app)
+    register_asset_helpers(app)
+    register_core_db(app)
+    register_csrf(app)
+    register_blueprints(app)
+
+    return app

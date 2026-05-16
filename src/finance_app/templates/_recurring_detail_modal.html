@@ -1,0 +1,157 @@
+<script id="recurring-activity-data" type="application/json">
+{{ recurring_activity_json | tojson }}
+</script>
+
+<div class="modal fade" id="recurring-activity-modal" tabindex="-1" aria-labelledby="recurring-activity-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="recurring-activity-modal-title">{{ _("Recurring activity") }}</h5>
+                    <div class="text-muted small" data-recurring-detail-subtitle></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="metric-label">{{ _("Direction") }}</div>
+                        <div class="fw-semibold" data-recurring-detail-type></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-label">{{ _("Frequency") }}</div>
+                        <div class="fw-semibold" data-recurring-detail-frequency></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-label">{{ _("Typical amount") }}</div>
+                        <div class="fw-semibold" data-recurring-detail-amount></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-label">{{ _("Expected date") }}</div>
+                        <div class="fw-semibold" data-recurring-detail-date></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-label">{{ _("Last seen") }}</div>
+                        <div class="fw-semibold" data-recurring-detail-last-seen></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-label">{{ _("Observed months") }}</div>
+                        <div class="fw-semibold" data-recurring-detail-observed></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-label">{{ _("Status") }}</div>
+                        <div class="fw-semibold" data-recurring-detail-status></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-label">{{ _("Confidence") }}</div>
+                        <div data-recurring-detail-confidence></div>
+                    </div>
+                </div>
+
+                <div class="text-muted small mb-3" data-recurring-detail-explanation></div>
+                <div class="text-muted small mb-4" data-recurring-detail-match></div>
+                <div class="card mb-4 d-none" data-recurring-detail-amount-change>
+                    <div class="card-body">
+                        <div class="section-title mb-3">
+                            <div>
+                                <h6 class="card-title mb-1">{{ _("Amount change") }}</h6>
+                                <div class="text-muted small">{{ _("Actual matched amount compared with the typical amount.") }}</div>
+                            </div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="metric-label">{{ _("Typical") }}</div>
+                                <div class="fw-semibold" data-recurring-detail-change-typical></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="metric-label">{{ _("Actual") }}</div>
+                                <div class="fw-semibold" data-recurring-detail-change-actual></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="metric-label">{{ _("Difference") }}</div>
+                                <div class="fw-semibold" data-recurring-detail-change-difference></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-info py-2 d-none" data-recurring-detail-action-status></div>
+
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <button type="button" class="btn btn-sm btn-primary" data-recurring-confirm-action><i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Confirm recurring") }}</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-recurring-ignore-action><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Not recurring / Ignore") }}</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-recurring-edit-action><i class="bi bi-pencil" aria-hidden="true"></i>{{ _("Edit") }}</button>
+                </div>
+
+                <div class="card mb-4 d-none" data-recurring-edit-panel>
+                    <div class="card-body">
+                        <div class="section-title mb-3">
+                            <div>
+                                <h6 class="card-title mb-1">{{ _("Edit recurring pattern") }}</h6>
+                                <div class="text-muted small">{{ _("Saved changes override this detected recurring pattern.") }}</div>
+                            </div>
+                        </div>
+                        <form class="row g-3" data-recurring-edit-form>
+                            <div class="col-md-4">
+                                <label class="form-label" for="recurring-edit-frequency">{{ _("Frequency") }}</label>
+                                <select id="recurring-edit-frequency" class="form-select" data-recurring-edit-frequency>
+                                    <option value="Weekly">{{ _("Weekly") }}</option>
+                                    <option value="Biweekly">{{ _("Biweekly") }}</option>
+                                    <option value="Monthly-like">{{ _("Monthly-like") }}</option>
+                                    <option value="Quarterly">{{ _("Quarterly") }}</option>
+                                    <option value="Annual">{{ _("Annual") }}</option>
+                                    <option value="Irregular recurring">{{ _("Irregular recurring") }}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="recurring-edit-date">{{ _("Expected day/date") }}</label>
+                                <input id="recurring-edit-date" class="form-control" type="text" data-recurring-edit-date>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="recurring-edit-amount">{{ _("Typical amount") }}</label>
+                                <input id="recurring-edit-amount" class="form-control" type="number" min="0" step="0.01" data-recurring-edit-amount>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="recurring-edit-date-tolerance">{{ _("Date tolerance") }}</label>
+                                <input id="recurring-edit-date-tolerance" class="form-control" type="number" min="0" step="1" data-recurring-edit-date-tolerance>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="recurring-edit-amount-tolerance">{{ _("Amount tolerance") }}</label>
+                                <input id="recurring-edit-amount-tolerance" class="form-control" type="number" min="0" step="0.01" data-recurring-edit-amount-tolerance>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="recurring-edit-active">{{ _("Active/inactive") }}</label>
+                                <select id="recurring-edit-active" class="form-select" data-recurring-edit-active>
+                                    <option value="active">{{ _("Active") }}</option>
+                                    <option value="inactive">{{ _("Inactive") }}</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-sm btn-primary" type="button" data-recurring-save-edit-action>{{ _("Save changes") }}</button>
+                                <span class="text-muted small ms-2">{{ _("Saved changes apply to this recurring pattern.") }}</span>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <h6 class="card-title mb-2">{{ _("Recent occurrences") }}</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" data-no-export>
+                        <thead>
+                            <tr>
+                                <th>{{ _("Date") }}</th>
+                                <th>{{ _("Description") }}</th>
+                                <th>{{ _("Category") }}</th>
+                                <th>{{ _("Account") }}</th>
+                                <th class="text-end">{{ _("Amount") }}</th>
+                            </tr>
+                        </thead>
+                        <tbody data-recurring-detail-occurrences></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">{{ _("Close") }}</button>
+            </div>
+        </div>
+    </div>
+</div>

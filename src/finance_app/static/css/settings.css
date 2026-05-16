@@ -1,0 +1,181 @@
+.settings-form {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.settings-section {
+    border-bottom: 1px solid var(--app-border);
+    padding-bottom: 1.5rem;
+}
+
+.settings-section:last-of-type {
+    border-bottom: 0;
+    padding-bottom: 0.25rem;
+}
+
+.settings-section-header {
+    margin-bottom: 1.1rem;
+}
+
+.settings-section-title {
+    color: var(--app-heading);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin: 0;
+}
+
+.settings-section-help,
+.settings-subsection-help {
+    color: var(--app-muted);
+    font-size: 0.84rem;
+    line-height: 1.35;
+    margin-top: 0.25rem;
+}
+
+.settings-subsection {
+    margin-top: 1.35rem;
+}
+
+.settings-subsection:first-of-type {
+    margin-top: 0;
+}
+
+.settings-subsection-title {
+    color: var(--app-heading);
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin: 0 0 0.25rem;
+}
+
+.settings-grid {
+    align-items: start;
+    display: grid;
+    gap: 1rem 1.25rem;
+}
+
+.settings-grid-appearance {
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    max-width: 58rem;
+}
+
+.settings-grid-compact {
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 14rem));
+}
+
+.settings-grid-wide {
+    grid-template-columns: minmax(18rem, 32rem);
+}
+
+.settings-grid-mixed {
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 14rem));
+}
+
+.settings-field,
+.theme-mode-field,
+.language-mode-field {
+    min-width: 0;
+}
+
+.settings-form fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.theme-mode-field,
+.language-mode-field {
+    max-width: 27rem;
+}
+
+.settings-field-model {
+    grid-column: span 2;
+    max-width: 34rem;
+}
+
+.settings-form .form-label,
+.settings-form legend.form-label {
+    color: var(--app-heading);
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 0.35rem;
+}
+
+.settings-form .form-control,
+.settings-form .form-select {
+    min-height: 2.35rem;
+}
+
+.settings-form .input-group .form-control {
+    min-width: 0;
+}
+
+.settings-form .form-text {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+    margin-top: 0.35rem;
+    max-width: 30rem;
+}
+
+.language-mode-code {
+    align-items: center;
+    background: rgba(var(--app-accent-rgb), 0.12);
+    border: 1px solid rgba(var(--app-accent-rgb), 0.3);
+    border-radius: 8px;
+    color: var(--app-accent-strong);
+    display: grid;
+    flex: 0 0 auto;
+    font-size: 0.85rem;
+    font-weight: 800;
+    height: 44px;
+    line-height: 1;
+    place-items: center;
+    width: 44px;
+}
+
+.btn-check:checked + .language-mode-option .language-mode-code {
+    background: rgba(var(--app-accent-rgb), 0.2);
+    border-color: var(--app-accent);
+    color: var(--app-heading);
+}
+
+.statement-types-editor td {
+    vertical-align: top;
+}
+
+.statement-types-editor .form-control,
+.statement-types-editor .form-select {
+    min-width: 12rem;
+}
+
+.statement-types-editor .form-text {
+    max-width: none;
+}
+
+.statement-types-editor [data-remove-statement-type] {
+    margin-top: 0.15rem;
+}
+
+.settings-actions {
+    flex-wrap: wrap;
+    padding-top: 0.1rem;
+}
+
+@media (max-width: 850px) {
+    .settings-grid-appearance,
+    .settings-grid-compact,
+    .settings-grid-wide,
+    .settings-grid-mixed {
+        grid-template-columns: 1fr;
+    }
+
+    .theme-mode-field,
+    .language-mode-field,
+    .settings-field-model {
+        grid-column: auto;
+        max-width: none;
+    }
+}

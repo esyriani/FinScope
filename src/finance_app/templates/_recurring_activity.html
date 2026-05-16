@@ -1,0 +1,92 @@
+<section class="card" id="recurring-activity-section" data-table-export-scope>
+    <div class="card-body p-0">
+        <div class="section-title px-4 pt-4">
+            <div>
+                <h5 class="card-title mb-1">{{ _("Recurring activity") }}</h5>
+                <div class="text-muted small">{{ _("Detected bills, income, subscriptions, and other repeating transactions.") }}</div>
+            </div>
+        </div>
+        <div class="text-muted small px-4 pb-3">
+            {{ _("Occurred means date and amount are within tolerance. Amount changed means timing is close but amount is outside tolerance. Likely occurred means the merchant appeared this month, but timing is outside tolerance. Possibly inactive means the pattern missed multiple expected cycles.") }}
+        </div>
+        <div class="d-flex flex-wrap gap-2 px-4 pb-3" data-recurring-activity-filters>
+            <button class="btn btn-sm btn-primary" type="button" data-recurring-activity-filter="all" aria-pressed="true">{{ _("All") }}</button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="occurred" aria-pressed="false">{{ _("Occurred") }}</button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="amount_changed" aria-pressed="false">{{ _("Amount changed") }}</button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="likely_occurred" aria-pressed="false">{{ _("Likely occurred") }}</button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="expected" aria-pressed="false">{{ _("Expected") }}</button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="overdue" aria-pressed="false">{{ _("Overdue") }}</button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="possibly_inactive" aria-pressed="false">{{ _("Possibly inactive") }}</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" data-no-export data-sortable-table>
+                <thead>
+                    <tr>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Expected date") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Merchant") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Category") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="text"><span>{{ _("Status") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Frequency") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Confidence") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="6" data-sort-type="number"><span>{{ _("Typical amount") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="7" data-sort-type="number"><span>{{ _("Change") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="8" data-sort-type="text"><span>{{ _("Last seen") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="9" data-sort-type="number"><span>{{ _("Observed months") }}</span></button></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in recurring_items %}
+                    <tr
+                        data-recurring-activity-row
+                        data-recurring-status="{{ item.status }}"
+                        data-recurring-id="{{ item.id }}"
+                        role="button"
+                        tabindex="0"
+                        title="{{ _('Double-click to view recurring activity details') }}"
+                    >
+                        <td data-sort-value="{{ item.date }}">{{ item.date | datefmt }}</td>
+                        <td>{{ item.merchant }}</td>
+                        <td>{{ item.category }}</td>
+                        {% set status_labels = {
+                            "occurred": "Occurred",
+                            "amount_changed": "Amount changed",
+                            "likely_occurred": "Likely occurred",
+                            "expected": "Expected",
+                            "overdue": "Overdue",
+                            "possibly_inactive": "Possibly inactive",
+                            "matched": "Likely occurred"
+                        } %}
+                        {% set status_label = status_labels.get(item.status, item.status | title) %}
+                        <td>{{ _(status_label) }}</td>
+                        <td>{{ _(item.frequency) }}</td>
+                        {% set confidence_badges = {"High": "text-bg-success", "Medium": "text-bg-warning", "Low": "text-bg-secondary"} %}
+                        <td><span class="badge {{ confidence_badges.get(item.confidence, 'text-bg-secondary') }}">{{ _(item.confidence) }}</span></td>
+                        <td class="text-end {% if item.type == 'income' %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ item.amount }}">{{ item.amount | moneyfmt }}</td>
+                        {% if item.amount_change %}
+                            <td class="text-end {% if item.amount_change.difference >= 0 %}text-danger{% else %}text-success{% endif %}" data-sort-value="{{ item.amount_change.difference }}">
+                                {{ item.amount_change.difference | moneyfmt }}
+                                {% if item.amount_change.percent is not none %}
+                                    <span class="text-muted small">({{ "%+.1f"|format(item.amount_change.percent) }}%)</span>
+                                {% endif %}
+                            </td>
+                        {% else %}
+                            <td class="text-end text-muted" data-sort-value="0">-</td>
+                        {% endif %}
+                        <td data-sort-value="{{ item.last_seen }}">{{ item.last_seen | datefmt }}</td>
+                        <td class="text-end" data-sort-value="{{ item.observed_months }}">{{ item.observed_months }}</td>
+                    </tr>
+                    {% else %}
+                    <tr data-sort-ignore>
+                        <td colspan="10" class="text-muted">{{ _("No recurring-looking activity detected yet.") }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if recurring_items %}
+                    <tr data-recurring-activity-empty data-sort-ignore hidden>
+                        <td colspan="10" class="text-muted">{{ _("No recurring activity matches this status.") }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

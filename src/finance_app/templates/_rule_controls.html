@@ -1,0 +1,264 @@
+{% macro rule_category_control(prefix, category_options, selected_category=None, label="Category", select_class="form-select", category_descriptions=None) %}
+{% set category_descriptions = category_descriptions or {} %}
+{% set selected_description = category_descriptions.get(selected_category, "") if selected_category else "" %}
+<div class="rule-form-row">
+    <label class="form-label" for="{{ prefix }}-category">{{ _(label) }}</label>
+    <select
+        id="{{ prefix }}-category"
+        class="{{ select_class }}"
+        name="category"
+        title="{{ selected_description }}"
+        data-bs-tooltip
+        data-category-description-select
+    >
+        {% if selected_category and selected_category not in category_options %}
+            <option value="{{ selected_category }}" selected>{{ selected_category }}</option>
+        {% endif %}
+
+        {% for option in category_options %}
+            {% set option_description = category_descriptions.get(option, "") %}
+            <option
+                value="{{ option }}"
+                title="{{ option_description }}"
+                data-category-description="{{ option_description }}"
+                {% if selected_category == option %}selected{% endif %}
+            >
+                {{ option }}
+            </option>
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}
+
+{% macro rule_keyword_control(prefix, value="", label="Rule keyword") %}
+<div class="rule-form-row">
+    <label class="form-label" for="{{ prefix }}-keyword">{{ _(label) }}</label>
+    <input
+        id="{{ prefix }}-keyword"
+        class="form-control"
+        type="text"
+        name="keyword"
+        value="{{ value }}"
+        placeholder="{{ _('Cleaned merchant or keyword') }}"
+    >
+</div>
+{% endmacro %}
+
+{% macro rule_scope_control(prefix, merchant_id=None, merchant_name=None) %}
+<fieldset class="rule-fieldset">
+    <legend class="form-label">{{ _("Match scope") }}</legend>
+    <div class="rule-choice-grid">
+        <input
+            class="btn-check"
+            type="radio"
+            name="merchant_id"
+            id="{{ prefix }}-scope-merchant"
+            value="{{ merchant_id or '' }}"
+            {% if merchant_id %}checked{% endif %}
+        >
+        <label class="rule-choice" for="{{ prefix }}-scope-merchant">
+            <span class="rule-choice-icon"><i class="bi bi-shop" aria-hidden="true"></i></span>
+            <span class="rule-choice-text">
+                <span class="rule-choice-title">{{ _("Merchant only") }}</span>
+                <span class="rule-choice-detail">{{ merchant_name or _("Match only transactions linked to this merchant.") }}</span>
+            </span>
+        </label>
+
+        <input
+            class="btn-check"
+            type="radio"
+            name="merchant_id"
+            id="{{ prefix }}-scope-fuzzy"
+            value=""
+            {% if not merchant_id %}checked{% endif %}
+        >
+        <label class="rule-choice" for="{{ prefix }}-scope-fuzzy">
+            <span class="rule-choice-icon"><i class="bi bi-search" aria-hidden="true"></i></span>
+            <span class="rule-choice-text">
+                <span class="rule-choice-title">{{ _("Fuzzy keyword") }}</span>
+                <span class="rule-choice-detail">{{ _("Match any normalized description containing this keyword.") }}</span>
+            </span>
+        </label>
+    </div>
+</fieldset>
+{% endmacro %}
+
+{% macro rule_account_control(prefix, account_options, selected_account_id=None, label="Account") %}
+<div class="rule-form-row">
+    <label class="form-label" for="{{ prefix }}-account">{{ _(label) }}</label>
+    <select id="{{ prefix }}-account" class="form-select" name="account_id">
+        <option value="">{{ _("Any account") }}</option>
+        {% for account in account_options %}
+            <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}
+
+{% macro rule_direction_control(prefix, direction_options, selected_direction="any", label="Direction") %}
+<div class="rule-form-row">
+    <label class="form-label" for="{{ prefix }}-direction">{{ _(label) }}</label>
+    <select id="{{ prefix }}-direction" class="form-select" name="direction">
+        {% for value, text in direction_options %}
+            <option value="{{ value }}" {% if selected_direction == value %}selected{% endif %}>{{ _(text) }}</option>
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}
+
+{% macro rule_tag_control(prefix, tag_options, selected_tags=None, label="Tags") %}
+{% set selected_tags = selected_tags or [] %}
+<fieldset class="rule-form-row">
+    <legend class="form-label">{{ _(label) }}</legend>
+    <div class="tag-choice-list">
+        {% for tag in tag_options %}
+            {% set tag_name = tag.name if tag.name is defined else tag %}
+            {% set tag_color = tag.color if tag.color is defined else "#64748b" %}
+            {% set tag_description = tag.description if tag.description is defined else "" %}
+            <input
+                class="btn-check tag-choice-input"
+                type="checkbox"
+                name="tags"
+                id="{{ prefix }}-tag-{{ loop.index }}"
+                value="{{ tag_name }}"
+                {% if tag_name in selected_tags %}checked{% endif %}
+            >
+            <label
+                class="tag-choice"
+                for="{{ prefix }}-tag-{{ loop.index }}"
+                style="--tag-color: {{ tag_color }};"
+                {% if tag_description %}
+                    title="{{ tag_description }}"
+                    data-bs-tooltip
+                {% endif %}
+            >
+                <span class="tag-choice-swatch" aria-hidden="true"></span>
+                <span>{{ tag_name }}</span>
+            </label>
+        {% else %}
+            <span class="text-muted small">{{ _("No tags configured.") }}</span>
+        {% endfor %}
+    </div>
+</fieldset>
+{% endmacro %}
+
+{% macro rule_save_mode_control(prefix, field_name, save_value, no_value, legend, save_title, save_detail, no_title, no_detail, default_value=None) %}
+{% set selected_value = default_value if default_value is not none else save_value %}
+<fieldset class="rule-fieldset">
+    <legend class="form-label">{{ _(legend) }}</legend>
+    <div class="rule-choice-grid">
+        <input class="btn-check" type="radio" name="{{ field_name }}" id="{{ prefix }}-save-rule" value="{{ save_value }}" {% if selected_value == save_value %}checked{% endif %}>
+        <label class="rule-choice" for="{{ prefix }}-save-rule">
+            <span class="rule-choice-icon">R</span>
+            <span class="rule-choice-text">
+                <span class="rule-choice-title">{{ _(save_title) }}</span>
+                <span class="rule-choice-detail">{{ _(save_detail) }}</span>
+            </span>
+        </label>
+
+        <input class="btn-check" type="radio" name="{{ field_name }}" id="{{ prefix }}-no-rule" value="{{ no_value }}" {% if selected_value == no_value %}checked{% endif %}>
+        <label class="rule-choice" for="{{ prefix }}-no-rule">
+            <span class="rule-choice-icon">1</span>
+            <span class="rule-choice-text">
+                <span class="rule-choice-title">{{ _(no_title) }}</span>
+                <span class="rule-choice-detail">{{ _(no_detail) }}</span>
+            </span>
+        </label>
+    </div>
+</fieldset>
+{% endmacro %}
+
+{% macro amount_rule_control(prefix, amount_min=None, amount_max=None) %}
+{% set has_amount = amount_min is not none or amount_max is not none %}
+{% set is_exact = amount_min is not none and amount_max is not none and amount_min == amount_max %}
+{% set is_range = has_amount and not is_exact %}
+<fieldset class="amount-rule-control" data-rule-amount-control>
+    <legend class="form-label">{{ _("Amount match") }}</legend>
+    <input type="hidden" name="amount_min" value="{{ '' if amount_min is none else amount_min }}" data-rule-amount-min>
+    <input type="hidden" name="amount_max" value="{{ '' if amount_max is none else amount_max }}" data-rule-amount-max>
+
+    <div class="form-check form-switch amount-rule-switch">
+        <input
+            class="form-check-input"
+            type="checkbox"
+            role="switch"
+            id="{{ prefix }}-any-amount"
+            data-rule-any-amount
+            {% if not has_amount %}checked{% endif %}
+        >
+        <label class="form-check-label" for="{{ prefix }}-any-amount">{{ _("Any amount") }}</label>
+    </div>
+
+    <div class="amount-rule-body" data-rule-amount-body>
+        <div class="amount-rule-modes">
+            <input
+                class="btn-check"
+                type="radio"
+                name="{{ prefix }}-amount-mode"
+                id="{{ prefix }}-amount-exact-mode"
+                value="exact"
+                data-rule-amount-mode
+                {% if not is_range %}checked{% endif %}
+            >
+            <label class="amount-mode-option" for="{{ prefix }}-amount-exact-mode">
+                <span class="rule-choice-icon">=</span>
+                <span class="rule-choice-title">{{ _("Exact amount") }}</span>
+            </label>
+
+            <input
+                class="btn-check"
+                type="radio"
+                name="{{ prefix }}-amount-mode"
+                id="{{ prefix }}-amount-range-mode"
+                value="range"
+                data-rule-amount-mode
+                {% if is_range %}checked{% endif %}
+            >
+            <label class="amount-mode-option" for="{{ prefix }}-amount-range-mode">
+                <span class="rule-choice-icon">R</span>
+                <span class="rule-choice-title">{{ _("Range") }}</span>
+            </label>
+        </div>
+
+        <div class="amount-mode-fields" data-rule-exact-fields>
+            <label class="form-label" for="{{ prefix }}-exact-amount">{{ _("Amount") }}</label>
+            <input
+                id="{{ prefix }}-exact-amount"
+                class="form-control"
+                type="text"
+                inputmode="decimal"
+                data-rule-exact-amount
+                value="{{ amount_min if is_exact else '' }}"
+                placeholder="{{ _('Example: -1680.00') }}"
+            >
+        </div>
+
+        <div class="amount-mode-fields amount-range-fields" data-rule-range-fields>
+            <div>
+                <label class="form-label" for="{{ prefix }}-range-min">{{ _("Min amount") }}</label>
+                <input
+                    id="{{ prefix }}-range-min"
+                    class="form-control"
+                    type="text"
+                    inputmode="decimal"
+                    data-rule-range-min
+                    value="{{ '' if amount_min is none or is_exact else amount_min }}"
+                    placeholder="{{ _('Any') }}"
+                >
+            </div>
+            <div>
+                <label class="form-label" for="{{ prefix }}-range-max">{{ _("Max amount") }}</label>
+                <input
+                    id="{{ prefix }}-range-max"
+                    class="form-control"
+                    type="text"
+                    inputmode="decimal"
+                    data-rule-range-max
+                    value="{{ '' if amount_max is none or is_exact else amount_max }}"
+                    placeholder="{{ _('Any') }}"
+                >
+            </div>
+        </div>
+    </div>
+</fieldset>
+{% endmacro %}

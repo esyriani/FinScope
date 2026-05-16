@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Finances: Flask App",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/finance_app/app.py",
+            "cwd": "${workspaceFolder}/src/finance_app",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src/finance_app",
+                "FINANCE_CONFIG_FILE": "${workspaceFolder}/src/finance_app/config.ini",
+                "PYTHONDONTWRITEBYTECODE": "1"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

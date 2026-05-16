@@ -1,0 +1,302 @@
+"""Application-wide constants and persisted value vocabularies."""
+
+import os
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
+RUNTIME_DIR = os.path.join(PROJECT_DIR, "runtime")
+TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+UNKNOWN_CATEGORY = "UNKNOWN"
+TRANSFER_CATEGORY = "Transfers"
+
+FILTER_MODE_INCLUDE = "include"
+FILTER_MODE_EXCLUDE = "exclude"
+FILTER_MODES = (
+    FILTER_MODE_INCLUDE,
+    FILTER_MODE_EXCLUDE,
+)
+
+THEME_MODE_DARK = "dark"
+THEME_MODE_LIGHT = "light"
+THEME_MODES = (
+    THEME_MODE_DARK,
+    THEME_MODE_LIGHT,
+)
+
+ACCOUNT_TYPE_CHECKING = "checking"
+ACCOUNT_TYPE_SAVINGS = "savings"
+ACCOUNT_TYPE_CREDIT_CARD = "credit_card"
+ACCOUNT_TYPES = {
+    ACCOUNT_TYPE_CHECKING: "Checking account",
+    ACCOUNT_TYPE_SAVINGS: "Savings account",
+    ACCOUNT_TYPE_CREDIT_CARD: "Credit card",
+}
+
+STATEMENT_IMPORT_MODE_LEDGER = "ledger"
+STATEMENT_IMPORT_MODE_ENRICHMENT = "enrichment"
+STATEMENT_IMPORT_MODES = {
+    STATEMENT_IMPORT_MODE_LEDGER: "Ledger source",
+    STATEMENT_IMPORT_MODE_ENRICHMENT: "Enrichment source",
+}
+
+STATEMENT_IMPORT_STATUS_PENDING = "pending"
+STATEMENT_IMPORT_STATUS_QUEUED = "queued"
+STATEMENT_IMPORT_STATUS_RUNNING = "running"
+STATEMENT_IMPORT_STATUS_COMPLETED = "completed"
+STATEMENT_IMPORT_STATUS_FAILED = "failed"
+STATEMENT_IMPORT_STATUSES = (
+    STATEMENT_IMPORT_STATUS_PENDING,
+    STATEMENT_IMPORT_STATUS_QUEUED,
+    STATEMENT_IMPORT_STATUS_RUNNING,
+    STATEMENT_IMPORT_STATUS_COMPLETED,
+    STATEMENT_IMPORT_STATUS_FAILED,
+)
+ACTIVE_STATEMENT_IMPORT_STATUSES = (
+    STATEMENT_IMPORT_STATUS_QUEUED,
+    STATEMENT_IMPORT_STATUS_RUNNING,
+)
+
+INTERAC_DIRECTION_AUTO = "auto"
+INTERAC_DIRECTION_SENT = "sent"
+INTERAC_DIRECTION_RECEIVED = "received"
+INTERAC_DIRECTIONS = {
+    INTERAC_DIRECTION_AUTO: "Auto-detect",
+    INTERAC_DIRECTION_SENT: "Sent",
+    INTERAC_DIRECTION_RECEIVED: "Received",
+}
+
+TRANSACTION_KIND_EXPENSE = "expense"
+TRANSACTION_KIND_INCOME = "income"
+TRANSACTION_KIND_PAYMENT = "payment"
+TRANSACTION_KIND_TRANSFER = "transfer"
+TRANSACTION_KIND_REFUND = "refund"
+TRANSACTION_KINDS = {
+    TRANSACTION_KIND_EXPENSE: "Expense",
+    TRANSACTION_KIND_INCOME: "Income",
+    TRANSACTION_KIND_PAYMENT: "Payment",
+    TRANSACTION_KIND_TRANSFER: "Transfer",
+    TRANSACTION_KIND_REFUND: "Refund",
+}
+
+REPORTABLE_TRANSACTION_KINDS = (
+    TRANSACTION_KIND_EXPENSE,
+    TRANSACTION_KIND_INCOME,
+    TRANSACTION_KIND_REFUND,
+)
+NON_REPORTABLE_TRANSACTION_KINDS = (
+    TRANSACTION_KIND_PAYMENT,
+    TRANSACTION_KIND_TRANSFER,
+)
+
+MERCHANT_DISPLAY_NAME_SOURCE_SYSTEM = "system"
+MERCHANT_DISPLAY_NAME_SOURCE_USER = "user"
+MERCHANT_DISPLAY_NAME_SOURCES = (
+    MERCHANT_DISPLAY_NAME_SOURCE_SYSTEM,
+    MERCHANT_DISPLAY_NAME_SOURCE_USER,
+)
+
+MERCHANT_ALIAS_SOURCE_SYSTEM = "system"
+MERCHANT_ALIAS_SOURCE_USER = "user"
+MERCHANT_ALIAS_SOURCE_IMPORT = "import"
+MERCHANT_ALIAS_SOURCE_RULE = "rule"
+MERCHANT_ALIAS_SOURCE_FALLBACK = "fallback"
+MERCHANT_ALIAS_SOURCE_ALIAS = "alias"
+MERCHANT_ALIAS_SOURCES = (
+    MERCHANT_ALIAS_SOURCE_SYSTEM,
+    MERCHANT_ALIAS_SOURCE_USER,
+    MERCHANT_ALIAS_SOURCE_IMPORT,
+    MERCHANT_ALIAS_SOURCE_RULE,
+    MERCHANT_ALIAS_SOURCE_FALLBACK,
+    MERCHANT_ALIAS_SOURCE_ALIAS,
+)
+
+MERCHANT_ALIAS_CONFIDENCE_HIGH = "high"
+MERCHANT_ALIAS_CONFIDENCE_MEDIUM = "medium"
+MERCHANT_ALIAS_CONFIDENCE_LOW = "low"
+MERCHANT_ALIAS_CONFIDENCES = (
+    MERCHANT_ALIAS_CONFIDENCE_HIGH,
+    MERCHANT_ALIAS_CONFIDENCE_MEDIUM,
+    MERCHANT_ALIAS_CONFIDENCE_LOW,
+)
+
+CATEGORY_SOURCE_UNKNOWN = "unknown"
+CATEGORY_SOURCE_RULE = "rule"
+CATEGORY_SOURCE_HISTORY = "history"
+CATEGORY_SOURCE_AI = "ai"
+CATEGORY_SOURCE_MANUAL = "manual"
+CATEGORY_SOURCES = (
+    CATEGORY_SOURCE_UNKNOWN,
+    CATEGORY_SOURCE_RULE,
+    CATEGORY_SOURCE_HISTORY,
+    CATEGORY_SOURCE_AI,
+    CATEGORY_SOURCE_MANUAL,
+)
+TRANSACTION_TAG_SOURCES = CATEGORY_SOURCES
+
+CATEGORY_RULE_SOURCE_MANUAL = "manual"
+CATEGORY_RULE_SOURCE_AUTOMATIC = "automatic"
+CATEGORY_RULE_SOURCE_DEFAULT = "default"
+CATEGORY_RULE_SOURCES = (
+    CATEGORY_RULE_SOURCE_MANUAL,
+    CATEGORY_RULE_SOURCE_AUTOMATIC,
+    CATEGORY_RULE_SOURCE_DEFAULT,
+)
+IMPORTABLE_CATEGORY_RULE_SOURCES = CATEGORY_RULE_SOURCES
+
+CATEGORY_RULE_DIRECTION_ANY = "any"
+CATEGORY_RULE_DIRECTION_DEBIT = "debit"
+CATEGORY_RULE_DIRECTION_CREDIT = "credit"
+CATEGORY_RULE_DIRECTIONS = (
+    CATEGORY_RULE_DIRECTION_ANY,
+    CATEGORY_RULE_DIRECTION_DEBIT,
+    CATEGORY_RULE_DIRECTION_CREDIT,
+)
+CATEGORY_RULE_DIRECTION_LABELS = {
+    CATEGORY_RULE_DIRECTION_ANY: "Any direction",
+    CATEGORY_RULE_DIRECTION_DEBIT: "Debit",
+    CATEGORY_RULE_DIRECTION_CREDIT: "Credit",
+}
+
+RECURRING_PATTERN_TYPE_SPENDING = "spending"
+RECURRING_PATTERN_TYPE_INCOME = "income"
+RECURRING_PATTERN_TYPES = (
+    RECURRING_PATTERN_TYPE_SPENDING,
+    RECURRING_PATTERN_TYPE_INCOME,
+)
+
+RECURRING_USER_STATUS_DETECTED = "detected"
+RECURRING_USER_STATUS_CONFIRMED = "confirmed"
+RECURRING_USER_STATUS_IGNORED = "ignored"
+RECURRING_USER_STATUS_EDITED = "edited"
+RECURRING_USER_STATUSES = (
+    RECURRING_USER_STATUS_DETECTED,
+    RECURRING_USER_STATUS_CONFIRMED,
+    RECURRING_USER_STATUS_IGNORED,
+    RECURRING_USER_STATUS_EDITED,
+)
+
+STATEMENT_TYPE_PARSER_BANK_ACCOUNT = "bank_account"
+STATEMENT_TYPE_PARSER_CREDIT_CARD = "credit_card"
+STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER = "interac_etransfer"
+STATEMENT_TYPE_PARSER_TYPES = {
+    STATEMENT_TYPE_PARSER_BANK_ACCOUNT: "Checking account",
+    STATEMENT_TYPE_PARSER_CREDIT_CARD: "Credit card",
+    STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER: "Interac e-Transfer history",
+}
+
+DEFAULT_STATEMENT_TYPE_SEED_ROWS = (
+    (
+        "Checking account",
+        STATEMENT_TYPE_PARSER_BANK_ACCOUNT,
+        STATEMENT_IMPORT_MODE_LEDGER,
+        ACCOUNT_TYPE_CHECKING,
+    ),
+    (
+        "Credit card",
+        STATEMENT_TYPE_PARSER_CREDIT_CARD,
+        STATEMENT_IMPORT_MODE_LEDGER,
+        ACCOUNT_TYPE_CREDIT_CARD,
+    ),
+    (
+        "Interac e-Transfer",
+        STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
+        STATEMENT_IMPORT_MODE_ENRICHMENT,
+        ACCOUNT_TYPE_CHECKING,
+    ),
+)
+
+DATE_FORMATS = (
+    "%Y-%m-%d",
+    "%Y/%m/%d",
+    "%Y.%m.%d",
+    "%d-%m-%Y",
+    "%d/%m/%Y",
+    "%d.%m.%Y",
+    "%m/%d/%Y",
+    "%d %b %Y",
+    "%b %d %Y",
+    "%b %d, %Y",
+    "%d-%b-%y",
+    "%d %b %y",
+    "%d %B %Y",
+    "%B %d %Y",
+    "%B %d, %Y",
+    "%Y%m%d",
+)
+
+FRENCH_MONTHS = {
+    "janv": "Jan",
+    "janvier": "January",
+    "fev": "Feb",
+    "fevr": "Feb",
+    "fevrier": "February",
+    "mars": "March",
+    "avr": "Apr",
+    "avril": "April",
+    "mai": "May",
+    "juin": "June",
+    "juil": "Jul",
+    "juillet": "July",
+    "aout": "August",
+    "sept": "Sep",
+    "septembre": "September",
+    "oct": "Oct",
+    "octobre": "October",
+    "nov": "Nov",
+    "novembre": "November",
+    "dec": "Dec",
+    "decembre": "December",
+}
+
+DATE_COLUMNS = {
+    "date",
+    "transactiondate",
+    "postingdate",
+    "posteddate",
+    "postdate",
+    "transdate",
+    "effectivedate",
+}
+
+DESCRIPTION_COLUMNS = {
+    "description",
+    "details",
+    "detail",
+    "merchant",
+    "payee",
+    "name",
+    "memo",
+    "transactiondescription",
+}
+
+DEBIT_COLUMNS = {
+    "debit",
+    "withdrawal",
+    "withdrawals",
+    "paidout",
+    "charge",
+    "charges",
+    "debitamount",
+    "amountdebit",
+}
+
+CREDIT_COLUMNS = {
+    "credit",
+    "deposit",
+    "deposits",
+    "paidin",
+    "payment",
+    "payments",
+    "creditamount",
+    "amountcredit",
+}
+
+AMOUNT_COLUMNS = {
+    "amount",
+    "transactionamount",
+    "cadamount",
+    "amountcad",
+    "signedamount",
+}

@@ -1,0 +1,79 @@
+.export-toolbar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+.table-export-toolbar,
+.chart-export-toolbar {
+    background: var(--app-surface);
+    border-bottom: 1px solid var(--app-border);
+    padding: 0.75rem 1rem;
+}
+
+.chart-export-toolbar {
+    border-bottom: 0;
+    padding-inline: 0;
+    padding-top: 0;
+}
+
+.export-button {
+    align-items: center;
+    display: inline-flex;
+    font-size: 0.82rem;
+    font-weight: 700;
+    gap: 0.35rem;
+    min-height: 32px;
+}
+
+.export-button svg {
+    fill: none;
+    flex: 0 0 auto;
+    height: 15px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    width: 15px;
+}
+
+.pagination {
+    --bs-pagination-bg: var(--app-surface);
+    --bs-pagination-border-color: var(--app-border);
+    --bs-pagination-color: var(--app-text);
+    --bs-pagination-disabled-bg: var(--app-surface-soft);
+    --bs-pagination-disabled-border-color: var(--app-border);
+    --bs-pagination-disabled-color: var(--app-muted);
+    --bs-pagination-focus-bg: var(--app-surface-soft);
+    --bs-pagination-focus-box-shadow: var(--focus-shadow);
+    --bs-pagination-hover-bg: var(--app-surface-soft);
+    --bs-pagination-hover-border-color: var(--app-border-strong);
+    --bs-pagination-hover-color: var(--app-heading);
+    --bs-pagination-active-bg: var(--app-accent);
+    --bs-pagination-active-border-color: var(--app-accent);
+}
+
+[data-bs-theme="dark"] .pagination {
+    --bs-pagination-active-color: #05201c;
+}
+
+.table-pagination-footer {
+    background: var(--app-surface);
+    border-top: 1px solid var(--app-border);
+    padding: 0.9rem 1rem;
+}
+
+.empty-state {
+    background: var(--empty-bg);
+    border: 1px dashed var(--empty-border);
+    border-radius: 8px;
+    color: var(--app-muted);
+    padding: 2rem;
+}
+
+.empty-state.compact {
+    padding: 1rem;
+}

@@ -1,0 +1,112 @@
+.review-group-merchant {
+    color: var(--app-heading);
+    font-weight: 750;
+    max-width: 24rem;
+    overflow-wrap: anywhere;
+}
+
+.review-example-list {
+    display: grid;
+    gap: 0.45rem;
+    min-width: 18rem;
+}
+
+.review-set-summary {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 12rem;
+}
+
+.review-set-summary strong {
+    color: var(--app-heading);
+}
+
+.review-set-summary span {
+    color: var(--app-muted);
+    font-size: 0.9rem;
+}
+
+.review-example {
+    align-items: center;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0.55rem 0.65rem;
+}
+
+.review-example-description {
+    color: var(--app-heading);
+    font-weight: 700;
+    max-width: 30rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.review-rule-switch {
+    align-items: center;
+    display: flex;
+    gap: 0.55rem;
+    margin: 0;
+    min-height: 30px;
+    padding-left: 0;
+}
+
+.review-rule-switch .form-check-input {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.review-rule-switch .form-check-label {
+    color: var(--app-heading);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.review-modal-form .btn-check:disabled + .rule-choice {
+    cursor: not-allowed;
+    opacity: 0.58;
+}
+
+.review-transaction-selector {
+    display: grid;
+    gap: 0.75rem;
+    justify-items: start;
+}
+
+.review-selection-status {
+    color: var(--app-muted);
+}
+
+.review-transaction-list {
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    max-height: 18rem;
+    overflow: auto;
+    width: 100%;
+}
+
+.review-transaction-list .table {
+    min-width: 42rem;
+}
+
+.review-transaction-list th,
+.review-transaction-list td {
+    background: transparent;
+}
+
+.review-transaction-select {
+    text-align: center;
+    width: 2.75rem;
+}
+
+.review-transaction-description {
+    color: var(--app-heading);
+    font-weight: 700;
+    max-width: 18rem;
+    overflow-wrap: anywhere;
+}

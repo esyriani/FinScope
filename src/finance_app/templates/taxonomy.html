@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set categories = categories | default([]) %}
+{% set tags = tags | default([]) %}
+
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Categories") }}</h2>
+        <p class="text-muted mb-0">{{ _("Manage transaction categories and tags used by rules, review, and LLM categorization.") }}</p>
+    </div>
+    <div class="home-actions">
+        <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-tag-modal">
+            <i class="bi bi-tag" aria-hidden="true"></i>{{ _("New tag") }}
+        </button>
+        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-category-modal">
+            <i class="bi bi-folder-plus" aria-hidden="true"></i>{{ _("New category") }}
+        </button>
+    </div>
+</div>
+
+<div data-ajax-refresh-target="taxonomy-actions">
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">
+                {{ _(message) }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="row g-4 align-items-start">
+    <div class="col-xl-6">
+        <div class="card">
+            <div class="card-body border-bottom">
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                    <div>
+                        <h5 class="mb-1">{{ _("Categories") }}</h5>
+                        <div class="text-muted small">{{ _("{count} configured", count=categories | length) }}</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-category-modal">
+                        <i class="bi bi-plus-circle" aria-hidden="true"></i>{{ _("Add") }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                {% if categories %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" data-sortable-table>
+                            <thead>
+                                <tr>
+                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Name") }}</span></button></th>
+                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Transactions") }}</span></button></th>
+                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Rules") }}</span></button></th>
+                                    <th class="text-end">{{ _("Actions") }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for category in categories %}
+                                <tr data-row-edit-target="#edit-category-{{ category.id }}">
+                                    <td>
+                                        <div class="fw-semibold">{{ category.name }}</div>
+                                        {% if category.description %}
+                                            <div class="text-muted small">{{ category.description }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-muted small" data-sort-value="{{ category.transaction_count }}">{{ category.transaction_count }}</td>
+                                    <td class="text-muted small" data-sort-value="{{ category.rule_count }}">{{ category.rule_count }}</td>
+                                    <td class="text-end">
+                                        <div class="action-cluster justify-content-end" data-row-action>
+                                            <button
+                                                class="btn btn-sm btn-outline-primary btn-icon-only"
+                                                type="button"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#edit-category-{{ category.id }}"
+                                                aria-label="{{ _('Edit category {name}', name=category.name) }}"
+                                                title="{{ _('Edit') }}"
+                                                data-bs-tooltip
+                                            >
+                                                <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                            </button>
+                                            {% if category.transaction_count == 0 and category.rule_count == 0 %}
+                                                <button
+                                                    class="btn btn-sm btn-outline-danger btn-icon-only"
+                                                    type="button"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#delete-category-{{ category.id }}"
+                                                    aria-label="{{ _('Delete category {name}', name=category.name) }}"
+                                                    title="{{ _('Delete') }}"
+                                                    data-bs-tooltip
+                                                >
+                                                    <i class="bi bi-trash" aria-hidden="true"></i>
+                                                </button>
+                                            {% else %}
+                                                <button
+                                                    class="btn btn-sm btn-outline-secondary btn-icon-only"
+                                                    type="button"
+                                                    disabled
+                                                    aria-label="{{ _('Category {name} cannot be deleted because it is in use', name=category.name) }}"
+                                                    title="{{ _('In use') }}"
+                                                    data-bs-tooltip
+                                                >
+                                                    <i class="bi bi-lock" aria-hidden="true"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="empty-state">{{ _("No categories configured.") }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-6">
+        <div class="card">
+            <div class="card-body border-bottom">
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                    <div>
+                        <h5 class="mb-1">{{ _("Tags") }}</h5>
+                        <div class="text-muted small">{{ _("{count} configured", count=tags | length) }}</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-tag-modal">
+                        <i class="bi bi-plus-circle" aria-hidden="true"></i>{{ _("Add") }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                {% if tags %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" data-sortable-table>
+                            <thead>
+                                <tr>
+                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Name") }}</span></button></th>
+                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Transactions") }}</span></button></th>
+                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Rules") }}</span></button></th>
+                                    <th class="text-end">{{ _("Actions") }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tag in tags %}
+                                <tr data-row-edit-target="#edit-tag-{{ tag.id }}">
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="tag-pill" style="--tag-color: {{ tag.color }};">{{ tag.name }}</span>
+                                        </div>
+                                        {% if tag.description %}
+                                            <div class="text-muted small mt-1">{{ tag.description }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-muted small" data-sort-value="{{ tag.transaction_count }}">{{ tag.transaction_count }}</td>
+                                    <td class="text-muted small" data-sort-value="{{ tag.rule_count }}">{{ tag.rule_count }}</td>
+                                    <td class="text-end">
+                                        <div class="action-cluster justify-content-end" data-row-action>
+                                            <button
+                                                class="btn btn-sm btn-outline-primary btn-icon-only"
+                                                type="button"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#edit-tag-{{ tag.id }}"
+                                                aria-label="{{ _('Edit tag {name}', name=tag.name) }}"
+                                                title="{{ _('Edit') }}"
+                                                data-bs-tooltip
+                                            >
+                                                <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                            </button>
+                                            {% if tag.transaction_count == 0 and tag.rule_count == 0 %}
+                                                <button
+                                                    class="btn btn-sm btn-outline-danger btn-icon-only"
+                                                    type="button"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#delete-tag-{{ tag.id }}"
+                                                    aria-label="{{ _('Delete tag {name}', name=tag.name) }}"
+                                                    title="{{ _('Delete') }}"
+                                                    data-bs-tooltip
+                                                >
+                                                    <i class="bi bi-trash" aria-hidden="true"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="empty-state">{{ _("No tags configured.") }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="create-category-modal" tabindex="-1" aria-labelledby="create-category-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('taxonomy_admin.create_category') }}" data-ajax-refresh-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="create-category-title">{{ _("New category") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="new-category-name">{{ _("Name") }}</label>
+                        <input id="new-category-name" class="form-control" type="text" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="new-category-description">{{ _("Description") }}</label>
+                        <textarea id="new-category-description" class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label" for="new-category-instruction">{{ _("LLM instruction") }}</label>
+                        <textarea id="new-category-instruction" class="form-control" name="instruction" rows="5"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="create-tag-modal" tabindex="-1" aria-labelledby="create-tag-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('taxonomy_admin.create_tag') }}" data-ajax-refresh-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="create-tag-title">{{ _("New tag") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="new-tag-name">{{ _("Name") }}</label>
+                        <input id="new-tag-name" class="form-control" type="text" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="new-tag-color">{{ _("Color") }}</label>
+                        <input id="new-tag-color" class="form-control form-control-color" type="color" name="color" value="#64748b">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="new-tag-description">{{ _("Description") }}</label>
+                        <textarea id="new-tag-description" class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label" for="new-tag-instruction">{{ _("LLM instruction") }}</label>
+                        <textarea id="new-tag-instruction" class="form-control" name="instruction" rows="5"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for category in categories %}
+<div class="modal fade" id="edit-category-{{ category.id }}" tabindex="-1" aria-labelledby="edit-category-{{ category.id }}-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('taxonomy_admin.update_category') }}" data-ajax-refresh-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="category_id" value="{{ category.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="edit-category-{{ category.id }}-title">{{ _("Edit category") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="category-{{ category.id }}-name">{{ _("Name") }}</label>
+                        <input id="category-{{ category.id }}-name" class="form-control" type="text" name="name" value="{{ category.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="category-{{ category.id }}-description">{{ _("Description") }}</label>
+                        <textarea id="category-{{ category.id }}-description" class="form-control" name="description" rows="3">{{ category.description }}</textarea>
+                    </div>
+                    <div>
+                        <label class="form-label" for="category-{{ category.id }}-instruction">{{ _("LLM instruction") }}</label>
+                        <textarea id="category-{{ category.id }}-instruction" class="form-control" name="instruction" rows="5">{{ category.instruction }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% for category in categories if category.transaction_count == 0 and category.rule_count == 0 %}
+<div class="modal fade" id="delete-category-{{ category.id }}" tabindex="-1" aria-labelledby="delete-category-{{ category.id }}-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('taxonomy_admin.delete_category') }}" data-ajax-refresh-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="category_id" value="{{ category.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="delete-category-{{ category.id }}-title">{{ _("Delete category") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">{{ _("Delete unused category") }} <strong>{{ category.name }}</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% for tag in tags %}
+<div class="modal fade" id="edit-tag-{{ tag.id }}" tabindex="-1" aria-labelledby="edit-tag-{{ tag.id }}-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('taxonomy_admin.update_tag') }}" data-ajax-refresh-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="tag_id" value="{{ tag.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="edit-tag-{{ tag.id }}-title">{{ _("Edit tag") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="tag-{{ tag.id }}-name">{{ _("Name") }}</label>
+                        <input id="tag-{{ tag.id }}-name" class="form-control" type="text" name="name" value="{{ tag.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="tag-{{ tag.id }}-color">{{ _("Color") }}</label>
+                        <input id="tag-{{ tag.id }}-color" class="form-control form-control-color" type="color" name="color" value="{{ tag.color }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="tag-{{ tag.id }}-description">{{ _("Description") }}</label>
+                        <textarea id="tag-{{ tag.id }}-description" class="form-control" name="description" rows="3">{{ tag.description }}</textarea>
+                    </div>
+                    <div>
+                        <label class="form-label" for="tag-{{ tag.id }}-instruction">{{ _("LLM instruction") }}</label>
+                        <textarea id="tag-{{ tag.id }}-instruction" class="form-control" name="instruction" rows="5">{{ tag.instruction }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="delete-tag-{{ tag.id }}" tabindex="-1" aria-labelledby="delete-tag-{{ tag.id }}-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('taxonomy_admin.delete_tag') }}" data-ajax-refresh-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="tag_id" value="{{ tag.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="delete-tag-{{ tag.id }}-title">{{ _("Delete tag") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">{{ _("Delete unused tag") }} <strong>{{ tag.name }}</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endblock %}

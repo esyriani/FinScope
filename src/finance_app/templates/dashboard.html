@@ -1,0 +1,493 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set category_options = category_options | default([]) %}
+{% set selected_categories = selected_categories | default([]) %}
+{% set tag_options = tag_options | default([]) %}
+{% set selected_tags = selected_tags | default([]) %}
+{% macro dashboard_sort_icon(active_sort, active_direction, column) -%}
+    {% if active_sort == column %}<span class="sort-icon {{ active_direction }}" aria-hidden="true"></span>{% endif %}
+{%- endmacro %}
+
+<div data-dashboard-drilldown-scope>
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Dashboard") }}</h2>
+        <p class="text-muted mb-0">{{ _("Current view: {period}.", period=period_label) }}</p>
+    </div>
+
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <input type="hidden" name="quick_view" value="{{ quick_view }}" data-dashboard-quick-view-input>
+            <input type="hidden" name="filter_mode" value="{{ filter_mode }}">
+            <div class="col-md-3">
+                <label class="form-label" for="dashboard-period">{{ _("Period") }}</label>
+                <select id="dashboard-period" class="form-select" name="period">
+                    {% for period_value, period_text in period_options %}
+                        <option value="{{ period_value }}" {% if selected_period == period_value %}selected{% endif %}>{{ _(period_text) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2 {% if selected_period != period_custom %}d-none{% endif %}" data-dashboard-custom-range>
+                <label class="form-label" for="dashboard-date-from">{{ _("From") }}</label>
+                <input
+                    id="dashboard-date-from"
+                    class="form-control"
+                    type="text"
+                    name="date_from"
+                    value="{{ selected_date_from }}"
+                    placeholder="dd-Mon-YYYY"
+                    data-flatpickr-date
+                >
+            </div>
+
+            <div class="col-md-2 {% if selected_period != period_custom %}d-none{% endif %}" data-dashboard-custom-range>
+                <label class="form-label" for="dashboard-date-to">{{ _("To") }}</label>
+                <input
+                    id="dashboard-date-to"
+                    class="form-control"
+                    type="text"
+                    name="date_to"
+                    value="{{ selected_date_to }}"
+                    placeholder="dd-Mon-YYYY"
+                    data-flatpickr-date
+                >
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">{{ _("Quick view") }}</label>
+                <div class="d-flex flex-nowrap gap-1 overflow-auto" role="group" aria-label="{{ _('Quick view') }}">
+                    {% for option in quick_view_options %}
+                    <button
+                        type="submit"
+                        class="btn btn-sm text-nowrap {% if option.active %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                        data-dashboard-quick-view="{{ option.value }}"
+                        aria-pressed="{{ 'true' if option.active else 'false' }}"
+                    >
+                        {{ _(option.label) }}{% if option.count is defined %}: {{ option.count }}{% endif %}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div
+                class="w-100 {% if quick_view != quick_view_custom %}d-none{% endif %}"
+                data-dashboard-custom-filter-break
+            ></div>
+
+            <div
+                class="col-md-3 {% if quick_view != quick_view_custom %}d-none{% endif %}"
+                data-dashboard-custom-categories
+            >
+                <label class="form-label" id="dashboard-categories-label">{{ _("Categories") }}</label>
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}">
+                    <div
+                        class="tag-multiselect-control"
+                        role="button"
+                        tabindex="{% if quick_view == quick_view_custom %}0{% else %}-1{% endif %}"
+                        aria-labelledby="dashboard-categories-label"
+                        aria-expanded="false"
+                        aria-disabled="{{ 'false' if quick_view == quick_view_custom else 'true' }}"
+                        data-tag-multiselect-toggle
+                    >
+                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                    </div>
+                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        {% for option in category_options %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="categories"
+                                    value="{{ option }}"
+                                    {% if option in selected_categories %}checked{% endif %}
+                                    {% if quick_view != quick_view_custom %}disabled{% endif %}
+                                >
+                                <span>{{ option }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="col-md-3 {% if quick_view != quick_view_custom %}d-none{% endif %}"
+                data-dashboard-custom-tags
+            >
+                <label class="form-label" id="dashboard-tags-label">{{ _("Tags") }}</label>
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}">
+                    <div
+                        class="tag-multiselect-control"
+                        role="button"
+                        tabindex="{% if quick_view == quick_view_custom %}0{% else %}-1{% endif %}"
+                        aria-labelledby="dashboard-tags-label"
+                        aria-expanded="false"
+                        aria-disabled="{{ 'false' if quick_view == quick_view_custom else 'true' }}"
+                        data-tag-multiselect-toggle
+                    >
+                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                    </div>
+                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        {% for option in tag_options %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="tags"
+                                    value="{{ option.name }}"
+                                    {% if option.name in selected_tags %}checked{% endif %}
+                                    {% if quick_view != quick_view_custom %}disabled{% endif %}
+                                >
+                                <span>{{ option.name }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 ms-md-auto filter-actions">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
+                <a class="btn btn-outline-secondary" href="/dashboard"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if data_quality and data_quality.transaction_count > 0 %}
+<section class="quality-panel quality-{{ data_quality.level }} mb-4">
+    <div class="quality-panel-head">
+        <div>
+            <div class="metric-label">{{ _("Categorization completeness") }}</div>
+            <a class="quality-score text-reset text-decoration-none d-inline-block" href="{{ data_quality.categorized_url }}">{{ _("{percent}% categorized", percent=data_quality.quality_score) }}</a>
+        </div>
+        <a class="quality-message text-reset text-decoration-none" href="{{ data_quality.needs_review_url }}">{{ data_quality.message }}</a>
+        <div class="d-flex gap-2 justify-content-end">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#dashboard-quality-details" aria-expanded="false" aria-controls="dashboard-quality-details">
+                {{ _("More") }}
+            </button>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ data_quality.review_url }}"><i class="bi bi-check2-square" aria-hidden="true"></i>{{ data_quality.review_label }}</a>
+        </div>
+    </div>
+
+    <div class="collapse" id="dashboard-quality-details">
+    {% for group in data_quality.metric_groups %}
+    <div>
+        <div class="metric-label mb-2">{{ _(group.label) }}</div>
+        <div class="quality-metric-grid">
+            {% for metric in group.metrics %}
+            <a class="quality-metric text-reset text-decoration-none" href="{{ metric.url }}">
+                <div class="quality-metric-top">
+                    <span>{{ _(metric.label) }}</span>
+                    <strong>{{ metric.rate }}%</strong>
+                </div>
+                <div class="quality-meter" aria-label="{{ _(metric.label) }} {{ metric.rate }}%">
+                    <span style="width: {{ metric.rate }}%;"></span>
+                </div>
+                <div class="text-muted small">{{ metric.count }} {{ _("of") }} {{ data_quality.transaction_count }} &mdash; {{ metric.rate }}%</div>
+            </a>
+            {% endfor %}
+        </div>
+        {% if group.note %}
+        <a class="text-muted small mt-2 d-inline-block text-decoration-none" href="{{ data_quality.needs_review_url }}">{{ _(group.note) }}</a>
+        {% endif %}
+        {% if group.compact_metrics %}
+        <div class="text-muted small mt-2">
+            {% for metric in group.compact_metrics %}
+            <a class="text-muted text-decoration-none" href="{{ metric.url }}">{{ _(metric.label) }}: {{ metric.count }} {{ _("of") }} {{ data_quality.transaction_count }} &mdash; {{ metric.rate }}%</a>{% if not loop.last %}<span class="mx-1">&middot;</span>{% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<div class="metric-grid mb-4">
+    <a class="metric-card text-reset text-decoration-none" href="{{ dashboard_links.spending }}">
+        <div class="metric-label">{{ _("Spending") }}</div>
+        <div class="metric-value">{{ total_spending | moneyfmt }}</div>
+        <div class="metric-detail">{{ cash_flow_summary.spending_detail }}</div>
+    </a>
+
+    <a class="metric-card text-reset text-decoration-none" href="{{ dashboard_links.income }}">
+        <div class="metric-label">{{ _("Income and credits") }}</div>
+        <div class="metric-value">{{ total_income | moneyfmt }}</div>
+        <div class="metric-detail">{{ cash_flow_summary.income_detail }}</div>
+    </a>
+
+    <a class="metric-card text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
+        <div class="metric-label">{{ _("Net cash flow") }}</div>
+        <div class="metric-value {% if net_cashflow >= 0 %}text-success{% else %}text-danger{% endif %}">
+            {{ net_cashflow | moneyfmt }}
+        </div>
+        <div class="metric-detail">{{ cash_flow_summary.net_detail }}</div>
+    </a>
+
+    <a class="metric-card text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
+        <div class="metric-label">{{ _("Savings rate") }}</div>
+        <div class="metric-value {% if cash_flow_summary.savings_rate is not none and cash_flow_summary.savings_rate >= 0 %}text-success{% elif cash_flow_summary.savings_rate is not none %}text-danger{% endif %}">
+            {{ cash_flow_summary.savings_rate_label }}
+        </div>
+        <div class="metric-detail">{{ cash_flow_summary.savings_detail }}</div>
+    </a>
+</div>
+
+{% if transaction_count > 0 %}
+<div class="status-strip mb-4">
+    <a class="text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
+        <span class="status-label">{{ _("Transactions") }}</span>
+        <strong>{{ transaction_count }}</strong>
+    </a>
+    <a class="text-reset text-decoration-none" href="{{ dashboard_links.unknown }}">
+        <span class="status-label">{{ _("Unknown") }}</span>
+        <strong>{{ uncategorized_count }}</strong>
+    </a>
+    <a class="text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
+        <span class="status-label">{{ _("Date range") }}</span>
+        <strong>
+            {% if first_tx_date and last_tx_date %}
+                {{ first_tx_date | datefmt }} {{ _("to") }} {{ last_tx_date | datefmt }}
+            {% else %}
+                {{ _("n/a") }}
+            {% endif %}
+        </strong>
+    </a>
+    <a class="text-reset text-decoration-none" href="{{ dashboard_links.upload }}">
+        <span class="status-label">{{ _("Last upload") }}</span>
+        <strong>
+            {% if last_upload %}
+                {{ last_upload["account_name"] or _("Personal") }} / {{ last_upload["filename"] }}
+            {% else %}
+                {{ _("n/a") }}
+            {% endif %}
+        </strong>
+    </a>
+</div>
+
+<div class="dashboard-grid">
+    <section class="card chart-card chart-card-tall">
+        <div class="card-body">
+            <div class="section-title">
+                <h5 class="card-title">{{ _("Spending by category") }}</h5>
+            </div>
+            <div id="categoryChart" class="chart-viewport" data-chart-export></div>
+        </div>
+    </section>
+
+    <section class="card chart-card chart-card-tall">
+        <div class="card-body">
+            <div class="section-title">
+                <h5 class="card-title">{{ _("Monthly cash flow") }}</h5>
+            </div>
+            <div id="netChart" class="chart-viewport" data-chart-export></div>
+        </div>
+    </section>
+
+    <section class="card chart-card dashboard-wide">
+        <div class="card-body">
+            <div class="section-title">
+                <h5 class="card-title">{{ _("Spending vs income over time") }}</h5>
+            </div>
+            <div id="spendingIncomeChart" class="chart-viewport" data-chart-export></div>
+        </div>
+    </section>
+
+    <section class="card dashboard-wide">
+        <div class="card-body p-0">
+            <div class="section-title px-4 pt-4">
+                <h5 class="card-title">{{ _("Merchant analytics") }}</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 merchant-analytics-table">
+                    <colgroup>
+                        <col class="merchant-col-merchant">
+                        <col class="merchant-col-category">
+                        <col class="merchant-col-transactions">
+                        <col class="merchant-col-spending">
+                        <col class="merchant-col-period">
+                        <col class="merchant-col-rules">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>
+                                <a class="sort-link" href="{{ merchant_sort_url('merchant') }}">
+                                    <span>{{ _("Merchant") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'merchant') }}
+                                </a>
+                            </th>
+                            <th>
+                                <a class="sort-link" href="{{ merchant_sort_url('category') }}">
+                                    <span>{{ _("Category") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'category') }}
+                                </a>
+                            </th>
+                            <th class="text-end">
+                                <a class="sort-link justify-content-end" href="{{ merchant_sort_url('transactions') }}">
+                                    <span>{{ _("Transactions") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'transactions') }}
+                                </a>
+                            </th>
+                            <th class="text-end">
+                                <a class="sort-link justify-content-end" href="{{ merchant_sort_url('spending') }}">
+                                    <span>{{ _("Spending") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'spending') }}
+                                </a>
+                            </th>
+                            <th class="text-end">
+                                <a class="sort-link justify-content-end" href="{{ merchant_sort_url('period_change') }}">
+                                    <span>{{ _("Period change") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'period_change') }}
+                                </a>
+                            </th>
+                            <th>
+                                <a class="sort-link" href="{{ merchant_sort_url('rules') }}">
+                                    <span>{{ _("Active rules") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'rules') }}
+                                </a>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for merchant in merchant_rows %}
+                        <tr data-row-href="{{ merchant['url'] }}" data-row-drilldown="dblclick">
+                            <td>
+                                <strong>{{ merchant["merchant"] }}</strong>
+                                {% if merchant["examples"] %}
+                                    <div class="text-muted small">{{ merchant["examples"][0] }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="merchant-category-cell">{{ merchant["category"] }}</td>
+                            <td class="text-end">{{ merchant["transaction_count"] }}</td>
+                            <td class="text-end">
+                                <div class="spending-cell-visual">
+                                    <span class="spending-cell-amount">{{ merchant["total"] | moneyfmt }}</span>
+                                    <span class="spending-bar-track" aria-hidden="true">
+                                        <span class="spending-bar-fill" style="width: {{ merchant['bar_width'] }}%;"></span>
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="text-end">
+                                <span
+                                    class="{% if merchant['period_change']['direction'] == 'up' %}text-danger{% elif merchant['period_change']['direction'] == 'down' %}text-success{% endif %}"
+                                >
+                                    {{ _(merchant["period_change"]["label"]) }}
+                                </span>
+                                <div class="text-muted small">{{ merchant["period_change"]["detail"] }}</div>
+                            </td>
+                            <td>
+                                {% if merchant["rules"] %}
+                                    {% for rule in merchant["rules"] %}
+                                        <a class="text-reset text-decoration-none" href="{{ rule['url'] }}">{{ rule["keyword"] }} -> {{ rule["category"] }}</a>{% if not loop.last %}<span class="text-muted">, </span>{% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-muted">{{ _("No matching rules") }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="card dashboard-wide">
+        <div class="card-body p-0">
+            <div class="section-title px-4 pt-4">
+                <h5 class="card-title">{{ _("Category detail") }}</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 category-detail-table">
+                    <colgroup>
+                        <col class="category-detail-col-category">
+                        <col class="category-detail-col-spending">
+                        <col class="category-detail-col-share">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>
+                                <a class="sort-link" href="{{ category_sort_url('category') }}">
+                                    <span>{{ _("Category") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'category') }}
+                                </a>
+                            </th>
+                            <th class="text-end">
+                                <a class="sort-link justify-content-end" href="{{ category_sort_url('spending') }}">
+                                    <span>{{ _("Spending") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'spending') }}
+                                </a>
+                            </th>
+                            <th class="text-end">
+                                <a class="sort-link justify-content-end" href="{{ category_sort_url('share') }}">
+                                    <span>{{ _("Share") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'share') }}
+                                </a>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in category_rows %}
+                        <tr data-row-href="{{ row['url'] }}" data-row-drilldown="dblclick">
+                            <td>{{ row["category"] }}</td>
+                            <td class="text-end">
+                                <div class="spending-cell-visual">
+                                    <span class="spending-cell-amount">{{ row["total"] | moneyfmt }}</span>
+                                    <span class="spending-bar-track" aria-hidden="true">
+                                        <span class="spending-bar-fill" style="width: {{ row['bar_width'] }}%;"></span>
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="text-end">{{ row["share"] }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script src="{{ static_asset('vendor/echarts/5.6.0/echarts.min.js') }}"></script>
+<script id="dashboard-chart-data" type="application/json">
+{{ {
+    "categoryLabels": category_labels | default([]),
+    "categoryTotals": category_totals | default([]),
+    "categoryUrls": category_urls | default([]),
+    "expenseMonthLabels": expense_month_labels | default([]),
+    "expenseMonthTotals": expense_month_totals | default([]),
+    "expenseMonthUrls": expense_month_urls | default([]),
+    "incomeMonthLabels": income_month_labels | default([]),
+    "incomeMonthTotals": income_month_totals | default([]),
+    "incomeMonthUrls": income_month_urls | default([]),
+    "spendingIncomeMonthLabels": spending_income_month_labels | default([]),
+    "spendingIncomeSpendingTotals": spending_income_spending_totals | default([]),
+    "spendingIncomeIncomeTotals": spending_income_income_totals | default([]),
+    "spendingIncomeSpendingUrls": spending_income_spending_urls | default([]),
+    "spendingIncomeIncomeUrls": spending_income_income_urls | default([]),
+    "netMonthLabels": net_month_labels | default([]),
+    "netMonthTotals": net_month_totals | default([]),
+    "netMonthUrls": net_month_urls | default([]),
+} | tojson }}
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const collapseElement = document.getElementById('dashboard-quality-details');
+    const button = document.querySelector('[data-bs-target="#dashboard-quality-details"]');
+    
+    if (collapseElement && button) {
+        collapseElement.addEventListener('show.bs.collapse', function() {
+            button.textContent = '{{ _("Less") }}';
+        });
+        
+        collapseElement.addEventListener('hide.bs.collapse', function() {
+            button.textContent = '{{ _("More") }}';
+        });
+    }
+});
+</script>
+<script src="{{ static_asset('js/dashboard-charts.js') }}"></script>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data yet. Upload a CSV statement first.") }}
+</div>
+{% endif %}
+</div>
+{% endblock %}

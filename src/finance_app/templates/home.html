@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Home") }}</h2>
+        <p class="text-muted mb-0">{{ _("Year-to-date pulse for your personal finances.") }}</p>
+    </div>
+    <div class="home-actions">
+        <a class="btn btn-outline-secondary" href="/transactions?category={{ unknown_category | urlencode }}"><i class="bi bi-check2-square" aria-hidden="true"></i>{{ _("Review unknown") }}</a>
+        <a class="btn btn-primary" href="/upload"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>{{ _("Upload statement") }}</a>
+    </div>
+</div>
+
+<div class="metric-grid mb-4">
+    <div class="metric-card">
+        <div class="metric-label">{{ _("YTD spending") }}</div>
+        <div class="metric-value">{{ ytd_spending | moneyfmt }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">{{ _("YTD income") }}</div>
+        <div class="metric-value">{{ ytd_income | moneyfmt }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">{{ _("YTD cash flow") }}</div>
+        <div class="metric-value {% if ytd_cashflow >= 0 %}text-success{% else %}text-danger{% endif %}">
+            {{ ytd_cashflow | moneyfmt }}
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Unknown") }}</div>
+        <div class="metric-value">{{ overview["uncategorized_count"] }}</div>
+    </div>
+</div>
+
+<div class="home-grid">
+    <section class="card">
+        <div class="card-body">
+            <div class="section-title">
+                <h5 class="card-title">{{ _("Activity") }}</h5>
+            </div>
+
+            <div class="home-facts">
+                <div>
+                    <span class="status-label">{{ _("Statements") }}</span>
+                    <strong>{{ statement_count }}</strong>
+                </div>
+                <div>
+                    <span class="status-label">{{ _("YTD transactions") }}</span>
+                    <strong>{{ overview["transaction_count"] }}</strong>
+                </div>
+                <div>
+                    <span class="status-label">{{ _("Latest transaction") }}</span>
+                    <strong>
+                        {% if overview["latest_tx_date"] %}
+                            {{ overview["latest_tx_date"] | datefmt }}
+                        {% else %}
+                            {{ _("n/a") }}
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span class="status-label">{{ _("Latest statement") }}</span>
+                    <strong>
+                        {% if latest_statement %}
+                            {{ latest_statement["account_name"] or _("Personal") }} / {{ latest_statement["filename"] }}
+                        {% else %}
+                            {{ _("n/a") }}
+                        {% endif %}
+                    </strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-body">
+            <div class="section-title">
+                <h5 class="card-title">{{ _("Top categories") }}</h5>
+            </div>
+
+            {% if top_categories %}
+                <div class="category-stack">
+                    {% for row in top_categories %}
+                    <a class="category-row" href="/transactions?category={{ row['category'] | urlencode }}">
+                        <span>{{ row["category"] }}</span>
+                        <strong>{{ row["total"] | moneyfmt }}</strong>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state compact">{{ _("No spending categories yet.") }}</div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+<div class="quick-links">
+    <a href="/dashboard">
+        <span>{{ _("Dashboard") }}</span>
+        <strong>{{ _("Charts and category breakdowns") }}</strong>
+    </a>
+    <a href="/transactions">
+        <span>{{ _("Transactions") }}</span>
+        <strong>{{ _("Search, filter, and recategorize") }}</strong>
+    </a>
+    <a href="/rules">
+        <span>{{ _("Rules") }}</span>
+        <strong>{{ _("Merchant keyword mappings") }}</strong>
+    </a>
+</div>
+{% endblock %}

@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set selected_tags = selected_tags | default([]) %}
+{% set tag_options = tag_options | default([]) %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Calendar") }}</h2>
+        <p class="text-muted mb-0">{{ _("Review cash-flow timing and posted daily transactions.") }}</p>
+    </div>
+</div>
+
+<div class="metric-grid mb-4">
+    <a class="metric-card text-reset text-decoration-none" href="{{ month_transactions_url }}">
+        <div class="metric-label">{{ _("Spending") }}</div>
+        <div class="metric-value">{{ summary.spending | moneyfmt }}</div>
+        <div class="metric-detail">{{ _("Posted outflows in {month}.", month=month_label) }}</div>
+    </a>
+    <a class="metric-card text-reset text-decoration-none" href="{{ month_transactions_url }}">
+        <div class="metric-label">{{ _("Income and credits") }}</div>
+        <div class="metric-value">{{ summary.income | moneyfmt }}</div>
+        <div class="metric-detail">{{ _("Posted inflows in {month}.", month=month_label) }}</div>
+    </a>
+    <a class="metric-card text-reset text-decoration-none" href="{{ month_transactions_url }}">
+        <div class="metric-label">{{ _("Net cash flow") }}</div>
+        <div class="metric-value {% if summary.net >= 0 %}text-success{% else %}text-danger{% endif %}">{{ summary.net | moneyfmt }}</div>
+        <div class="metric-detail">
+            {% if summary.transaction_count == 1 %}
+                {{ _("{count} posted transaction.", count=summary.transaction_count) }}
+            {% else %}
+                {{ _("{count} posted transactions.", count=summary.transaction_count) }}
+            {% endif %}
+        </div>
+    </a>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Expected recurring") }}</div>
+        <div class="metric-value">
+            {% if summary.expected_count == 1 %}
+                {{ _("{count} item", count=summary.expected_count) }}
+            {% else %}
+                {{ _("{count} items", count=summary.expected_count) }}
+            {% endif %}
+        </div>
+        <div class="metric-detail">
+            {{ _("{count} occurred", count=summary.recurring_occurred_count) }} / {{ _("{count} upcoming", count=summary.recurring_expected_count) }}{% if summary.recurring_overdue_count %} / {{ _("{count} overdue", count=summary.recurring_overdue_count) }}{% endif %}
+        </div>
+        <div class="metric-detail">
+            {{ summary.expected_spending | moneyfmt }} {{ _("expected spending") }} / {{ summary.expected_income | moneyfmt }} {{ _("expected income") }}
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <a class="btn btn-sm btn-primary" href="{{ url_for('recurring.recurring', month=selected_month, view='calendar') }}">{{ _("View recurring calendar") }}</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('recurring.recurring', month=selected_month, view='list') }}">{{ _("View recurring list") }}</a>
+        </div>
+    </div>
+</div>
+
+<section class="card mb-4">
+    <div class="card-body">
+        <div class="section-title">
+            <div>
+                <h5 class="card-title mb-1">{{ month_label }}</h5>
+                <div class="text-muted small">{{ _("Daily summaries. Double-click a day to review its transactions.") }}</div>
+            </div>
+            <div class="d-flex flex-nowrap gap-1 overflow-auto" role="group" aria-label="{{ _('Heatmap') }}" data-calendar-heatmap-controls>
+                {% for option in heatmap_options %}
+                <button
+                    class="btn btn-sm text-nowrap {% if option.value == heatmap_metric %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                    type="button"
+                    data-calendar-heatmap="{{ option.value }}"
+                    aria-pressed="{{ 'true' if option.value == heatmap_metric else 'false' }}"
+                >
+                    {{ _(option.label) }}
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <form method="get" class="calendar-control-row">
+            <input type="hidden" name="heatmap" value="{{ heatmap_metric }}" data-calendar-heatmap-input>
+
+            <div class="calendar-category-field">
+                <label class="form-label" id="calendar-categories-label">{{ _("Categories") }}</label>
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}">
+                    <div
+                        class="tag-multiselect-control"
+                        role="button"
+                        tabindex="0"
+                        aria-labelledby="calendar-categories-label"
+                        aria-expanded="false"
+                        data-tag-multiselect-toggle
+                    >
+                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                    </div>
+                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        {% for option in category_options %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="categories"
+                                    value="{{ option }}"
+                                    {% if option in selected_categories %}checked{% endif %}
+                                >
+                                <span>{{ option }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="calendar-tag-field">
+                <label class="form-label" id="calendar-tags-label">{{ _("Tags") }}</label>
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}">
+                    <div
+                        class="tag-multiselect-control"
+                        role="button"
+                        tabindex="0"
+                        aria-labelledby="calendar-tags-label"
+                        aria-expanded="false"
+                        data-tag-multiselect-toggle
+                    >
+                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                    </div>
+                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        {% for option in tag_options %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="tags"
+                                    value="{{ option.name }}"
+                                    {% if option.name in selected_tags %}checked{% endif %}
+                                >
+                                <span>{{ option.name }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="calendar-filter-actions filter-actions">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('calendar_page.calendar_view') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+            </div>
+
+            <div class="calendar-month-controls" aria-label="{{ _('Calendar month navigation') }}">
+                <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+                <div class="calendar-month-field">
+                    <label class="form-label" for="calendar-month">{{ _("Month") }}</label>
+                    <input id="calendar-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month>
+                </div>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
+            </div>
+        </form>
+
+        <div class="calendar-scroll">
+            <div class="calendar-weekdays" aria-hidden="true">
+                {% for label in weekday_labels %}
+                    <div>{{ label }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="calendar-grid">
+                {% for day in days %}
+                <section
+                    class="calendar-day {{ day.heatmap_class }} {% if not day.in_month %}calendar-day-muted{% endif %} {% if day.is_today %}calendar-day-today{% endif %}"
+                    style="--calendar-heat-alpha: {{ day.heatmap_alpha }};"
+                    tabindex="0"
+                    role="button"
+                    data-calendar-day="{{ day.date }}"
+                    data-heatmap-spending-alpha="{{ day.heatmap.spending.alpha }}"
+                    data-heatmap-spending-class="{{ day.heatmap.spending.class }}"
+                    data-heatmap-income-alpha="{{ day.heatmap.income.alpha }}"
+                    data-heatmap-income-class="{{ day.heatmap.income.class }}"
+                    data-heatmap-net-alpha="{{ day.heatmap.net.alpha }}"
+                    data-heatmap-net-class="{{ day.heatmap.net.class }}"
+                >
+                <div class="calendar-day-head">
+                    <span>{{ day.day_number }}</span>
+                    <a class="calendar-day-link" href="{{ day.url }}" aria-label="{{ _('Open {date} transactions', date=day.date) }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+                </div>
+
+                <div class="calendar-day-summary">
+                    <div>
+                        <span>{{ _("Spend") }}</span>
+                        <strong class="text-danger">{{ day.spending | moneyfmt }}</strong>
+                    </div>
+                    <div>
+                        <span>{{ _("Income") }}</span>
+                        <strong class="text-success">{{ day.income | moneyfmt }}</strong>
+                    </div>
+                    <div>
+                        <span>{{ _("Net") }}</span>
+                        <strong class="{% if day.net >= 0 %}text-success{% else %}text-danger{% endif %}">{{ day.net | moneyfmt }}</strong>
+                    </div>
+                </div>
+
+                <div class="calendar-day-count">
+                    {% if day.transactions | length == 1 %}
+                        {{ _("{count} transaction", count=day.transactions | length) }}
+                    {% else %}
+                        {{ _("{count} transactions", count=day.transactions | length) }}
+                    {% endif %}
+                </div>
+                </section>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="modal fade" id="calendar-day-modal" tabindex="-1" aria-labelledby="calendar-day-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="calendar-day-modal-title">{{ _("Transactions") }}</h5>
+                    <div class="text-muted small" data-calendar-modal-summary></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <div data-calendar-modal-empty class="empty-state compact d-none">{{ _("No transactions on this day.") }}</div>
+                <div class="table-responsive" data-calendar-modal-table>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>{{ _("Description") }}</th>
+                                <th>{{ _("Category") }}</th>
+                                <th>{{ _("Account") }}</th>
+                                <th class="text-end">{{ _("Amount") }}</th>
+                            </tr>
+                        </thead>
+                        <tbody data-calendar-modal-transactions></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a class="btn btn-outline-secondary" href="#" data-calendar-modal-link><i class="bi bi-receipt" aria-hidden="true"></i>{{ _("Transactions") }}</a>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">{{ _("Close") }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="calendar-day-data" type="application/json">
+{{ calendar_day_json | tojson }}
+</script>
+{% endblock %}

@@ -1,0 +1,368 @@
+"""Flask routes for the upload feature."""
+
+from flask import Blueprint, flash, redirect, render_template, request, url_for
+from sqlalchemy import delete, insert, select
+
+from finance_app.background.runner import submit_background_job
+from finance_app.core.config import settings
+from finance_app.core.constants import (
+    ACCOUNT_TYPE_CREDIT_CARD,
+    ACTIVE_STATEMENT_IMPORT_STATUSES,
+    INTERAC_DIRECTION_AUTO,
+    STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
+)
+from finance_app.database.engine import db_core_transaction
+from finance_app.database.tables import (
+    statements as statements_table,
+    statement_types as statement_types_table,
+    transactions as transactions_table,
+)
+from finance_app.modules.accounts.repository import get_or_create_account, normalize_account_type
+from finance_app.modules.categories.service import categorize_transactions
+from finance_app.modules.categories.taxonomy import set_transaction_tags
+from finance_app.modules.settings.runtime import get_statement_type_by_id
+from finance_app.modules.statements.importer import (
+    allowed_statement_file,
+    extract_pdf_text,
+    file_checksum,
+    get_file_extension,
+    normalize_interac_direction,
+)
+from finance_app.modules.upload import workflow as upload_workflow
+from finance_app.modules.upload.service import build_upload_context
+
+
+upload_bp = Blueprint("upload", __name__)
+
+
+@upload_bp.route("/upload", methods=["GET", "POST"])
+def upload():
+    """Render the upload page."""
+    if request.method == "POST":
+        return handle_statement_upload()
+
+    return render_template("upload.html", **build_upload_context(request.args))
+
+
+def handle_statement_upload():
+    """Handle statement upload."""
+    uploaded_file = request.files.get("statement")
+    account_name = request.form.get("account_name", "Personal").strip() or "Personal"
+    paid_from_account_name = request.form.get("paid_from_account_name", "").strip()
+    statement_type_id = request.form.get("statement_type_id", "").strip()
+
+    with db_core_transaction() as conn:
+        statement_type = get_statement_type_by_id(conn, statement_type_id)
+
+        if statement_type is None:
+            flash("Please choose a valid statement type.")
+            return redirect(url_for("upload.upload"))
+
+        interac_direction = INTERAC_DIRECTION_AUTO
+        if statement_type["parser_type"] == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
+            interac_direction = normalize_interac_direction(request.form.get("interac_direction"))
+
+        if uploaded_file is None or uploaded_file.filename == "":
+            flash("Please choose a statement file.")
+            return redirect(url_for("upload.upload"))
+
+        if not allowed_statement_file(uploaded_file.filename):
+            allowed = ", ".join(sorted(settings.allowed_statement_extensions)).upper()
+            flash(f"Only {allowed} files are supported.")
+            return redirect(url_for("upload.upload"))
+
+        checksum = file_checksum(uploaded_file)
+        existing = statement_by_checksum(conn, checksum)
+
+        if existing:
+            flash(
+                "This statement was already uploaded as "
+                f"{existing['filename']} on {existing['uploaded_at']} "
+                f"({existing['import_status']}). "
+                "Use Retry import or Reprocess from Uploaded statements."
+            )
+            return redirect(url_for("upload.upload"))
+
+        extension = get_file_extension(uploaded_file.filename)
+        raw_text = read_statement_text(uploaded_file, extension)
+
+        if raw_text is None:
+            return redirect(url_for("upload.upload"))
+
+        # The statement import type controls parsing/import mode. The account
+        # reporting role is stored separately so reports can classify card payments
+        # and transfers without changing how the statement file is parsed.
+        account_type = normalize_account_type(
+            request.form.get("account_type") or statement_type["default_account_type"]
+        )
+        paid_from_value = (paid_from_account_name or None) if account_type == ACCOUNT_TYPE_CREDIT_CARD else ""
+        account = get_or_create_account(
+            conn,
+            account_name,
+            account_type=account_type,
+            paid_from_account_name=paid_from_value,
+        )
+        statement_id = create_uploaded_statement(
+            conn,
+            account["id"],
+            statement_type["id"],
+            uploaded_file.filename,
+            checksum,
+            extension,
+            interac_direction,
+            raw_text,
+        )
+        upload_workflow.reset_statement_import_state(conn, statement_id)
+
+    job_id = submit_statement_import_job(
+        statement_id,
+        account["id"],
+        statement_type["parser_type"],
+        statement_type["import_mode"],
+        extension,
+        raw_text,
+        uploaded_file.filename,
+        interac_direction=interac_direction,
+    )
+
+    flash(
+        "Statement queued for background import and categorization. "
+        f"Track progress on the Jobs page. Job: {job_id[:8]}"
+    )
+    return redirect(url_for("upload.upload"))
+
+
+@upload_bp.route("/upload/<int:statement_id>/retry", methods=["POST"])
+def retry_statement_import(statement_id):
+    """Queue another import attempt for an existing stored statement."""
+    return queue_existing_statement_import(statement_id, reprocess=False)
+
+
+@upload_bp.route("/upload/<int:statement_id>/reprocess", methods=["POST"])
+def reprocess_statement_import(statement_id):
+    """Delete a statement's imported transactions and queue a fresh import."""
+    return queue_existing_statement_import(statement_id, reprocess=True)
+
+
+def queue_existing_statement_import(statement_id, reprocess=False):
+    """Queue import work from stored statement text without accepting a new file."""
+    next_url = upload_redirect_target()
+
+    with db_core_transaction() as conn:
+        statement = statement_import_row(conn, statement_id)
+        if statement is None:
+            flash("Statement not found.")
+            return redirect(next_url)
+
+        if statement["import_status"] in ACTIVE_STATEMENT_IMPORT_STATUSES:
+            flash("This statement import is already queued or running.")
+            return redirect(next_url)
+
+        raw_text = statement["raw_text"] or ""
+        if not raw_text.strip():
+            flash("This statement has no stored text to import.")
+            return redirect(next_url)
+
+        if reprocess:
+            delete_statement_transactions(conn, statement_id)
+
+        extension = statement_extension(statement)
+        upload_workflow.reset_statement_import_state(conn, statement_id)
+
+    job_id = submit_statement_import_job(
+        statement_id,
+        statement["account_id"],
+        statement["parser_type"],
+        statement["import_mode"],
+        extension,
+        raw_text,
+        statement["filename"],
+        label_prefix="Reprocess" if reprocess else "Retry import",
+        interac_direction=statement["interac_direction"],
+    )
+    flash(
+        f"{'Reprocess' if reprocess else 'Retry'} queued. "
+        f"Track progress on the Jobs page. Job: {job_id[:8]}"
+    )
+    return redirect(next_url)
+
+
+def statement_import_row(conn, statement_id):
+    """Return persisted statement data needed to queue import work."""
+    return conn.execute(
+        select(
+            statements_table.c.id,
+            statements_table.c.account_id,
+            statements_table.c.filename,
+            statements_table.c.extension,
+            statements_table.c.raw_text,
+            statements_table.c.import_status,
+            statements_table.c.interac_direction,
+            statement_types_table.c.parser_type,
+            statement_types_table.c.import_mode,
+        )
+        .select_from(
+            statements_table.join(
+                statement_types_table,
+                statement_types_table.c.id == statements_table.c.statement_type_id,
+            )
+        )
+        .where(statements_table.c.id == statement_id)
+    ).mappings().fetchone()
+
+
+def statement_by_checksum(conn, checksum):
+    """Return an uploaded statement row by checksum for duplicate detection."""
+    return conn.execute(
+        select(
+            statements_table.c.id,
+            statements_table.c.filename,
+            statements_table.c.uploaded_at,
+            statements_table.c.import_status,
+        ).where(statements_table.c.checksum == checksum)
+    ).mappings().fetchone()
+
+
+def create_uploaded_statement(
+    conn,
+    account_id,
+    statement_type_id,
+    filename,
+    checksum,
+    extension,
+    interac_direction,
+    raw_text,
+):
+    """Insert an uploaded statement row and return its ID."""
+    result = conn.execute(
+        insert(statements_table).values(
+            account_id=account_id,
+            statement_type_id=statement_type_id,
+            filename=filename,
+            checksum=checksum,
+            extension=extension,
+            interac_direction=interac_direction,
+            raw_text=raw_text,
+        )
+    )
+    return result.inserted_primary_key[0]
+
+
+def delete_statement_transactions(conn, statement_id):
+    """Delete imported transactions for a statement before reprocessing."""
+    conn.execute(
+        delete(transactions_table).where(transactions_table.c.statement_id == statement_id)
+    )
+
+
+def statement_extension(statement):
+    """Return a stored or filename-derived extension for a statement row."""
+    extension = (statement["extension"] or "").strip().lower()
+    if extension:
+        return extension
+
+    filename = statement["filename"] or ""
+    if "." not in filename:
+        return ""
+
+    return get_file_extension(filename)
+
+
+def submit_statement_import_job(
+    statement_id,
+    account_id,
+    parser_type,
+    import_mode,
+    extension,
+    raw_text,
+    filename,
+    label_prefix="Import",
+    interac_direction=INTERAC_DIRECTION_AUTO,
+):
+    """Submit statement import work with upload undo metadata."""
+    interac_direction = normalize_interac_direction(interac_direction)
+    undo_state = {}
+    return submit_background_job(
+        f"{label_prefix} {filename}",
+        import_statement_transactions_job,
+        statement_id,
+        account_id,
+        parser_type,
+        extension,
+        raw_text,
+        import_mode=import_mode,
+        interac_direction=interac_direction,
+        undo_state=undo_state,
+        undo_handler=undo_statement_upload_job,
+        undo_args=(statement_id, undo_state),
+    )
+
+
+def upload_redirect_target():
+    """Return a safe redirect target for upload actions."""
+    target = request.form.get("next", "").strip()
+    if target.startswith("/upload"):
+        return target
+
+    return url_for("upload.upload")
+
+
+def read_statement_text(uploaded_file, extension):
+    """Handle the read statement text route."""
+    if extension == "pdf":
+        pdf_text = extract_pdf_text(uploaded_file)
+
+        if not pdf_text.strip():
+            flash("Could not extract text from this PDF. It may be scanned or image-based.")
+            return None
+
+        return pdf_text
+
+    if extension == "csv":
+        uploaded_file.stream.seek(0)
+        raw_bytes = uploaded_file.stream.read()
+        uploaded_file.stream.seek(0)
+        return raw_bytes.decode("utf-8-sig", errors="replace")
+
+    flash("Unsupported file type.")
+    return None
+
+
+def import_transactions(
+    conn,
+    statement_id,
+    account_id,
+    statement_type,
+    extension,
+    raw_text,
+    undo_state=None,
+    import_mode=None,
+    interac_direction="auto",
+):
+    """Import transactions."""
+    original_categorize_transactions = upload_workflow.categorize_transactions
+    original_set_transaction_tags = upload_workflow.set_transaction_tags
+    upload_workflow.categorize_transactions = categorize_transactions
+    upload_workflow.set_transaction_tags = set_transaction_tags
+    try:
+        return upload_workflow.import_transactions(
+            conn,
+            statement_id,
+            account_id,
+            statement_type,
+            extension,
+            raw_text,
+            undo_state=undo_state,
+            import_mode=import_mode,
+            interac_direction=interac_direction,
+        )
+    finally:
+        upload_workflow.categorize_transactions = original_categorize_transactions
+        upload_workflow.set_transaction_tags = original_set_transaction_tags
+
+
+import_statement_transactions_job = upload_workflow.import_statement_transactions_job
+count_statement_unknown_transactions = upload_workflow.count_statement_unknown_transactions
+categorize_statement_unknown_transactions_job = upload_workflow.categorize_statement_unknown_transactions_job
+undo_statement_upload_job = upload_workflow.undo_statement_upload_job
+upload_result_message = upload_workflow.upload_result_message

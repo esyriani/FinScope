@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+{% from "_rule_controls.html" import amount_rule_control, rule_account_control, rule_category_control, rule_direction_control, rule_keyword_control, rule_scope_control, rule_tag_control with context %}
+
+{% block content %}
+{% set category_options = category_options | default([]) %}
+{% set account_options = account_options | default([]) %}
+{% set direction_options = direction_options | default([]) %}
+{% set category_descriptions = category_descriptions | default({}) %}
+{% set tag_options = tag_options | default([]) %}
+{% set page = page | default(1) %}
+{% set page_size = page_size | default(rules | length) %}
+{% set total_count = total_count | default(rules | length) %}
+{% set total_pages = total_pages | default(1) %}
+{% set page_start = page_start | default(1 if rules else 0) %}
+{% set page_end = page_end | default(rules | length) %}
+{% set search = search | default("") %}
+{% set selected_category = selected_category | default("") %}
+{% set selected_source = selected_source | default("") %}
+{% set selected_tags = selected_tags | default([]) %}
+{% set selected_approval = selected_approval | default("") %}
+{% set sort = sort | default("source") %}
+{% set direction = direction | default("asc") %}
+
+{% macro rule_preview_panel() %}
+<section class="rule-preview" data-rule-preview>
+    <div class="rule-preview-header">
+        <div>
+            <h6 class="mb-0">{{ _("Preview") }}</h6>
+            <span class="text-muted small" data-rule-preview-status>{{ _("Enter a keyword to preview active matches.") }}</span>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-rule-preview-refresh>
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>{{ _("Refresh") }}
+        </button>
+    </div>
+    <div class="rule-preview-list" data-rule-preview-list></div>
+</section>
+{% endmacro %}
+
+{% macro rules_pagination(label) %}
+{% if total_pages > 1 %}
+<nav aria-label="{{ label }}">
+    <ul class="pagination mb-0">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ page_url(page - 1) }}">{{ _("Previous") }}</a>
+        </li>
+
+        {% for page_number in range(1, total_pages + 1) %}
+            {% if page_number == 1 or page_number == total_pages or (page_number >= page - 2 and page_number <= page + 2) %}
+                <li class="page-item {% if page_number == page %}active{% endif %}">
+                    <a class="page-link" href="{{ page_url(page_number) }}">{{ page_number }}</a>
+                </li>
+            {% elif page_number == page - 3 or page_number == page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ page_url(page + 1) }}">{{ _("Next") }}</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endmacro %}
+
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Category rules") }}</h2>
+        <p class="text-muted mb-0">{{ _("Manual rules are applied before default rules.") }}</p>
+    </div>
+    <div class="home-actions">
+        <form method="post" action="/rules/apply-all" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="btn btn-outline-primary" type="submit">
+                <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Apply all rules") }}
+            </button>
+        </form>
+        <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#import-rules-modal">
+            <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import rules") }}
+        </button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.export_rules') }}">
+            <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>{{ _("Export CSV") }}
+        </a>
+        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-rule-modal">
+            <i class="bi bi-plus-circle" aria-hidden="true"></i>{{ _("New rule") }}
+        </button>
+    </div>
+</div>
+
+<div class="modal fade" id="import-rules-modal" tabindex="-1" aria-labelledby="import-rules-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('rules.import_rules') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="import-rules-title">{{ _("Import rules") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="rules-file">{{ _("Rules CSV") }}</label>
+                        <input id="rules-file" class="form-control" type="file" name="rules_file" accept=".csv,text/csv" required>
+                        <div class="form-text">{{ _("Use the rules CSV export format: keyword, account_name, merchant_name, category, tags, amount_min, amount_max, direction, source, created_at.") }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-label">{{ _("Import mode") }}</div>
+                        <div class="form-check">
+                            <input id="rules-import-add" class="form-check-input" type="radio" name="mode" value="add" checked>
+                            <label class="form-check-label" for="rules-import-add">
+                                {{ _("Add new rules only") }}
+                            </label>
+                            <div class="form-text">{{ _("Existing rule scope and amount-range combinations are skipped.") }}</div>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input id="rules-import-override" class="form-check-input" type="radio" name="mode" value="override">
+                            <label class="form-check-label" for="rules-import-override">
+                                {{ _("Override all rules") }}
+                            </label>
+                            <div class="form-text text-danger">{{ _("Removes all existing rules and replaces them with the imported file. The job can be undone from Jobs.") }}</div>
+                        </div>
+                    </div>
+                    <p class="text-muted mb-0">{{ _("The import runs as a background job so the Rules page remains usable.") }}</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import rules") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div data-ajax-refresh-target="rules-actions">
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">
+                {{ _(message) }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+<div class="alert alert-info d-none" role="status" data-rules-ajax-status></div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <input type="hidden" name="direction" value="{{ direction }}">
+            <div class="col-md-4">
+                <label class="form-label" for="rules-search">{{ _("Search rules") }}</label>
+                <input
+                    id="rules-search"
+                    class="form-control"
+                    type="text"
+                    name="search"
+                    placeholder="{{ _('Search keyword, merchant, category, source, amount, or date') }}"
+                    value="{{ search }}"
+                >
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="rules-category">{{ _("Category") }}</label>
+                <select id="rules-category" class="form-select" name="category">
+                    <option value="">{{ _("All categories") }}</option>
+                    {% for option in category_options %}
+                        <option value="{{ option }}" {% if selected_category == option %}selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" id="rules-tags-label">{{ _("Tags") }}</label>
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}">
+                    <div
+                        class="tag-multiselect-control"
+                        role="button"
+                        tabindex="0"
+                        aria-labelledby="rules-tags-label"
+                        aria-expanded="false"
+                        data-tag-multiselect-toggle
+                    >
+                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                    </div>
+                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        {% for option in tag_options %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="tags"
+                                    value="{{ option.name }}"
+                                    {% if option.name in selected_tags %}checked{% endif %}
+                                >
+                                <span>{{ option.name }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="rules-source">{{ _("Source") }}</label>
+                <select id="rules-source" class="form-select" name="source">
+                    {% for source_value, source_text in source_filter_options %}
+                        <option value="{{ source_value }}" {% if selected_source == source_value %}selected{% endif %}>{{ _(source_text) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="rules-approval">{{ _("Approval") }}</label>
+                <select id="rules-approval" class="form-select" name="approval">
+                    {% for approval_value, approval_text in approval_filter_options %}
+                        <option value="{{ approval_value }}" {% if selected_approval == approval_value %}selected{% endif %}>{{ _(approval_text) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="w-100"></div>
+
+            <div class="col-md-3 ms-md-auto filter-actions">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
+                <a class="btn btn-outline-secondary" href="/rules"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="create-rule-modal" tabindex="-1" aria-labelledby="create-rule-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="/rules/create" data-rule-editor data-rule-preview-url="/rules/preview">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="create-rule-title">{{ _("New rule") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    {{ rule_keyword_control("new-rule", "", "Keyword") }}
+                    {{ rule_category_control("new-rule", category_options, category_descriptions=category_descriptions) }}
+                    {{ rule_tag_control("new-rule", tag_options) }}
+                    {{ rule_account_control("new-rule", account_options) }}
+                    {{ rule_direction_control("new-rule", direction_options) }}
+                    {{ amount_rule_control("new-rule") }}
+                    {{ rule_preview_panel() }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save rule") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if rules %}
+<div class="card">
+    <div class="card-body border-bottom">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="text-muted">
+                {{ _("Showing {start}-{end} of {total} rules", start=page_start, end=page_end, total=total_count) }}
+            </div>
+
+            {{ rules_pagination(_("Rule pages")) }}
+        </div>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" data-rules-table data-selected-approval="{{ selected_approval }}">
+                <thead>
+                    <tr>
+                        <th>
+                            <a class="sort-link" href="{{ sort_url('keyword') }}">
+                                <span>{{ _("Keyword") }}</span>{% if sort == "keyword" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                            </a>
+                        </th>
+                        <th>
+                            <a class="sort-link" href="{{ sort_url('category') }}">
+                                <span>{{ _("Category") }}</span>{% if sort == "category" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                            </a>
+                        </th>
+                        <th>{{ _("Tags") }}</th>
+                        <th>
+                            <a class="sort-link" href="{{ sort_url('amount_min') }}">
+                                <span>{{ _("Amount") }}</span>{% if sort == "amount_min" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                            </a>
+                        </th>
+                        <th>
+                            <a class="sort-link" href="{{ sort_url('source') }}">
+                                <span>{{ _("Source") }}</span>{% if sort == "source" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                            </a>
+                        </th>
+                        <th>
+                            <a class="sort-link" href="{{ sort_url('created_at') }}">
+                                <span>{{ _("Created") }}</span>{% if sort == "created_at" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                            </a>
+                        </th>
+                        <th class="text-end">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr data-row-edit-target="#edit-rule-{{ rule['id'] }}" data-rule-row="{{ rule['id'] }}">
+                        <td>
+                            <div class="rule-keyword">{{ rule["keyword"] }}</div>
+                            {% if rule["merchant_id"] %}
+                                <div class="small text-muted">{{ _("Merchant") }}: {{ rule["merchant_name"] }}</div>
+                            {% else %}
+                                <div class="small text-muted">{{ _("Fuzzy keyword") }}</div>
+                            {% endif %}
+                            {% if rule["account_name"] %}
+                                <div class="small text-muted">{{ _("Account") }}: {{ rule["account_name"] }}</div>
+                            {% endif %}
+                            {% if rule["direction"] != "any" %}
+                                <div class="small text-muted">{{ _("Direction") }}: {{ _(rule["direction_label"]) }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ rule["category"] }}</td>
+                        <td>
+                            {% if rule["tag_pills"] %}
+                                <div class="tag-pill-list">
+                                    {% for tag in rule["tag_pills"] %}
+                                        <span class="tag-pill" style="--tag-color: {{ tag.color }};">{{ tag.name }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if rule["amount_min"] is none and rule["amount_max"] is none %}
+                                <span class="text-muted">{{ _("Any") }}</span>
+                            {% elif rule["amount_min"] == rule["amount_max"] %}
+                                <span class="amount-range">{{ rule["amount_min"] | moneyfmt }}</span>
+                            {% else %}
+                                <span class="amount-range">
+                                    {{ _("Any") if rule["amount_min"] is none else (rule["amount_min"] | moneyfmt) }}
+                                    -
+                                    {{ _("Any") if rule["amount_max"] is none else (rule["amount_max"] | moneyfmt) }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {{ rule['source_badge_class'] }}">
+                                {{ _(rule["source_label"]) }}
+                            </span>
+                            {% if rule["source"] == "automatic" %}
+                                <span class="badge {{ rule['approval_badge_class'] }}" data-rule-approval-badge>
+                                    {{ _(rule["approval_label"]) }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ rule["created_at"] }}</td>
+                        <td class="text-end">
+                            <div class="action-cluster justify-content-end" data-row-action>
+                                <button
+                                    class="btn btn-sm btn-outline-primary btn-icon-only"
+                                    type="button"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#edit-rule-{{ rule['id'] }}"
+                                    aria-label="{{ _('Edit rule {keyword}', keyword=rule['keyword']) }}"
+                                    title="{{ _('Edit') }}"
+                                    data-bs-tooltip
+                                >
+                                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                </button>
+                                {% if rule["requires_approval"] %}
+                                <form method="post" action="/rules/{{ rule['id'] }}/approve" class="d-inline" data-rule-table-action="approve" data-rule-id="{{ rule['id'] }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <button
+                                        class="btn btn-sm btn-outline-success"
+                                        type="submit"
+                                        aria-label="{{ _('Approve rule {keyword}', keyword=rule['keyword']) }}"
+                                    >
+                                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <form method="post" action="/rules/{{ rule['id'] }}/apply" class="d-inline" data-rule-table-action="apply" data-rule-id="{{ rule['id'] }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <button
+                                        class="btn btn-sm btn-outline-secondary btn-icon-only"
+                                        type="submit"
+                                        aria-label="{{ _('Apply rule {keyword} to existing transactions', keyword=rule['keyword']) }}"
+                                        title="{{ _('Apply rule') }}"
+                                        data-bs-tooltip
+                                    >
+                                        <i class="bi bi-play-circle" aria-hidden="true"></i>
+                                    </button>
+                                </form>
+                                <button
+                                    class="btn btn-sm btn-outline-danger btn-icon-only"
+                                    type="button"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#delete-rule-{{ rule['id'] }}"
+                                    aria-label="{{ _('Delete rule {keyword}', keyword=rule['keyword']) }}"
+                                    title="{{ _('Delete') }}"
+                                    data-bs-tooltip
+                                >
+                                    <i class="bi bi-trash" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if total_pages > 1 %}
+    <div class="table-pagination-footer d-flex justify-content-end">
+        {{ rules_pagination(_("Rule pages bottom")) }}
+    </div>
+    {% endif %}
+</div>
+
+{% for rule in rules %}
+<div class="modal fade" id="edit-rule-{{ rule['id'] }}" tabindex="-1" aria-labelledby="edit-rule-{{ rule['id'] }}-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="/rules/{{ rule['id'] }}/update" data-rule-editor data-rule-preview-url="/rules/preview" data-ajax-refresh-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="edit-rule-{{ rule['id'] }}-title">{{ _("Edit rule") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    {{ rule_keyword_control("rule-" ~ rule["id"], rule["keyword"], "Keyword") }}
+                    {% if rule["merchant_id"] %}
+                        {{ rule_scope_control("rule-" ~ rule["id"], rule["merchant_id"], rule["merchant_name"]) }}
+                    {% else %}
+                        <input type="hidden" name="merchant_id" value="">
+                    {% endif %}
+                    {{ rule_category_control("rule-" ~ rule["id"], category_options, rule["category"], category_descriptions=category_descriptions) }}
+                    {{ rule_tag_control("rule-" ~ rule["id"], tag_options, rule["tags"]) }}
+                    {{ rule_account_control("rule-" ~ rule["id"], account_options, rule["account_id"]) }}
+                    {{ rule_direction_control("rule-" ~ rule["id"], direction_options, rule["direction"]) }}
+                    {{ amount_rule_control("rule-" ~ rule["id"], rule["amount_min"], rule["amount_max"]) }}
+                    {{ rule_preview_panel() }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save rule") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="delete-rule-{{ rule['id'] }}" tabindex="-1" aria-labelledby="delete-rule-{{ rule['id'] }}-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/rules/{{ rule['id'] }}/delete" data-rule-table-action="delete" data-rule-id="{{ rule['id'] }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="delete-rule-{{ rule['id'] }}-title">{{ _("Delete rule") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">{{ _("Delete rule") }} <strong>{{ rule["keyword"] }}</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete") }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">{{ _("No category rules yet. Create a rule or categorize a transaction to add one.") }}</div>
+{% endif %}
+</div>
+{% endblock %}

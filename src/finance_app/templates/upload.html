@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set page = page | default(1) %}
+{% set page_size = page_size | default(statements | length) %}
+{% set total_count = total_count | default(statements | length) %}
+{% set total_pages = total_pages | default(1) %}
+{% set page_start = page_start | default(1 if statements else 0) %}
+{% set page_end = page_end | default(statements | length) %}
+
+{% macro statement_pagination(label) %}
+{% if statements and total_pages > 1 %}
+<nav aria-label="{{ label }}">
+    <ul class="pagination mb-0">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('upload.upload', page=page - 1) }}">{{ _("Previous") }}</a>
+        </li>
+
+        {% for page_number in range(1, total_pages + 1) %}
+            {% if page_number == 1 or page_number == total_pages or (page_number >= page - 2 and page_number <= page + 2) %}
+                <li class="page-item {% if page_number == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('upload.upload', page=page_number) }}">{{ page_number }}</a>
+                </li>
+            {% elif page_number == page - 3 or page_number == page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('upload.upload', page=page + 1) }}">{{ _("Next") }}</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endmacro %}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h2 class="mb-1">{{ _("Upload statements") }}</h2>
+        <p class="text-muted mb-0">{{ _("Upload CSV or text-based PDF statements. The original file is not stored.") }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i>{{ _("Jobs") }}</a>
+</div>
+
+<div data-ajax-refresh-target="upload-actions">
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">
+                {{ _(message) }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data" class="row g-3 align-items-start" data-upload-form>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-lg-4 col-md-6">
+                <label for="account_name" class="form-label">{{ _("Account") }}</label>
+                <input
+                    class="form-control"
+                    type="text"
+                    id="account_name"
+                    name="account_name"
+                    value="Personal"
+                    placeholder="{{ _('Example: RBC Visa') }}"
+                    list="account_name_options"
+                >
+                <datalist id="account_name_options">
+                    {% for account in accounts %}
+                        <option value="{{ account['name'] }}"></option>
+                    {% endfor %}
+                </datalist>
+                <div class="form-text">{{ _("Name the account that should own this upload. Existing account names are reused.") }}</div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <label for="statement_type" class="form-label">{{ _("Statement import type") }}</label>
+                <select id="statement_type" class="form-select" name="statement_type_id" data-statement-type-select>
+                    {% for statement_type in statement_types %}
+                        <option
+                            value="{{ statement_type['id'] }}"
+                            data-parser-type="{{ statement_type['parser_type'] }}"
+                            data-import-mode="{{ statement_type['import_mode'] }}"
+                            data-account-type="{{ statement_type['default_account_type'] }}"
+                        >
+                            {{ statement_type["name"] }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">{{ _("Select the parser and import behavior for this file. Bank and card statements add transactions; Interac history enriches existing checking rows.") }}</div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <label for="account_type" class="form-label">{{ _("Account reporting role") }}</label>
+                <select id="account_type" class="form-select" name="account_type" data-account-type-select>
+                    {% for account_type, label in account_types.items() %}
+                        <option value="{{ account_type }}">{{ _(label) }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">{{ _("Select how this account is classified in reports. Usually keep the suggested role; use Credit card for card statements.") }}</div>
+            </div>
+
+            <div class="col-lg-4 col-md-6 d-none" data-interac-direction-field>
+                <label for="interac_direction" class="form-label">{{ _("Interac direction") }}</label>
+                <select id="interac_direction" class="form-select" name="interac_direction">
+                    {% for direction, label in interac_directions.items() %}
+                        <option value="{{ direction }}">{{ _(label) }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">{{ _("Use Auto-detect unless the Interac file has generic columns and all amounts are positive.") }}</div>
+            </div>
+
+            <div class="col-12 d-none" data-interac-warning>
+                <div class="alert alert-warning mb-0" role="alert">
+                    <div class="d-flex gap-2">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                        <div>
+                            <div class="fw-semibold">{{ _("Import matching checking statements first") }}</div>
+                            <div>{{ _("Interac history only enriches existing checking rows. Rows are ignored until the matching checking transactions have already been imported.") }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6" data-paid-from-field>
+                <label for="paid_from_account_name" class="form-label">{{ _("Paid from account") }}</label>
+                <input
+                    class="form-control"
+                    type="text"
+                    id="paid_from_account_name"
+                    name="paid_from_account_name"
+                    placeholder="{{ _('Example: Main checking') }}"
+                    list="paid_from_account_options"
+                >
+                <datalist id="paid_from_account_options">
+                    {% for account in accounts %}
+                        {% if account['account_type'] != "credit_card" %}
+                            <option value="{{ account['name'] }}"></option>
+                        {% endif %}
+                    {% endfor %}
+                </datalist>
+                <div class="form-text">{{ _("Optional for credit cards paid from a checking or savings account.") }}</div>
+            </div>
+
+            <div class="col-lg-5 col-md-7">
+                <label for="statement" class="form-label">{{ _("Statement file") }}</label>
+                <input
+                    class="form-control"
+                    type="file"
+                    id="statement"
+                    name="statement"
+                    accept=".csv,.pdf"
+                >
+            </div>
+            <div class="col-lg-3 col-md-5">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>{{ _("Upload") }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h5 class="mb-0">{{ _("Uploaded statements") }}</h5>
+            {% if statements %}
+                <div class="text-muted small">{{ _("Showing {start}-{end} of {total} statements", start=page_start, end=page_end, total=total_count) }}</div>
+            {% endif %}
+        </div>
+
+        {{ statement_pagination(_("Statement pages")) }}
+    </div>
+
+    <div class="card-body p-0">
+        {% if statements %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>{{ _("Account") }}</th>
+                        <th>{{ _("Statement type") }}</th>
+                        <th>{{ _("Filename") }}</th>
+                        <th>{{ _("Uploaded at") }}</th>
+                        <th>{{ _("Import") }}</th>
+                        <th class="text-end">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for statement in statements %}
+                    {% set import_status = statement["import_status"] or "pending" %}
+                    {% set import_busy = import_status in ["queued", "running"] %}
+                    <tr data-row-edit-target="#statement-details-{{ statement['id'] }}">
+                        <td>
+                            <div>{{ statement["account_name"] or _("Personal") }}</div>
+                            {% if statement["account_type"] %}
+                                <div class="small text-muted">{{ _(account_types.get(statement["account_type"], statement["account_type"])) }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ statement["statement_type_name"] or _("Unknown") }}</td>
+                        <td>{{ statement["filename"] }}</td>
+                        <td>{{ statement["uploaded_at"] }}</td>
+                        <td>
+                            <span class="badge text-bg-{% if import_status == 'completed' %}success{% elif import_status == 'failed' %}danger{% elif import_status == 'running' %}warning{% elif import_status == 'queued' %}secondary{% else %}light{% endif %}">
+                                {{ import_status }}
+                            </span>
+                            <div class="small text-muted mt-1">
+                                {{ _("Added {count}", count=statement["imported_count"]) }},
+                                {{ _("skipped {count}", count=statement["skipped_count"]) }},
+                                {{ _("ignored {count}", count=statement["ignored_count"]) }}
+                            </div>
+                            {% if statement["llm_candidate_count"] %}
+                                <div class="small text-muted">{{ _("LLM queued {count}", count=statement["llm_candidate_count"]) }}</div>
+                            {% endif %}
+                            {% if statement["import_error"] %}
+                                <div class="small text-danger">{{ statement["import_error"] }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="d-inline-flex gap-2" data-row-action>
+                                <form method="post" action="{{ url_for('upload.retry_statement_import', statement_id=statement['id']) }}" data-ajax-refresh-form>
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <button
+                                        class="btn btn-sm btn-outline-primary"
+                                        type="submit"
+                                        {% if import_busy %}disabled{% endif %}
+                                    >
+                                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>{{ _("Retry") }}
+                                    </button>
+                                </form>
+                                <button
+                                    class="btn btn-sm btn-outline-danger"
+                                    type="button"
+                                    {% if import_busy %}
+                                        disabled
+                                    {% else %}
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#reprocess-statement-{{ statement['id'] }}"
+                                    {% endif %}
+                                >
+                                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>{{ _("Reprocess") }}
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-muted">
+            {{ _("No statements uploaded yet.") }}
+        </div>
+        {% endif %}
+    </div>
+    {% if statements and total_pages > 1 %}
+    <div class="table-pagination-footer d-flex justify-content-end">
+        {{ statement_pagination(_("Statement pages bottom")) }}
+    </div>
+    {% endif %}
+</div>
+
+{% for statement in statements %}
+    {% set import_status = statement["import_status"] or "pending" %}
+    <div class="modal fade" id="statement-details-{{ statement['id'] }}" tabindex="-1" aria-labelledby="statement-details-{{ statement['id'] }}-title" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="statement-details-{{ statement['id'] }}-title">{{ _("Statement details") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-4 mb-4">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="small text-muted">{{ _("Filename") }}</div>
+                            <div class="fw-semibold text-break">{{ statement["filename"] }}</div>
+                        </div>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="small text-muted">{{ _("Account") }}</div>
+                            <div class="fw-semibold">{{ statement["account_name"] or _("Personal") }}</div>
+                            {% if statement["account_type"] %}
+                                <div class="small text-muted">{{ _(account_types.get(statement["account_type"], statement["account_type"])) }}</div>
+                            {% endif %}
+                            {% if statement["paid_from_account_name"] %}
+                                <div class="small text-muted">{{ _("Paid from account") }}: {{ statement["paid_from_account_name"] }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="small text-muted">{{ _("Statement type") }}</div>
+                            <div class="fw-semibold">{{ statement["statement_type_name"] or _("Unknown") }}</div>
+                            {% if statement["parser_type"] %}
+                                <div class="small text-muted">{{ _("Parser") }}: {{ _(statement_parser_types.get(statement["parser_type"], statement["parser_type"])) }}</div>
+                            {% endif %}
+                            {% if statement["import_mode"] %}
+                                <div class="small text-muted">{{ _("Import mode") }}: {{ _(statement_import_modes.get(statement["import_mode"], statement["import_mode"])) }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="small text-muted">{{ _("File type") }}</div>
+                            <div class="fw-semibold">{{ statement["extension_label"] }}</div>
+                            {% if statement["interac_direction"] %}
+                                <div class="small text-muted">{{ _("Interac direction") }}: {{ _(interac_directions.get(statement["interac_direction"], statement["interac_direction"])) }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="small text-muted">{{ _("Uploaded at") }}</div>
+                            <div class="fw-semibold">{{ statement["uploaded_at"] }}</div>
+                        </div>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="small text-muted">{{ _("Import status") }}</div>
+                            <span class="badge text-bg-{% if import_status == 'completed' %}success{% elif import_status == 'failed' %}danger{% elif import_status == 'running' %}warning{% elif import_status == 'queued' %}secondary{% else %}light{% endif %}">
+                                {{ import_status }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <h6 class="mb-3">{{ _("Processing summary") }}</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="small text-muted">{{ _("Added transactions") }}</div>
+                            <div class="fs-5 fw-semibold">{{ statement["imported_count"] }}</div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="small text-muted">{{ _("Current statement transactions") }}</div>
+                            <div class="fs-5 fw-semibold">{{ statement["transaction_count"] }}</div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="small text-muted">{{ _("Skipped rows") }}</div>
+                            <div class="fs-5 fw-semibold">{{ statement["skipped_count"] }}</div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="small text-muted">{{ _("Ignored rows") }}</div>
+                            <div class="fs-5 fw-semibold">{{ statement["ignored_count"] }}</div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="small text-muted">{{ _("LLM queued") }}</div>
+                            <div class="fs-5 fw-semibold">{{ statement["llm_candidate_count"] }}</div>
+                        </div>
+                        {% if statement["parser_type"] == "interac_etransfer" and (statement["skipped_count"] or statement["ignored_count"]) %}
+                            <div class="col-12">
+                                <div class="alert alert-warning py-2 mb-0" role="alert">
+                                    {{ _("For Interac history, skipped rows are ambiguous matches. Ignored rows are cancelled, non-deposited, or have no matching checking transaction yet. Import the matching checking statements first, then reprocess the Interac history.") }}
+                                </div>
+                            </div>
+                        {% endif %}
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="small text-muted">{{ _("Started") }}</div>
+                            <div class="fw-semibold">{{ statement["import_started_at"] or _("n/a") }}</div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="small text-muted">{{ _("Finished") }}</div>
+                            <div class="fw-semibold">{{ statement["import_finished_at"] or _("n/a") }}</div>
+                        </div>
+                    </div>
+
+                    {% if statement["import_error"] %}
+                        <div class="alert alert-danger" role="alert">
+                            {{ statement["import_error"] }}
+                        </div>
+                    {% endif %}
+
+                    <h6 class="mb-3">{{ _("Stored text preview") }}</h6>
+                    {% if statement["raw_text_preview"] %}
+                        <pre class="statement-text-preview">{{ statement["raw_text_preview"] }}</pre>
+                        <div class="small text-muted">
+                            {{ _("Stored characters") }}: {{ statement["raw_text_size"] }}
+                            {% if statement["raw_text_truncated"] %}
+                                &middot; {{ _("Preview truncated.") }}
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">{{ _("No stored text available.") }}</p>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Close") }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if import_status not in ["queued", "running"] %}
+        <div class="modal fade" id="reprocess-statement-{{ statement['id'] }}" tabindex="-1" aria-labelledby="reprocess-statement-{{ statement['id'] }}-title" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form method="post" action="{{ url_for('upload.reprocess_statement_import', statement_id=statement['id']) }}" data-ajax-refresh-form>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="next" value="{{ request.full_path }}">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="reprocess-statement-{{ statement['id'] }}-title">{{ _("Reprocess statement") }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>{{ _("Reprocess") }} <strong>{{ statement["filename"] }}</strong>?</p>
+                            <p class="mb-0 text-danger">
+                                {{ _("This will remove transactions imported from this statement and import them again from the stored statement text.") }}
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                            <button class="btn btn-outline-danger" type="submit"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>{{ _("Reprocess") }}</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endfor %}
+</div>
+{% endblock %}

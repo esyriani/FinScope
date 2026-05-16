@@ -1,0 +1,88 @@
+<section class="card">
+    <div class="card-body">
+        <div class="section-title">
+            <div>
+                <h5 class="card-title mb-1">{{ month_label }}</h5>
+                <div class="text-muted small">{{ _("Expected and matched recurring activity by date.") }}</div>
+            </div>
+            {% if recurring_calendar_legend %}
+            <div class="recurring-calendar-legend" aria-label="{{ _('Recurring status legend') }}">
+                {% for item in recurring_calendar_legend %}
+                    <span class="recurring-calendar-legend-item recurring-status-{{ item.status }}">{{ _(item.label) }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="calendar-scroll">
+            <div class="calendar-weekdays" aria-hidden="true">
+                {% for label in weekday_labels %}
+                    <div>{{ label }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="calendar-grid">
+                {% for day in recurring_calendar_days %}
+                <section
+                    class="calendar-day recurring-calendar-day {% if not day.in_month %}calendar-day-muted{% endif %} {% if day.is_today %}calendar-day-today{% endif %}"
+                    tabindex="0"
+                    role="button"
+                    data-recurring-calendar-day="{{ day.date }}"
+                    aria-label="{{ _('Open recurring items for {date}', date=day.date) }}"
+                >
+                    <div class="calendar-day-head">
+                        <span>{{ day.day_number }}</span>
+                    </div>
+
+                    <div class="recurring-calendar-chip-list">
+                        {% for item in day.recurring_items %}
+                        <button
+                            class="recurring-calendar-chip recurring-status-{{ item.status }}"
+                            type="button"
+                            data-recurring-id="{{ item.id }}"
+                            aria-label="{{ item.aria_label }}"
+                            title="{{ _(item.status_label) }} - {{ item.merchant }} - {{ item.amount_label }}"
+                        >
+                            <span>{{ _(item.status_label) }}</span>
+                            <strong>{{ item.merchant }}</strong>
+                            <em class="{{ item.amount_class }}">{{ item.amount_label }}</em>
+                        </button>
+                        {% endfor %}
+                        {% if day.more_count %}
+                            <button
+                                class="recurring-calendar-more"
+                                type="button"
+                                data-recurring-day-more="{{ day.date }}"
+                                aria-label="{{ _('Show {count} more recurring items for {date}', count=day.more_count, date=day.date) }}"
+                            >
+                                {{ _("+{count} more", count=day.more_count) }}
+                            </button>
+                        {% endif %}
+                    </div>
+                </section>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<script id="recurring-calendar-day-data" type="application/json">
+{{ recurring_calendar_days | tojson }}
+</script>
+
+<div class="modal fade" id="recurring-calendar-day-modal" tabindex="-1" aria-labelledby="recurring-calendar-day-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="recurring-calendar-day-modal-title">{{ _("Recurring items") }}</h5>
+                    <div class="text-muted small" data-recurring-calendar-day-summary></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <div class="recurring-calendar-day-list" data-recurring-calendar-day-list></div>
+            </div>
+        </div>
+    </div>
+</div>

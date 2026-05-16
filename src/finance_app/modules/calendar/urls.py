@@ -1,0 +1,34 @@
+"""URL builders for the calendar feature."""
+
+from urllib.parse import urlencode
+
+from flask import url_for
+
+from finance_app.core.periods import PERIOD_CUSTOM
+from finance_app.modules.transactions.constants import IGNORED_FILTER_ACTIVE
+
+
+def calendar_url(month, params):
+    """Render url."""
+    cleaned = {"month": month.isoformat()[:7]}
+    for key, value in params.items():
+        if isinstance(value, (list, tuple)):
+            values = [item for item in value if item]
+            if values:
+                cleaned[key] = values
+        elif value:
+            cleaned[key] = value
+    return f"{url_for('calendar_page.calendar_view')}?{urlencode(cleaned, doseq=True)}"
+
+
+def transactions_url(date_from, date_to):
+    """Render url."""
+    query = urlencode(
+        {
+            "period": PERIOD_CUSTOM,
+            "date_from": date_from,
+            "date_to": date_to,
+            "ignored": IGNORED_FILTER_ACTIVE,
+        }
+    )
+    return f"{url_for('transactions.transactions')}?{query}"

@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h2 class="mb-1">{{ _("Settings") }}</h2>
+        <p class="text-muted mb-0">{{ _("Configure table limits, previews, categories, statement types, interface language, and theme mode.") }}</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">
+                {{ _(message) }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" class="settings-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <section class="settings-section">
+                <div class="settings-section-header">
+                    <h5 class="settings-section-title">{{ _("General") }}</h5>
+                    <div class="settings-section-help">{{ _("Appearance and everyday interface defaults.") }}</div>
+                </div>
+
+                <div class="settings-subsection">
+                    <h6 class="settings-subsection-title">{{ _("Appearance") }}</h6>
+                    <div class="settings-grid settings-grid-appearance">
+                        <fieldset class="theme-mode-field">
+                            <legend class="form-label mb-2">{{ _("Theme mode") }}</legend>
+                            <div class="theme-mode-options" role="radiogroup" aria-label="{{ _('Theme mode') }}">
+                                <input
+                                    class="btn-check"
+                                    type="radio"
+                                    name="theme_mode"
+                                    id="theme_mode_dark"
+                                    value="{{ theme_mode_dark }}"
+                                    autocomplete="off"
+                                    {% if theme_mode == theme_mode_dark %}checked{% endif %}
+                                >
+                                <label class="theme-mode-option" for="theme_mode_dark">
+                                    <span class="theme-mode-icon" aria-hidden="true">
+                                        <img src="{{ url_for('static', filename='img/dark.png') }}" alt="">
+                                    </span>
+                                    <span class="theme-mode-title">{{ _("Dark") }}</span>
+                                </label>
+
+                                <input
+                                    class="btn-check"
+                                    type="radio"
+                                    name="theme_mode"
+                                    id="theme_mode_light"
+                                    value="{{ theme_mode_light }}"
+                                    autocomplete="off"
+                                    {% if theme_mode == theme_mode_light %}checked{% endif %}
+                                >
+                                <label class="theme-mode-option" for="theme_mode_light">
+                                    <span class="theme-mode-icon" aria-hidden="true">
+                                        <img src="{{ url_for('static', filename='img/light.png') }}" alt="">
+                                    </span>
+                                    <span class="theme-mode-title">{{ _("Light") }}</span>
+                                </label>
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="language-mode-field">
+                            <legend class="form-label mb-2">{{ _("Interface language") }}</legend>
+                            <div class="theme-mode-options language-mode-options" role="radiogroup" aria-label="{{ _('Interface language') }}">
+                                {% for language_code, language_name in supported_languages.items() %}
+                                    <input
+                                        class="btn-check"
+                                        type="radio"
+                                        name="ui_language"
+                                        id="ui_language_{{ language_code }}"
+                                        value="{{ language_code }}"
+                                        autocomplete="off"
+                                        {% if ui_language == language_code %}checked{% endif %}
+                                    >
+                                    <label class="theme-mode-option language-mode-option" for="ui_language_{{ language_code }}">
+                                        <span class="language-mode-code" aria-hidden="true">{{ language_code|upper }}</span>
+                                        <span class="theme-mode-title">{{ _(language_name) }}</span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </fieldset>
+                    </div>
+                </div>
+
+                <div class="settings-subsection">
+                    <h6 class="settings-subsection-title">{{ _("Table limits") }}</h6>
+                    <div class="settings-subsection-help">{{ _("Default row counts used throughout the app.") }}</div>
+                    <div class="settings-grid settings-grid-compact">
+                        <div class="settings-field">
+                            <label for="default_table_page_size" class="form-label">{{ _("Default table page size") }}</label>
+                            <input id="default_table_page_size" class="form-control" type="number" min="1" name="default_table_page_size" value="{{ default_table_page_size }}">
+                            <div class="form-text">{{ _("Rows shown per page in paginated tables.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="comparison_max_years" class="form-label">{{ _("Comparison default years") }}</label>
+                            <input id="comparison_max_years" class="form-control" type="number" min="2" name="comparison_max_years" value="{{ comparison_max_years }}">
+                            <div class="form-text">{{ _("Years selected by default on the comparison page.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="home_top_category_limit" class="form-label">{{ _("Home top category limit") }}</label>
+                            <input id="home_top_category_limit" class="form-control" type="number" min="1" name="home_top_category_limit" value="{{ home_top_category_limit }}">
+                            <div class="form-text">{{ _("Top spending categories shown on the home page.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="merchant_table_limit" class="form-label">{{ _("Merchant table limit") }}</label>
+                            <input id="merchant_table_limit" class="form-control" type="number" min="1" name="merchant_table_limit" value="{{ merchant_table_limit }}">
+                            <div class="form-text">{{ _("Merchant rows shown in comparison summaries.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="rule_preview_limit" class="form-label">{{ _("Rule preview limit") }}</label>
+                            <input id="rule_preview_limit" class="form-control" type="number" min="1" name="rule_preview_limit" value="{{ rule_preview_limit }}">
+                            <div class="form-text">{{ _("Matching transactions shown while previewing rules.") }}</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <div class="settings-section-header">
+                    <h5 class="settings-section-title">{{ _("Categorization") }}</h5>
+                    <div class="settings-section-help">{{ _("Category defaults and automated categorization thresholds.") }}</div>
+                </div>
+
+                <div class="settings-grid settings-grid-wide">
+                    <div class="settings-field">
+                        <label for="unknown_category" class="form-label">{{ _("Unknown category name") }}</label>
+                        <input id="unknown_category" class="form-control" type="text" name="unknown_category" value="{{ unknown_category }}">
+                        <div class="form-text">{{ _("Fallback category used when no rule or accepted LLM suggestion applies.") }}</div>
+                    </div>
+                </div>
+
+                <div class="settings-subsection">
+                    <h6 class="settings-subsection-title">{{ _("LLM settings") }}</h6>
+                    <div class="settings-subsection-help">{{ _("Thresholds and model used for automated category suggestions.") }}</div>
+                    <div class="settings-grid settings-grid-mixed">
+                        <div class="settings-field">
+                            <label for="llm_confidence_threshold" class="form-label">{{ _("LLM confidence threshold") }}</label>
+                            <input id="llm_confidence_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="llm_confidence_threshold" value="{{ llm_confidence_threshold }}">
+                            <div class="form-text">{{ _("Minimum confidence required to accept a suggested category.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="verify_threshold" class="form-label">{{ _("Verify threshold") }}</label>
+                            <input id="verify_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="verify_threshold" value="{{ verify_threshold }}">
+                            <div class="form-text">{{ _("Accepted categories below this confidence stay marked for review.") }}</div>
+                        </div>
+
+                        <div class="settings-field settings-field-model">
+                            <label for="openai_model" class="form-label">{{ _("OpenAI model") }}</label>
+                            <div class="input-group">
+                                <input id="openai_model" class="form-control" type="text" name="openai_model" value="{{ openai_model }}" placeholder="gpt-4o-mini">
+                                <button
+                                    class="btn btn-outline-secondary"
+                                    type="submit"
+                                    formaction="{{ url_for('settings_page.validate_openai_model') }}"
+                                    formmethod="post"
+                                >
+                                    <i class="bi bi-check-circle" aria-hidden="true"></i>{{ _("Validate") }}
+                                </button>
+                            </div>
+                            <div class="form-text">{{ _("Defaults to the model configured in config.ini. Validation checks whether this model is returned by the OpenAI models API for your API key.") }}</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <div class="settings-section-header">
+                    <h5 class="settings-section-title">{{ _("Recurrence detection") }}</h5>
+                    <div class="settings-section-help">{{ _("Rules for identifying repeated transactions.") }}</div>
+                </div>
+
+                <div class="settings-grid settings-grid-compact">
+                    <div class="settings-field">
+                        <label for="recurrence_minimum_occurrences" class="form-label">{{ _("Minimum occurrences") }}</label>
+                        <input id="recurrence_minimum_occurrences" class="form-control" type="number" min="1" name="recurrence_minimum_occurrences" value="{{ recurrence_minimum_occurrences }}">
+                        <div class="form-text">{{ _("Default: 3 distinct months before a pattern is shown.") }}</div>
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="recurrence_date_tolerance_days" class="form-label">{{ _("Date tolerance days") }}</label>
+                        <input id="recurrence_date_tolerance_days" class="form-control" type="number" min="1" name="recurrence_date_tolerance_days" value="{{ recurrence_date_tolerance_days }}">
+                        <div class="form-text">{{ _("Default: 5 days around the expected date.") }}</div>
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="recurrence_amount_tolerance_absolute" class="form-label">{{ _("Absolute amount tolerance") }}</label>
+                        <input id="recurrence_amount_tolerance_absolute" class="form-control" type="number" min="0" step="0.01" name="recurrence_amount_tolerance_absolute" value="{{ recurrence_amount_tolerance_absolute }}">
+                        <div class="form-text">{{ _("Default: 10 dollars minimum tolerance.") }}</div>
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="recurrence_amount_tolerance_percent" class="form-label">{{ _("Amount tolerance percent") }}</label>
+                        <input id="recurrence_amount_tolerance_percent" class="form-control" type="number" min="0" max="1" step="0.01" name="recurrence_amount_tolerance_percent" value="{{ recurrence_amount_tolerance_percent }}">
+                        <div class="form-text">{{ _("Default: 0.15, or 15% of the typical amount.") }}</div>
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="recurrence_missed_cycles_before_inactive" class="form-label">{{ _("Missed cycles before inactive") }}</label>
+                        <input id="recurrence_missed_cycles_before_inactive" class="form-control" type="number" min="1" name="recurrence_missed_cycles_before_inactive" value="{{ recurrence_missed_cycles_before_inactive }}">
+                        <div class="form-text">{{ _("Default: 2. Reserved for future inactive detection.") }}</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <div class="settings-section-header">
+                    <h5 class="settings-section-title">{{ _("Statements") }}</h5>
+                    <div class="settings-section-help">{{ _("Statement import type names and parser mappings.") }}</div>
+                </div>
+
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <label class="form-label mb-0" for="statement-types-table">{{ _("Statement types") }}</label>
+                    <button class="btn btn-sm btn-outline-primary" type="button" data-add-statement-type>
+                        <i class="bi bi-plus-circle" aria-hidden="true"></i>{{ _("Add type") }}
+                    </button>
+                </div>
+                <div class="table-responsive statement-types-editor">
+                    <table id="statement-types-table" class="table table-hover align-middle mb-0" data-statement-types-table data-no-row-select data-no-export>
+                        <thead>
+                            <tr>
+                                <th>{{ _("Name") }}</th>
+                                <th>{{ _("Statement type") }}</th>
+                                <th>{{ _("Import behavior") }}</th>
+                                <th>{{ _("Default account role") }}</th>
+                                <th class="text-end"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for statement_type in statement_types %}
+                            <tr>
+                                <td>
+                                    <input type="hidden" name="statement_type_ids" value="{{ statement_type['id'] }}">
+                                    <input class="form-control" type="text" name="statement_type_names" value="{{ statement_type['name'] }}" placeholder="{{ _('Credit card') }}">
+                                    <div class="form-text">{{ _("Names appear in upload and statement history.") }}</div>
+                                </td>
+                                <td>
+                                    <select class="form-select" name="statement_type_parser_types">
+                                        {% for parser_type, label in statement_type_parser_types.items() %}
+                                            <option value="{{ parser_type }}" {% if statement_type["parser_type"] == parser_type %}selected{% endif %}>{{ _(label) }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">{{ _("Choose how imported rows are interpreted.") }}</div>
+                                </td>
+                                <td>
+                                    <select class="form-select" name="statement_type_import_modes">
+                                        {% for import_mode, label in statement_import_modes.items() %}
+                                            <option value="{{ import_mode }}" {% if statement_type["import_mode"] == import_mode %}selected{% endif %}>{{ _(label) }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">{{ _("Choose whether uploads create ledger rows or enrich existing rows.") }}</div>
+                                </td>
+                                <td>
+                                    <select class="form-select" name="statement_type_default_account_types">
+                                        {% for account_type, label in account_types.items() %}
+                                            <option value="{{ account_type }}" {% if statement_type["default_account_type"] == account_type %}selected{% endif %}>{{ _(label) }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">{{ _("Default role for accounts created from this statement type.") }}</div>
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-outline-danger" type="button" data-remove-statement-type aria-label="{{ _('Remove') }}" title="{{ _('Remove') }}">
+                                        <i class="bi bi-trash" aria-hidden="true"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div class="settings-actions d-flex gap-2">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-save" aria-hidden="true"></i>{{ _("Save settings") }}</button>
+                <a class="btn btn-outline-secondary" href="/settings"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Reset form") }}</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

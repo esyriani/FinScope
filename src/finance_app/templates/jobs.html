@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set page = page | default(1) %}
+{% set page_size = page_size | default(jobs | length) %}
+{% set total_count = total_count | default(jobs | length) %}
+{% set total_pages = total_pages | default(1) %}
+{% set page_start = page_start | default(1 if jobs else 0) %}
+{% set page_end = page_end | default(jobs | length) %}
+
+{% macro jobs_pagination(label) %}
+{% if total_pages > 1 %}
+<nav aria-label="{{ label }}">
+    <ul class="pagination mb-0">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('jobs.jobs', page=page - 1) }}">{{ _("Previous") }}</a>
+        </li>
+
+        {% for page_number in range(1, total_pages + 1) %}
+            {% if page_number == 1 or page_number == total_pages or (page_number >= page - 2 and page_number <= page + 2) %}
+                <li class="page-item {% if page_number == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('jobs.jobs', page=page_number) }}">{{ page_number }}</a>
+                </li>
+            {% elif page_number == page - 3 or page_number == page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('jobs.jobs', page=page + 1) }}">{{ _("Next") }}</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endmacro %}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h2 class="mb-1">{{ _("Background jobs") }}</h2>
+        <p class="text-muted mb-0">{{ _("Long-running imports and categorization jobs run here while the app stays usable.") }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>{{ _("Refresh") }}</a>
+</div>
+
+<div data-ajax-refresh-target="jobs-actions">
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">
+                {{ _(message) }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card">
+    {% if jobs %}
+        <div class="card-body border-bottom">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="text-muted">
+                    {{ _("Showing {start}-{end} of {total} jobs", start=page_start, end=page_end, total=total_count) }}
+                </div>
+
+                {{ jobs_pagination(_("Job pages")) }}
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>{{ _("Job") }}</th>
+                            <th>{{ _("Status") }}</th>
+                            <th>{{ _("Created") }}</th>
+                            <th>{{ _("Started") }}</th>
+                            <th>{{ _("Finished") }}</th>
+                            <th>{{ _("Result") }}</th>
+                            <th class="text-end">{{ _("Actions") }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in jobs %}
+                            <tr>
+                                <td>{{ job.label }}</td>
+                                <td>
+                                    <span class="badge text-bg-{% if job.status == 'completed' %}success{% elif job.status == 'failed' %}danger{% elif job.status == 'running' %}warning{% else %}secondary{% endif %}">
+                                        {{ job.status }}
+                                    </span>
+                                </td>
+                                <td>{{ job.created_at }}</td>
+                                <td>{{ job.started_at or "" }}</td>
+                                <td>{{ job.finished_at or "" }}</td>
+                                <td>
+                                    {% if job.error %}
+                                        <span class="text-danger">{{ job.error }}</span>
+                                    {% elif job.result %}
+                                        {{ job.result }}
+                                    {% endif %}
+                                    {% if job.undo_error %}
+                                        <div class="text-danger small">{{ job.undo_error }}</div>
+                                    {% endif %}
+                                    {% if job.undo_status == "undone" %}
+                                        <div class="text-muted small">
+                                            Undone {{ job.undone_at }}{% if job.undo_result %}: {{ job.undo_result }}{% endif %}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% set undo_title = _("Undo job") %}
+                                    {% if job.undo_status == "undone" %}
+                                        {% set undo_title = _("Already undone") %}
+                                    {% elif job.status in ["queued", "running"] %}
+                                        {% set undo_title = _("Available after the job finishes") %}
+                                    {% elif job.undo_status == "unavailable" %}
+                                        {% set undo_title = _("Nothing to undo") %}
+                                    {% endif %}
+
+                                    <button
+                                        class="btn btn-sm btn-outline-danger btn-icon-only"
+                                        type="button"
+                                        {% if job.can_undo %}
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#undo-job-{{ job.id }}"
+                                        {% else %}
+                                            disabled
+                                        {% endif %}
+                                        aria-label="{{ _('Undo job {label}', label=job.label) }}"
+                                        title="{{ undo_title }}"
+                                        data-bs-tooltip
+                                    >
+                                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="table-pagination-footer d-flex justify-content-end">
+            {{ jobs_pagination(_("Job pages bottom")) }}
+        </div>
+        {% endif %}
+    {% else %}
+        <div class="card-body p-0">
+            <div class="p-4 text-muted">{{ _("No background jobs yet.") }}</div>
+        </div>
+    {% endif %}
+</div>
+
+{% for job in jobs %}
+    {% if job.can_undo %}
+        <div class="modal fade" id="undo-job-{{ job.id }}" tabindex="-1" aria-labelledby="undo-job-{{ job.id }}-title" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form method="post" action="{{ url_for('jobs.undo_job', job_id=job.id) }}" data-ajax-refresh-form>
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="next" value="{{ request.full_path }}">
+                            <div class="modal-header">
+                            <h5 class="modal-title" id="undo-job-{{ job.id }}-title">{{ _("Undo job") }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>{{ _("Undo") }} <strong>{{ job.label }}</strong>?</p>
+                            <p class="mb-0 text-danger">
+                                {{ _("This will remove data created by the job and restore transaction values it changed.") }}
+                                {{ _("This action cannot be undone.") }}
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                            <button class="btn btn-outline-danger" type="submit"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Undo job") }}</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endfor %}
+</div>
+{% endblock %}

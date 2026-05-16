@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="{{ ui_language }}" data-bs-theme="{{ ui_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <title>FinScope</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/png" href="{{ static_asset('img/favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ static_asset('img/favicon.png') }}">
+
+    <script>
+        window.financeLocale = {{ ui_locale | tojson }};
+        window.financeI18n = {{ client_i18n | tojson }};
+        window.financeTranslate = function(message, variables) {
+            const template = (window.financeI18n && window.financeI18n[message]) || message;
+            return Object.entries(variables || {}).reduce(
+                (result, entry) => result.replaceAll(`{${entry[0]}}`, String(entry[1])),
+                template
+            );
+        };
+        if (localStorage.getItem("finance.sidebarCollapsed") === "true") {
+            document.documentElement.classList.add("sidebar-collapsed");
+        }
+        document.documentElement.setAttribute(
+            "data-bs-theme",
+            "{{ 'dark' if ui_theme == 'dark' else 'light' }}"
+        );
+    </script>
+    <link href="{{ static_asset('vendor/bootstrap/5.3.3/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ static_asset('vendor/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ static_asset('vendor/flatpickr/4.6.13/flatpickr.min.css') }}">
+    <link rel="stylesheet" href="{{ static_asset('vendor/flatpickr/4.6.13/plugins/monthSelect/style.css') }}">
+    {% set stylesheet_files = [
+        'css/base.css',
+        'css/home-dashboard.css',
+        'css/comparison.css',
+        'css/calendar-recurring.css',
+        'css/tables.css',
+        'css/rules-list.css',
+        'css/settings.css',
+        'css/rule-forms.css',
+        'css/review.css',
+        'css/tag-multiselect.css',
+        'css/exports.css',
+        'css/responsive.css'
+    ] %}
+    {% for stylesheet_file in stylesheet_files %}
+    <link rel="stylesheet" href="{{ static_asset(stylesheet_file) }}">
+    {% endfor %}
+</head>
+<body>
+<div class="app-layout">
+    <aside class="sidebar">
+        <div class="sidebar-top">
+            <a class="brand {% if request.path == '/' %}active{% endif %}" href="/" aria-label="{{ _('Home') }}">
+                <div class="brand-mark" aria-hidden="true">
+                    <img src="{{ static_asset('img/favicon.png') }}" alt="">
+                </div>
+                <div class="brand-copy">
+                    <div class="brand-title">FinScope</div>
+                    <div class="brand-subtitle">{{ _("Personal finances") }}</div>
+                </div>
+            </a>
+
+            <button
+                class="sidebar-toggle"
+                type="button"
+                data-sidebar-toggle
+                aria-label="{{ _('Toggle sidebar') }}"
+                aria-expanded="true"
+                title="{{ _('Toggle sidebar') }}"
+                data-bs-tooltip
+            >
+                <span></span>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="{{ _('Primary navigation') }}">
+            <div class="nav-group">
+                <div class="nav-group-label">{{ _("Overview") }}</div>
+                <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/" title="{{ _('Home') }}"><i class="bi bi-house-door" aria-hidden="true"></i><span>{{ _("Home") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/dashboard') %}active{% endif %}" href="/dashboard" title="{{ _('Dashboard') }}"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>{{ _("Dashboard") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/comparison') %}active{% endif %}" href="/comparison" title="{{ _('Comparison') }}"><i class="bi bi-layout-split" aria-hidden="true"></i><span>{{ _("Comparison") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/calendar') %}active{% endif %}" href="/calendar" title="{{ _('Calendar') }}"><i class="bi bi-calendar3" aria-hidden="true"></i><span>{{ _("Calendar") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/recurring') %}active{% endif %}" href="/recurring" title="{{ _('Recurring') }}"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>{{ _("Recurring") }}</span></a>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-group-label">{{ _("Management") }}</div>
+                <a class="nav-link {% if request.path.startswith('/upload') %}active{% endif %}" href="/upload" title="{{ _('Upload') }}"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i><span>{{ _("Upload") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/transactions') %}active{% endif %}" href="/transactions" title="{{ _('Transactions') }}"><i class="bi bi-receipt" aria-hidden="true"></i><span>{{ _("Transactions") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/review') %}active{% endif %}" href="/review" title="{{ _('Review') }}"><i class="bi bi-check2-square" aria-hidden="true"></i><span>{{ _("Review") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/rules') %}active{% endif %}" href="/rules" title="{{ _('Rules') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Rules") }}</span></a>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-group-label">{{ _("Admin") }}</div>
+                <a class="nav-link {% if request.path.startswith('/jobs') %}active{% endif %}" href="/jobs" title="{{ _('Jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i><span>{{ _("Jobs") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/taxonomy') %}active{% endif %}" href="/taxonomy" title="{{ _('Categories') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Categories") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/settings') %}active{% endif %}" href="/settings" title="{{ _('Settings') }}"><i class="bi bi-gear" aria-hidden="true"></i><span>{{ _("Settings") }}</span></a>
+            </div>
+        </nav>
+    </aside>
+
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<script src="{{ static_asset('vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ static_asset('vendor/flatpickr/4.6.13/flatpickr.min.js') }}"></script>
+<script src="{{ static_asset('vendor/flatpickr/4.6.13/plugins/monthSelect/index.js') }}"></script>
+{% set script_files = [
+    'js/core.js',
+    'js/settings.js',
+    'js/upload.js',
+    'js/rules.js',
+    'js/review.js',
+    'js/dashboard.js',
+    'js/tables.js',
+    'js/dates.js',
+    'js/calendar.js',
+    'js/recurring.js',
+    'js/exports.js',
+    'js/tag-multiselect.js',
+    'js/ajax-actions.js'
+] %}
+{% for script_file in script_files %}
+<script src="{{ static_asset(script_file) }}"></script>
+{% endfor %}
+</body>
+</html>

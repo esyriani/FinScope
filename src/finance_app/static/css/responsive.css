@@ -1,0 +1,119 @@
+@media (max-width: 1100px) {
+    .metric-grid,
+    .dashboard-grid,
+    .quality-metric-grid,
+    .status-strip,
+    .quick-links,
+    .home-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboard-wide {
+        grid-column: auto;
+    }
+
+    .calendar-control-row {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "categories"
+            "tags"
+            "actions"
+            "navigation";
+    }
+
+    .calendar-filter-actions {
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 850px) {
+    .app-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        position: static;
+    }
+
+    .content {
+        padding: 1rem;
+    }
+
+    .page-header,
+    .period-form,
+    .home-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .metric-grid,
+    .dashboard-grid,
+    .quality-metric-grid,
+    .status-strip,
+    .quick-links,
+    .home-grid,
+    .home-facts {
+        grid-template-columns: 1fr;
+    }
+
+    .theme-mode-options {
+        grid-template-columns: 1fr;
+    }
+
+    .rule-summary > div,
+    .quality-panel-head,
+    .rule-form-row,
+    .rule-keyword-row {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
+
+    .rule-choice-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .amount-rule-modes,
+    .amount-range-fields,
+    .rule-preview-row,
+    .review-example {
+        grid-template-columns: 1fr;
+    }
+
+    .review-example-description {
+        white-space: normal;
+    }
+
+    .calendar-month-controls,
+    .calendar-filter-actions,
+    .filter-actions {
+        align-items: stretch;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .filter-actions .btn {
+        min-width: 0;
+    }
+
+    .calendar-month-field {
+        grid-column: 1 / -1;
+    }
+
+    .sidebar-collapsed .app-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar-collapsed .brand-copy,
+    .sidebar-collapsed .sidebar .nav-link span {
+        display: block;
+    }
+
+    .sidebar-collapsed .sidebar-top {
+        align-items: center;
+        flex-direction: row;
+    }
+
+    .sidebar-collapsed .sidebar .nav-link::after {
+        display: none;
+    }
+}

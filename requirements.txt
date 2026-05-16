@@ -1,0 +1,7 @@
+Flask
+pypdf
+openai
+pytest
+pytest-cov
+SQLAlchemy
+PyMySQL

@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
+
+{% block content %}
+{% set page = page | default(1) %}
+{% set page_size = page_size | default(groups | length) %}
+{% set total_count = total_count | default(groups | length) %}
+{% set total_pages = total_pages | default(1) %}
+{% set page_start = page_start | default(1 if groups else 0) %}
+{% set page_end = page_end | default(groups | length) %}
+{% set summary = summary | default({}) %}
+{% set sort = sort | default("review_set") %}
+{% set direction = direction | default("desc") %}
+{% set review_page_url = page_url | default(none) %}
+{% set review_sort_url = sort_url | default(none) %}
+{% set tag_options = tag_options | default([]) %}
+{% set category_descriptions = category_descriptions | default({}) %}
+{% set merchant_search = merchant_search | default("") %}
+
+{% macro review_pagination(label, review_page_url) %}
+{% if total_pages > 1 %}
+<nav aria-label="{{ label }}">
+    <ul class="pagination mb-0">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ review_page_url(page - 1) if review_page_url else url_for('review.review', page=page - 1) }}">{{ _("Previous") }}</a>
+        </li>
+
+        {% for page_number in range(1, total_pages + 1) %}
+            {% if page_number == 1 or page_number == total_pages or (page_number >= page - 2 and page_number <= page + 2) %}
+                <li class="page-item {% if page_number == page %}active{% endif %}">
+                    <a class="page-link" href="{{ review_page_url(page_number) if review_page_url else url_for('review.review', page=page_number) }}">{{ page_number }}</a>
+                </li>
+            {% elif page_number == page - 3 or page_number == page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ review_page_url(page + 1) if review_page_url else url_for('review.review', page=page + 1) }}">{{ _("Next") }}</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endmacro %}
+
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Review categories") }}</h2>
+        <p class="text-muted mb-0">{{ _("Grouped active transactions waiting for category review.") }}</p>
+    </div>
+    <div class="home-actions">
+        <a class="btn btn-outline-secondary" href="{{ url_for('transactions.transactions', review='needs_review', period='all') }}"><i class="bi bi-receipt" aria-hidden="true"></i>{{ _("Transactions") }}</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i>{{ _("Jobs") }}</a>
+    </div>
+</div>
+
+<div data-ajax-refresh-target="review-actions">
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">
+                {{ _(message) }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <input type="hidden" name="direction" value="{{ direction }}">
+            {% for key in ungrouped_keys %}
+                <input type="hidden" name="ungroup" value="{{ key }}">
+            {% endfor %}
+
+            <div class="col-md-6">
+                <label class="form-label" for="review-merchant">{{ _("Merchant") }}</label>
+                <input
+                    id="review-merchant"
+                    class="form-control"
+                    type="text"
+                    name="merchant"
+                    placeholder="{{ _('Search merchant') }}"
+                    value="{{ merchant_search }}"
+                >
+            </div>
+
+            <div class="col-md-3 ms-md-auto filter-actions">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('review.review') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="metric-grid mb-4">
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Groups") }}</div>
+        <div class="metric-value">{{ summary.group_count or 0 }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Transactions") }}</div>
+        <div class="metric-value">{{ summary.transaction_count or 0 }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Largest group") }}</div>
+        <div class="metric-value">{{ summary.largest_group_count or 0 }}</div>
+        {% if summary.largest_group_key %}
+            <div class="metric-detail">{{ summary.largest_group_key }}</div>
+        {% endif %}
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Review amount") }}</div>
+        <div class="metric-value">{{ (summary.review_amount or 0) | moneyfmt }}</div>
+    </div>
+</div>
+
+{% if groups %}
+<div class="card">
+    <div class="card-body border-bottom">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="text-muted">
+                {{ _("Showing {start}-{end} of {total} review sets", start=page_start, end=page_end, total=total_count) }}
+            </div>
+
+            {{ review_pagination(_("Review group pages"), review_page_url) }}
+        </div>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>
+                            <a class="sort-link" href="{{ review_sort_url('merchant') if review_sort_url else url_for('review.review', sort='merchant', direction='asc') }}">
+                                <span>{{ _("Merchant") }}</span>{% if sort == "merchant" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                            </a>
+                        </th>
+                        <th>
+                            <a class="sort-link" href="{{ review_sort_url('review_set') if review_sort_url else url_for('review.review', sort='review_set', direction='desc') }}">
+                                <span>{{ _("Review set") }}</span>{% if sort == "review_set" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                            </a>
+                        </th>
+                        <th>{{ _("Examples") }}</th>
+                        <th class="text-end">{{ _("Action") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in groups %}
+                    <tr>
+                        <td>
+                            <div class="review-group-merchant">{{ group.display_label }}</div>
+                            {% if group.is_ungrouped %}
+                                <div class="text-muted small">{{ _("Split from merchant contains {merchant}", merchant=group.merchant_key) }}</div>
+                            {% else %}
+                                <div class="text-muted small">{{ _("Rule: merchant contains {merchant}", merchant=group.merchant_key) }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="review-set-summary">
+                                <strong>{{ group.count }} transaction{{ "" if group.count == 1 else "s" }}</strong>
+                                <span>{{ group.first_date | datefmt }}{% if group.first_date != group.last_date %} to {{ group.last_date | datefmt }}{% endif %}</span>
+                                <span>{{ group.total_amount | moneyfmt }} impact</span>
+                            </div>
+                            <div class="text-muted small">{{ group.categories | join(", ") }}</div>
+                        </td>
+                        <td>
+                            <div class="review-example-list">
+                                {% for tx in group.examples %}
+                                    <div class="review-example">
+                                        <div>
+                                            <div class="review-example-description">{{ tx.description }}</div>
+                                            <div class="text-muted small">{{ tx.tx_date | datefmt }} / {{ tx.account_name or "Personal" }}</div>
+                                        </div>
+                                        <strong>{{ tx.amount | moneyfmt }}</strong>
+                                    </div>
+                                {% endfor %}
+                                {% if group.count > group.examples | length %}
+                                    <div class="text-muted small">+{{ group.count - (group.examples | length) }} more</div>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="text-end">
+                            <div class="action-cluster justify-content-end">
+                                {% if group.is_ungrouped %}
+                                    <a class="btn btn-sm btn-outline-secondary" href="{{ group.regroup_url }}">
+                                        <i class="bi bi-collection" aria-hidden="true"></i>{{ _("Regroup") }}
+                                    </a>
+                                {% elif group.ungroup_url %}
+                                    <a class="btn btn-sm btn-outline-secondary" href="{{ group.ungroup_url }}">
+                                        <i class="bi bi-diagram-3" aria-hidden="true"></i>{{ _("Ungroup") }}
+                                    </a>
+                                {% endif %}
+                                <button
+                                    class="btn btn-sm btn-primary"
+                                    type="button"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#review-group-{{ loop.index }}"
+                                >
+                                    <i class="bi bi-check2-square" aria-hidden="true"></i>{{ _("Review") }}
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="table-pagination-footer d-flex justify-content-end">
+        {{ review_pagination(_("Review group pages bottom"), review_page_url) }}
+    </div>
+    {% endif %}
+</div>
+
+{% for group in groups %}
+{% set review_group_index = loop.index %}
+<div class="modal fade" id="review-group-{{ review_group_index }}" tabindex="-1" aria-labelledby="review-group-{{ review_group_index }}-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form class="review-modal-form" method="post" action="{{ url_for('review.apply_review_group') }}" data-ajax-refresh-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="merchant_key" value="{{ group.merchant_key }}">
+                <input type="hidden" name="transaction_id" value="{{ group.transaction_id or '' }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="review-group-{{ review_group_index }}-title">{{ _(group.modal_title) }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body transaction-rule-modal">
+                    <dl class="rule-summary">
+                        <div>
+                            <dt>{{ _("Description") if group.is_ungrouped else _("Merchant") }}</dt>
+                            <dd>{{ group.display_label }}</dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Transactions") }}</dt>
+                            <dd>{{ group.count }}</dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Impact") }}</dt>
+                            <dd>{{ group.total_amount | moneyfmt }}</dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Category source") }}</dt>
+                            <dd>
+                                {% for source in group.category_source_badges %}
+                                    <span class="badge {{ source.class }}">{{ _(source.label) }}</span>
+                                {% endfor %}
+                                {% if group.transactions | length == 1 and group.transactions[0].category_confidence_label %}
+                                    <span class="badge text-bg-secondary">{{ group.transactions[0].category_confidence_label }}</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    {% if not group.is_ungrouped and group.count > 1 %}
+                    <div class="review-transaction-selector" data-review-transaction-selector>
+                        <button
+                            class="btn btn-sm btn-outline-secondary"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#review-group-{{ review_group_index }}-transactions"
+                            aria-expanded="false"
+                            aria-controls="review-group-{{ review_group_index }}-transactions"
+                        >
+                            <i class="bi bi-list-check" aria-hidden="true"></i>{{ _("Show all transactions") }}
+                        </button>
+
+                        <div class="collapse" id="review-group-{{ review_group_index }}-transactions">
+                            <div class="table-responsive review-transaction-list">
+                                <table class="table table-sm align-middle mb-0" data-no-export data-no-row-select>
+                                    <thead>
+                                        <tr>
+                                            <th class="review-transaction-select">
+                                                <span class="visually-hidden">{{ _("Select") }}</span>
+                                            </th>
+                                            <th>{{ _("Date") }}</th>
+                                            <th>{{ _("Description") }}</th>
+                                            <th>{{ _("Account") }}</th>
+                                            <th>{{ _("Category") }}</th>
+                                            <th>{{ _("Source") }}</th>
+                                            <th class="text-end">{{ _("Amount") }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for tx in group.transactions %}
+                                        <tr>
+                                            <td class="review-transaction-select">
+                                                <input
+                                                    class="form-check-input"
+                                                    type="checkbox"
+                                                    name="transaction_ids"
+                                                    id="review-group-{{ review_group_index }}-tx-{{ tx.id }}"
+                                                    value="{{ tx.id }}"
+                                                    data-review-transaction-checkbox
+                                                >
+                                                <label class="visually-hidden" for="review-group-{{ review_group_index }}-tx-{{ tx.id }}">{{ _("Select") }} {{ tx.description }}</label>
+                                            </td>
+                                            <td>{{ tx.tx_date | datefmt }}</td>
+                                            <td>
+                                                <div class="review-transaction-description">{{ tx.description }}</div>
+                                            </td>
+                                            <td>{{ tx.account_name or _("Personal") }}</td>
+                                            <td>{{ tx.category or unknown_category }}</td>
+                                            <td>
+                                                <span class="badge {{ tx.category_source_badge_class }}">{{ _(tx.category_source_label) }}</span>
+                                                {% if tx.category_confidence_label %}
+                                                    <span class="badge text-bg-secondary">{{ tx.category_confidence_label }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end">{{ tx.amount | moneyfmt }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="review-selection-status text-muted small" data-review-selection-status>
+                            {{ _("No transactions selected. The category will apply to the whole group.") }}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {{ rule_category_control("review-rule-" ~ review_group_index, category_options, unknown_category, category_descriptions=category_descriptions) }}
+                    {{ rule_tag_control("review-rule-" ~ review_group_index, tag_options) }}
+                    {{ rule_save_mode_control(
+                        "review-rule-" ~ review_group_index,
+                        "create_rule",
+                        "1",
+                        "0",
+                        "Rule creation",
+                        "Save rule",
+                        "Use the options below for future matches",
+                        "This transaction only" if group.is_ungrouped else "This group only",
+                        "Do not save a rule",
+                        group.rule_save_default
+                    ) }}
+                    {{ rule_keyword_control("review-rule-" ~ review_group_index, group.rule_keyword) }}
+
+                    {{ amount_rule_control("review-rule-" ~ review_group_index, group.default_amount_min, group.default_amount_max) }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i><span data-review-submit-label>{{ _(group.submit_label) }}</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    {% if merchant_search %}
+        {{ _("No review groups match this merchant search.") }}
+    {% else %}
+        {{ _("No active transactions need category review.") }}
+    {% endif %}
+</div>
+{% endif %}
+</div>
+{% endblock %}

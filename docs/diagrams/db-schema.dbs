@@ -1,0 +1,802 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<project name="Sqlite" database="Sqlite" id="6888e5d5-d090-450d-a64e-33a401e7778b" >
+	<schema name="Default" >
+		<table name="accounts" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="name" type="TEXT" mandatory="y" />
+			<column name="account_type" type="TEXT" mandatory="y" >
+				<defo><![CDATA['checking']]></defo>
+			</column>
+			<column name="paid_from_account_id" type="INTEGER" />
+			<index name="pk_accounts" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="unq_accounts_name" unique="UNIQUE_KEY" >
+				<column name="name" />
+			</index>
+			<constraint name="CK_accounts" type="CHECK" options="" >
+				<string><![CDATA[account_type IN ('checking', 'credit_card', 'savings')]]></string>
+			</constraint>
+			<constraint name="CK_accounts_001" type="CHECK" options="" >
+				<string><![CDATA[TRIM(name) <> '']]></string>
+			</constraint>
+			<fk name="FK_accounts accounts" to_schema="Default" to_table="accounts" delete_action="setNull" >
+				<fk_column name="paid_from_account_id" pk="id" />
+			</fk>
+		</table>
+		<table name="categories" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="name" type="TEXT" mandatory="y" />
+			<column name="description" type="TEXT" />
+			<column name="instruction" type="TEXT" />
+			<column name="created_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_categories" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="idx_categories_name" unique="NORMAL" >
+				<column name="name" />
+			</index>
+			<constraint name="CK_categories" type="CHECK" options="" >
+				<string><![CDATA[TRIM(name) <> '']]></string>
+			</constraint>
+		</table>
+		<table name="category_rule_tags" spec="" >
+			<column name="rule_id" type="INTEGER" mandatory="y" />
+			<column name="tag_id" type="INTEGER" mandatory="y" />
+			<index name="pk_category_rule_tags" unique="PRIMARY_KEY" >
+				<column name="rule_id" />
+				<column name="tag_id" />
+			</index>
+			<index name="idx_category_rule_tags_tag" unique="NORMAL" >
+				<column name="tag_id" />
+			</index>
+			<fk name="FK_category_rule_tags category_rules" to_schema="Default" to_table="category_rules" delete_action="cascade" >
+				<fk_column name="rule_id" pk="id" />
+			</fk>
+			<fk name="FK_category_rule_tags tags" to_schema="Default" to_table="tags" delete_action="cascade" >
+				<fk_column name="tag_id" pk="id" />
+			</fk>
+		</table>
+		<table name="category_rules" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="merchant_id" type="INTEGER" />
+			<column name="keyword" type="TEXT" mandatory="y" />
+			<column name="category" type="TEXT" />
+			<column name="category_id" type="INTEGER" />
+			<column name="amount_min" type="REAL" />
+			<column name="amount_max" type="REAL" />
+			<column name="source" type="TEXT" mandatory="y" >
+				<defo><![CDATA['manual']]></defo>
+			</column>
+			<column name="created_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<column name="ai_approved" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="IFNULL(amount_min, -999999999999.0)" type="TEXT" spec="functional" />
+			<column name="IFNULL(amount_max, -999999999999.0)" type="TEXT" spec="functional" />
+			<column name="IFNULL(amount_min, -999999999999.0)" type="TEXT" spec="functional" />
+			<column name="IFNULL(amount_max, -999999999999.0)" type="TEXT" spec="functional" />
+			<index name="pk_category_rules" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="idx_category_rules_keyword" unique="NORMAL" >
+				<column name="keyword" />
+			</index>
+			<index name="idx_category_rules_merchant" unique="NORMAL" >
+				<column name="merchant_id" />
+			</index>
+			<index name="idx_category_rules_category_id" unique="NORMAL" >
+				<column name="category_id" />
+			</index>
+			<index name="idx_category_rules_keyword_amount_unique" unique="UNIQUE_INDEX" options="WHERE merchant_id IS NULL" >
+				<column name="keyword" />
+				<column name="IFNULL(amount_min, -999999999999.0)" />
+				<column name="IFNULL(amount_max, -999999999999.0)" />
+			</index>
+			<index name="idx_category_rules_merchant_amount_unique" unique="UNIQUE_INDEX" options="WHERE merchant_id IS NOT NULL" >
+				<column name="merchant_id" />
+				<column name="IFNULL(amount_min, -999999999999.0)" />
+				<column name="IFNULL(amount_max, -999999999999.0)" />
+			</index>
+			<index name="idx_category_rules_source_approval" unique="NORMAL" >
+				<column name="source" />
+				<column name="ai_approved" />
+			</index>
+			<constraint name="CK_category_rules" type="CHECK" options="" >
+				<string><![CDATA[TRIM(keyword) <> '']]></string>
+			</constraint>
+			<constraint name="CK_category_rules_001" type="CHECK" options="" >
+				<string><![CDATA[source IN ('automatic', 'default', 'manual')]]></string>
+			</constraint>
+			<constraint name="CK_category_rules_002" type="CHECK" options="" >
+				<string><![CDATA[ai_approved IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="CK_category_rules_003" type="CHECK" options="" >
+				<string><![CDATA[amount_min IS NULL OR amount_max IS NULL OR amount_min <= amount_max]]></string>
+			</constraint>
+			<fk name="FK_category_rules merchants" to_schema="Default" to_table="merchants" delete_action="setNull" >
+				<fk_column name="merchant_id" pk="id" />
+			</fk>
+			<fk name="FK_category_rules categories" to_schema="Default" to_table="categories" delete_action="setNull" >
+				<fk_column name="category_id" pk="id" />
+			</fk>
+		</table>
+		<table name="merchant_aliases" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="merchant_id" type="INTEGER" mandatory="y" />
+			<column name="alias_key" type="TEXT" mandatory="y" />
+			<column name="raw_example" type="TEXT" />
+			<column name="source" type="TEXT" mandatory="y" >
+				<defo><![CDATA['system']]></defo>
+			</column>
+			<column name="confidence" type="TEXT" mandatory="y" >
+				<defo><![CDATA['high']]></defo>
+			</column>
+			<column name="created_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<column name="updated_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_merchant_aliases" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="unq_merchant_aliases_alias_key" unique="UNIQUE_KEY" >
+				<column name="alias_key" />
+			</index>
+			<index name="idx_merchant_aliases_merchant" unique="NORMAL" >
+				<column name="merchant_id" />
+			</index>
+			<constraint name="CK_merchant_aliases" type="CHECK" options="" >
+				<string><![CDATA[TRIM(alias_key) <> '']]></string>
+			</constraint>
+			<constraint name="CK_merchant_aliases_001" type="CHECK" options="" >
+				<string><![CDATA[source IN ('alias', 'fallback', 'import', 'rule', 'system', 'user')]]></string>
+			</constraint>
+			<constraint name="CK_merchant_aliases_002" type="CHECK" options="" >
+				<string><![CDATA[confidence IN ('high', 'low', 'medium')]]></string>
+			</constraint>
+			<fk name="FK_merchant_aliases merchants" to_schema="Default" to_table="merchants" delete_action="cascade" >
+				<fk_column name="merchant_id" pk="id" />
+			</fk>
+		</table>
+		<table name="merchants" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="canonical_key" type="TEXT" mandatory="y" />
+			<column name="system_name" type="TEXT" mandatory="y" />
+			<column name="display_name" type="TEXT" mandatory="y" />
+			<column name="display_name_source" type="TEXT" mandatory="y" >
+				<defo><![CDATA['system']]></defo>
+			</column>
+			<column name="active" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[1]]></defo>
+			</column>
+			<column name="created_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<column name="updated_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_merchants" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="unq_merchants_canonical_key" unique="UNIQUE_KEY" >
+				<column name="canonical_key" />
+			</index>
+			<index name="idx_merchants_display_name" unique="NORMAL" >
+				<column name="display_name" />
+			</index>
+			<constraint name="CK_merchants" type="CHECK" options="" >
+				<string><![CDATA[TRIM(canonical_key) <> '']]></string>
+			</constraint>
+			<constraint name="CK_merchants_001" type="CHECK" options="" >
+				<string><![CDATA[TRIM(system_name) <> '']]></string>
+			</constraint>
+			<constraint name="CK_merchants_002" type="CHECK" options="" >
+				<string><![CDATA[TRIM(display_name) <> '']]></string>
+			</constraint>
+			<constraint name="CK_merchants_003" type="CHECK" options="" >
+				<string><![CDATA[display_name_source IN ('system', 'user')]]></string>
+			</constraint>
+			<constraint name="CK_merchants_004" type="CHECK" options="" >
+				<string><![CDATA[active IN (0, 1)]]></string>
+			</constraint>
+		</table>
+		<table name="recurring_patterns" spec="" >
+			<column name="pattern_key" type="TEXT" mandatory="y" />
+			<column name="merchant_id" type="INTEGER" />
+			<column name="merchant" type="TEXT" mandatory="y" />
+			<column name="type" type="TEXT" mandatory="y" />
+			<column name="user_status" type="TEXT" mandatory="y" >
+				<defo><![CDATA['detected']]></defo>
+			</column>
+			<column name="frequency" type="TEXT" />
+			<column name="expected_day" type="INTEGER" />
+			<column name="typical_amount" type="REAL" />
+			<column name="date_tolerance_days" type="INTEGER" />
+			<column name="amount_tolerance" type="REAL" />
+			<column name="active" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[1]]></defo>
+			</column>
+			<column name="created_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<column name="updated_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_recurring_patterns" unique="PRIMARY_KEY" >
+				<column name="pattern_key" />
+			</index>
+			<index name="idx_recurring_patterns_status" unique="NORMAL" >
+				<column name="user_status" />
+				<column name="active" />
+			</index>
+			<index name="idx_recurring_patterns_merchant_type" unique="UNIQUE_INDEX" options="WHERE merchant_id IS NOT NULL" >
+				<column name="merchant_id" />
+				<column name="type" />
+			</index>
+			<constraint name="CK_recurring_patterns" type="CHECK" options="" >
+				<string><![CDATA[type IN ('income', 'spending')]]></string>
+			</constraint>
+			<constraint name="CK_recurring_patterns_001" type="CHECK" options="" >
+				<string><![CDATA[user_status IN ('confirmed', 'detected', 'edited', 'ignored')]]></string>
+			</constraint>
+			<constraint name="CK_recurring_patterns_002" type="CHECK" options="" >
+				<string><![CDATA[active IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="CK_recurring_patterns_003" type="CHECK" options="" >
+				<string><![CDATA[expected_day IS NULL OR (expected_day >= 1 AND expected_day <= 31)]]></string>
+			</constraint>
+			<constraint name="CK_recurring_patterns_004" type="CHECK" options="" >
+				<string><![CDATA[date_tolerance_days IS NULL OR date_tolerance_days >= 0]]></string>
+			</constraint>
+			<constraint name="CK_recurring_patterns_005" type="CHECK" options="" >
+				<string><![CDATA[amount_tolerance IS NULL OR amount_tolerance >= 0]]></string>
+			</constraint>
+			<constraint name="CK_recurring_patterns_006" type="CHECK" options="" >
+				<string><![CDATA[typical_amount IS NULL OR typical_amount >= 0]]></string>
+			</constraint>
+			<fk name="FK_recurring_patterns merchants" to_schema="Default" to_table="merchants" delete_action="setNull" >
+				<fk_column name="merchant_id" pk="id" />
+			</fk>
+		</table>
+		<table name="settings" spec="" >
+			<column name="value" type="TEXT" mandatory="y" />
+			<constraint name="CK_settings" type="CHECK" options="" >
+				<string><![CDATA[TRIM(key) <> '']]></string>
+			</constraint>
+		</table>
+		<table name="statement_types" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="name" type="TEXT" mandatory="y" />
+			<column name="parser_type" type="TEXT" mandatory="y" >
+				<defo><![CDATA['credit_card']]></defo>
+			</column>
+			<column name="import_mode" type="TEXT" mandatory="y" >
+				<defo><![CDATA['ledger']]></defo>
+			</column>
+			<column name="default_account_type" type="TEXT" mandatory="y" >
+				<defo><![CDATA['checking']]></defo>
+			</column>
+			<column name="active" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[1]]></defo>
+			</column>
+			<column name="created_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_statement_types" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="unq_statement_types_name" unique="UNIQUE_KEY" >
+				<column name="name" />
+			</index>
+			<index name="idx_statement_types_active" unique="NORMAL" >
+				<column name="active" />
+				<column name="name" />
+			</index>
+			<constraint name="CK_statement_types" type="CHECK" options="" >
+				<string><![CDATA[TRIM(name) <> '']]></string>
+			</constraint>
+			<constraint name="CK_statement_types_001" type="CHECK" options="" >
+				<string><![CDATA[parser_type IN ('bank_account', 'credit_card', 'interac_etransfer')]]></string>
+			</constraint>
+			<constraint name="CK_statement_types_002" type="CHECK" options="" >
+				<string><![CDATA[import_mode IN ('enrichment', 'ledger')]]></string>
+			</constraint>
+			<constraint name="CK_statement_types_003" type="CHECK" options="" >
+				<string><![CDATA[default_account_type IN ('checking', 'credit_card', 'savings')]]></string>
+			</constraint>
+			<constraint name="CK_statement_types_004" type="CHECK" options="" >
+				<string><![CDATA[active IN (0, 1)]]></string>
+			</constraint>
+		</table>
+		<table name="statements" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="account_id" type="INTEGER" />
+			<column name="statement_type_id" type="INTEGER" mandatory="y" />
+			<column name="filename" type="TEXT" mandatory="y" />
+			<column name="checksum" type="TEXT" mandatory="y" />
+			<column name="extension" type="TEXT" mandatory="y" >
+				<defo><![CDATA['']]></defo>
+			</column>
+			<column name="interac_direction" type="TEXT" mandatory="y" >
+				<defo><![CDATA['auto']]></defo>
+			</column>
+			<column name="raw_text" type="TEXT" />
+			<column name="import_status" type="TEXT" mandatory="y" >
+				<defo><![CDATA['pending']]></defo>
+			</column>
+			<column name="import_error" type="TEXT" />
+			<column name="import_started_at" type="TEXT" />
+			<column name="import_finished_at" type="TEXT" />
+			<column name="imported_count" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="skipped_count" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="ignored_count" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="llm_candidate_count" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="uploaded_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_statements" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="unq_statements_checksum" unique="UNIQUE_KEY" >
+				<column name="checksum" />
+			</index>
+			<index name="idx_statements_account" unique="NORMAL" >
+				<column name="account_id" />
+			</index>
+			<index name="idx_statements_statement_type" unique="NORMAL" >
+				<column name="statement_type_id" />
+			</index>
+			<index name="idx_statements_uploaded_at" unique="NORMAL" >
+				<column name="uploaded_at" />
+			</index>
+			<constraint name="CK_statements" type="CHECK" options="" >
+				<string><![CDATA[TRIM(filename) <> '']]></string>
+			</constraint>
+			<constraint name="CK_statements_001" type="CHECK" options="" >
+				<string><![CDATA[TRIM(checksum) <> '']]></string>
+			</constraint>
+			<constraint name="CK_statements_002" type="CHECK" options="" >
+				<string><![CDATA[import_status IN ('completed', 'failed', 'pending', 'queued', 'running')]]></string>
+			</constraint>
+			<constraint name="CK_statements_003" type="CHECK" options="" >
+				<string><![CDATA[interac_direction IN ('auto', 'received', 'sent')]]></string>
+			</constraint>
+			<constraint name="CK_statements_004" type="CHECK" options="" >
+				<string><![CDATA[imported_count >= 0]]></string>
+			</constraint>
+			<constraint name="CK_statements_005" type="CHECK" options="" >
+				<string><![CDATA[skipped_count >= 0]]></string>
+			</constraint>
+			<constraint name="CK_statements_006" type="CHECK" options="" >
+				<string><![CDATA[ignored_count >= 0]]></string>
+			</constraint>
+			<constraint name="CK_statements_007" type="CHECK" options="" >
+				<string><![CDATA[llm_candidate_count >= 0]]></string>
+			</constraint>
+			<fk name="FK_statements accounts" to_schema="Default" to_table="accounts" >
+				<fk_column name="account_id" pk="id" />
+			</fk>
+			<fk name="FK_statements statement_types" to_schema="Default" to_table="statement_types" >
+				<fk_column name="statement_type_id" pk="id" />
+			</fk>
+		</table>
+		<table name="tags" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="name" type="TEXT" mandatory="y" />
+			<column name="description" type="TEXT" />
+			<column name="instruction" type="TEXT" />
+			<column name="color" type="TEXT" />
+			<column name="created_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_tags" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="idx_tags_name" unique="NORMAL" >
+				<column name="name" />
+			</index>
+			<constraint name="CK_tags" type="CHECK" options="" >
+				<string><![CDATA[TRIM(name) <> '']]></string>
+			</constraint>
+		</table>
+		<table name="transaction_tags" spec="" >
+			<column name="transaction_id" type="INTEGER" mandatory="y" />
+			<column name="tag_id" type="INTEGER" mandatory="y" />
+			<column name="source" type="TEXT" mandatory="y" >
+				<defo><![CDATA['unknown']]></defo>
+			</column>
+			<column name="rule_id" type="INTEGER" />
+			<column name="assigned_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_transaction_tags" unique="PRIMARY_KEY" >
+				<column name="transaction_id" />
+				<column name="tag_id" />
+			</index>
+			<index name="idx_transaction_tags_tag" unique="NORMAL" >
+				<column name="tag_id" />
+			</index>
+			<constraint name="CK_transaction_tags" type="CHECK" options="" >
+				<string><![CDATA[source IN ('ai', 'manual', 'rule', 'unknown')]]></string>
+			</constraint>
+			<fk name="FK_transaction_tags transactions" to_schema="Default" to_table="transactions" delete_action="cascade" >
+				<fk_column name="transaction_id" pk="id" />
+			</fk>
+			<fk name="FK_transaction_tags tags" to_schema="Default" to_table="tags" delete_action="cascade" >
+				<fk_column name="tag_id" pk="id" />
+			</fk>
+			<fk name="FK_transaction_tags category_rules" to_schema="Default" to_table="category_rules" delete_action="setNull" >
+				<fk_column name="rule_id" pk="id" />
+			</fk>
+		</table>
+		<table name="transactions" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="statement_id" type="INTEGER" />
+			<column name="account_id" type="INTEGER" />
+			<column name="merchant_id" type="INTEGER" />
+			<column name="tx_date" type="TEXT" mandatory="y" />
+			<column name="description" type="TEXT" mandatory="y" />
+			<column name="amount" type="REAL" mandatory="y" />
+			<column name="category" type="TEXT" />
+			<column name="category_id" type="INTEGER" />
+			<column name="needs_review" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="category_source" type="TEXT" mandatory="y" >
+				<defo><![CDATA['unknown']]></defo>
+			</column>
+			<column name="category_confidence" type="REAL" />
+			<column name="category_rule_id" type="INTEGER" />
+			<column name="categorized_at" type="TEXT" />
+			<column name="reviewed_at" type="TEXT" />
+			<column name="ignored" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="transaction_kind" type="TEXT" mandatory="y" >
+				<defo><![CDATA['expense']]></defo>
+			</column>
+			<column name="fingerprint" type="TEXT" mandatory="y" />
+			<column name="created_at" type="TEXT" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_transactions" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="unq_transactions_fingerprint" unique="UNIQUE_KEY" >
+				<column name="fingerprint" />
+			</index>
+			<index name="idx_transactions_date" unique="NORMAL" >
+				<column name="tx_date" />
+			</index>
+			<index name="idx_transactions_category" unique="NORMAL" >
+				<column name="category" />
+			</index>
+			<index name="idx_transactions_category_id" unique="NORMAL" >
+				<column name="category_id" />
+			</index>
+			<index name="idx_transactions_date_category" unique="NORMAL" >
+				<column name="tx_date" />
+				<column name="category" />
+			</index>
+			<index name="idx_transactions_account" unique="NORMAL" >
+				<column name="account_id" />
+			</index>
+			<index name="idx_transactions_merchant" unique="NORMAL" >
+				<column name="merchant_id" />
+			</index>
+			<index name="idx_transactions_amount" unique="NORMAL" >
+				<column name="amount" />
+			</index>
+			<index name="idx_transactions_description" unique="NORMAL" >
+				<column name="description" />
+			</index>
+			<index name="idx_transactions_statement" unique="NORMAL" >
+				<column name="statement_id" />
+			</index>
+			<index name="idx_transactions_dashboard_category_amount" unique="NORMAL" >
+				<column name="category" />
+				<column name="amount" />
+			</index>
+			<index name="idx_transactions_dashboard_date_amount" unique="NORMAL" >
+				<column name="tx_date" />
+				<column name="amount" />
+			</index>
+			<index name="idx_transactions_needs_review" unique="NORMAL" >
+				<column name="needs_review" />
+			</index>
+			<index name="idx_transactions_ignored" unique="NORMAL" >
+				<column name="ignored" />
+			</index>
+			<index name="idx_transactions_category_source" unique="NORMAL" >
+				<column name="category_source" />
+			</index>
+			<index name="idx_transactions_reviewed_at" unique="NORMAL" >
+				<column name="reviewed_at" />
+			</index>
+			<index name="idx_transactions_kind" unique="NORMAL" >
+				<column name="transaction_kind" />
+			</index>
+			<constraint name="CK_transactions" type="CHECK" options="" >
+				<string><![CDATA[TRIM(tx_date) <> '']]></string>
+			</constraint>
+			<constraint name="CK_transactions_001" type="CHECK" options="" >
+				<string><![CDATA[TRIM(description) <> '']]></string>
+			</constraint>
+			<constraint name="CK_transactions_002" type="CHECK" options="" >
+				<string><![CDATA[needs_review IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="CK_transactions_003" type="CHECK" options="" >
+				<string><![CDATA[ignored IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="CK_transactions_004" type="CHECK" options="" >
+				<string><![CDATA[transaction_kind IN ('expense', 'income', 'payment', 'refund', 'transfer')]]></string>
+			</constraint>
+			<constraint name="CK_transactions_005" type="CHECK" options="" >
+				<string><![CDATA[category_source IN ('ai', 'manual', 'rule', 'unknown')]]></string>
+			</constraint>
+			<constraint name="CK_transactions_006" type="CHECK" options="" >
+				<string><![CDATA[category_confidence IS NULL OR (category_confidence >= 0 AND category_confidence <= 1)]]></string>
+			</constraint>
+			<fk name="FK_transactions statements" to_schema="Default" to_table="statements" >
+				<fk_column name="statement_id" pk="id" />
+			</fk>
+			<fk name="FK_transactions accounts" to_schema="Default" to_table="accounts" >
+				<fk_column name="account_id" pk="id" />
+			</fk>
+			<fk name="FK_transactions merchants" to_schema="Default" to_table="merchants" delete_action="setNull" >
+				<fk_column name="merchant_id" pk="id" />
+			</fk>
+			<fk name="FK_transactions categories" to_schema="Default" to_table="categories" delete_action="setNull" >
+				<fk_column name="category_id" pk="id" />
+			</fk>
+			<fk name="FK_transactions category_rules" to_schema="Default" to_table="category_rules" delete_action="setNull" >
+				<fk_column name="category_rule_id" pk="id" />
+			</fk>
+		</table>
+		<trigger name="trg_categories_category_cache_name_au" table="categories" id="7adaaeb6-4d48-4d41-947e-88f1a85bb28d" isSystem="false" >
+			<string><![CDATA[CREATE TRIGGER trg_categories_category_cache_name_au
+        AFTER UPDATE OF name ON categories
+        BEGIN
+            
+            UPDATE transactions
+            SET category = NEW.name
+            WHERE category_id = NEW.id;
+        
+
+
+            UPDATE category_rules
+            SET category = NEW.name
+            WHERE category_id = NEW.id;
+        
+        END]]></string>
+		</trigger>
+		<trigger name="trg_category_rules_category_cache_ai" table="category_rules" id="aa44f61a-9199-4a9f-9c78-49553e239c0c" isSystem="false" >
+			<string><![CDATA[CREATE TRIGGER trg_category_rules_category_cache_ai
+        AFTER INSERT ON category_rules
+        WHEN NEW.category_id IS NOT NULL
+            OR (NEW.category IS NOT NULL AND TRIM(NEW.category) <> '')
+        BEGIN
+            INSERT OR IGNORE INTO categories (name)
+            SELECT TRIM(NEW.category)
+            WHERE NEW.category_id IS NULL
+            AND NEW.category IS NOT NULL
+            AND TRIM(NEW.category) <> '';
+
+            UPDATE category_rules
+            SET category_id = CASE
+                    WHEN NEW.category_id IS NOT NULL THEN NEW.category_id
+                    WHEN NEW.category IS NULL OR TRIM(NEW.category) = '' THEN NULL
+                    ELSE (
+                        SELECT id
+                        FROM categories
+                        WHERE name = TRIM(NEW.category)
+                    )
+                END,
+                category = CASE
+                    WHEN NEW.category_id IS NOT NULL THEN (
+                        SELECT name
+                        FROM categories
+                        WHERE id = NEW.category_id
+                    )
+                    WHEN NEW.category IS NULL OR TRIM(NEW.category) = '' THEN NULL
+                    ELSE TRIM(NEW.category)
+                END
+            WHERE id = NEW.id;
+        END]]></string>
+		</trigger>
+		<trigger name="trg_category_rules_category_cache_category_au" table="category_rules" id="16994301-cfac-474c-b242-53e9dd100d7b" isSystem="false" >
+			<string><![CDATA[CREATE TRIGGER trg_category_rules_category_cache_category_au
+        AFTER UPDATE OF category ON category_rules
+        BEGIN
+            INSERT OR IGNORE INTO categories (name)
+            SELECT TRIM(NEW.category)
+            WHERE NEW.category IS NOT NULL
+            AND TRIM(NEW.category) <> '';
+
+            UPDATE category_rules
+            SET category_id = CASE
+                    WHEN NEW.category IS NULL OR TRIM(NEW.category) = '' THEN NULL
+                    ELSE (
+                        SELECT id
+                        FROM categories
+                        WHERE name = TRIM(NEW.category)
+                    )
+                END,
+                category = CASE
+                    WHEN NEW.category IS NULL OR TRIM(NEW.category) = '' THEN NULL
+                    ELSE TRIM(NEW.category)
+                END
+            WHERE id = NEW.id;
+        END]]></string>
+		</trigger>
+		<trigger name="trg_category_rules_category_cache_category_id_au" table="category_rules" id="493df40f-81bf-4a2b-bf94-ad596b459e45" isSystem="false" >
+			<string><![CDATA[CREATE TRIGGER trg_category_rules_category_cache_category_id_au
+        AFTER UPDATE OF category_id ON category_rules
+        BEGIN
+            UPDATE category_rules
+            SET category = CASE
+                WHEN NEW.category_id IS NULL THEN NULL
+                ELSE (
+                    SELECT name
+                    FROM categories
+                    WHERE id = NEW.category_id
+                )
+            END
+            WHERE id = NEW.id;
+        END]]></string>
+		</trigger>
+		<trigger name="trg_transactions_category_cache_ai" table="transactions" id="3146d116-5759-4539-9dbe-abdb1d134597" isSystem="false" >
+			<string><![CDATA[CREATE TRIGGER trg_transactions_category_cache_ai
+        AFTER INSERT ON transactions
+        WHEN NEW.category_id IS NOT NULL
+            OR (NEW.category IS NOT NULL AND TRIM(NEW.category) <> '')
+        BEGIN
+            INSERT OR IGNORE INTO categories (name)
+            SELECT TRIM(NEW.category)
+            WHERE NEW.category_id IS NULL
+            AND NEW.category IS NOT NULL
+            AND TRIM(NEW.category) <> '';
+
+            UPDATE transactions
+            SET category_id = CASE
+                    WHEN NEW.category_id IS NOT NULL THEN NEW.category_id
+                    WHEN NEW.category IS NULL OR TRIM(NEW.category) = '' THEN NULL
+                    ELSE (
+                        SELECT id
+                        FROM categories
+                        WHERE name = TRIM(NEW.category)
+                    )
+                END,
+                category = CASE
+                    WHEN NEW.category_id IS NOT NULL THEN (
+                        SELECT name
+                        FROM categories
+                        WHERE id = NEW.category_id
+                    )
+                    WHEN NEW.category IS NULL OR TRIM(NEW.category) = '' THEN NULL
+                    ELSE TRIM(NEW.category)
+                END
+            WHERE id = NEW.id;
+        END]]></string>
+		</trigger>
+		<trigger name="trg_transactions_category_cache_category_au" table="transactions" id="5f09962c-1cfd-4180-9eac-4a45cfb2a7cf" isSystem="false" >
+			<string><![CDATA[CREATE TRIGGER trg_transactions_category_cache_category_au
+        AFTER UPDATE OF category ON transactions
+        BEGIN
+            INSERT OR IGNORE INTO categories (name)
+            SELECT TRIM(NEW.category)
+            WHERE NEW.category IS NOT NULL
+            AND TRIM(NEW.category) <> '';
+
+            UPDATE transactions
+            SET category_id = CASE
+                    WHEN NEW.category IS NULL OR TRIM(NEW.category) = '' THEN NULL
+                    ELSE (
+                        SELECT id
+                        FROM categories
+                        WHERE name = TRIM(NEW.category)
+                    )
+                END,
+                category = CASE
+                    WHEN NEW.category IS NULL OR TRIM(NEW.category) = '' THEN NULL
+                    ELSE TRIM(NEW.category)
+                END
+            WHERE id = NEW.id;
+        END]]></string>
+		</trigger>
+		<trigger name="trg_transactions_category_cache_category_id_au" table="transactions" id="5d3d6ede-def4-4a2e-b712-97d911057e0e" isSystem="false" >
+			<string><![CDATA[CREATE TRIGGER trg_transactions_category_cache_category_id_au
+        AFTER UPDATE OF category_id ON transactions
+        BEGIN
+            UPDATE transactions
+            SET category = CASE
+                WHEN NEW.category_id IS NULL THEN NULL
+                ELSE (
+                    SELECT name
+                    FROM categories
+                    WHERE id = NEW.category_id
+                )
+            END
+            WHERE id = NEW.id;
+        END]]></string>
+		</trigger>
+		<trigger name="trg_transactions_kind_after_insert" table="transactions" id="26f8feb2-1901-431b-94c8-86c8eb60ec86" isSystem="false" >
+			<string><![CDATA[CREATE TRIGGER trg_transactions_kind_after_insert
+        AFTER INSERT ON transactions
+        WHEN NEW.transaction_kind = 'expense'
+        AND (
+            NEW.amount < 0
+            OR NEW.category = 'Transfers'
+        )
+        BEGIN
+            UPDATE transactions
+            SET transaction_kind = CASE
+                WHEN NEW.category = 'Transfers' THEN 'transfer'
+                WHEN NEW.amount < 0 THEN 'income'
+                ELSE transaction_kind
+            END
+            WHERE id = NEW.id;
+        END]]></string>
+		</trigger>
+	</schema>
+	<diagram_group name="Default" id="5efe017b-d39a-474c-bb2e-525343b35f94" >
+		<diagram name="Diagram" id="cbc92950-0bb0-484f-816c-daebf3ecff94" show_relation="columns" color="333333" >
+			<entity schema="Default" name="accounts" color="3986C1" x="836" y="741" />
+			<entity schema="Default" name="categories" color="3986C1" x="551" y="228" />
+			<entity schema="Default" name="category_rule_tags" color="3986C1" x="570" y="57" />
+			<entity schema="Default" name="category_rules" color="3986C1" x="285" y="76" >
+				<column name="id" />
+				<column name="merchant_id" />
+				<column name="keyword" />
+				<column name="category" />
+				<column name="category_id" />
+				<column name="amount_min" />
+				<column name="amount_max" />
+				<column name="source" />
+				<column name="created_at" />
+				<column name="ai_approved" />
+			</entity>
+			<entity schema="Default" name="merchant_aliases" color="3986C1" x="380" y="684" />
+			<entity schema="Default" name="merchants" color="3986C1" x="57" y="608" />
+			<entity schema="Default" name="recurring_patterns" color="3986C1" x="57" y="190" />
+			<entity schema="Default" name="settings" color="3986C1" x="95" y="76" />
+			<entity schema="Default" name="statement_types" color="3986C1" x="855" y="380" />
+			<entity schema="Default" name="statements" color="3986C1" x="1121" y="456" />
+			<entity schema="Default" name="tags" color="3986C1" x="969" y="171" />
+			<entity schema="Default" name="transaction_tags" color="3986C1" x="741" y="190" />
+			<entity schema="Default" name="transactions" color="3986C1" x="570" y="475" />
+		</diagram>
+	</diagram_group>
+</project>

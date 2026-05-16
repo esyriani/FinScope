@@ -1,0 +1,333 @@
+.chart-type-toggle {
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    display: inline-grid;
+    gap: 0.2rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0.2rem;
+}
+
+.chart-type-option {
+    align-items: center;
+    border-radius: 6px;
+    color: var(--app-muted);
+    cursor: pointer;
+    display: flex;
+    gap: 0.35rem;
+    justify-content: center;
+    min-height: 2rem;
+    min-width: 4.6rem;
+    padding: 0.35rem 0.55rem;
+    transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.chart-type-option .bi {
+    line-height: 1;
+}
+
+.btn-check:checked + .chart-type-option {
+    background: var(--app-accent);
+    color: #ffffff;
+}
+
+[data-bs-theme="dark"] .btn-check:checked + .chart-type-option {
+    color: #05201c;
+}
+
+.btn-check:focus-visible + .chart-type-option {
+    box-shadow: var(--focus-shadow);
+}
+
+.insight-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.insight-carousel {
+    align-items: center;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.insight-carousel-inner {
+    min-width: 0;
+}
+
+.insight-carousel-control {
+    align-items: center;
+    align-self: center;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    color: var(--app-text);
+    display: grid;
+    height: 2.5rem;
+    justify-content: center;
+    place-items: center;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    width: 2.5rem;
+}
+
+.insight-carousel-control:hover,
+.insight-carousel-control:focus {
+    background: var(--app-accent-soft);
+    border-color: var(--app-accent);
+    color: var(--app-heading);
+}
+
+.insight-carousel-control:focus-visible {
+    box-shadow: var(--focus-shadow);
+    outline: none;
+}
+
+.insight-carousel-control .bi {
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.insight-card {
+    --insight-color: var(--app-accent);
+    --insight-rgb: var(--app-accent-rgb);
+    background:
+        linear-gradient(135deg, rgba(var(--insight-rgb), 0.13), transparent 44%),
+        var(--app-surface);
+    border: 1px solid var(--app-border);
+    border-top: 3px solid var(--insight-color);
+    border-radius: 8px;
+    box-shadow: var(--app-shadow);
+    color: var(--app-text);
+    display: grid;
+    gap: 0.9rem;
+    min-height: 188px;
+    padding: 1rem;
+}
+
+.insight-card-danger {
+    --insight-color: var(--app-danger);
+    --insight-rgb: var(--app-danger-rgb);
+    border-color: rgba(var(--app-danger-rgb), 0.42);
+    border-top-color: var(--app-danger);
+}
+
+.insight-card-success {
+    --insight-color: var(--app-success);
+    --insight-rgb: var(--app-success-rgb);
+    border-color: rgba(var(--app-success-rgb), 0.42);
+    border-top-color: var(--app-success);
+}
+
+.insight-card-warning {
+    --insight-color: var(--app-warning);
+    --insight-rgb: var(--app-warning-rgb);
+}
+
+.insight-card-muted {
+    --insight-color: var(--app-muted);
+    --insight-rgb: 100, 112, 107;
+}
+
+[data-bs-theme="dark"] .insight-card-muted {
+    --insight-rgb: 169, 187, 180;
+}
+
+.insight-top {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.insight-icon {
+    align-items: center;
+    background: rgba(var(--insight-rgb), 0.16);
+    border: 1px solid rgba(var(--insight-rgb), 0.34);
+    border-radius: 8px;
+    color: var(--insight-color);
+    display: grid;
+    flex: 0 0 auto;
+    height: 42px;
+    place-items: center;
+    width: 42px;
+}
+
+.insight-icon .bi {
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+.insight-heading {
+    min-width: 0;
+}
+
+.insight-title {
+    color: var(--app-heading);
+    font-size: 0.98rem;
+    font-weight: 750;
+    line-height: 1.25;
+    margin-top: 0.15rem;
+    overflow-wrap: anywhere;
+}
+
+.insight-focus {
+    align-items: center;
+    display: flex;
+    gap: 0.6rem;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.insight-summary {
+    color: var(--app-heading);
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+}
+
+.insight-badge {
+    background: rgba(var(--insight-rgb), 0.16);
+    border: 1px solid rgba(var(--insight-rgb), 0.34);
+    border-radius: 999px;
+    color: var(--insight-color);
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    font-weight: 800;
+    padding: 0.25rem 0.55rem;
+}
+
+.insight-card-danger .insight-summary,
+.insight-card-danger .insight-current-value,
+.insight-card-danger .insight-stat strong {
+    color: var(--app-danger);
+}
+
+.insight-card-success .insight-summary,
+.insight-card-success .insight-current-value,
+.insight-card-success .insight-stat strong {
+    color: var(--app-success);
+}
+
+.insight-card-danger .insight-badge {
+    background: var(--app-danger);
+    border-color: var(--app-danger);
+    color: #ffffff;
+}
+
+.insight-card-success .insight-badge {
+    background: var(--app-success);
+    border-color: var(--app-success);
+    color: #ffffff;
+}
+
+[data-bs-theme="dark"] .insight-card-success .insight-badge {
+    color: #052e16;
+}
+
+.insight-bars {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.insight-bar-row {
+    align-items: center;
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: 3.8rem minmax(0, 1fr) auto;
+}
+
+.insight-bar-row span,
+.insight-stat span,
+.insight-detail {
+    color: var(--app-muted);
+    font-size: 0.82rem;
+}
+
+.insight-bar-row strong,
+.insight-stat strong {
+    color: var(--app-heading);
+    font-size: 0.86rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.insight-bar-track {
+    background: var(--app-surface-soft);
+    border-radius: 999px;
+    height: 0.48rem;
+    overflow: hidden;
+}
+
+.insight-bar-fill {
+    background: var(--insight-color);
+    border-radius: inherit;
+    display: block;
+    height: 100%;
+}
+
+.insight-bar-fill-prior {
+    opacity: 0.45;
+}
+
+.insight-stat-grid {
+    display: grid;
+    gap: 0.6rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.insight-stat {
+    background: rgba(var(--insight-rgb), 0.1);
+    border: 1px solid rgba(var(--insight-rgb), 0.22);
+    border-radius: 8px;
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+    padding: 0.65rem;
+}
+
+.insight-stat-grid .insight-stat:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+}
+
+.insight-detail {
+    line-height: 1.45;
+}
+
+@media (max-width: 850px) {
+    .chart-type-toggle {
+        width: 100%;
+    }
+
+    .chart-type-option {
+        min-width: 0;
+    }
+
+    .insight-carousel {
+        gap: 0.6rem;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .insight-carousel-inner {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .insight-carousel-control {
+        justify-self: stretch;
+        width: auto;
+    }
+
+    .insight-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .insight-bar-row {
+        grid-template-columns: 3.8rem minmax(5rem, 1fr);
+    }
+
+    .insight-bar-row strong {
+        grid-column: 2;
+    }
+}
