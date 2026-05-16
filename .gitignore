@@ -1,6 +1,14 @@
 .venv/
+.vscode/
 __pycache__/
 *.py[cod]
+.coverage
+
+report.md
+code review.txt
+codereview.md
+roadmap.docx
+
 
 src/finance_app/config.ini
 src/finance_app/*.db
