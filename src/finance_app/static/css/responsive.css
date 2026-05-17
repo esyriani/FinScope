@@ -9,6 +9,25 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .command-pulse-layout {
+        grid-template-areas:
+            "summary"
+            "support";
+        grid-template-columns: 1fr;
+    }
+
+    .cockpit-panel-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .shortcut-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .command-primary-action {
+        justify-self: start;
+    }
+
     .dashboard-wide {
         grid-column: auto;
     }
@@ -22,7 +41,19 @@
             "navigation";
     }
 
-    .calendar-filter-actions {
+    .recurring-control-row {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "categories"
+            "tags"
+            "navigation"
+            "status"
+            "confidence"
+            "actions";
+    }
+
+    .calendar-filter-actions,
+    .recurring-filter-actions {
         justify-content: flex-end;
     }
 }
@@ -49,6 +80,10 @@
     }
 
     .metric-grid,
+    .command-pulse-layout,
+    .cockpit-panel-grid,
+    .pulse-facts,
+    .shortcut-strip,
     .dashboard-breakdown-grid,
     .dashboard-grid,
     .quality-metric-grid,
@@ -89,6 +124,7 @@
     .calendar-month-controls,
     .dashboard-breakdown-actions,
     .calendar-filter-actions,
+    .recurring-filter-actions,
     .filter-actions {
         align-items: stretch;
         display: grid;
@@ -119,5 +155,17 @@
 
     .sidebar-collapsed .sidebar .nav-link::after {
         display: none;
+    }
+
+    .attention-item,
+    .activity-item {
+        align-items: start;
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .attention-item .badge,
+    .activity-amount {
+        grid-column: 2;
+        justify-self: start;
     }
 }

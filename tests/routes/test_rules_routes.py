@@ -6,6 +6,7 @@ import io
 import pytest
 
 from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
 from finance_app.modules.rules import controller as rules_controller
 from finance_app.modules.rules.import_export import import_rules_job, undo_import_rules_job
@@ -182,6 +183,21 @@ def test_rules_route_filters_by_tags(client, db_conn):
     assert b"CAFE SHARED" not in response.data
 
 
+def test_rules_route_filters_by_untagged_rules(client, db_conn):
+    """Verify the virtual untagged tag filter finds rules without tags."""
+    insert_rule(db_conn, keyword="NO TAG RULE", category="Food")
+    tagged_rule_id = insert_rule(db_conn, keyword="WITH TAX RULE", category="Food")
+    set_rule_tags(db_conn, tagged_rule_id, ["Tax"])
+    db_conn.commit()
+
+    response = client.get(f"/rules?tags={UNTAGGED_TAG_FILTER}")
+
+    assert response.status_code == 200
+    assert b"NO TAG RULE" in response.data
+    assert b"WITH TAX RULE" not in response.data
+    assert b"Untagged" in response.data
+
+
 def test_rules_route_filters_by_category(client, db_conn):
     """Verify the rules page can be filtered by category."""
     insert_rule(db_conn, keyword="METRO FOOD", category="Food")
@@ -192,7 +208,13 @@ def test_rules_route_filters_by_category(client, db_conn):
     assert response.status_code == 200
     assert b"HYDRO UTILITIES" in response.data
     assert b"METRO FOOD" not in response.data
-    assert b'value="Utilities" selected' in response.data
+    body = response.get_data(as_text=True)
+    filter_markup = body[body.index('id="rules-categories-label"'):]
+    selected_input = filter_markup[
+        filter_markup.index('value="Utilities"'):filter_markup.index('value="Utilities"') + 200
+    ]
+    assert 'name="categories"' in body
+    assert "checked" in selected_input
 
 
 def test_rules_route_filters_by_source(client, db_conn):

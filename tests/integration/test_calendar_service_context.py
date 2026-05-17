@@ -4,6 +4,7 @@ from datetime import date as real_date
 
 from werkzeug.datastructures import MultiDict
 
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.calendar import parsing as calendar_parsing
 from finance_app.modules.calendar import presenter as calendar_presenter
@@ -177,6 +178,23 @@ def test_calendar_context_applies_tag_filters(app, db_conn, monkeypatch):
     assert "tags=Tax" in context["previous_month_url"]
     assert calendar_day(context, "2026-05-02")["transactions"][0]["category"] == "Food"
     assert calendar_day(context, "2026-05-05")["transactions"] == []
+
+
+def test_calendar_context_applies_untagged_filter(app, db_conn, monkeypatch):
+    """Verify the virtual untagged tag filter finds transactions without tags."""
+    seed_calendar_transactions(db_conn)
+    patch_calendar_today(monkeypatch)
+    args = MultiDict([("month", "2026-05"), ("tags", UNTAGGED_TAG_FILTER)])
+
+    with app.test_request_context("/calendar"):
+        context = calendar_service.build_calendar_context(args)
+
+    assert context["selected_tags"] == [UNTAGGED_TAG_FILTER]
+    assert context["summary"]["spending"] == 48.99
+    assert context["summary"]["income"] == 1000.00
+    assert context["summary"]["transaction_count"] == 3
+    assert calendar_day(context, "2026-05-02")["transactions"] == []
+    assert calendar_day(context, "2026-05-04")["transactions"][0]["description"] == "Unknown Shop"
 
 
 def test_recurring_activity_context_exposes_json_payload(app, db_conn, monkeypatch):

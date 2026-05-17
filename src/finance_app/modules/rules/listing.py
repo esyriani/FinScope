@@ -3,7 +3,7 @@
 from urllib.parse import urlencode
 
 from flask import url_for
-from sqlalchemy import String, case, cast, exists, func, literal, or_, select
+from sqlalchemy import String, case, cast, func, literal, or_, select
 
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
@@ -21,15 +21,14 @@ from finance_app.modules.categories.taxonomy import (
     get_tag_color_map,
     get_tag_option_rows,
 )
+from finance_app.modules.categories.tag_filters import rule_tag_condition
 from finance_app.modules.categories.service import get_category_options
 from finance_app.core.config import settings
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
-    category_rule_tags as category_rule_tags_table,
     category_rules as category_rules_table,
     merchants as merchants_table,
-    tags as tags_table,
 )
 from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.core.query import parse_page, parse_sort_direction
@@ -58,7 +57,14 @@ RULE_SOURCE_FILTER_OPTIONS = (
 def build_rules_context(args):
     """Build rules context."""
     search = args.get("search", "").strip()
-    selected_category = args.get("category", "").strip()
+    selected_categories = [
+        category.strip()
+        for category in args.getlist("categories")
+        if category.strip()
+    ]
+    legacy_category = args.get("category", "").strip()
+    if legacy_category and legacy_category not in selected_categories:
+        selected_categories.append(legacy_category)
     selected_source = args.get("source", "").strip()
     if selected_source not in CATEGORY_RULE_SOURCES:
         selected_source = ""
@@ -79,14 +85,17 @@ def build_rules_context(args):
         category_options = get_category_options(conn)
         account_options = account_option_rows(conn)
         category_descriptions = get_category_description_map(conn)
-        if selected_category not in category_options:
-            selected_category = ""
+        selected_categories = [
+            category for category in selected_categories
+            if category in category_options
+        ]
+        selected_category = selected_categories[0] if len(selected_categories) == 1 else ""
 
         sort, sort_expression = resolve_rules_sort(sort)
         filters = build_rule_filters(
             search,
             approval,
-            selected_category,
+            selected_categories,
             selected_source,
             selected_tags,
         )
@@ -111,6 +120,7 @@ def build_rules_context(args):
         "tag_options": tag_options,
         "search": search,
         "selected_category": selected_category,
+        "selected_categories": selected_categories,
         "selected_source": selected_source,
         "selected_tags": selected_tags,
         "selected_approval": approval,
@@ -120,7 +130,7 @@ def build_rules_context(args):
         "direction": direction,
         "page_url": lambda page_number: rules_list_url(
             search,
-            selected_category,
+            selected_categories,
             selected_source,
             approval,
             selected_tags,
@@ -130,7 +140,7 @@ def build_rules_context(args):
         ),
         "sort_url": lambda sort_name: rules_list_url(
             search,
-            selected_category,
+            selected_categories,
             selected_source,
             approval,
             selected_tags,
@@ -185,7 +195,7 @@ def resolve_rules_sort(sort):
     return sort, sort_columns[sort]
 
 
-def build_rule_filters(search, approval, selected_category, selected_source, selected_tags):
+def build_rule_filters(search, approval, selected_categories, selected_source, selected_tags):
     """Build Core conditions for the rule listing filters."""
     filters = []
     if search:
@@ -198,8 +208,8 @@ def build_rule_filters(search, approval, selected_category, selected_source, sel
         filters.append(category_rules_table.c.source == CATEGORY_RULE_SOURCE_AUTOMATIC)
         filters.append(category_rules_table.c.ai_approved == 0)
 
-    if selected_category:
-        filters.append(category_rules_table.c.category == selected_category)
+    if selected_categories:
+        filters.append(category_rules_table.c.category.in_(selected_categories))
     if selected_source:
         filters.append(category_rules_table.c.source == selected_source)
     if selected_tags:
@@ -232,23 +242,7 @@ def rule_search_filter(search):
 
 def rule_tag_filter(selected_tags):
     """Return a Core EXISTS condition for selected rule tags."""
-    tags = [tag for tag in selected_tags if tag not in (None, "")]
-    if not tags:
-        return None
-
-    return exists(
-        select(1)
-        .select_from(
-            category_rule_tags_table.join(
-                tags_table,
-                tags_table.c.id == category_rule_tags_table.c.tag_id,
-            )
-        )
-        .where(
-            category_rule_tags_table.c.rule_id == category_rules_table.c.id,
-            tags_table.c.name.in_(tags),
-        )
-    )
+    return rule_tag_condition(selected_tags, category_rules_table.c.id)
 
 
 def rules_count(conn, filters):
@@ -323,11 +317,11 @@ def decorate_rule_rows(conn, rows):
         row["approval_badge_class"] = "text-bg-success" if row["ai_approved"] else "text-bg-warning"
 
 
-def rules_list_url(search, selected_category, selected_source, approval, selected_tags, sort, direction, page):
+def rules_list_url(search, selected_categories, selected_source, approval, selected_tags, sort, direction, page):
     """Build a rules list URL while preserving filter state."""
     params = {
         "search": search,
-        "category": selected_category,
+        "categories": selected_categories,
         "source": selected_source,
         "approval": approval,
         "tags": selected_tags,

@@ -60,6 +60,7 @@ def build_transactions_context(args):
         "categories": categories,
         "search": filters["search"],
         "selected_category": filters["category"],
+        "selected_categories": filters["selected_categories"],
         "selected_tags": filters["selected_tags"],
         "selected_review": filters["review"],
         "selected_category_source": filters["category_source"],

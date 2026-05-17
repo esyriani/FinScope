@@ -8,6 +8,7 @@ from finance_app.core.query import CoreFilters
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.service import get_category_options
+from finance_app.modules.categories.tag_filters import has_concrete_tag_filter
 from finance_app.modules.categories.taxonomy import get_tag_option_rows
 from finance_app.modules.comparison.constants import PERIOD_COMPARISON_OPTIONS
 from finance_app.modules.comparison.parsing import (
@@ -169,7 +170,7 @@ def build_period_comparison(
     """Build period comparison."""
     ranges = period_comparison_ranges(comparison_key, date.today())
     category_filters = build_category_conditions(selected_categories, selected_tags, unknown_category)
-    include_transfer_credits = bool(selected_tags)
+    include_transfer_credits = has_concrete_tag_filter(selected_tags)
 
     current_summary = fetch_period_summary(
         conn,

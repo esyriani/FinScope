@@ -14,6 +14,7 @@ def test_parse_transaction_filters_normalizes_request_args(db_conn):
     args = MultiDict(
         [
             ("categories", "Groceries"),
+            ("category", "Utilities"),
             ("categories", ""),
             ("tags", "Tax"),
             ("tags", ""),
@@ -35,7 +36,7 @@ def test_parse_transaction_filters_normalizes_request_args(db_conn):
 
     filters = parse_transaction_filters(args, db_conn)
 
-    assert filters["selected_categories"] == ["Groceries"]
+    assert filters["selected_categories"] == ["Groceries", "Utilities"]
     assert filters["selected_tags"] == ["Tax"]
     assert filters["filter_mode"] == "exclude"
     assert filters["category_status"] == "categorized"

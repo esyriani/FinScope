@@ -11,6 +11,16 @@
     padding-bottom: 1rem;
 }
 
+.recurring-control-row {
+    align-items: end;
+    display: grid;
+    gap: 0.85rem;
+    grid-template-areas:
+        "categories tags navigation"
+        "status confidence actions";
+    grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr) auto;
+}
+
 .calendar-month-controls {
     align-items: end;
     display: flex;
@@ -37,12 +47,50 @@
     min-width: 0;
 }
 
+.recurring-category-field {
+    grid-area: categories;
+    min-width: 0;
+}
+
+.recurring-tag-field {
+    grid-area: tags;
+    min-width: 0;
+}
+
+.recurring-status-field {
+    grid-area: status;
+    min-width: 0;
+}
+
+.recurring-confidence-field {
+    grid-area: confidence;
+    min-width: 0;
+}
+
+.recurring-month-controls {
+    grid-area: navigation;
+    justify-content: flex-end;
+}
+
 .calendar-control-row .form-label {
     font-size: 0.86rem;
     margin-bottom: 0.35rem;
 }
 
+.recurring-control-row .form-label {
+    font-size: 0.86rem;
+    margin-bottom: 0.35rem;
+}
+
 .calendar-filter-actions {
+    align-items: end;
+    display: flex;
+    gap: 0.5rem;
+    grid-area: actions;
+    justify-content: flex-end;
+}
+
+.recurring-filter-actions {
     align-items: end;
     display: flex;
     gap: 0.5rem;

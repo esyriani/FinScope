@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set selected_tags = selected_tags | default([]) %}
+{% set tag_options = tag_options | default([]) %}
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Recurring") }}</h2>
@@ -10,15 +12,10 @@
 
 <section class="card mb-4">
     <div class="card-body">
-        <form method="get" class="row g-3 align-items-end">
+        <form method="get" class="recurring-control-row">
             <input type="hidden" name="view" value="{{ selected_recurring_view }}">
 
-            <div class="col-md-2">
-                <label class="form-label" for="recurring-month">{{ _("Month") }}</label>
-                <input id="recurring-month" class="form-control" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month>
-            </div>
-
-            <div class="col-md-3">
+            <div class="recurring-category-field">
                 <label class="form-label" id="recurring-categories-label">{{ _("Categories") }}</label>
                 <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}">
                     <div
@@ -49,7 +46,58 @@
                 </div>
             </div>
 
-            <div class="col-md-2">
+            <div class="recurring-tag-field">
+                <label class="form-label" id="recurring-tags-label">{{ _("Tags") }}</label>
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}">
+                    <div
+                        class="tag-multiselect-control"
+                        role="button"
+                        tabindex="0"
+                        aria-labelledby="recurring-tags-label"
+                        aria-expanded="false"
+                        data-tag-multiselect-toggle
+                    >
+                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                    </div>
+                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        <label class="tag-multiselect-option">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="tags"
+                                value="{{ untagged_tag_filter_value }}"
+                                {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                            >
+                            <span>{{ _("Untagged") }}</span>
+                        </label>
+                        {% for option in tag_options %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="tags"
+                                    value="{{ option.name }}"
+                                    {% if option.name in selected_tags %}checked{% endif %}
+                                >
+                                <span>{{ option.name }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="calendar-month-controls recurring-month-controls" aria-label="{{ _('Calendar month navigation') }}">
+                <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}"><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+                <div class="calendar-month-field">
+                    <label class="form-label" for="recurring-month">{{ _("Month") }}</label>
+                    <input id="recurring-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month>
+                </div>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}"><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}"><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
+            </div>
+
+            <div class="recurring-status-field">
                 <label class="form-label" for="recurring-status">{{ _("Status") }}</label>
                 <select id="recurring-status" class="form-select" name="statuses">
                     <option value="">{{ _("All statuses") }}</option>
@@ -59,7 +107,7 @@
                 </select>
             </div>
 
-            <div class="col-md-2">
+            <div class="recurring-confidence-field">
                 <label class="form-label" for="recurring-confidence">{{ _("Confidence") }}</label>
                 <select id="recurring-confidence" class="form-select" name="confidence">
                     <option value="">{{ _("All confidence") }}</option>
@@ -69,7 +117,7 @@
                 </select>
             </div>
 
-            <div class="col-md-3 ms-md-auto filter-actions">
+            <div class="recurring-filter-actions filter-actions">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
                 <a class="btn btn-outline-secondary" href="{{ clear_filters_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>

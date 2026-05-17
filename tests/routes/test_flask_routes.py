@@ -426,25 +426,35 @@ def test_financial_reporting_pages_render_french_copy(client, db_conn):
     )
     db_conn.commit()
 
+    home_response = client.get("/")
     dashboard_response = client.get("/dashboard?period=ytd")
     comparison_response = client.get("/comparison")
     calendar_response = client.get("/calendar")
     recurring_response = client.get("/recurring")
 
+    assert home_response.status_code == 200
     assert dashboard_response.status_code == 200
     assert comparison_response.status_code == 200
     assert calendar_response.status_code == 200
     assert recurring_response.status_code == 200
 
+    home = home_response.get_data(as_text=True)
     dashboard = dashboard_response.get_data(as_text=True)
     comparison = comparison_response.get_data(as_text=True)
     calendar = calendar_response.get_data(as_text=True)
     recurring = recurring_response.get_data(as_text=True)
 
+    visible_home = strip_script_blocks(home)
     visible_dashboard = strip_script_blocks(dashboard)
     visible_comparison = strip_script_blocks(comparison)
     visible_calendar = strip_script_blocks(calendar)
     visible_recurring = strip_script_blocks(recurring)
+
+    assert "Ce qui demande une attention" in visible_home
+    assert "À traiter" in visible_home
+    assert "Centre de commande financier" not in visible_home
+    assert "Financial command center" not in visible_home
+    assert "Needs attention" not in visible_home
 
     assert "Tableau de bord" in visible_dashboard
     assert "Vue actuelle : Depuis le début de l&#39;année." in visible_dashboard

@@ -11,6 +11,7 @@
 {% set category_options = category_options | default([]) %}
 {% set category_descriptions = category_descriptions | default({}) %}
 {% set tag_options = tag_options | default([]) %}
+{% set selected_categories = selected_categories | default([]) %}
 {% set selected_tags = selected_tags | default([]) %}
 {% set sort = sort | default("date") %}
 {% set direction = direction | default("desc") %}
@@ -104,22 +105,38 @@
                 </select>
             </div>
 
-            <div class="col-md-5">
-                <label class="form-label" for="category">{{ _("Category") }}</label>
-                <select id="category" class="form-select" name="category">
-                    <option value="">{{ _("All categories") }}</option>
-                    {% for cat in categories %}
-                        <option
-                            value="{{ cat['category'] }}"
-                            {% if selected_category == cat['category'] %}selected{% endif %}
-                        >
-                            {{ cat["category"] }}
-                        </option>
-                    {% endfor %}
-                </select>
+            <div class="col-md-6">
+                <label class="form-label" id="transaction-categories-label">{{ _("Category") }}</label>
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}">
+                    <div
+                        class="tag-multiselect-control"
+                        role="button"
+                        tabindex="0"
+                        aria-labelledby="transaction-categories-label"
+                        aria-expanded="false"
+                        data-tag-multiselect-toggle
+                    >
+                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                    </div>
+                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        {% for option in category_options %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="categories"
+                                    value="{{ option }}"
+                                    {% if option in selected_categories %}checked{% endif %}
+                                >
+                                <span>{{ option }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
 
-            <div class="col-md-7">
+            <div class="col-md-6">
                 <label class="form-label" id="transaction-tags-label">{{ _("Tags") }}</label>
                 <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}">
                     <div
@@ -134,6 +151,16 @@
                         <span class="tag-multiselect-arrow" aria-hidden="true"></span>
                     </div>
                     <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        <label class="tag-multiselect-option">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="tags"
+                                value="{{ untagged_tag_filter_value }}"
+                                {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                            >
+                            <span>{{ _("Untagged") }}</span>
+                        </label>
                         {% for option in tag_options %}
                             <label class="tag-multiselect-option">
                                 <input

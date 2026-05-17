@@ -135,6 +135,17 @@
                         <span class="tag-multiselect-arrow" aria-hidden="true"></span>
                     </div>
                     <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                        <label class="tag-multiselect-option">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="tags"
+                                value="{{ untagged_tag_filter_value }}"
+                                {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                                {% if quick_view != quick_view_custom %}disabled{% endif %}
+                            >
+                            <span>{{ _("Untagged") }}</span>
+                        </label>
                         {% for option in tag_options %}
                             <label class="tag-multiselect-option">
                                 <input

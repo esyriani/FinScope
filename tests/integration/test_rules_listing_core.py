@@ -72,6 +72,7 @@ def test_rules_context_filters_with_core_queries(app, db_conn):
     assert context["rules"][0]["requires_approval"] is True
     assert context["rules"][0]["tag_label"] == "Tax"
     assert context["selected_category"] == "Food"
+    assert context["selected_categories"] == ["Food"]
     assert context["selected_source"] == "automatic"
     assert context["selected_approval"] == "suggested"
     assert context["selected_tags"] == ["Tax"]

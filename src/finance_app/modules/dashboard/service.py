@@ -3,6 +3,7 @@
 from finance_app.core.constants import FILTER_MODE_INCLUDE, FILTER_MODES, UNKNOWN_CATEGORY
 from finance_app.core.money import money_to_float, rounded_money_float
 from finance_app.modules.categories.service import get_category_options
+from finance_app.modules.categories.tag_filters import has_concrete_tag_filter
 from finance_app.modules.categories.taxonomy import get_tag_option_rows
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
@@ -149,7 +150,10 @@ def build_dashboard_context(args):
             unknown_category,
         )
         filter_criteria = filters.criteria()
-        include_transfer_credits = bool(selected_tags) and filter_mode == FILTER_MODE_INCLUDE
+        include_transfer_credits = (
+            has_concrete_tag_filter(selected_tags)
+            and filter_mode == FILTER_MODE_INCLUDE
+        )
 
         category_options = get_category_options(conn)
         tag_options = get_tag_option_rows(conn)

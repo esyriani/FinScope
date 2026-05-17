@@ -62,6 +62,9 @@ def parse_transaction_filters(args, conn):
         for value in args.getlist("categories")
         if value.strip()
     ]
+    legacy_category = args.get("category", "").strip()
+    if legacy_category and legacy_category not in selected_categories:
+        selected_categories.append(legacy_category)
     selected_tags = [
         value.strip()
         for value in args.getlist("tags")
@@ -101,7 +104,7 @@ def parse_transaction_filters(args, conn):
 
     return {
         "search": args.get("search", "").strip(),
-        "category": args.get("category", "").strip(),
+        "category": legacy_category,
         "selected_categories": selected_categories,
         "selected_tags": selected_tags,
         "filter_mode": filter_mode,
@@ -160,12 +163,6 @@ def build_transaction_core_filters(filters, unknown_category, conn=None):
             include=filters["filter_mode"] == FILTER_MODE_INCLUDE,
         )
     )
-
-    if filters["category"]:
-        if filters["category"] == unknown_category:
-            core_filters.add(category_value == unknown_category)
-        else:
-            core_filters.add(transactions_table.c.category == filters["category"])
 
     if filters["category_status"] == CATEGORY_STATUS_UNKNOWN:
         core_filters.add(category_value == unknown_category)

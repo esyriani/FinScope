@@ -4,112 +4,190 @@
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Home") }}</h2>
-        <p class="text-muted mb-0">{{ _("Year-to-date pulse for your personal finances.") }}</p>
-    </div>
-    <div class="home-actions">
-        <a class="btn btn-outline-secondary" href="/transactions?category={{ unknown_category | urlencode }}"><i class="bi bi-check2-square" aria-hidden="true"></i>{{ _("Review unknown") }}</a>
-        <a class="btn btn-primary" href="/upload"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>{{ _("Upload statement") }}</a>
+        <p class="text-muted mb-0">{{ _("What needs attention, what changed, and where to act next.") }}</p>
     </div>
 </div>
 
-<div class="metric-grid mb-4">
-    <div class="metric-card">
-        <div class="metric-label">{{ _("YTD spending") }}</div>
-        <div class="metric-value">{{ ytd_spending | moneyfmt }}</div>
-    </div>
+{% set primary_attention_items = attention_items[:3] %}
+{% set additional_attention_items = attention_items[3:] %}
+{% set primary_activity_items = recent_activity[:4] %}
+{% set additional_activity_items = recent_activity[4:] %}
 
-    <div class="metric-card">
-        <div class="metric-label">{{ _("YTD income") }}</div>
-        <div class="metric-value">{{ ytd_income | moneyfmt }}</div>
-    </div>
-
-    <div class="metric-card">
-        <div class="metric-label">{{ _("YTD cash flow") }}</div>
-        <div class="metric-value {% if ytd_cashflow >= 0 %}text-success{% else %}text-danger{% endif %}">
-            {{ ytd_cashflow | moneyfmt }}
-        </div>
-    </div>
-
-    <div class="metric-card">
-        <div class="metric-label">{{ _("Unknown") }}</div>
-        <div class="metric-value">{{ overview["uncategorized_count"] }}</div>
-    </div>
-</div>
-
-<div class="home-grid">
-    <section class="card">
+<div class="cockpit-flow">
+    <section class="card command-pulse">
         <div class="card-body">
-            <div class="section-title">
-                <h5 class="card-title">{{ _("Activity") }}</h5>
+        <div class="command-pulse-layout">
+            <div class="command-pulse-summary">
+                <span class="badge command-pulse-badge command-pulse-{{ financial_pulse.state }}">{{ _(financial_pulse.state | replace("_", " ") | title) }}</span>
+                <h3>{{ _(financial_pulse.title) }}</h3>
+                <p>
+                    {% if financial_pulse.operational_count == 1 %}
+                        <strong>{{ _("{count} item requires attention", count=financial_pulse.operational_count) }}</strong>
+                    {% elif financial_pulse.operational_count > 1 %}
+                        <strong>{{ _("{count} items require attention", count=financial_pulse.operational_count) }}</strong>
+                    {% else %}
+                        <strong>{{ _("Nothing needs attention") }}</strong>
+                    {% endif %}
+                    <span>{{ _(financial_pulse.summary) }}</span>
+                </p>
             </div>
 
-            <div class="home-facts">
-                <div>
-                    <span class="status-label">{{ _("Statements") }}</span>
-                    <strong>{{ statement_count }}</strong>
+            <div class="pulse-support">
+                <div class="pulse-facts" aria-label="{{ _('Financial pulse metrics') }}">
+                    {% for kpi in pulse_kpis[:2] %}
+                        <a class="pulse-fact text-reset text-decoration-none" href="{{ kpi.href }}">
+                            <span>{{ _(kpi.label) }}</span>
+                            <strong class="{% if kpi.tone %}text-{{ kpi.tone }}{% endif %}">
+                                {% if kpi.value_type == "money" %}
+                                    {{ kpi.value | moneyfmt }}
+                                {% else %}
+                                    {{ kpi.value }}
+                                {% endif %}
+                            </strong>
+                        </a>
+                    {% endfor %}
                 </div>
-                <div>
-                    <span class="status-label">{{ _("YTD transactions") }}</span>
-                    <strong>{{ overview["transaction_count"] }}</strong>
-                </div>
-                <div>
-                    <span class="status-label">{{ _("Latest transaction") }}</span>
-                    <strong>
-                        {% if overview["latest_tx_date"] %}
-                            {{ overview["latest_tx_date"] | datefmt }}
-                        {% else %}
-                            {{ _("n/a") }}
-                        {% endif %}
-                    </strong>
-                </div>
-                <div>
-                    <span class="status-label">{{ _("Latest statement") }}</span>
-                    <strong>
-                        {% if latest_statement %}
-                            {{ latest_statement["account_name"] or _("Personal") }} / {{ latest_statement["filename"] }}
-                        {% else %}
-                            {{ _("n/a") }}
-                        {% endif %}
-                    </strong>
-                </div>
+
+                <a class="btn btn-primary btn-sm command-primary-action" href="{{ primary_action.href }}">
+                    <i class="bi {{ primary_action.icon }}" aria-hidden="true"></i>{{ _(primary_action.label) }}
+                </a>
             </div>
+        </div>
         </div>
     </section>
 
-    <section class="card">
-        <div class="card-body">
-            <div class="section-title">
-                <h5 class="card-title">{{ _("Top categories") }}</h5>
-            </div>
-
-            {% if top_categories %}
-                <div class="category-stack">
-                    {% for row in top_categories %}
-                    <a class="category-row" href="/transactions?category={{ row['category'] | urlencode }}">
-                        <span>{{ row["category"] }}</span>
-                        <strong>{{ row["total"] | moneyfmt }}</strong>
-                    </a>
-                    {% endfor %}
+    <div class="cockpit-panel-grid">
+        <section class="card cockpit-panel">
+            <div class="card-body">
+                <div class="section-title">
+                    <h5 class="card-title">{{ _("Needs attention") }}</h5>
                 </div>
-            {% else %}
-                <div class="empty-state compact">{{ _("No spending categories yet.") }}</div>
+
+                {% if primary_attention_items %}
+                    <div class="attention-list">
+                        {% for item in primary_attention_items %}
+                            <a class="attention-item attention-{{ item.tone }}" href="{{ item.href }}">
+                                <span class="attention-icon"><i class="bi {{ item.icon }}" aria-hidden="true"></i></span>
+                                <span class="attention-copy">
+                                    <span class="attention-title">{{ _(item.title) }}</span>
+                                    <span class="attention-detail">{{ _(item.detail) }}</span>
+                                    {% if item.latest %}
+                                        <span class="attention-latest">{{ item.latest }}</span>
+                                    {% endif %}
+                                </span>
+                                <span class="badge text-bg-{{ item.tone }}">{{ item.count }}</span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                    {% if additional_attention_items %}
+                        <div class="collapse" id="additionalAttentionItems">
+                            <div class="attention-list attention-list-secondary">
+                                {% for item in additional_attention_items %}
+                                    <a class="attention-item attention-{{ item.tone }}" href="{{ item.href }}">
+                                        <span class="attention-icon"><i class="bi {{ item.icon }}" aria-hidden="true"></i></span>
+                                        <span class="attention-copy">
+                                            <span class="attention-title">{{ _(item.title) }}</span>
+                                            <span class="attention-detail">{{ _(item.detail) }}</span>
+                                            {% if item.latest %}
+                                                <span class="attention-latest">{{ item.latest }}</span>
+                                            {% endif %}
+                                        </span>
+                                        <span class="badge text-bg-{{ item.tone }}">{{ item.count }}</span>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary attention-view-all" type="button" data-bs-toggle="collapse" data-bs-target="#additionalAttentionItems" aria-expanded="false" aria-controls="additionalAttentionItems">
+                            {{ _("View all") }} <span class="badge text-bg-secondary">{{ additional_attention_items | length }}</span>
+                        </button>
+                    {% endif %}
+                {% else %}
+                    <div class="empty-state compact">{{ _("No operational issues need attention right now.") }}</div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="card cockpit-panel">
+            <div class="card-body">
+                <div class="section-title">
+                    <h5 class="card-title">{{ _("Recent activity") }}</h5>
+                </div>
+
+                {% if primary_activity_items %}
+                    <div class="activity-list">
+                        {% for item in primary_activity_items %}
+                            <a class="activity-item" href="{{ item.href }}">
+                                <span class="activity-icon"><i class="bi {{ item.icon }}" aria-hidden="true"></i></span>
+                                <span class="activity-copy">
+                                    <span class="activity-label">{{ _(item.label) }}</span>
+                                    <span class="activity-name">{{ item.name }}</span>
+                                    <span class="activity-meta">
+                                        {% if item.date %}{{ item.date | datefmt }}{% endif %}
+                                        {% if item.detail %}<span>{{ _(item.detail) }}</span>{% endif %}
+                                    </span>
+                                </span>
+                                {% if item.amount is not none %}
+                                    <strong class="activity-amount">{{ item.amount | moneyfmt }}</strong>
+                                {% endif %}
+                            </a>
+                        {% endfor %}
+                    </div>
+                    {% if additional_activity_items %}
+                        <div class="collapse" id="additionalActivityItems">
+                            <div class="activity-list activity-list-secondary">
+                                {% for item in additional_activity_items %}
+                                    <a class="activity-item" href="{{ item.href }}">
+                                        <span class="activity-icon"><i class="bi {{ item.icon }}" aria-hidden="true"></i></span>
+                                        <span class="activity-copy">
+                                            <span class="activity-label">{{ _(item.label) }}</span>
+                                            <span class="activity-name">{{ item.name }}</span>
+                                            <span class="activity-meta">
+                                                {% if item.date %}{{ item.date | datefmt }}{% endif %}
+                                                {% if item.detail %}<span>{{ _(item.detail) }}</span>{% endif %}
+                                            </span>
+                                        </span>
+                                        {% if item.amount is not none %}
+                                            <strong class="activity-amount">{{ item.amount | moneyfmt }}</strong>
+                                        {% endif %}
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary activity-view-all" type="button" data-bs-toggle="collapse" data-bs-target="#additionalActivityItems" aria-expanded="false" aria-controls="additionalActivityItems">
+                            {{ _("More activity") }} <span class="badge text-bg-secondary">{{ additional_activity_items | length }}</span>
+                        </button>
+                    {% endif %}
+                {% else %}
+                    <div class="empty-state compact">{{ _("No recent operational activity yet.") }}</div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <section class="shortcut-strip" aria-labelledby="homeShortcutsTitle">
+        <div class="shortcut-heading">
+            <h5 id="homeShortcutsTitle">{{ _("Shortcuts") }}</h5>
+        </div>
+
+        <div class="shortcut-list">
+            {% for action in suggested_actions %}
+                {% if not action.primary %}
+                    <a class="btn btn-outline-secondary shortcut-action" href="{{ action.href }}">
+                        <i class="bi {{ action.icon }}" aria-hidden="true"></i>
+                        <span>{{ _(action.label) }}</span>
+                        {% if action.count %}
+                            <span class="badge text-bg-secondary">{{ action.count }}</span>
+                        {% endif %}
+                    </a>
+                {% endif %}
+            {% endfor %}
+            {% if not suggested_actions %}
+                <a class="btn btn-outline-secondary shortcut-action" href="/upload">
+                    <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                    <span>{{ _("Import statement") }}</span>
+                </a>
             {% endif %}
         </div>
     </section>
-</div>
-
-<div class="quick-links">
-    <a href="/dashboard">
-        <span>{{ _("Dashboard") }}</span>
-        <strong>{{ _("Charts and category breakdowns") }}</strong>
-    </a>
-    <a href="/transactions">
-        <span>{{ _("Transactions") }}</span>
-        <strong>{{ _("Search, filter, and recategorize") }}</strong>
-    </a>
-    <a href="/rules">
-        <span>{{ _("Rules") }}</span>
-        <strong>{{ _("Merchant keyword mappings") }}</strong>
-    </a>
 </div>
 {% endblock %}

@@ -9,6 +9,7 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.repository import resolve_category_id
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.transactions.service import build_transactions_context
 
@@ -182,6 +183,9 @@ def test_transactions_context_merchant_filters_and_tag_rendering(db_conn):
     tag_context = build_transactions_context(
         MultiDict([("period", "all"), ("tags", "Shared")])
     )
+    untagged_context = build_transactions_context(
+        MultiDict([("period", "all"), ("tags", UNTAGGED_TAG_FILTER)])
+    )
 
     metro = merchant_context["transactions"][0]
     assert descriptions(merchant_context) == ["Metro Grocery"]
@@ -200,6 +204,9 @@ def test_transactions_context_merchant_filters_and_tag_rendering(db_conn):
 
     assert tag_context["selected_tags"] == ["Shared"]
     assert descriptions(tag_context) == ["Cafe Bistro"]
+    assert untagged_context["selected_tags"] == [UNTAGGED_TAG_FILTER]
+    assert untagged_context["total_count"] == 3
+    assert all(row["tag_label"] == "" for row in untagged_context["transactions"])
 
 
 def test_transactions_context_merchant_filter_matches_default_aliases(db_conn):

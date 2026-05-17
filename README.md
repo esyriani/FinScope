@@ -11,7 +11,7 @@ FinScope is a single-user Flask application with SQLite persistence, background 
 > Project owner: Eugene Syriani  
 > Current deployment target: local desktop  
 > License: [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`)  
-> Last modification: 2026-05-16
+> Last modification: 2026-05-17
 
 ![FinScope splash screen](docs/img/splash.png)
 
@@ -67,16 +67,16 @@ $env:FINANCE_PORT = "5001"
 ## Tech stack
 
 <ul style="list-style: none; padding-left: 0;">
-  <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="18" /> Python</li>
-  <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/flask/flask-original.svg" width="18" /> Flask</li>
-  <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/sqlite/sqlite-original.svg" width="18" /> SQLite</li>
-  <li><img src="https://upload.wikimedia.org/wikipedia/commons/d/d7/SQLAlchemy.svg" width="18" /> SQLAlchemy Core</li>
-  <li><img src="https://cdn.simpleicons.org/jinja/black" width="18" /> Jinja templates</li>
-  <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bootstrap/bootstrap-original.svg" width="18" /> Bootstrap</li>
-  <li><img src="https://cdn.simpleicons.org/apacheecharts/AA344D" width="18" /> ECharts</li>
-  <li><img src="https://cdn.simpleicons.org/pytest/0A9EDC" width="18" /> pytest</li>
-  <li><img src="https://upload.wikimedia.org/wikipedia/commons/6/60/Adobe_Acrobat_Reader_icon_(2020).svg" width="18" /> pypdf</li>
-  <li><img src="https://upload.wikimedia.org/wikipedia/commons/6/66/OpenAI_logo_2025_%28symbol%29.svg" width="18" /> OpenAI API <em>(optional)</em></li>
+  <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="18" /> Python 3.10+ <em>(developed and tested with Python 3.11.9)</em></li>
+  <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/flask/flask-original.svg" width="18" /> Flask 3.1.3</li>
+  <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/sqlite/sqlite-original.svg" width="18" /> SQLite 3.45.1</li>
+  <li><img src="https://upload.wikimedia.org/wikipedia/commons/d/d7/SQLAlchemy.svg" width="18" /> SQLAlchemy Core 2.0.49</li>
+  <li><img src="https://cdn.simpleicons.org/jinja/black" width="18" /> Jinja templates 3.1.6</li>
+  <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bootstrap/bootstrap-original.svg" width="18" /> Bootstrap 5.3.3</li>
+  <li><img src="https://cdn.simpleicons.org/apacheecharts/AA344D" width="18" /> ECharts 5.6.0</li>
+  <li><img src="https://cdn.simpleicons.org/pytest/0A9EDC" width="18" /> pytest 9.0.3</li>
+  <li><img src="https://upload.wikimedia.org/wikipedia/commons/6/60/Adobe_Acrobat_Reader_icon_(2020).svg" width="18" /> pypdf 6.10.2</li>
+  <li><img src="https://upload.wikimedia.org/wikipedia/commons/6/66/OpenAI_logo_2025_%28symbol%29.svg" width="18" /> OpenAI SDK 2.33.0 <em>(optional)</em></li>
 </ul>
 
 ## Repository layout

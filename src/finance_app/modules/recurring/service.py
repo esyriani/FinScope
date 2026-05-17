@@ -11,9 +11,11 @@ from finance_app.modules.calendar.service import (
     build_recurring_activity_context,
     build_recurring_activity_json,
     clean_categories,
+    clean_tags,
     default_month,
     parse_month,
     recurring_amount_change_cashflow_impact,
+    shift_month,
 )
 
 
@@ -33,10 +35,15 @@ def build_recurring_page_context(args):
     """Build recurring page context."""
     selected_month = parse_month(args.get("month")) or default_month()
     selected_categories = clean_categories(args.getlist("categories"))
+    selected_tags = clean_tags(args.getlist("tags"))
     selected_recurring_view = parse_recurring_view(args.get("view"))
     selected_statuses = clean_statuses(args.getlist("statuses"))
     selected_confidence = parse_confidence(args.get("confidence"))
-    recurring_context = build_recurring_activity_context(selected_month, selected_categories)
+    recurring_context = build_recurring_activity_context(
+        selected_month,
+        selected_categories,
+        selected_tags,
+    )
     recurring_items = filter_recurring_items(
         recurring_context["recurring_items"],
         selected_statuses,
@@ -48,14 +55,41 @@ def build_recurring_page_context(args):
         "month_label": format_month_year(recurring_context["month_start"]),
         "selected_categories": selected_categories,
         "category_options": recurring_context["category_options"],
+        "selected_tags": selected_tags,
+        "tag_options": recurring_context["tag_options"],
         "selected_recurring_view": selected_recurring_view,
         "selected_statuses": selected_statuses,
         "selected_confidence": selected_confidence,
         "status_options": STATUS_OPTIONS,
         "confidence_options": CONFIDENCE_OPTIONS,
+        "previous_month_url": recurring_filter_url(
+            shift_month(recurring_context["month_start"], -1),
+            selected_categories,
+            selected_tags,
+            selected_recurring_view,
+            selected_statuses,
+            selected_confidence,
+        ),
+        "next_month_url": recurring_filter_url(
+            shift_month(recurring_context["month_start"], 1),
+            selected_categories,
+            selected_tags,
+            selected_recurring_view,
+            selected_statuses,
+            selected_confidence,
+        ),
+        "current_month_url": recurring_filter_url(
+            default_month(),
+            selected_categories,
+            selected_tags,
+            selected_recurring_view,
+            selected_statuses,
+            selected_confidence,
+        ),
         "list_view_url": recurring_view_url(
             recurring_context["month_start"],
             selected_categories,
+            selected_tags,
             "list",
             selected_statuses,
             selected_confidence,
@@ -63,6 +97,7 @@ def build_recurring_page_context(args):
         "calendar_view_url": recurring_view_url(
             recurring_context["month_start"],
             selected_categories,
+            selected_tags,
             "calendar",
             selected_statuses,
             selected_confidence,
@@ -146,14 +181,42 @@ def build_recurring_summary(recurring_items):
     }
 
 
-def recurring_view_url(month_start, selected_categories, view, selected_statuses=None, selected_confidence=""):
+def recurring_view_url(
+    month_start,
+    selected_categories,
+    selected_tags,
+    view,
+    selected_statuses=None,
+    selected_confidence="",
+):
     """Build view URL."""
+    return recurring_filter_url(
+        month_start,
+        selected_categories,
+        selected_tags,
+        view,
+        selected_statuses,
+        selected_confidence,
+    )
+
+
+def recurring_filter_url(
+    month_start,
+    selected_categories,
+    selected_tags,
+    view,
+    selected_statuses=None,
+    selected_confidence="",
+):
+    """Build a recurring URL while preserving filter state."""
     params = {
         "month": month_start.isoformat()[:7],
         "view": view,
     }
     if selected_categories:
         params["categories"] = selected_categories
+    if selected_tags:
+        params["tags"] = selected_tags
     if selected_statuses:
         params["statuses"] = selected_statuses
     if selected_confidence:

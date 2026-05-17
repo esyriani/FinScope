@@ -235,6 +235,330 @@
     margin-top: 0.25rem;
 }
 
+.cockpit-flow {
+    display: grid;
+    gap: 1.45rem;
+}
+
+.command-pulse {
+    border-color: rgba(var(--app-accent-rgb), 0.22);
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.command-pulse .card-body {
+    padding: 1.05rem 1.15rem;
+}
+
+.command-pulse-layout {
+    align-items: center;
+    display: grid;
+    gap: 1rem 1.5rem;
+    grid-template-areas:
+        "summary support";
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.48fr);
+}
+
+.command-pulse-summary {
+    grid-area: summary;
+    min-width: 0;
+}
+
+.command-pulse-summary h3 {
+    color: var(--app-heading);
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.2;
+    margin: 0.5rem 0 0.3rem;
+}
+
+.command-pulse-summary p {
+    align-items: center;
+    color: var(--app-muted);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.95rem;
+    gap: 0.35rem 0.6rem;
+    margin: 0;
+    max-width: 48rem;
+}
+
+.command-pulse-summary p strong {
+    color: var(--app-heading);
+}
+
+.command-pulse-badge {
+    border: 1px solid var(--app-border);
+    color: var(--app-heading);
+}
+
+.command-pulse-surplus {
+    background: rgba(22, 163, 74, 0.14);
+    border-color: rgba(22, 163, 74, 0.36);
+}
+
+.command-pulse-deficit {
+    background: rgba(220, 38, 38, 0.14);
+    border-color: rgba(220, 38, 38, 0.36);
+}
+
+.command-pulse-balanced,
+.command-pulse-empty {
+    background: var(--app-surface-soft);
+}
+
+.pulse-support {
+    align-items: end;
+    display: grid;
+    gap: 0.75rem;
+    grid-area: support;
+    justify-items: start;
+}
+
+.pulse-facts {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+}
+
+.pulse-fact {
+    border-left: 1px solid rgba(var(--app-accent-rgb), 0.22);
+    display: grid;
+    gap: 0.18rem;
+    min-width: 0;
+    padding-left: 0.75rem;
+}
+
+.pulse-fact:hover span,
+.pulse-fact:hover strong {
+    color: var(--app-heading);
+}
+
+.pulse-fact span {
+    color: var(--app-muted);
+    font-size: 0.72rem;
+    font-weight: 750;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.pulse-fact strong {
+    color: var(--app-heading);
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.command-primary-action {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.4rem;
+    justify-self: start;
+    white-space: nowrap;
+}
+
+.cockpit-panel-grid {
+    align-items: start;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+}
+
+.cockpit-panel {
+    box-shadow: none;
+}
+
+.cockpit-panel .card-body {
+    padding: 1rem 1.05rem;
+}
+
+.attention-list,
+.activity-list {
+    display: grid;
+    gap: 0;
+}
+
+.attention-list-secondary {
+    border-top: 1px solid var(--app-border);
+    margin-top: 0.35rem;
+}
+
+.activity-list-secondary {
+    border-top: 1px solid var(--app-border);
+    margin-top: 0.2rem;
+}
+
+.attention-item,
+.activity-item {
+    align-items: center;
+    border-top: 1px solid var(--app-border);
+    color: var(--app-text);
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-width: 0;
+    padding: 0.8rem 0;
+    text-decoration: none;
+}
+
+.activity-item {
+    gap: 0.65rem;
+    padding: 0.58rem 0;
+}
+
+.attention-list > .attention-item:first-child,
+.activity-list > .activity-item:first-child {
+    border-top: 0;
+}
+
+.attention-item:hover,
+.activity-item:hover {
+    color: var(--app-text);
+}
+
+.attention-item:hover .attention-title,
+.activity-item:hover .activity-name {
+    color: var(--app-accent-strong);
+}
+
+.attention-icon,
+.activity-icon {
+    align-items: center;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    color: var(--app-accent-strong);
+    display: inline-flex;
+    height: 2rem;
+    justify-content: center;
+    width: 2rem;
+}
+
+.activity-icon {
+    background: transparent;
+    height: 1.8rem;
+    width: 1.8rem;
+}
+
+.attention-danger .attention-icon {
+    color: var(--app-danger);
+}
+
+.attention-warning .attention-icon {
+    color: #d97706;
+}
+
+.attention-secondary .attention-icon {
+    color: var(--app-muted);
+}
+
+.attention-copy,
+.activity-copy {
+    display: grid;
+    gap: 0.12rem;
+    min-width: 0;
+}
+
+.attention-title,
+.activity-name {
+    color: var(--app-heading);
+    font-weight: 750;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.activity-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.attention-detail,
+.attention-latest,
+.activity-label,
+.activity-meta {
+    color: var(--app-muted);
+    font-size: 0.84rem;
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.activity-label,
+.activity-meta {
+    font-size: 0.78rem;
+}
+
+.attention-latest {
+    color: var(--app-text);
+}
+
+.cockpit-panel-grid .attention-detail,
+.cockpit-panel-grid .attention-latest,
+.cockpit-panel-grid .activity-meta {
+    white-space: normal;
+}
+
+.attention-view-all,
+.activity-view-all {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.45rem;
+    margin-top: 0.75rem;
+}
+
+.activity-meta {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.activity-amount {
+    color: var(--app-muted);
+    font-size: 0.86rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.shortcut-strip {
+    align-items: center;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding-bottom: 0.15rem;
+}
+
+.shortcut-heading h5 {
+    color: var(--app-heading);
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.shortcut-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.shortcut-action {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.45rem;
+    padding: 0.34rem 0.65rem;
+}
+
 .dashboard-grid {
     display: grid;
     gap: 1rem;
