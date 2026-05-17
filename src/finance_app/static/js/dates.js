@@ -9,7 +9,9 @@ function setupFlatpickrInputs() {
             altFormat: "d-M-Y",
             altInput: true,
             altInputClass: "form-control",
-            dateFormat: "Y-m-d"
+            dateFormat: "Y-m-d",
+            disableMobile: true,
+            position: "auto center"
         });
     });
 
@@ -31,7 +33,15 @@ function setupFlatpickrInputs() {
             altInput: true,
             altInputClass: "form-control",
             dateFormat: "Y-m",
-            plugins: monthPlugins
+            disableMobile: true,
+            plugins: monthPlugins,
+            position: "auto center"
         });
     });
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setupFlatpickrInputs);
+} else {
+    setupFlatpickrInputs();
 }

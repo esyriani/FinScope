@@ -61,7 +61,7 @@
 
             <div class="col-md-6">
                 <label class="form-label">{{ _("Quick view") }}</label>
-                <div class="d-flex flex-nowrap gap-1 overflow-auto" role="group" aria-label="{{ _('Quick view') }}">
+                <div class="d-flex flex-wrap gap-1" role="group" aria-label="{{ _('Quick view') }}">
                     {% for option in quick_view_options %}
                     <button
                         type="submit"

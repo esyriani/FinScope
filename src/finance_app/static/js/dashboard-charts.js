@@ -196,6 +196,22 @@ function dashboardRegisterDrilldown(chart) {
     });
 }
 
+function dashboardResizeChart(chart) {
+    window.requestAnimationFrame(() => chart.resize());
+}
+
+function dashboardObserveChartResize(chart, element) {
+    window.addEventListener("resize", () => dashboardResizeChart(chart));
+    window.addEventListener("finance:layoutchange", () => dashboardResizeChart(chart));
+
+    if (window.ResizeObserver) {
+        element.financeResizeObserver = new ResizeObserver(() => dashboardResizeChart(chart));
+        element.financeResizeObserver.observe(element);
+    }
+
+    dashboardResizeChart(chart);
+}
+
 function dashboardCreateChart(element, option, drilldown = true) {
     if (!window.echarts || !element) return null;
 
@@ -205,7 +221,7 @@ function dashboardCreateChart(element, option, drilldown = true) {
         dashboardRegisterDrilldown(chart);
     }
 
-    window.addEventListener("resize", () => chart.resize());
+    dashboardObserveChartResize(chart, element);
     return chart;
 }
 

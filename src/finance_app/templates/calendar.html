@@ -61,7 +61,7 @@
                 <h5 class="card-title mb-1">{{ month_label }}</h5>
                 <div class="text-muted small">{{ _("Daily summaries. Double-click a day to review its transactions.") }}</div>
             </div>
-            <div class="d-flex flex-nowrap gap-1 overflow-auto" role="group" aria-label="{{ _('Heatmap') }}" data-calendar-heatmap-controls>
+            <div class="d-flex flex-wrap gap-1" role="group" aria-label="{{ _('Heatmap') }}" data-calendar-heatmap-controls>
                 {% for option in heatmap_options %}
                 <button
                     class="btn btn-sm text-nowrap {% if option.value == heatmap_metric %}btn-primary{% else %}btn-outline-secondary{% endif %}"

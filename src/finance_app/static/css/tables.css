@@ -73,6 +73,15 @@
     margin-bottom: 0;
 }
 
+.table-responsive {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+}
+
+.table-responsive > .table {
+    min-width: 44rem;
+}
+
 .table thead th {
     background: var(--table-head-bg);
     color: var(--table-head-color);

@@ -135,6 +135,22 @@ function comparisonChartOption(chartType = "line") {
     };
 }
 
+function comparisonResizeChart(chart) {
+    window.requestAnimationFrame(() => chart.resize());
+}
+
+function comparisonObserveChartResize(chart, element) {
+    window.addEventListener("resize", () => comparisonResizeChart(chart));
+    window.addEventListener("finance:layoutchange", () => comparisonResizeChart(chart));
+
+    if (window.ResizeObserver) {
+        element.financeResizeObserver = new ResizeObserver(() => comparisonResizeChart(chart));
+        element.financeResizeObserver.observe(element);
+    }
+
+    comparisonResizeChart(chart);
+}
+
 function renderComparisonChart() {
     if (!window.echarts || !comparisonCharts.monthlySpending?.length) return;
 
@@ -148,10 +164,11 @@ function renderComparisonChart() {
         input.addEventListener("change", () => {
             if (!input.checked) return;
             chart.setOption(comparisonChartOption(input.value), true);
+            comparisonResizeChart(chart);
         });
     });
 
-    window.addEventListener("resize", () => chart.resize());
+    comparisonObserveChartResize(chart, element);
 }
 
 renderComparisonChart();

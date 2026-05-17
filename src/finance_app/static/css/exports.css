@@ -54,6 +54,8 @@
     --bs-pagination-hover-color: var(--app-heading);
     --bs-pagination-active-bg: var(--app-accent);
     --bs-pagination-active-border-color: var(--app-accent);
+    flex-wrap: wrap;
+    gap: 0.25rem;
 }
 
 [data-bs-theme="dark"] .pagination {

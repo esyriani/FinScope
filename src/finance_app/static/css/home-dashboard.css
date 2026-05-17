@@ -10,7 +10,9 @@
 
 .home-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
+    justify-content: flex-end;
 }
 
 .metric-grid {
@@ -597,9 +599,11 @@
 .section-title {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
     justify-content: space-between;
     margin-bottom: 1rem;
+    min-width: 0;
 }
 
 .card-title {
@@ -622,6 +626,7 @@
 
 .chart-card .chart-viewport {
     height: 280px !important;
+    min-width: 0;
     width: 100% !important;
 }
 

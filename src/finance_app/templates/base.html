@@ -49,8 +49,32 @@
     {% endfor %}
 </head>
 <body>
+<header class="mobile-topbar">
+    <a class="mobile-brand {% if request.path == '/' %}active{% endif %}" href="/" aria-label="{{ _('Home') }}">
+        <span class="brand-mark" aria-hidden="true">
+            <img src="{{ static_asset('img/favicon.png') }}" alt="">
+        </span>
+        <span class="brand-copy">
+            <span class="brand-title">FinScope</span>
+            <span class="brand-subtitle">{{ _("Personal finances") }}</span>
+        </span>
+    </a>
+
+    <button
+        class="sidebar-toggle mobile-sidebar-toggle"
+        type="button"
+        data-sidebar-mobile-toggle
+        aria-label="{{ _('Toggle sidebar') }}"
+        aria-expanded="false"
+        aria-controls="primary-sidebar"
+        title="{{ _('Toggle sidebar') }}"
+    >
+        <span></span>
+    </button>
+</header>
+
 <div class="app-layout">
-    <aside class="sidebar">
+    <aside class="sidebar" id="primary-sidebar">
         <div class="sidebar-top">
             <a class="brand {% if request.path == '/' %}active{% endif %}" href="/" aria-label="{{ _('Home') }}">
                 <div class="brand-mark" aria-hidden="true">
@@ -68,6 +92,7 @@
                 data-sidebar-toggle
                 aria-label="{{ _('Toggle sidebar') }}"
                 aria-expanded="true"
+                aria-controls="primary-sidebar"
                 title="{{ _('Toggle sidebar') }}"
                 data-bs-tooltip
             >
@@ -109,6 +134,7 @@
         {% block content %}{% endblock %}
     </main>
 </div>
+<button class="sidebar-backdrop" type="button" data-sidebar-backdrop aria-label="{{ _('Toggle sidebar') }}"></button>
 
 <script src="{{ static_asset('vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ static_asset('vendor/flatpickr/4.6.13/flatpickr.min.js') }}"></script>

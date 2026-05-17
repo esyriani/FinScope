@@ -1,27 +1,79 @@
-const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
+const sidebarToggles = Array.from(document.querySelectorAll("[data-sidebar-toggle], [data-sidebar-mobile-toggle]"));
+const sidebarBackdrop = document.querySelector("[data-sidebar-backdrop]");
+const sidebarMediaQuery = window.matchMedia("(max-width: 850px)");
 
 function getCsrfToken() {
     return document.querySelector("meta[name='csrf-token']")?.getAttribute("content") || "";
 }
 
+function notifyLayoutChanged() {
+    window.dispatchEvent(new CustomEvent("finance:layoutchange"));
+}
+
+function isMobileSidebar() {
+    return sidebarMediaQuery.matches;
+}
+
+function updateSidebarToggleState() {
+    const mobileOpen = document.documentElement.classList.contains("sidebar-open");
+    const desktopCollapsed = document.documentElement.classList.contains("sidebar-collapsed");
+    const expanded = isMobileSidebar() ? mobileOpen : !desktopCollapsed;
+
+    sidebarToggles.forEach((toggle) => {
+        toggle.setAttribute("aria-expanded", String(expanded));
+    });
+}
+
+function setSidebarOpen(open) {
+    document.documentElement.classList.toggle("sidebar-open", open);
+    updateSidebarToggleState();
+    notifyLayoutChanged();
+}
+
 function setSidebarCollapsed(collapsed) {
     document.documentElement.classList.toggle("sidebar-collapsed", collapsed);
     localStorage.setItem("finance.sidebarCollapsed", String(collapsed));
-
-    if (sidebarToggle) {
-        sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
-    }
+    updateSidebarToggleState();
+    notifyLayoutChanged();
 }
 
-if (sidebarToggle) {
-    const initialState = document.documentElement.classList.contains("sidebar-collapsed");
-    sidebarToggle.setAttribute("aria-expanded", String(!initialState));
+if (sidebarToggles.length) {
+    updateSidebarToggleState();
 
-    sidebarToggle.addEventListener("click", () => {
-        const collapsed = !document.documentElement.classList.contains("sidebar-collapsed");
-        setSidebarCollapsed(collapsed);
+    sidebarToggles.forEach((toggle) => {
+        toggle.addEventListener("click", () => {
+            if (isMobileSidebar()) {
+                setSidebarOpen(!document.documentElement.classList.contains("sidebar-open"));
+                return;
+            }
+
+            const collapsed = !document.documentElement.classList.contains("sidebar-collapsed");
+            setSidebarCollapsed(collapsed);
+        });
     });
 }
+
+sidebarBackdrop?.addEventListener("click", () => setSidebarOpen(false));
+
+document.querySelectorAll(".sidebar a").forEach((link) => {
+    link.addEventListener("click", () => {
+        if (isMobileSidebar()) {
+            setSidebarOpen(false);
+        }
+    });
+});
+
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && isMobileSidebar()) {
+        setSidebarOpen(false);
+    }
+});
+
+sidebarMediaQuery.addEventListener("change", () => {
+    setSidebarOpen(false);
+    updateSidebarToggleState();
+    notifyLayoutChanged();
+});
 
 const themeModeInputs = Array.from(document.querySelectorAll("input[name='theme_mode']"));
 themeModeInputs.forEach((input) => {

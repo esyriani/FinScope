@@ -49,9 +49,19 @@ function positionMenu(multiselect) {
     if (!toggle || !menu) return;
 
     const rect = toggle.getBoundingClientRect();
-    menu.style.top = (rect.bottom + window.scrollY) + "px";
-    menu.style.left = rect.left + "px";
-    menu.style.width = rect.width + "px";
+    const viewportPadding = 8;
+    const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
+    const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - width - viewportPadding));
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+    const availableHeight = openAbove ? spaceAbove : spaceBelow;
+    const maxHeight = Math.max(80, Math.min(300, availableHeight));
+
+    menu.style.top = (openAbove ? Math.max(viewportPadding, rect.top - maxHeight) : rect.bottom) + "px";
+    menu.style.left = left + "px";
+    menu.style.width = width + "px";
+    menu.style.maxHeight = maxHeight + "px";
 }
 
 function showMenu(multiselect) {
