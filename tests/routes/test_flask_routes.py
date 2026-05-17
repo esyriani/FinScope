@@ -372,9 +372,23 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, db_conn):
     db_conn.commit()
 
     response = client.get("/dashboard?period=all")
+    tag_response = client.get("/dashboard?period=all&breakdown=tag")
+    untagged_response = client.get("/dashboard?period=all&breakdown=tag&show_untagged=1")
 
     assert response.status_code == 200
+    assert tag_response.status_code == 200
+    assert untagged_response.status_code == 200
     assert b"data-category-description-select" not in response.data
+    assert b"Breakdown" in response.data
+    assert b"Spending by category" in response.data
+    assert b"Category detail" in response.data
+    assert b"Spending by tag" in tag_response.data
+    assert b"Tag detail" in tag_response.data
+    assert b"Tagged spending can count the same transaction more than once." in tag_response.data
+    assert b"Show untagged" in tag_response.data
+    assert b'"categoryLabels": []' in tag_response.data
+    assert b"Hide untagged" in untagged_response.data
+    assert b'"categoryLabels": ["Untagged"]' in untagged_response.data
 
 
 def test_financial_reporting_pages_render_french_copy(client, db_conn):

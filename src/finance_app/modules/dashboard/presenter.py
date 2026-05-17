@@ -4,7 +4,12 @@ from flask import url_for
 
 from finance_app.core.i18n import gettext
 from finance_app.core.money import money_to_float, rounded_money_float
-from finance_app.modules.categories.sources import CATEGORY_SOURCE_AI, CATEGORY_SOURCE_HISTORY, CATEGORY_SOURCE_RULE
+from finance_app.modules.categories.sources import (
+    CATEGORY_SOURCE_AI,
+    CATEGORY_SOURCE_HISTORY,
+    CATEGORY_SOURCE_MANUAL,
+    CATEGORY_SOURCE_RULE,
+)
 from finance_app.modules.categories.service import get_category_rules, normalize_merchant_description, rule_amount_matches
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.transactions.constants import (
@@ -15,9 +20,11 @@ from finance_app.modules.transactions.constants import (
     CATEGORY_STATUS_CATEGORIZED,
     CATEGORY_STATUS_UNKNOWN,
     REVIEW_FILTER_NEEDS_REVIEW,
+    REVIEW_FILTER_VERIFIED,
 )
 from .urls import app_url, dashboard_transactions_url
 from .constants import (
+    DASHBOARD_BREAKDOWN_TAG,
     DASHBOARD_CATEGORY_SORT_CATEGORY,
     DASHBOARD_CATEGORY_SORT_SHARE,
     DASHBOARD_CATEGORY_SORT_SPENDING,
@@ -39,17 +46,9 @@ def build_quick_view_options(active_view, counts):
     """Build quick view options."""
     options = [
         {
-            "value": QUICK_VIEW_ALL,
-            "label": "All",
-        },
-        {
             "value": QUICK_VIEW_CATEGORIZED,
             "label": "Categorized",
             "count": counts["categorized_count"],
-        },
-        {
-            "value": QUICK_VIEW_CUSTOM,
-            "label": "Choose filters",
         },
         {
             "value": QUICK_VIEW_NEEDS_REVIEW,
@@ -60,6 +59,14 @@ def build_quick_view_options(active_view, counts):
             "value": QUICK_VIEW_UNKNOWN,
             "label": "Unknown",
             "count": counts["unknown_count"],
+        },
+        {
+            "value": QUICK_VIEW_CUSTOM,
+            "label": "Choose filters",
+        },
+        {
+            "value": QUICK_VIEW_ALL,
+            "label": "All",
         },
     ]
 
@@ -148,9 +155,131 @@ def build_dashboard_links(
             selected_tags=selected_tags,
             review=REVIEW_FILTER_NEEDS_REVIEW,
         ),
+        "verified": dashboard_transactions_url(
+            period,
+            filter_mode,
+            selected_categories,
+            True,
+            date_from,
+            date_to,
+            quick_view,
+            selected_tags=selected_tags,
+            review=REVIEW_FILTER_VERIFIED,
+        ),
         "review": url_for("review.review"),
         "upload": url_for("upload.upload"),
     }
+
+
+def build_dashboard_insights(
+    summary,
+    total_spending,
+    period,
+    filter_mode,
+    selected_categories,
+    selected_tags=None,
+    date_from="",
+    date_to="",
+    quick_view=QUICK_VIEW_ALL,
+):
+    """Build finance-oriented dashboard insight tiles for the current view."""
+    selected_tags = selected_tags or []
+    transaction_count = summary["transaction_count"] or 0
+    categorized_count = summary["categorized_count"] or 0
+    verified_count = summary["manually_reviewed_count"] or 0
+    untagged_count = summary["untagged_spending_count"] or 0
+    untagged_total = rounded_money_float(summary["untagged_spending_total"])
+    top_source = top_categorization_source(summary, categorized_count)
+
+    return {
+        "average_transaction_amount": rounded_money_float(summary["average_transaction_amount"]),
+        "transaction_count": transaction_count,
+        "untagged_spending_count": untagged_count,
+        "untagged_spending_total": untagged_total,
+        "untagged_spending_rate": percentage(untagged_total, total_spending),
+        "verified_count": verified_count,
+        "verified_rate": percentage(verified_count, transaction_count),
+        "top_source": top_source,
+        "top_source_url": source_transactions_url(
+            top_source["source"],
+            period,
+            filter_mode,
+            selected_categories,
+            selected_tags,
+            date_from,
+            date_to,
+            quick_view,
+        ),
+    }
+
+
+def top_categorization_source(summary, categorized_count):
+    """Return the dominant category assignment source in a summary row."""
+    candidates = [
+        {
+            "source": CATEGORY_SOURCE_RULE,
+            "label": "Rule",
+            "count": summary["rule_count"] or 0,
+        },
+        {
+            "source": CATEGORY_SOURCE_HISTORY,
+            "label": "Similarity",
+            "count": summary["history_count"] or 0,
+        },
+        {
+            "source": CATEGORY_SOURCE_AI,
+            "label": "AI",
+            "count": summary["ai_count"] or 0,
+        },
+        {
+            "source": CATEGORY_SOURCE_MANUAL,
+            "label": "Manual",
+            "count": summary["manual_source_count"] or 0,
+        },
+    ]
+    ordered = sorted(
+        enumerate(candidates),
+        key=lambda item: (item[1]["count"], -item[0]),
+        reverse=True,
+    )
+    top = ordered[0][1] if ordered else {"source": "", "label": "n/a", "count": 0}
+    if top["count"] == 0:
+        top = {"source": "", "label": "n/a", "count": 0}
+    return {
+        **top,
+        "rate": percentage(top["count"], categorized_count),
+    }
+
+
+def source_transactions_url(
+    source,
+    period,
+    filter_mode,
+    selected_categories,
+    selected_tags,
+    date_from,
+    date_to,
+    quick_view,
+):
+    """Return a transactions URL for a category source insight."""
+    if not source:
+        return ""
+    source_filter = (
+        CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED
+        if source == CATEGORY_SOURCE_MANUAL
+        else source
+    )
+    return dashboard_transactions_url(
+        period,
+        filter_mode,
+        selected_categories,
+        True,
+        date_from,
+        date_to,
+        quick_view,
+        selected_tags=selected_tags,
+        category_source=source_filter,
+    )
 
 
 def build_cash_flow_summary(total_income, total_spending):
@@ -488,18 +617,34 @@ def build_category_rows(
     date_from="",
     date_to="",
     quick_view=QUICK_VIEW_ALL,
+    breakdown="category",
 ):
-    """Build category rows."""
+    """Build category or tag breakdown rows."""
     selected_tags = selected_tags or []
     rows = []
 
     for row in spending_by_category:
-        total = rounded_money_float(row["total"])
-        rows.append({
-            "category": row["category"],
-            "total": total,
-            "share": round((total / total_spending) * 100, 1) if total_spending else 0,
-            "url": dashboard_transactions_url(
+        row_data = dict(row)
+        total = rounded_money_float(row_data["total"])
+        is_tag_breakdown = breakdown == DASHBOARD_BREAKDOWN_TAG
+        tag_name = row_data.get("tag", "")
+        is_untagged = bool(row_data.get("untagged"))
+        label = gettext("Untagged") if is_untagged else row_data["category"]
+        if is_tag_breakdown:
+            url = "" if is_untagged else dashboard_transactions_url(
+                period,
+                filter_mode,
+                selected_categories,
+                True,
+                date_from,
+                date_to,
+                QUICK_VIEW_CUSTOM,
+                selected_tags=selected_tags,
+                tags=[tag_name],
+                amount_type=AMOUNT_TYPE_SPENDING,
+            )
+        else:
+            url = dashboard_transactions_url(
                 period,
                 filter_mode,
                 selected_categories,
@@ -508,9 +653,14 @@ def build_category_rows(
                 date_to,
                 quick_view,
                 selected_tags=selected_tags,
-                category=row["category"],
+                category=row_data["category"],
                 amount_type=AMOUNT_TYPE_SPENDING,
-            ),
+            )
+        rows.append({
+            "category": label,
+            "total": total,
+            "share": round((total / total_spending) * 100, 1) if total_spending else 0,
+            "url": url,
         })
 
     max_total = max((row["total"] for row in rows), default=0)

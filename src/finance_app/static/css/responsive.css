@@ -1,5 +1,6 @@
 @media (max-width: 1100px) {
     .metric-grid,
+    .dashboard-breakdown-grid,
     .dashboard-grid,
     .quality-metric-grid,
     .status-strip,
@@ -41,12 +42,14 @@
 
     .page-header,
     .period-form,
+    .dashboard-breakdown-bar,
     .home-actions {
         align-items: stretch;
         flex-direction: column;
     }
 
     .metric-grid,
+    .dashboard-breakdown-grid,
     .dashboard-grid,
     .quality-metric-grid,
     .status-strip,
@@ -84,6 +87,7 @@
     }
 
     .calendar-month-controls,
+    .dashboard-breakdown-actions,
     .calendar-filter-actions,
     .filter-actions {
         align-items: stretch;

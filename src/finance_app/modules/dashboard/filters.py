@@ -8,9 +8,10 @@ from finance_app.modules.categories.tag_filters import transaction_tag_condition
 
 from .constants import (
     DASHBOARD_CATEGORY_SORT_CATEGORY,
+    DASHBOARD_BREAKDOWN_CATEGORY,
+    DASHBOARD_BREAKDOWN_OPTIONS,
     DASHBOARD_MERCHANT_SORT_CATEGORY,
     DASHBOARD_MERCHANT_SORT_MERCHANT,
-    QUICK_VIEW_ALL,
     QUICK_VIEW_CATEGORIZED,
     QUICK_VIEW_CUSTOM,
     QUICK_VIEW_NEEDS_REVIEW,
@@ -35,6 +36,17 @@ def dashboard_table_default_direction(sort):
     return "asc" if sort in text_sorts else "desc"
 
 
+def parse_dashboard_breakdown(value):
+    """Parse the dashboard breakdown mode."""
+    breakdown = str(value or "").strip()
+    return breakdown if breakdown in DASHBOARD_BREAKDOWN_OPTIONS else DASHBOARD_BREAKDOWN_CATEGORY
+
+
+def parse_dashboard_flag(value):
+    """Parse an optional dashboard boolean query flag."""
+    return str(value or "").strip().casefold() in {"1", "true", "yes", "on"}
+
+
 def parse_quick_view(value, selected_categories, selected_tags=None):
     """Parse quick view."""
     quick_view = str(value or "").strip()
@@ -42,7 +54,7 @@ def parse_quick_view(value, selected_categories, selected_tags=None):
         return quick_view
     if selected_categories or selected_tags:
         return QUICK_VIEW_CUSTOM
-    return QUICK_VIEW_ALL
+    return QUICK_VIEW_CATEGORIZED
 
 
 def apply_quick_view_core_filter(

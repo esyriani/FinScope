@@ -387,14 +387,33 @@ def test_dashboard_context_totals_filters_custom_dates_and_sorting(app, db_conn)
 
     assert context["selected_period"] == "custom"
     assert context["period_label"] == "01-Jan-2026 to 28-Feb-2026"
-    assert context["total_spending"] == 290.00
+    assert context["quick_view"] == "categorized"
+    assert [(option["value"], option["active"]) for option in context["quick_view_options"]] == [
+        ("categorized", True),
+        ("needs_review", False),
+        ("unknown", False),
+        ("custom", False),
+        ("all", False),
+    ]
+    assert context["total_spending"] == 260.00
     assert context["total_income"] == 1000.00
-    assert context["net_cashflow"] == 710.00
-    assert context["transaction_count"] == 5
-    assert context["uncategorized_count"] == 1
+    assert context["net_cashflow"] == 740.00
+    assert context["transaction_count"] == 4
+    assert context["uncategorized_count"] == 0
     assert context["data_quality"]["transaction_count"] == 5
+    assert context["data_quality"]["quality_score"] == 80
     assert context["data_quality"]["review_label"] == "Review 1 unknown transaction"
     assert context["data_quality"]["level"] == "warning"
+    assert "quick_view=categorized" not in context["data_quality"]["categorized_url"]
+    insights = context["dashboard_insights"]
+    assert insights["average_transaction_amount"] == 315.00
+    assert insights["untagged_spending_count"] == 0
+    assert insights["untagged_spending_rate"] == 0.0
+    assert insights["verified_count"] == 0
+    assert insights["verified_rate"] == 0.0
+    assert insights["top_source"]["label"] == "Rule"
+    assert insights["top_source"]["count"] == 3
+    assert insights["top_source"]["rate"] == 75.0
     assert category_totals(context) == {
         "Food": 140.00,
         "Utilities": 120.00,
@@ -464,6 +483,85 @@ def test_dashboard_context_quick_views_and_category_include_filter(app, db_conn)
     assert tax_context["transaction_count"] == 1
     assert category_totals(tax_context) == {"Food": 100.00}
     assert list(merchant_totals(tax_context).items()) == [("METRO GROCERY", 100.00)]
+
+
+def test_dashboard_context_tag_breakdown_counts_each_matching_tag(app, db_conn):
+    """Verify tag breakdown uses tag-associated spending, including overlaps."""
+    seed_reporting_data(db_conn)
+    cafe_id = db_conn.execute(
+        """
+        SELECT id
+        FROM transactions
+        WHERE fingerprint = 'seed-2026-food-cafe'
+        """
+    ).fetchone()["id"]
+    set_transaction_tags(db_conn, cafe_id, ["Shared", "Tax"], source="manual")
+    db_conn.commit()
+    args = MultiDict(
+        [
+            ("period", "custom"),
+            ("date_from", "2026-01-01"),
+            ("date_to", "2026-02-28"),
+            ("quick_view", "all"),
+            ("breakdown", "tag"),
+        ]
+    )
+
+    with app.test_request_context("/dashboard"):
+        context = build_dashboard_context(args)
+        untagged_context = build_dashboard_context(
+            MultiDict(
+                [
+                    ("period", "custom"),
+                    ("date_from", "2026-01-01"),
+                    ("date_to", "2026-02-28"),
+                    ("quick_view", "all"),
+                    ("breakdown", "tag"),
+                    ("show_untagged", "1"),
+                ]
+            )
+        )
+
+    assert context["breakdown_mode"] == "tag"
+    assert context["quick_view"] == "all"
+    assert context["breakdown_is_tag"] is True
+    assert context["show_untagged"] is False
+    assert "show_untagged=1" in context["show_untagged_url"]
+    assert context["breakdown_chart_title"] == "Spending by tag"
+    assert context["breakdown_table_title"] == "Tag detail"
+    assert context["breakdown_label"] == "Tag"
+    assert context["total_spending"] == 290.00
+    assert category_totals(context) == {
+        "Government": 120.00,
+        "Shared": 40.00,
+        "Tax": 140.00,
+    }
+    assert sum(category_totals(context).values()) > context["total_spending"]
+    assert context["category_labels"] == ["Tax", "Government", "Shared"]
+    tax_row = next(row for row in context["category_rows"] if row["category"] == "Tax")
+    assert "tags=Tax" in tax_row["url"]
+    assert "amount_type=spending" in tax_row["url"]
+    assert all(row["category"] != "Untagged" for row in context["category_rows"])
+
+    assert untagged_context["show_untagged"] is True
+    assert "show_untagged" not in untagged_context["show_untagged_url"]
+    assert category_totals(untagged_context) == {
+        "Government": 120.00,
+        "Shared": 40.00,
+        "Tax": 140.00,
+        "Untagged": 30.00,
+    }
+    assert untagged_context["category_labels"] == [
+        "Tax",
+        "Government",
+        "Shared",
+        "Untagged",
+    ]
+    untagged_row = next(
+        row for row in untagged_context["category_rows"]
+        if row["category"] == "Untagged"
+    )
+    assert untagged_row["url"] == ""
 
 
 def test_dashboard_tag_cashflow_includes_tagged_transfer_credits(app, db_conn):

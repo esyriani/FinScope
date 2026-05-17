@@ -53,13 +53,21 @@
 .status-strip {
     display: grid;
     gap: 1rem;
-    grid-template-columns: 0.85fr 0.85fr 1.35fr 1.95fr;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     padding: 1rem;
 }
 
 .status-strip strong {
     display: block;
     margin-top: 0.25rem;
+    overflow-wrap: anywhere;
+}
+
+.status-strip small {
+    color: var(--app-muted);
+    display: block;
+    font-weight: 600;
+    margin-top: 0.2rem;
     overflow-wrap: anywhere;
 }
 
@@ -233,8 +241,33 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.dashboard-breakdown-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+}
+
 .dashboard-wide {
     grid-column: 1 / -1;
+}
+
+.dashboard-breakdown-bar {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.dashboard-breakdown-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.dashboard-breakdown-detail {
+    min-height: 420px;
 }
 
 .section-title {

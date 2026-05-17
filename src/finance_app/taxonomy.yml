@@ -1,0 +1,117 @@
+categories:
+  - name: Income
+    description: Ordinary money received by the household, excluding rental-property cash flow, refunds, reimbursements, and account transfers.
+    instruction: Use for clear household income such as salary, payroll deposits, benefits, pensions, investment income, and other income credits. Do not use for rental-property transactions, refunds, reimbursements, internal transfers, account adjustments, cash withdrawals, or credit card payments. Use "Rental" for rental-property income or expenses. Use "Transfers" for refunds, reimbursements, and balance movements.
+
+  - name: Housing
+    description: Costs related to the household's primary residence, excluding utilities and income-generating rental properties.
+    instruction: Use for primary-residence rent, mortgage-related payments, condo fees, property taxes, repairs, maintenance, furniture, appliances, home services, and other household residence costs. Use "Utilities" for electricity, heating, water, internet, phone, and similar recurring services for personal or household use. Use "Rental" for income-generating rental properties.
+
+  - name: Rental
+    description: Income and expenses related to income-generating rental properties.
+    instruction: Use whenever the transaction is clearly related to an income-generating rental property, even if the transaction would otherwise look like Income, Housing, Utilities, Administrative, or Transfers. Use for rental income, rental-property repairs, property taxes, utilities, insurance, maintenance, condo fees, tenant-related expenses, and other rental-property cash flows. Add the "Tax" tag when the transaction may be useful for tax preparation or accounting.
+
+  - name: Utilities
+    description: Recurring household or personal services, including electricity, heating, water, internet, phone, and similar service bills.
+    instruction: Use for utility and communication services for the household's primary residence or personal use. This includes electricity, gas, heating, water, internet, mobile phone, home phone, and similar recurring services. Use "Rental" when the service is clearly for an income-generating rental property. Do not use merely because a transaction is recurring.
+
+  - name: Food
+    description: Food and drink, including groceries, restaurants, cafes, bakeries, takeout, delivery, and prepared meals.
+    instruction: Use for both food bought for home use and prepared food purchased outside the home. Do not split groceries and restaurants into separate categories. If the food expense occurred during a trip, work event, conference, or child-related activity, keep the category as "Food" and add the relevant tags only when the context is clear.
+
+  - name: Transportation
+    description: Local transportation and vehicle-related costs.
+    instruction: Use for ordinary local mobility, including public transit, taxis, rideshare, parking, gas, vehicle maintenance, vehicle insurance, registration, permits, tolls, and similar local transportation costs. Use "Travel" for trip-level expenses such as flights, hotels, vacation lodging, long-distance trains, car rentals, luggage, and booking services. Add the "Vehicle" tag when the transaction relates to owning, operating, maintaining, insuring, registering, or using a personal vehicle.
+
+  - name: Education
+    description: Expenses related to school, daycare, camps, learning, tutoring, children's activities, and education needs.
+    instruction: Use for daycare, school fees, camps, tutoring, school supplies, extracurricular activities, children's programs, courses, books, and education-related payments. Add the "Children" tag when the transaction specifically concerns children. Add the "Tax" tag for daycare, camps, or education expenses that may need review during tax preparation.
+
+  - name: Health
+    description: Health, medical, pharmacy, dental, vision, therapy, insurance, and wellness-related expenses.
+    instruction: Use for medication, pharmacy purchases, medical appointments, dental care, vision care, therapy, clinics, health services, wellness-related care, and health insurance. Add the "Tax" tag when the expense may be relevant for medical, insurance, or tax records. Add "Reimbursable" only when the transaction is expected to be repaid by insurance or another party.
+
+  - name: Personal
+    description: General retail purchases and personal goods that do not belong to a more specific category.
+    instruction: Use for clothing, electronics, books, gifts, personal care, household goods, toys, hobbies, and general consumer purchases. Use this as the default retail category when no more specific category applies. Use "Housing" for primary-residence repairs, furniture, appliances, or household infrastructure. Use "Work" for clearly professional purchases. Use "Education", "Health", "Food", or another specific category when the transaction clearly fits one.
+
+  - name: Travel
+    description: Trip-level transportation, lodging, bookings, and travel expenses.
+    instruction: Use for flights, hotels, vacation lodging, long-distance trains, car rentals, luggage, travel bookings, and other expenses whose main purpose is a trip. Do not use for ordinary local transit, gas, parking, taxis, or rideshare unless the description clearly indicates a trip. For meals during a trip, use "Food". For professional travel, use this category when the main nature of the transaction is travel, and add "Reimbursable" when applicable.
+
+  - name: Entertainment
+    description: Entertainment, hobbies, outings, sports, events, shows, movies, museums, games, streaming, and other discretionary leisure activities.
+    instruction: Use for entertainment and leisure activities that are not primarily travel, food, education, or shopping. Use for events, shows, concerts, movies, sports activities, hobbies, games, streaming entertainment, and family outings. Add "Subscription" when the transaction is for ongoing paid access to entertainment or a membership.
+
+  - name: Work
+    description: Professional, academic, research, conference, office, and employment-related expenses.
+    instruction: Use for conference registrations, professional memberships, office supplies, professional software, research expenses, work equipment, academic fees, and other clearly professional expenses. For work-related food, transportation, or travel, use the natural spending category unless the professional purpose is the main signal. Add "Reimbursable" when the expense is expected to be repaid.
+
+  - name: Administrative
+    description: Fees, interest, taxes, debt payments, legal, accounting, government, permits, licenses, and administrative expenses.
+    instruction: Use for bank fees, service fees, interest charges, credit card fees, loan payments, tax payments, accounting, legal services, government fees, permits, licenses, and other administrative charges. Do not use for account transfers, credit card payments, refunds, or reimbursements that are only movements of money; use "Transfers" for those. Use "Rental" instead when the administrative expense is clearly tied to an income-generating rental property.
+
+tags:
+  - name: Reimbursable
+    description: Marks expenses expected to be repaid by work, insurance, a tenant, another person, or another organization.
+    instruction: Use only when the transaction description, user rule, or context clearly indicates that the expense is expected to be repaid. This tag can apply across categories, such as Food, Travel, Work, Health, Education, Transportation, Housing, or Rental.
+
+  - name: Tax
+    description: Marks transactions that may be useful for tax preparation, accounting, or year-end review.
+    instruction: Use only when the transaction is likely to be needed for tax preparation or accounting, such as rental-property records, childcare, medical expenses, professional expenses, tax payments, accounting, legal fees, government documents, or official fees. Do not apply only because a transaction includes sales tax.
+
+  - name: Children
+    description: Marks transactions related to children or child-related household needs.
+    instruction: Use for daycare, school, camps, children's activities, children's clothing, children's health, toys, child benefits, and other child-specific transactions. Do not use for general family expenses unless the transaction is specifically child-related.
+
+  - name: Family
+    description: Marks transactions related to the household or family as a whole.
+    instruction: Use for family outings, family travel, shared household activities, family meals, and purchases intended for the household rather than one individual. Do not use when a more specific tag, such as "Children", captures the context better.
+
+  - name: Trip
+    description: Marks transactions related to a specific trip, whether personal, family, work-related, or rental-property-related.
+    instruction: Use when the transaction clearly belongs to a trip or travel event. This tag can apply to Food, Transportation, Travel, Entertainment, Work, or Personal transactions. Do not use for ordinary local spending unless it is clearly part of a trip.
+
+  - name: Conference
+    description: Marks transactions related to a professional, academic, or work conference.
+    instruction: Use for conference registration, lodging, travel, food, local transportation, memberships, and purchases associated with a conference. This tag often combines with "Reimbursable" or "Tax" when supported by the transaction or user rule.
+
+  - name: Shared
+    description: Marks expenses shared with another person, household, tenant, colleague, or organization.
+    instruction: Use when the transaction is expected to be split, repaid, or allocated across multiple people or parties. Do not use for ordinary family expenses unless there is an explicit sharing or settlement context.
+
+  - name: Service
+    description: Marks paid access to an ongoing service, platform, software, media service, membership, or service plan.
+    instruction: Use when the transaction is for access to a service rather than a physical good, meal, trip, event, or ordinary bill. Do not use merely because the transaction is recurring. Do not use for utilities, rent, insurance, taxes, loan payments, credit card payments, or ordinary transfers.
+  
+  - name: Investment
+    description: Marks transactions related to savings, investments, retirement accounts, investment accounts, GICs, TFSAs, RRSPs, RESPs, brokerage accounts, or transfers made for investment or savings purposes.
+    instruction: Use when the transaction is clearly related to saving, investing, retirement contributions, or moving money into or out of an investment or savings account. This tag can apply to transfers, investment purchases, retirement contributions, and loan payments specifically used to fund investments. Do not use for ordinary bank transfers unless the destination or context indicates savings or investment.
+
+  - name: Vehicle
+    description: Marks transactions related to owning, operating, maintaining, insuring, registering, or using a personal vehicle.
+    instruction: Use for gas, parking, maintenance, repairs, registration, permits, insurance, car washes, tires, tolls, and vehicle-related fees. Do not use for public transit, taxis, or rideshare unless the transaction is clearly vehicle-specific.
+
+  - name: Insurance
+    description: Marks insurance premiums, insurance reimbursements, or insurance-related administrative transactions.
+    instruction: Use for health, vehicle, home, rental property, travel, life, or other insurance-related transactions. This tag can apply across Health, Transportation, Housing, Rental, Travel, Administrative, or Transfers when the insurance context is clear.
+
+  - name: Donation
+    description: Marks charitable, nonprofit, community, religious, school, association, or fundraising contributions.
+    instruction: Use when the transaction appears to be a contribution rather than a purchase of goods or services. Add the "Tax" tag if the transaction may be relevant for tax preparation.
+
+  - name: Government
+    description: Marks transactions involving a municipal, provincial, federal, public agency, permit, registration, tax, or public administration payment.
+    instruction: Use when the payee or payment type is clearly a public authority, government agency, municipality, school tax authority, licensing body, or public administration service. This tag can apply across Administrative, Housing, Rental, Transportation, Education, or Transfers.
+  
+  - name: Restaurant
+    description: Marks food and drink purchased as prepared meals, snacks, or beverages from restaurants, cafes, bakeries, bars, food trucks, cafeterias, fast food, takeout, or delivery services.
+    instruction: Use when the transaction is primarily for prepared food or drink intended for immediate consumption. This tag usually applies with the "Food" category. Do not use for grocery stores, food markets, butcher shops, produce shops, specialty food stores, or household food purchases intended mainly for later preparation at home.
+
+  - name: Grocery
+    description: Marks food, beverages, and household consumables purchased from grocery stores, supermarkets, markets, specialty food shops, butcher shops, bakeries used mainly for household food purchases, or similar food retailers.
+    instruction: Use when the transaction is primarily for groceries or household food supplies intended for home use. This tag usually applies with the "Food" category. Do not use for restaurants, cafes, bars, takeout, delivery meals, cafeterias, or prepared food intended mainly for immediate consumption.
+  
+  - name: Judo
+    description: Marks transactions related to judo activities, including courses, competitions, coaching, refereeing, travel, transportation, equipment, reimbursements, per diems, and judo-related income.
+    instruction: Use when the transaction is clearly related to judo, regardless of category. This tag can apply to expenses such as courses, competition fees, travel, local transportation, meals during events, equipment, and administrative fees, as well as incoming payments such as coaching salary, refereeing payments, reimbursements, and per diems. For reimbursements or per diems that offset expenses, usually use the "Transfers" category with this tag. For coaching salary or compensation, usually use the "Income" category with this tag. Do not use this tag for general sports, fitness, or travel transactions unless the judo connection is clear.

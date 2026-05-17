@@ -22,33 +22,39 @@ from finance_app.core.query import CoreFilters, parse_sort_direction
 from .filters import (
     apply_quick_view_core_filter,
     dashboard_table_default_direction,
+    parse_dashboard_breakdown,
+    parse_dashboard_flag,
     parse_dashboard_table_sort,
     parse_quick_view,
 )
-from .urls import dashboard_month_url, dashboard_table_sort_url, dashboard_transactions_url
+from .urls import dashboard_month_url, dashboard_table_sort_url, dashboard_url
 from .queries import (
-    fetch_last_upload,
     fetch_merchant_analytics,
     fetch_monthly_expenses,
     fetch_monthly_income,
     fetch_monthly_net,
     fetch_quick_view_counts,
     fetch_spending_by_category,
+    fetch_spending_by_tag,
     fetch_summary,
 )
 from .constants import (
+    DASHBOARD_BREAKDOWN_CATEGORY,
+    DASHBOARD_BREAKDOWN_TAG,
     DASHBOARD_CATEGORY_SORTS,
     DASHBOARD_CATEGORY_SORT_SPENDING,
     DASHBOARD_MERCHANT_SORT_SPENDING,
     DASHBOARD_MERCHANT_SORTS,
     DASHBOARD_TABLE_CATEGORY,
     DASHBOARD_TABLE_MERCHANT,
+    QUICK_VIEW_ALL,
     QUICK_VIEW_CUSTOM,
 )
 from .presenter import (
     attach_data_quality_urls,
     build_cash_flow_summary,
     build_category_rows,
+    build_dashboard_insights,
     build_dashboard_links,
     build_data_quality,
     build_quick_view_options,
@@ -64,6 +70,11 @@ def build_dashboard_context(args):
     filter_mode = args.get("filter_mode", FILTER_MODE_INCLUDE).strip()
     if filter_mode not in FILTER_MODES:
         filter_mode = FILTER_MODE_INCLUDE
+    breakdown_mode = parse_dashboard_breakdown(args.get("breakdown"))
+    show_untagged = (
+        breakdown_mode == DASHBOARD_BREAKDOWN_TAG
+        and parse_dashboard_flag(args.get("show_untagged"))
+    )
     merchant_sort = parse_dashboard_table_sort(
         args.get("merchant_sort"),
         DASHBOARD_MERCHANT_SORTS,
@@ -123,6 +134,11 @@ def build_dashboard_context(args):
             base_filters.criteria(),
             unknown_category,
         )
+        data_quality_summary = fetch_summary(
+            conn,
+            base_filters.criteria(),
+            unknown_category,
+        )
         filters = base_filters.clone()
         apply_quick_view_core_filter(
             filters,
@@ -138,6 +154,7 @@ def build_dashboard_context(args):
         category_options = get_category_options(conn)
         tag_options = get_tag_option_rows(conn)
         spending_by_category = fetch_spending_by_category(conn, filter_criteria, unknown_category)
+        spending_by_tag = fetch_spending_by_tag(conn, filter_criteria)
         monthly_expenses = fetch_monthly_expenses(conn, filter_criteria)
         monthly_income = fetch_monthly_income(
             conn,
@@ -169,16 +186,29 @@ def build_dashboard_context(args):
             unknown_category,
             include_transfer_credits=include_transfer_credits,
         )
-        data_quality = build_data_quality(summary)
-        last_upload = fetch_last_upload(conn)
+        data_quality = build_data_quality(data_quality_summary)
 
     total_spending = rounded_money_float(summary["total_spending"])
     total_income = rounded_money_float(summary["total_income"])
     cash_flow_summary = build_cash_flow_summary(total_income, total_spending)
-    known_category_spending = sum(money_to_float(row["total"]) for row in spending_by_category)
+    spending_breakdown = (
+        spending_by_tag
+        if breakdown_mode == DASHBOARD_BREAKDOWN_TAG
+        else spending_by_category
+    )
+    if breakdown_mode == DASHBOARD_BREAKDOWN_TAG and not show_untagged:
+        spending_breakdown = [
+            row for row in spending_breakdown
+            if not row.get("untagged")
+        ]
+    breakdown_total = (
+        total_spending
+        if breakdown_mode == DASHBOARD_BREAKDOWN_TAG
+        else sum(money_to_float(row["total"]) for row in spending_by_category)
+    )
     category_rows = build_category_rows(
-        spending_by_category,
-        known_category_spending,
+        spending_breakdown,
+        breakdown_total,
         period,
         filter_mode,
         selected_categories,
@@ -186,7 +216,9 @@ def build_dashboard_context(args):
         date_from,
         date_to,
         quick_view,
+        breakdown=breakdown_mode,
     )
+    chart_category_rows = list(category_rows)
     sort_merchant_rows(merchant_rows, merchant_sort, merchant_direction)
     sort_category_rows(category_rows, category_table_sort, category_table_direction)
     dashboard_links = build_dashboard_links(
@@ -199,8 +231,9 @@ def build_dashboard_context(args):
         quick_view,
         include_transfer_credits=include_transfer_credits,
     )
-    attach_data_quality_urls(
-        data_quality,
+    dashboard_insights = build_dashboard_insights(
+        summary,
+        total_spending,
         period,
         filter_mode,
         selected_categories,
@@ -208,6 +241,16 @@ def build_dashboard_context(args):
         date_from,
         date_to,
         quick_view,
+    )
+    attach_data_quality_urls(
+        data_quality,
+        period,
+        FILTER_MODE_INCLUDE,
+        [],
+        [],
+        date_from,
+        date_to,
+        QUICK_VIEW_ALL,
     )
     income_amount_type = AMOUNT_TYPE_CREDIT if include_transfer_credits else AMOUNT_TYPE_INCOME
 
@@ -228,33 +271,61 @@ def build_dashboard_context(args):
         quick_view=quick_view,
         quick_view_custom=QUICK_VIEW_CUSTOM,
         quick_view_options=build_quick_view_options(quick_view, quick_view_counts),
+        breakdown_mode=breakdown_mode,
+        breakdown_category=DASHBOARD_BREAKDOWN_CATEGORY,
+        breakdown_tag=DASHBOARD_BREAKDOWN_TAG,
+        breakdown_options=[
+            {
+                "value": DASHBOARD_BREAKDOWN_CATEGORY,
+                "label": "Categories",
+                "url": dashboard_url(args, breakdown=DASHBOARD_BREAKDOWN_CATEGORY, show_untagged=""),
+                "active": breakdown_mode == DASHBOARD_BREAKDOWN_CATEGORY,
+            },
+            {
+                "value": DASHBOARD_BREAKDOWN_TAG,
+                "label": "Tags",
+                "url": dashboard_url(args, breakdown=DASHBOARD_BREAKDOWN_TAG),
+                "active": breakdown_mode == DASHBOARD_BREAKDOWN_TAG,
+            },
+        ],
+        breakdown_chart_title=(
+            "Spending by tag"
+            if breakdown_mode == DASHBOARD_BREAKDOWN_TAG
+            else "Spending by category"
+        ),
+        breakdown_table_title=(
+            "Tag detail"
+            if breakdown_mode == DASHBOARD_BREAKDOWN_TAG
+            else "Category detail"
+        ),
+        breakdown_label=(
+            "Tag"
+            if breakdown_mode == DASHBOARD_BREAKDOWN_TAG
+            else "Category"
+        ),
+        breakdown_is_tag=breakdown_mode == DASHBOARD_BREAKDOWN_TAG,
+        show_untagged=show_untagged,
+        show_untagged_url=dashboard_url(
+            args,
+            breakdown=DASHBOARD_BREAKDOWN_TAG,
+            show_untagged="" if show_untagged else "1",
+        ),
         total_spending=total_spending,
         total_income=total_income,
         net_cashflow=cash_flow_summary["net_cashflow"],
         cash_flow_summary=cash_flow_summary,
         transaction_count=summary["transaction_count"],
         uncategorized_count=summary["uncategorized_count"],
+        dashboard_insights=dashboard_insights,
         data_quality=data_quality,
         dashboard_links=dashboard_links,
         first_tx_date=summary["first_tx_date"],
         last_tx_date=summary["last_tx_date"],
-        last_upload=last_upload,
-        category_labels=[row["category"] for row in spending_by_category],
-        category_totals=[rounded_money_float(row["total"]) for row in spending_by_category],
+        category_labels=[row["category"] for row in chart_category_rows],
+        category_totals=[rounded_money_float(row["total"]) for row in chart_category_rows],
         category_urls=[
-            dashboard_transactions_url(
-                period,
-                filter_mode,
-                selected_categories,
-                False,
-                date_from,
-                date_to,
-                quick_view,
-                selected_tags=selected_tags,
-                category=row["category"],
-                amount_type=AMOUNT_TYPE_SPENDING,
-            )
-            for row in spending_by_category
+            row["url"]
+            for row in chart_category_rows
         ],
         category_rows=category_rows,
         expense_month_labels=[row["month"] for row in monthly_expenses],

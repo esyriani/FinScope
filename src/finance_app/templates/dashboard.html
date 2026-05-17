@@ -23,6 +23,7 @@
         <form method="get" class="row g-3 align-items-end">
             <input type="hidden" name="quick_view" value="{{ quick_view }}" data-dashboard-quick-view-input>
             <input type="hidden" name="filter_mode" value="{{ filter_mode }}">
+            <input type="hidden" name="breakdown" value="{{ breakdown_mode }}">
             <div class="col-md-3">
                 <label class="form-label" for="dashboard-period">{{ _("Period") }}</label>
                 <select id="dashboard-period" class="form-select" name="period">
@@ -242,45 +243,124 @@
 {% if transaction_count > 0 %}
 <div class="status-strip mb-4">
     <a class="text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
-        <span class="status-label">{{ _("Transactions") }}</span>
-        <strong>{{ transaction_count }}</strong>
+        <span class="status-label">{{ _("Average transaction") }}</span>
+        <strong>{{ dashboard_insights.average_transaction_amount | moneyfmt }}</strong>
+        <small>{{ _("{count} transactions", count=dashboard_insights.transaction_count) }}</small>
     </a>
-    <a class="text-reset text-decoration-none" href="{{ dashboard_links.unknown }}">
-        <span class="status-label">{{ _("Unknown") }}</span>
-        <strong>{{ uncategorized_count }}</strong>
+    <div>
+        <span class="status-label">{{ _("Untagged") }}</span>
+        <strong>{{ dashboard_insights.untagged_spending_count }} / {{ dashboard_insights.untagged_spending_rate }}%</strong>
+        <small>{{ _("{amount} without tags", amount=dashboard_insights.untagged_spending_total | moneyfmt) }}</small>
+    </div>
+    <a class="text-reset text-decoration-none" href="{{ dashboard_links.verified }}">
+        <span class="status-label">{{ _("Verified") }}</span>
+        <strong>{{ dashboard_insights.verified_count }} / {{ dashboard_insights.verified_rate }}%</strong>
+        <small>{{ _("User-approved") }}</small>
     </a>
-    <a class="text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
-        <span class="status-label">{{ _("Date range") }}</span>
-        <strong>
-            {% if first_tx_date and last_tx_date %}
-                {{ first_tx_date | datefmt }} {{ _("to") }} {{ last_tx_date | datefmt }}
-            {% else %}
-                {{ _("n/a") }}
-            {% endif %}
-        </strong>
-    </a>
-    <a class="text-reset text-decoration-none" href="{{ dashboard_links.upload }}">
-        <span class="status-label">{{ _("Last upload") }}</span>
-        <strong>
-            {% if last_upload %}
-                {{ last_upload["account_name"] or _("Personal") }} / {{ last_upload["filename"] }}
-            {% else %}
-                {{ _("n/a") }}
-            {% endif %}
-        </strong>
+    <a class="text-reset text-decoration-none" href="{{ dashboard_insights.top_source_url or dashboard_links.transactions }}">
+        <span class="status-label">{{ _("Top source") }}</span>
+        <strong>{{ _(dashboard_insights.top_source.label) }}</strong>
+        <small>{{ dashboard_insights.top_source.count }} / {{ dashboard_insights.top_source.rate }}%</small>
     </a>
 </div>
 
-<div class="dashboard-grid">
-    <section class="card chart-card chart-card-tall">
-        <div class="card-body">
-            <div class="section-title">
-                <h5 class="card-title">{{ _("Spending by category") }}</h5>
-            </div>
-            <div id="categoryChart" class="chart-viewport" data-chart-export></div>
+<section class="dashboard-breakdown-section mb-4">
+    <div class="dashboard-breakdown-bar mb-3">
+        <div>
+            <h5 class="card-title">{{ _("Spending breakdown") }}</h5>
+            {% if breakdown_is_tag %}
+                <div class="text-muted small">{{ _("Tagged spending can count the same transaction more than once.") }}</div>
+            {% endif %}
         </div>
-    </section>
+        <div class="dashboard-breakdown-actions">
+            <div class="btn-group" role="group" aria-label="{{ _('Breakdown') }}">
+                {% for option in breakdown_options %}
+                    <a
+                        class="btn btn-sm {% if option.active %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                        href="{{ option.url }}"
+                        aria-pressed="{{ 'true' if option.active else 'false' }}"
+                    >
+                        {{ _(option.label) }}
+                    </a>
+                {% endfor %}
+            </div>
+            {% if breakdown_is_tag %}
+                <a
+                    class="btn btn-sm {% if show_untagged %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                    href="{{ show_untagged_url }}"
+                    aria-pressed="{{ 'true' if show_untagged else 'false' }}"
+                >
+                    {{ _("Hide untagged") if show_untagged else _("Show untagged") }}
+                </a>
+            {% endif %}
+        </div>
+    </div>
 
+    <div class="dashboard-breakdown-grid">
+        <section class="card chart-card chart-card-tall">
+            <div class="card-body">
+                <div class="section-title">
+                    <h5 class="card-title">{{ _(breakdown_chart_title) }}</h5>
+                </div>
+                <div id="categoryChart" class="chart-viewport" data-chart-export></div>
+            </div>
+        </section>
+
+        <section class="card dashboard-breakdown-detail">
+            <div class="card-body p-0">
+                <div class="section-title px-4 pt-4">
+                    <h5 class="card-title">{{ _(breakdown_table_title) }}</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 category-detail-table">
+                        <colgroup>
+                            <col class="category-detail-col-category">
+                            <col class="category-detail-col-spending">
+                            <col class="category-detail-col-share">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>
+                                    <a class="sort-link" href="{{ category_sort_url('category') }}">
+                                        <span>{{ _(breakdown_label) }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'category') }}
+                                    </a>
+                                </th>
+                                <th class="text-end">
+                                    <a class="sort-link justify-content-end" href="{{ category_sort_url('spending') }}">
+                                        <span>{{ _("Spending") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'spending') }}
+                                    </a>
+                                </th>
+                                <th class="text-end">
+                                    <a class="sort-link justify-content-end" href="{{ category_sort_url('share') }}">
+                                        <span>{{ _("Share") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'share') }}
+                                    </a>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in category_rows %}
+                            <tr {% if row["url"] %}data-row-href="{{ row['url'] }}" data-row-drilldown="dblclick"{% endif %}>
+                                <td>{{ row["category"] }}</td>
+                                <td class="text-end">
+                                    <div class="spending-cell-visual">
+                                        <span class="spending-cell-amount">{{ row["total"] | moneyfmt }}</span>
+                                        <span class="spending-bar-track" aria-hidden="true">
+                                            <span class="spending-bar-fill" style="width: {{ row['bar_width'] }}%;"></span>
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="text-end">{{ row["share"] }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
+</section>
+
+<div class="dashboard-grid">
     <section class="card chart-card chart-card-tall">
         <div class="card-body">
             <div class="section-title">
@@ -290,7 +370,7 @@
         </div>
     </section>
 
-    <section class="card chart-card dashboard-wide">
+    <section class="card chart-card chart-card-tall">
         <div class="card-body">
             <div class="section-title">
                 <h5 class="card-title">{{ _("Spending vs income over time") }}</h5>
@@ -384,58 +464,6 @@
                                     <span class="text-muted">{{ _("No matching rules") }}</span>
                                 {% endif %}
                             </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <section class="card dashboard-wide">
-        <div class="card-body p-0">
-            <div class="section-title px-4 pt-4">
-                <h5 class="card-title">{{ _("Category detail") }}</h5>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0 category-detail-table">
-                    <colgroup>
-                        <col class="category-detail-col-category">
-                        <col class="category-detail-col-spending">
-                        <col class="category-detail-col-share">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>
-                                <a class="sort-link" href="{{ category_sort_url('category') }}">
-                                    <span>{{ _("Category") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'category') }}
-                                </a>
-                            </th>
-                            <th class="text-end">
-                                <a class="sort-link justify-content-end" href="{{ category_sort_url('spending') }}">
-                                    <span>{{ _("Spending") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'spending') }}
-                                </a>
-                            </th>
-                            <th class="text-end">
-                                <a class="sort-link justify-content-end" href="{{ category_sort_url('share') }}">
-                                    <span>{{ _("Share") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'share') }}
-                                </a>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in category_rows %}
-                        <tr data-row-href="{{ row['url'] }}" data-row-drilldown="dblclick">
-                            <td>{{ row["category"] }}</td>
-                            <td class="text-end">
-                                <div class="spending-cell-visual">
-                                    <span class="spending-cell-amount">{{ row["total"] | moneyfmt }}</span>
-                                    <span class="spending-bar-track" aria-hidden="true">
-                                        <span class="spending-bar-fill" style="width: {{ row['bar_width'] }}%;"></span>
-                                    </span>
-                                </div>
-                            </td>
-                            <td class="text-end">{{ row["share"] }}%</td>
                         </tr>
                         {% endfor %}
                     </tbody>

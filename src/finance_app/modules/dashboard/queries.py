@@ -1,6 +1,6 @@
 """SQLAlchemy Core query helpers for the dashboard feature."""
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, exists, func, select
 
 from finance_app.core.periods import previous_period_date_range
 from finance_app.core.reporting import (
@@ -12,12 +12,17 @@ from finance_app.core.reporting import (
 from finance_app.core.query import CoreFilters
 from finance_app.database.dates import date_month, date_month_identity, date_year, month_label
 from finance_app.database.tables import (
-    accounts as accounts_table,
     merchants as merchants_table,
-    statements as statements_table,
+    tags as tags_table,
+    transaction_tags as transaction_tags_table,
     transactions as transactions_table,
 )
-from finance_app.modules.categories.sources import CATEGORY_SOURCE_AI, CATEGORY_SOURCE_HISTORY, CATEGORY_SOURCE_RULE
+from finance_app.modules.categories.sources import (
+    CATEGORY_SOURCE_AI,
+    CATEGORY_SOURCE_HISTORY,
+    CATEGORY_SOURCE_MANUAL,
+    CATEGORY_SOURCE_RULE,
+)
 from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.transactions.constants import AMOUNT_TYPE_SPENDING
 from .filters import apply_quick_view_core_filter
@@ -54,6 +59,65 @@ def fetch_spending_by_category(conn, filters, unknown_category):
         .group_by(category)
         .order_by(total.desc())
     ).mappings().fetchall()
+
+
+def fetch_spending_by_tag(conn, filters):
+    """Fetch spending totals associated with each transaction tag.
+
+    Tagged totals intentionally count the full transaction amount for every tag
+    attached to the transaction. A transaction with multiple tags can therefore
+    contribute to multiple rows.
+    """
+    total = func.sum(transactions_table.c.amount)
+    tagged_rows = conn.execute(
+        select(
+            tags_table.c.name.label("category"),
+            tags_table.c.name.label("tag"),
+            total.label("total"),
+        )
+        .select_from(
+            transactions_table
+            .join(
+                transaction_tags_table,
+                transaction_tags_table.c.transaction_id == transactions_table.c.id,
+            )
+            .join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
+        )
+        .where(
+            spending_impact_clause(),
+            non_transfer_clause(),
+            *filters,
+        )
+        .group_by(tags_table.c.name)
+        .order_by(total.desc(), tags_table.c.name)
+    ).mappings().fetchall()
+
+    has_tag = exists(
+        select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id)
+    )
+    untagged = conn.execute(
+        select(total.label("total"))
+        .where(
+            spending_impact_clause(),
+            non_transfer_clause(),
+            ~has_tag,
+            *filters,
+        )
+    ).mappings().fetchone()
+    untagged_total = untagged["total"] if untagged else None
+    rows = [dict(row) for row in tagged_rows]
+    if untagged_total:
+        rows.append(
+            {
+                "category": "Untagged",
+                "tag": "",
+                "total": untagged_total,
+                "untagged": True,
+            }
+        )
+
+    rows.sort(key=lambda row: (-float(row["total"] or 0), row["category"]))
+    return rows
 
 
 def fetch_monthly_expenses(conn, filters):
@@ -267,6 +331,11 @@ def fetch_previous_merchant_totals(
 def fetch_summary(conn, filters, unknown_category, include_transfer_credits=False):
     """Fetch dashboard summary totals, optionally including filtered transfer credits."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
+    has_tag = exists(
+        select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id)
+    )
+    categorized = category != unknown_category
+    untagged_spending = spending_impact_clause() & non_transfer_clause() & ~has_tag
     return conn.execute(
         select(
             func.coalesce(
@@ -296,7 +365,13 @@ def fetch_summary(conn, filters, unknown_category, include_transfer_credits=Fals
                 0,
             ).label("total_income"),
             func.count().label("transaction_count"),
+            func.coalesce(func.avg(func.abs(transactions_table.c.amount)), 0).label("average_transaction_amount"),
             func.coalesce(func.sum(case((category == unknown_category, 1), else_=0)), 0).label("uncategorized_count"),
+            func.coalesce(func.sum(case((untagged_spending, 1), else_=0)), 0).label("untagged_spending_count"),
+            func.coalesce(
+                func.sum(case((untagged_spending, transactions_table.c.amount), else_=0)),
+                0,
+            ).label("untagged_spending_total"),
             func.coalesce(
                 func.sum(
                     case(
@@ -310,7 +385,7 @@ def fetch_summary(conn, filters, unknown_category, include_transfer_credits=Fals
                 ),
                 0,
             ).label("unknown_needs_review_count"),
-            func.coalesce(func.sum(case((category != unknown_category, 1), else_=0)), 0).label("categorized_count"),
+            func.coalesce(func.sum(case((categorized, 1), else_=0)), 0).label("categorized_count"),
             func.coalesce(
                 func.sum(case((transactions_table.c.needs_review == 1, 1), else_=0)),
                 0,
@@ -320,17 +395,57 @@ def fetch_summary(conn, filters, unknown_category, include_transfer_credits=Fals
                 0,
             ).label("manually_reviewed_count"),
             func.coalesce(
-                func.sum(case((transactions_table.c.category_source == CATEGORY_SOURCE_RULE, 1), else_=0)),
+                func.sum(
+                    case(
+                        (
+                            categorized
+                            & (transactions_table.c.category_source == CATEGORY_SOURCE_RULE),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
                 0,
             ).label("rule_count"),
             func.coalesce(
-                func.sum(case((transactions_table.c.category_source == CATEGORY_SOURCE_HISTORY, 1), else_=0)),
+                func.sum(
+                    case(
+                        (
+                            categorized
+                            & (transactions_table.c.category_source == CATEGORY_SOURCE_HISTORY),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
                 0,
             ).label("history_count"),
             func.coalesce(
-                func.sum(case((transactions_table.c.category_source == CATEGORY_SOURCE_AI, 1), else_=0)),
+                func.sum(
+                    case(
+                        (
+                            categorized
+                            & (transactions_table.c.category_source == CATEGORY_SOURCE_AI),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
                 0,
             ).label("ai_count"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            categorized
+                            & (transactions_table.c.category_source == CATEGORY_SOURCE_MANUAL),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("manual_source_count"),
             func.count(func.distinct(date_month_identity(transactions_table.c.tx_date))).label("active_months"),
             func.min(transactions_table.c.tx_date).label("first_tx_date"),
             func.max(transactions_table.c.tx_date).label("last_tx_date"),
@@ -376,22 +491,3 @@ def fetch_quick_view_counts(conn, filters, unknown_category):
         "unknown_count": row["unknown_count"] or 0,
         "categorized_count": row["categorized_count"] or 0,
     }
-
-
-def fetch_last_upload(conn):
-    """Fetch last upload."""
-    return conn.execute(
-        select(
-            statements_table.c.uploaded_at,
-            statements_table.c.filename,
-            accounts_table.c.name.label("account_name"),
-        )
-        .select_from(
-            statements_table.outerjoin(
-                accounts_table,
-                accounts_table.c.id == statements_table.c.account_id,
-            )
-        )
-        .order_by(statements_table.c.uploaded_at.desc())
-        .limit(1)
-    ).mappings().fetchone()
