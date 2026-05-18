@@ -22,6 +22,8 @@ from finance_app.database.seeds import (  # noqa: E402
     seed_statement_type_defaults,
 )
 from finance_app.database.tables import metadata  # noqa: E402
+from finance_app.modules.auth import repository as auth_repository  # noqa: E402
+from finance_app.modules.auth.service import bootstrap_owner  # noqa: E402
 
 
 LAYER_MARKERS = {
@@ -32,6 +34,8 @@ LAYER_MARKERS = {
 }
 DB_FIXTURES = {"db_conn", "core_conn"}
 FLASK_FIXTURES = {"app", "client", "runner"}
+TEST_OWNER_USERNAME = "owner"
+TEST_OWNER_PASSWORD = "OwnerPass123!"
 
 
 class TestRow:
@@ -259,6 +263,22 @@ def initialize_test_database(database_path):
         seed_category_taxonomy_defaults(conn)
 
 
+def seed_test_owner():
+    """Create the default authenticated owner used by existing route tests."""
+    with engine_module.db_core_transaction() as conn:
+        if auth_repository.owner_exists(conn):
+            return auth_repository.get_user_by_username(conn, TEST_OWNER_USERNAME)
+
+    return bootstrap_owner(TEST_OWNER_USERNAME, TEST_OWNER_PASSWORD, TEST_OWNER_PASSWORD)
+
+
+def login_test_client(client, user_id):
+    """Store Flask-Login session keys for a test client."""
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     """Create and configure a Flask application for tests."""
@@ -278,13 +298,24 @@ def app(tmp_path, monkeypatch):
     application = app_package.create_app()
     application.config["TESTING"] = True
     application.config["TEST_DATABASE_PATH"] = test_settings.database_path
+    seed_test_owner()
     yield application
     engine_module.dispose_database_engine()
 
 
 @pytest.fixture
 def client(app):
-    """A test client for the Flask application."""
+    """A test client authenticated as the default owner."""
+    test_client = app.test_client()
+    with engine_module.db_core_transaction() as conn:
+        owner = auth_repository.get_user_by_username(conn, TEST_OWNER_USERNAME)
+    login_test_client(test_client, owner["id"])
+    return test_client
+
+
+@pytest.fixture
+def anonymous_client(app):
+    """A test client without a logged-in user."""
     return app.test_client()
 
 

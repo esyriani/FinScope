@@ -4,7 +4,7 @@
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Settings") }}</h2>
-        <p class="text-muted mb-0">{{ _("Configure table limits, previews, categories, statement types, interface language, and theme mode.") }}</p>
+        <p class="text-muted mb-0">{{ _("Configure your interface preferences and owner-managed deployment settings.") }}</p>
     </div>
 </div>
 
@@ -129,6 +129,7 @@
                 </div>
             </section>
 
+            {% if can_manage_global_settings %}
             <section class="settings-section">
                 <div class="settings-section-header">
                     <h5 class="settings-section-title">{{ _("Categorization") }}</h5>
@@ -275,6 +276,7 @@
                     </table>
                 </div>
             </section>
+            {% endif %}
 
             <div class="settings-actions d-flex gap-2">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-save" aria-hidden="true"></i>{{ _("Save settings") }}</button>

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Account") }}</h2>
+        <p class="text-muted mb-0">{{ _("Manage how you appear in this shared FinScope deployment.") }}</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ _(message) }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <section class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ _("Profile") }}</h5>
+                <dl class="account-summary">
+                    <dt>{{ _("Username") }}</dt>
+                    <dd>{{ account_user["username"] }}</dd>
+                    <dt>{{ _("Role") }}</dt>
+                    <dd>{{ _(account_user["role"]|title) }}</dd>
+                </dl>
+
+                <form method="post" class="settings-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="account_action" value="display_name">
+                    <div class="settings-field">
+                        <label for="display_name" class="form-label">{{ _("Display name") }}</label>
+                        <input id="display_name" class="form-control" type="text" name="display_name" value="{{ account_user['display_name'] }}" required>
+                    </div>
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-person-check" aria-hidden="true"></i>{{ _("Save display name") }}
+                    </button>
+                </form>
+            </div>
+        </section>
+    </div>
+
+    <div class="col-lg-7">
+        <section class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ _("Password") }}</h5>
+                <form method="post" class="auth-form auth-form-narrow">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="account_action" value="password">
+
+                    <div>
+                        <label for="current_password" class="form-label">{{ _("Current password") }}</label>
+                        <input id="current_password" class="form-control" type="password" name="current_password" autocomplete="current-password" required>
+                    </div>
+
+                    <div>
+                        <label for="new_password" class="form-label">{{ _("New password") }}</label>
+                        <input id="new_password" class="form-control" type="password" name="new_password" autocomplete="new-password" required>
+                    </div>
+
+                    <div>
+                        <label for="confirm_password" class="form-label">{{ _("Confirm password") }}</label>
+                        <input id="confirm_password" class="form-control" type="password" name="confirm_password" autocomplete="new-password" required>
+                    </div>
+
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-save" aria-hidden="true"></i>{{ _("Save password") }}
+                    </button>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>
+
+<section class="card mt-3">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h5 class="card-title mb-1">{{ _("Session") }}</h5>
+            <p class="text-muted mb-0">{{ _("Sign out when you are done reviewing this FinScope database.") }}</p>
+        </div>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-secondary" type="submit">
+                <i class="bi bi-box-arrow-right" aria-hidden="true"></i>{{ _("Log out") }}
+            </button>
+        </form>
+    </div>
+</section>
+{% endblock %}

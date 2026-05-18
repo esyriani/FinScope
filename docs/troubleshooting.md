@@ -2,13 +2,14 @@
 
 ## FinScope starts with no data
 
-Check the configured database path:
+Check the configured database URL and SQLite path:
 
 ```powershell
+$env:FINANCE_DATABASE_URL
 $env:FINANCE_DB_PATH
 ```
 
-If no custom path is set, the default is `runtime/finance.db`.
+If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is `runtime/finance.db`.
 
 ## LLM categorization does not run
 

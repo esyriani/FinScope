@@ -31,6 +31,19 @@ def taxonomy_id(rows, name):
     raise AssertionError(f"Missing taxonomy row for {name}")
 
 
+def set_owner_setting(conn, key, value):
+    """Persist a runtime setting for the seeded owner account."""
+    conn.execute(
+        """
+        UPDATE user_settings
+        SET value = :value
+        WHERE key = :key
+          AND user_id = (SELECT id FROM users WHERE username = 'owner')
+        """,
+        {"key": key, "value": value},
+    )
+
+
 def result_payload(category_rows, tag_rows, request_id, category, confidence, tags=None, **extra):
     """Build a strict ID-based mocked LLM result."""
     payload = {
@@ -82,12 +95,8 @@ def test_pair_llm_results_uses_request_ids_and_positional_fallback():
 
 def test_classify_unknowns_with_llm_applies_thresholds_and_filters_invalid_values(db_conn, monkeypatch):
     """Verify accepted LLM results update transactions conservatively."""
-    db_conn.execute(
-        "UPDATE settings SET value = '0.80' WHERE key = 'llm_confidence_threshold'"
-    )
-    db_conn.execute(
-        "UPDATE settings SET value = '0.90' WHERE key = 'verify_threshold'"
-    )
+    set_owner_setting(db_conn, "llm_confidence_threshold", "0.80")
+    set_owner_setting(db_conn, "verify_threshold", "0.90")
     db_conn.commit()
     transactions = [
         unknown_transaction("Metro Grocery 1", "METRO", 12.34),
@@ -421,9 +430,9 @@ def test_classify_unknowns_with_llm_marks_three_way_disagreement_for_review(db_c
 
 def test_classify_unknowns_with_llm_passes_taxonomy_rules_and_runtime_settings(db_conn, monkeypatch):
     """Verify the LLM adapter receives taxonomy metadata and central thresholds."""
-    db_conn.execute("UPDATE settings SET value = '0.82' WHERE key = 'llm_confidence_threshold'")
-    db_conn.execute("UPDATE settings SET value = '0.74' WHERE key = 'verify_threshold'")
-    db_conn.execute("UPDATE settings SET value = 'gpt-unit' WHERE key = 'openai_model'")
+    set_owner_setting(db_conn, "llm_confidence_threshold", "0.82")
+    set_owner_setting(db_conn, "verify_threshold", "0.74")
+    set_owner_setting(db_conn, "openai_model", "gpt-unit")
     db_conn.commit()
     rules = [
         {
@@ -781,7 +790,7 @@ def test_build_llm_prompt_includes_evidence_and_compact_candidate_taxonomy():
 
 def test_classify_unknowns_with_llm_rejects_category_outside_candidate_taxonomy(db_conn, monkeypatch):
     """Verify model categories outside compact candidates remain unknown."""
-    db_conn.execute("UPDATE settings SET value = '0.80' WHERE key = 'llm_confidence_threshold'")
+    set_owner_setting(db_conn, "llm_confidence_threshold", "0.80")
     db_conn.commit()
     transactions = [
         {

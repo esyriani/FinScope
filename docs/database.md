@@ -1,16 +1,25 @@
 # Database
 
-FinScope stores local application data in SQLite by default. The default runtime database is `runtime/finance.db`, and runtime schema creation is managed by SQLAlchemy Core metadata in `src/finance_app/database/tables.py`.
+FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the default local backend at `runtime/finance.db`; MySQL is selected by setting a `mysql+pymysql://` SQLAlchemy URL. Runtime schema creation is managed by SQLAlchemy Core metadata in `src/finance_app/database/tables.py`.
 
-The database layer maintains the Core engine/connection lifecycle in `src/finance_app/database/engine.py`. Startup creates the configured schema from Core metadata and seeds runtime defaults through Core for SQLite and other SQLAlchemy URLs. `src/finance_app/database/tables.py` is the runtime initialization path and the test suite's schema source of truth.
+The database layer maintains the Core engine/connection lifecycle in `src/finance_app/database/engine.py`. Startup creates the configured clean schema from Core metadata and seeds runtime defaults through Core for SQLite and MySQL URLs. `src/finance_app/database/tables.py` is the runtime initialization path and the schema source of truth.
 
-Runtime settings, statement type management, account persistence, merchant persistence, category/tag taxonomy helpers, taxonomy admin CRUD, category rule repository helpers, imported-rule repository helpers, rule import/export job entry points, rule listing queries, rule create/update/approval/delete/preview/apply workflows, standalone categorization, recurring pattern writes, transaction list queries and route mutations, transaction repository helpers, transaction import deduplication, home summary queries, upload page context queries, upload queue/import/reprocess/undo workflows, dashboard/comparison/calendar reporting read models, review page/workflow queries and mutations, and jobs page settings lookups use SQLAlchemy Core connections.
+User-bound runtime settings, statement type management, account persistence, merchant persistence, category/tag taxonomy helpers, taxonomy admin CRUD, category rule repository helpers, imported-rule repository helpers, rule import/export job entry points, rule listing queries, rule create/update/approval/delete/preview/apply workflows, standalone categorization, recurring pattern writes, transaction list queries and route mutations, transaction repository helpers, transaction import deduplication, home summary queries, upload page context queries, upload queue/import/reprocess/undo workflows, dashboard/comparison/calendar reporting read models, review page/workflow queries and mutations, and jobs page settings lookups use SQLAlchemy Core connections.
 
-Runtime-facing persistence helpers now require SQLAlchemy Core connections. SQLite remains supported through `sqlite:///` database URLs.
+Runtime-facing persistence helpers require SQLAlchemy Core connections. SQLite uses `sqlite:///` database URLs, while MySQL uses `mysql+pymysql://` URLs. Compatible MariaDB deployments use the same MySQL URL form through PyMySQL.
 
 Money amounts are modeled in SQLAlchemy Core as fixed-scale `Numeric(14, 2)` values. This applies to transaction amounts, category rule amount bounds, and recurring pattern amount settings; probability-style fields such as category confidence remain floating point.
 
-Persisted enum-like text values, such as import statuses, parser types, category sources, rule sources, and recurring pattern statuses, are defined in `src/finance_app/core/constants.py`. The schema derives `CHECK` constraints from those constants so Python validation and SQLite constraints stay aligned.
+Persisted enum-like text values, such as import statuses, parser types, category sources, rule sources, and recurring pattern statuses, are defined in `src/finance_app/core/constants.py`. The schema derives `CHECK` constraints from those constants so Python validation and database constraints stay aligned across SQLite and MySQL.
+
+## Supported backends
+
+| Backend | Minimum version | URL form | Notes |
+| --- | --- | --- | --- |
+| SQLite | 3.31+ | `sqlite:///D:/path/to/finance.db` | Default local backend. The current development environment uses SQLite 3.45.1. |
+| MySQL | 8.0.16+ | `mysql+pymysql://user:password@host:3306/finscope` | Fully supported through SQLAlchemy Core and PyMySQL 1.1.3. Compatible MariaDB servers use the same URL form. |
+
+The schema uses generated columns, foreign keys, check constraints, unique constraints, numeric money fields, and timestamp helpers that are kept portable between SQLite and MySQL. MySQL deployments should use an InnoDB-capable server with `utf8mb4` character support; FinScope creates new MySQL databases with `utf8mb4_unicode_ci` when the configured account can create databases.
 
 ## Choosing a database
 
@@ -52,19 +61,17 @@ url = mysql+pymysql://user:password@127.0.0.1:3306/finscope
 path = ../../runtime/finance.db
 ```
 
-When `database.url` points to MySQL or another non-SQLite database, `database.path` is not active. The external database and user must already exist; FinScope initializes the schema and seed rows inside the selected database.
+When `database.url` points to MySQL, `database.path` is not active. FinScope creates the configured MySQL database when the account has server-level `CREATE DATABASE` permission; otherwise create the empty database first, then FinScope initializes tables and seed rows inside it.
 
 ## Interactive schema
 
-The interactive database schema is available at [db-schema.html](db-schema.html). It is a dynamic HTML page generated with DBSchema from `finance.db`.
+The database schema overview is available at [db-schema.html](db-schema.html). It is generated from the SQLAlchemy Core metadata in `src/finance_app/database/tables.py`.
 
-Use the interactive schema when you need to inspect table relationships, indexes, constraints, and column details visually. Use `src/finance_app/database/tables.py` as the source of truth for runtime schema implementation.
+Use the schema overview when you need to inspect table relationships, indexes, constraints, and column details. Use `src/finance_app/database/tables.py` as the source of truth for runtime schema implementation.
 
 ## Data model
 
-FinScope uses SQLite by default. Schema creation and startup initialization are handled by SQLAlchemy Core metadata and `init_db()`.
-
-![Database schema diagram](diagrams/db-schema.png)
+FinScope uses SQLite by default and MySQL when configured. Both backends are supported application databases. Schema creation and startup initialization are handled by SQLAlchemy Core metadata and `init_db()`.
 
 
 ### Table responsibilities
@@ -86,6 +93,27 @@ Defines the statement parsers available on the settings and upload pages.
 - `default_account_type`: Account role selected by default when a user uploads this statement type.
 - `active`: Soft-delete flag so old statement types can be hidden without losing historical references.
 - `created_at`: Creation timestamp for auditing and ordering.
+
+#### `users`
+
+Stores owner-managed user accounts for the single FinScope deployment.
+
+- `username`: Unique login name.
+- `display_name`: Required UI presentation name shown in greetings, shared-access context, and user-management pages.
+- `password_hash`: Secure password hash. SQLite stores this as `TEXT`; MySQL uses `VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`.
+- `role`: `owner`, `editor`, or `viewer`.
+- `is_active`: Soft-deactivation flag.
+- `must_change_password`: Forces a password change after temporary passwords.
+- `failed_login_count` and `locked_until`: Login throttling state.
+- `created_at`, `updated_at`, and `last_login_at`: Account lifecycle timestamps.
+
+#### `user_settings`
+
+Stores runtime settings as user-bound key/value pairs. The composite key is `user_id` and `key`, values are stored as text, and the settings layer parses them into the expected numeric or text types. When no request user is available, background and service code resolves settings through the active owner account.
+
+#### `audit_log`
+
+Stores security-relevant account events without plaintext passwords.
 
 #### `statements`
 
@@ -161,7 +189,7 @@ Stores imported ledger rows and their categorization state.
 
 #### `category_rules`
 
-Stores manual, automatic, or default rules used to categorize transactions.
+Stores manual or automatic rules used to categorize transactions.
 
 - `account_id`: Optional account scope. When present, the rule only applies to transactions from that account.
 - `merchant_id`: Optional exact merchant scope. When null, the rule matches by normalized keyword.
@@ -175,7 +203,7 @@ Stores manual, automatic, or default rules used to categorize transactions.
 - `ai_approved`: Approval flag for automatically suggested rules.
 - `created_at`: Creation timestamp.
 
-Unique constraints prevent duplicate rules for the same merchant or keyword, account scope, direction, and amount window across SQLite, MySQL, and PostgreSQL schema creation.
+Unique constraints prevent duplicate rules for the same merchant or keyword, account scope, direction, and amount window across SQLite and MySQL schema creation.
 
 #### `tags`
 
@@ -200,15 +228,11 @@ Join table between `transactions` and `tags`.
 
 Join table between category rules and tags. The composite key of `rule_id` and `tag_id` prevents duplicate tag assignments on a rule.
 
-#### `settings`
-
-Stores runtime settings as key/value pairs. The `key` column is the primary key and cannot be blank; values are stored as text and parsed by the settings layer.
-
 #### `recurring_patterns`
 
 Stores user overrides and status for detected recurring activity.
 
-- `pattern_key`: Primary key used for fuzzy or legacy recurring pattern lookups.
+- `pattern_key`: Primary key used for fuzzy recurring pattern lookups.
 - `merchant_id`: Optional stable merchant scope for durable merchant-bound overrides.
 - `merchant`: Merchant text snapshot used for display and fallback matching.
 - `type`: Recurring activity direction, either `spending` or `income`.
@@ -248,7 +272,7 @@ When tables, columns, indexes, or relationships change:
 
 1. Apply the application schema changes in `src/finance_app/database/tables.py`.
 2. Rebuild or initialize a representative `finance.db`.
-3. Regenerate `docs/db-schema.html` from that database with DBSchema.
+3. Regenerate `docs/db-schema.html` and `docs/diagrams/db-schema.dbs` from the SQLAlchemy Core metadata.
 4. Update [architecture.md](architecture.md) or this page if the conceptual data model changed.
 
-Do not hand-edit `docs/db-schema.html`; regenerate it from the database so the visual documentation stays consistent with the runtime schema.
+Do not hand-edit generated schema artifacts; regenerate them from the metadata so the documentation stays consistent with the runtime schema.

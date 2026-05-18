@@ -6,6 +6,7 @@ from finance_app.modules.categories.taxonomy import (
     get_tag_options,
     normalize_tag_names,
 )
+from finance_app.modules.auth.permissions import PERMISSION_EDIT_TRANSACTIONS, permission_required
 from finance_app.modules.categories.service import (
     get_category_options,
     normalize_category,
@@ -31,6 +32,7 @@ def transactions():
 
 
 @transactions_bp.route("/transactions/<int:transaction_id>/category", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
 def update_transaction_category(transaction_id):
     """Apply a manual category update to one transaction."""
     next_url = transactions_redirect_target()
@@ -100,6 +102,7 @@ def update_transaction_category(transaction_id):
 
 
 @transactions_bp.route("/transactions/<int:transaction_id>/verify", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
 def verify_transaction(transaction_id):
     """Mark one transaction as manually verified."""
     next_url = transactions_redirect_target()
@@ -111,6 +114,7 @@ def verify_transaction(transaction_id):
 
 
 @transactions_bp.route("/transactions/<int:transaction_id>/ignored", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
 def update_transaction_ignored(transaction_id):
     """Update the ignored flag for one transaction."""
     next_url = transactions_redirect_target()

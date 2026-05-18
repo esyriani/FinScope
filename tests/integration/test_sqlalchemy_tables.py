@@ -8,6 +8,22 @@ from finance_app.database.tables import metadata
 
 
 EXPECTED_TABLE_COLUMNS = {
+    "users": [
+        "id",
+        "username",
+        "display_name",
+        "password_hash",
+        "role",
+        "is_active",
+        "must_change_password",
+        "created_at",
+        "updated_at",
+        "last_login_at",
+        "failed_login_count",
+        "locked_until",
+    ],
+    "user_settings": ["user_id", "key", "value", "updated_at"],
+    "audit_log": ["id", "user_id", "username", "action", "details", "ip_address", "created_at"],
     "accounts": ["id", "name", "account_type", "paid_from_account_id"],
     "statement_types": [
         "id",
@@ -98,7 +114,6 @@ EXPECTED_TABLE_COLUMNS = {
         "ai_approved",
         "created_at",
     ],
-    "settings": ["key", "value"],
     "recurring_patterns": [
         "pattern_key",
         "merchant_id",
@@ -120,7 +135,8 @@ EXPECTED_TABLE_COLUMNS = {
 }
 
 EXPECTED_EXPLICIT_INDEXES = {
-    "idx_categories_name",
+    "idx_audit_log_created_at",
+    "idx_audit_log_user",
     "idx_category_rule_tags_tag",
     "idx_category_rules_amount_bounds",
     "idx_category_rules_account",
@@ -136,8 +152,9 @@ EXPECTED_EXPLICIT_INDEXES = {
     "idx_statements_account",
     "idx_statements_statement_type",
     "idx_statements_uploaded_at",
-    "idx_tags_name",
     "idx_transaction_tags_tag",
+    "idx_users_locked_until",
+    "idx_users_role_active",
     "idx_transactions_account",
     "idx_transactions_amount",
     "idx_transactions_category",
@@ -161,6 +178,9 @@ EXPECTED_EXPLICIT_INDEXES = {
 }
 
 EXPECTED_UNIQUE_CONSTRAINTS = {
+    "users": {
+        "uq_users_username": ["username"],
+    },
     "categories": {
         "uq_categories_builtin_key": ["builtin_key"],
     },
@@ -278,6 +298,12 @@ def test_core_metadata_uses_typed_date_and_timestamp_columns():
         metadata.tables["recurring_patterns"].c.updated_at,
         metadata.tables["tags"].c.created_at,
         metadata.tables["transaction_tags"].c.assigned_at,
+        metadata.tables["users"].c.created_at,
+        metadata.tables["users"].c.updated_at,
+        metadata.tables["users"].c.last_login_at,
+        metadata.tables["users"].c.locked_until,
+        metadata.tables["user_settings"].c.updated_at,
+        metadata.tables["audit_log"].c.created_at,
     ]
 
     assert all(isinstance(column.type, ISODate) for column in date_columns)
@@ -294,8 +320,19 @@ def test_core_metadata_compiles_portable_uniqueness_for_mysql_and_postgresql():
         normalized = rendered.replace("`", "").replace('"', "")
 
         assert "CREATE TABLE accounts" in normalized
+        assert "CREATE TABLE settings" not in normalized
+        assert "CREATE TABLE user_settings" in normalized
+        assert "PRIMARY KEY (user_id, key)" in normalized
+        assert "FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE" in normalized
         assert "tx_date DATE NOT NULL" in normalized
         assert "NUMERIC(14, 2)" in normalized
+        if database_url.startswith("mysql"):
+            assert "password_hash VARCHAR(255)" in normalized
+            assert "ENGINE=InnoDB" in normalized
+            assert "CHARSET=utf8mb4" in normalized
+            assert "COLLATE utf8mb4_unicode_ci" in normalized
+        else:
+            assert "password_hash TEXT" in normalized
         assert "uploaded_at" in normalized
         assert ("uploaded_at DATETIME" in normalized) or ("uploaded_at TIMESTAMP" in normalized)
         assert "FOREIGN KEY(category_id) REFERENCES categories (id) ON DELETE SET NULL" in normalized

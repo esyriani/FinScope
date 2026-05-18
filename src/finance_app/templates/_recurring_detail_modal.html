@@ -76,6 +76,7 @@
                 </div>
                 <div class="alert alert-info py-2 d-none" data-recurring-detail-action-status></div>
 
+                {% if can_edit_recurring %}
                 <div class="d-flex flex-wrap gap-2 mb-4">
                     <button type="button" class="btn btn-sm btn-primary" data-recurring-confirm-action><i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Confirm recurring") }}</button>
                     <button type="button" class="btn btn-sm btn-outline-danger" data-recurring-ignore-action><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Not recurring / Ignore") }}</button>
@@ -132,6 +133,7 @@
                         </form>
                     </div>
                 </div>
+                {% endif %}
 
                 <h6 class="card-title mb-2">{{ _("Recent occurrences") }}</h6>
                 <div class="table-responsive">

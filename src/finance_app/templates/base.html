@@ -49,6 +49,8 @@
     {% endfor %}
 </head>
 <body>
+{% set hide_app_shell = auth_shell|default(false) %}
+{% if current_user.is_authenticated and not hide_app_shell %}
 <header class="mobile-topbar">
     <a class="mobile-brand {% if request.path == '/' %}active{% endif %}" href="/" aria-label="{{ _('Home') }}">
         <span class="brand-mark" aria-hidden="true">
@@ -103,6 +105,7 @@
         <nav class="sidebar-nav" aria-label="{{ _('Primary navigation') }}">
             <div class="nav-group">
                 <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/" title="{{ _('Home') }}"><i class="bi bi-house-door" aria-hidden="true"></i><span>{{ _("Home") }}</span></a>
+                <a class="nav-link {% if request.path.startswith('/account') %}active{% endif %}" href="{{ url_for('auth.account') }}" title="{{ _('Account') }}"><i class="bi bi-person-circle" aria-hidden="true"></i><span>{{ _("Account") }}</span></a>
             </div>
 
             <div class="nav-group">
@@ -115,26 +118,45 @@
 
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Workflow") }}</div>
+                {% if current_user_can('import_statements') %}
                 <a class="nav-link {% if request.path.startswith('/upload') %}active{% endif %}" href="/upload" title="{{ _('Statements') }}"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i><span>{{ _("Statements") }}</span></a>
+                {% endif %}
                 <a class="nav-link {% if request.path.startswith('/transactions') %}active{% endif %}" href="/transactions" title="{{ _('Transactions') }}"><i class="bi bi-receipt" aria-hidden="true"></i><span>{{ _("Transactions") }}</span></a>
+                {% if current_user_can('edit_transactions') %}
                 <a class="nav-link {% if request.path.startswith('/review') %}active{% endif %}" href="/review" title="{{ _('Review') }}"><i class="bi bi-check2-square" aria-hidden="true"></i><span>{{ _("Review") }}</span></a>
+                {% endif %}
+                {% if current_user_can('manage_rules') %}
                 <a class="nav-link {% if request.path.startswith('/rules') %}active{% endif %}" href="/rules" title="{{ _('Rules') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Rules") }}</span></a>
+                {% endif %}
             </div>
 
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Admin") }}</div>
+                {% if current_user_can('manage_taxonomy') %}
                 <a class="nav-link {% if request.path.startswith('/taxonomy') %}active{% endif %}" href="/taxonomy" title="{{ _('Taxonomy') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Taxonomy") }}</span></a>
+                {% endif %}
+                {% if current_user_can('manage_jobs') %}
                 <a class="nav-link {% if request.path.startswith('/jobs') %}active{% endif %}" href="/jobs" title="{{ _('Jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i><span>{{ _("Jobs") }}</span></a>
+                {% endif %}
                 <a class="nav-link {% if request.path.startswith('/settings') %}active{% endif %}" href="/settings" title="{{ _('Settings') }}"><i class="bi bi-gear" aria-hidden="true"></i><span>{{ _("Settings") }}</span></a>
+                {% if current_user_can('manage_users') %}
+                <a class="nav-link {% if request.path.startswith('/admin/users') %}active{% endif %}" href="/admin/users" title="{{ _('Users') }}"><i class="bi bi-people" aria-hidden="true"></i><span>{{ _("Users") }}</span></a>
+                {% endif %}
             </div>
+
         </nav>
     </aside>
 
     <main class="content">
+{% else %}
+    <main class="auth-content">
+{% endif %}
         {% block content %}{% endblock %}
     </main>
+{% if current_user.is_authenticated and not hide_app_shell %}
 </div>
 <button class="sidebar-backdrop" type="button" data-sidebar-backdrop aria-label="{{ _('Toggle sidebar') }}"></button>
+{% endif %}
 
 <script src="{{ static_asset('vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ static_asset('vendor/flatpickr/4.6.13/flatpickr.min.js') }}"></script>

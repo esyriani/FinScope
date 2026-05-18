@@ -81,6 +81,10 @@ function setupSortableTables(root = document) {
             return (cell.getAttribute("data-sort-value") || cell.textContent).trim().toLocaleLowerCase();
         }
 
+        function rowSortGroup(row) {
+            return Number(row.dataset.sortGroup || 0) || 0;
+        }
+
         function setSortIcon(button, direction) {
             table.querySelectorAll(".sort-icon").forEach((icon) => icon.remove());
             const icon = document.createElement("span");
@@ -101,6 +105,9 @@ function setupSortableTables(root = document) {
                 const sortableRows = Array.from(tbody.rows).filter((row) => !row.hasAttribute("data-sort-ignore"));
                 const ignoredRows = Array.from(tbody.rows).filter((row) => row.hasAttribute("data-sort-ignore"));
                 sortableRows.sort((left, right) => {
+                    const groupDifference = rowSortGroup(left) - rowSortGroup(right);
+                    if (groupDifference !== 0) return groupDifference;
+
                     const leftValue = cellValue(left, column, type);
                     const rightValue = cellValue(right, column, type);
                     if (leftValue < rightValue) return nextDirection === "asc" ? -1 : 1;

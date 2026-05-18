@@ -4,6 +4,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from sqlalchemy import delete, insert, select
 
 from finance_app.background.runner import submit_background_job
+from finance_app.modules.auth.permissions import PERMISSION_IMPORT_STATEMENTS, permission_required
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -36,6 +37,7 @@ upload_bp = Blueprint("upload", __name__)
 
 
 @upload_bp.route("/upload", methods=["GET", "POST"])
+@permission_required(PERMISSION_IMPORT_STATEMENTS)
 def upload():
     """Render the upload page."""
     if request.method == "POST":
@@ -133,12 +135,14 @@ def handle_statement_upload():
 
 
 @upload_bp.route("/upload/<int:statement_id>/retry", methods=["POST"])
+@permission_required(PERMISSION_IMPORT_STATEMENTS)
 def retry_statement_import(statement_id):
     """Queue another import attempt for an existing stored statement."""
     return queue_existing_statement_import(statement_id, reprocess=False)
 
 
 @upload_bp.route("/upload/<int:statement_id>/reprocess", methods=["POST"])
+@permission_required(PERMISSION_IMPORT_STATEMENTS)
 def reprocess_statement_import(statement_id):
     """Delete a statement's imported transactions and queue a fresh import."""
     return queue_existing_statement_import(statement_id, reprocess=True)

@@ -21,6 +21,7 @@ from finance_app.modules.categories.taxonomy import (
     get_tag_options,
     seed_category_taxonomy,
 )
+from finance_app.modules.taxonomy_admin.service import fetch_category_rows, fetch_tag_rows
 
 
 def test_taxonomy_categories_tags_and_builtins_are_persisted(db_conn):
@@ -69,6 +70,35 @@ def test_category_options_seed_empty_db_from_taxonomy_file(db_conn):
     assert "UNKNOWN" in category_options
     assert "Transfers" in category_options
     assert db_conn.execute(select(func.count()).select_from(categories_table)).scalar_one() > 1
+
+
+def test_taxonomy_options_sort_user_values_before_builtins(db_conn):
+    """Verify user taxonomy values sort alphabetically before bundled values."""
+    db_conn.execute(
+        """
+        INSERT INTO categories (name)
+        VALUES ('Aardvark'), ('Zulu custom')
+        """
+    )
+    db_conn.execute(
+        """
+        INSERT INTO tags (name, color)
+        VALUES ('Audit', '#123abc'), ('Zulu tag', '#456def')
+        """
+    )
+
+    category_options = get_category_options(db_conn)
+    tag_options = get_tag_options(db_conn)
+    tag_option_rows = get_tag_option_rows(db_conn)
+    taxonomy_categories = fetch_category_rows(db_conn)
+    taxonomy_tags = fetch_tag_rows(db_conn)
+
+    assert category_options[-2:] == ["Transfers", "UNKNOWN"]
+    assert [row["name"] for row in taxonomy_categories][-2:] == ["Transfers", "UNKNOWN"]
+    assert tag_options[:2] == ["Audit", "Zulu tag"]
+    assert [row["name"] for row in tag_option_rows[:2]] == ["Audit", "Zulu tag"]
+    assert [row["name"] for row in taxonomy_tags[:2]] == ["Audit", "Zulu tag"]
+    assert all(row["is_builtin"] for row in taxonomy_tags[2:])
 
 
 def test_normalize_category_requires_supplied_options():

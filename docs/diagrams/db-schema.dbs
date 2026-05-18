@@ -26,6 +26,34 @@
 				<fk_column name="paid_from_account_id" pk="id" />
 			</fk>
 		</table>
+		<table name="audit_log" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="user_id" type="INTEGER" />
+			<column name="username" type="TEXT" length="150" />
+			<column name="action" type="TEXT" length="64" mandatory="y" />
+			<column name="details" type="TEXT" />
+			<column name="ip_address" type="TEXT" length="64" />
+			<column name="created_at" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_audit_log" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="idx_audit_log_created_at" unique="NORMAL" >
+				<column name="created_at" />
+			</index>
+			<index name="idx_audit_log_user" unique="NORMAL" >
+				<column name="user_id" />
+			</index>
+			<constraint name="ck_audit_log_audit_log_action_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(action) != '']]></string>
+			</constraint>
+			<fk name="fk_audit_log_user_id_users" to_schema="Default" to_table="users" delete_action="setNull" >
+				<fk_column name="user_id" pk="id" />
+			</fk>
+		</table>
 		<table name="categories" spec="" >
 			<column name="id" type="INTEGER" mandatory="y" >
 				<identity><![CDATA[AUTOINCREMENT]]></identity>
@@ -40,11 +68,11 @@
 			<index name="pk_categories" unique="PRIMARY_KEY" >
 				<column name="id" />
 			</index>
+			<index name="uq_categories_builtin_key" unique="UNIQUE_KEY" >
+				<column name="builtin_key" />
+			</index>
 			<index name="idx_categories_name" unique="NORMAL" >
 				<column name="name" />
-			</index>
-			<index name="uq_categories_builtin_key" unique="UNIQUE_INDEX" >
-				<column name="builtin_key" />
 			</index>
 			<constraint name="ck_categories_categories_name_non_empty" type="CHECK" options="" >
 				<string><![CDATA[trim(name) != '']]></string>
@@ -147,7 +175,7 @@
 				<column name="amount_max" />
 			</index>
 			<constraint name="ck_category_rules_category_rules_source_allowed" type="CHECK" options="" >
-				<string><![CDATA[source IN ('automatic', 'default', 'manual')]]></string>
+				<string><![CDATA[source IN ('automatic', 'manual')]]></string>
 			</constraint>
 			<constraint name="ck_category_rules_category_rules_ai_approved_bool" type="CHECK" options="" >
 				<string><![CDATA[ai_approved IN (0, 1)]]></string>
@@ -643,13 +671,89 @@
 				<fk_column name="category_rule_id" pk="id" />
 			</fk>
 		</table>
+		<table name="user_settings" spec="" >
+			<column name="user_id" type="INTEGER" mandatory="y" />
+			<column name="key" type="TEXT" length="255" mandatory="y" />
+			<column name="value" type="TEXT" mandatory="y" />
+			<column name="updated_at" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_user_settings" unique="PRIMARY_KEY" >
+				<column name="user_id" />
+				<column name="key" />
+			</index>
+			<constraint name="ck_user_settings_user_settings_key_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim("key") != '']]></string>
+			</constraint>
+			<fk name="fk_user_settings_user_id_users" to_schema="Default" to_table="users" delete_action="cascade" >
+				<fk_column name="user_id" pk="id" />
+			</fk>
+		</table>
+		<table name="users" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="username" type="TEXT" length="150" mandatory="y" />
+			<column name="display_name" type="TEXT" length="150" mandatory="y" />
+			<column name="password_hash" type="TEXT" mandatory="y" />
+			<column name="role" type="TEXT" length="32" mandatory="y" />
+			<column name="is_active" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[1]]></defo>
+			</column>
+			<column name="must_change_password" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="created_at" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<column name="updated_at" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<column name="last_login_at" type="TEXT" length="32" />
+			<column name="failed_login_count" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="locked_until" type="TEXT" length="32" />
+			<index name="pk_users" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="uq_users_username" unique="UNIQUE_KEY" >
+				<column name="username" />
+			</index>
+			<index name="idx_users_locked_until" unique="NORMAL" >
+				<column name="locked_until" />
+			</index>
+			<index name="idx_users_role_active" unique="NORMAL" >
+				<column name="role" />
+				<column name="is_active" />
+			</index>
+			<constraint name="ck_users_users_username_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(username) != '']]></string>
+			</constraint>
+			<constraint name="ck_users_users_display_name_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(display_name) != '']]></string>
+			</constraint>
+			<constraint name="ck_users_users_role_allowed" type="CHECK" options="" >
+				<string><![CDATA[role IN ('editor', 'owner', 'viewer')]]></string>
+			</constraint>
+			<constraint name="ck_users_users_is_active_bool" type="CHECK" options="" >
+				<string><![CDATA[is_active IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="ck_users_users_must_change_password_bool" type="CHECK" options="" >
+				<string><![CDATA[must_change_password IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="ck_users_users_failed_login_count_non_negative" type="CHECK" options="" >
+				<string><![CDATA[failed_login_count >= 0]]></string>
+			</constraint>
+		</table>
 	</schema>
 	<diagram_group name="Default" id="5efe017b-d39a-474c-bb2e-525343b35f94" >
 		<diagram name="Diagram" id="cbc92950-0bb0-484f-816c-daebf3ecff94" show_relation="columns" color="333333" >
-			<entity schema="Default" name="accounts" color="3986C1" x="836" y="741" />
-			<entity schema="Default" name="categories" color="3986C1" x="551" y="228" />
-			<entity schema="Default" name="category_rule_tags" color="3986C1" x="570" y="57" />
-			<entity schema="Default" name="category_rules" color="3986C1" x="285" y="76" >
+			<entity schema="Default" name="accounts" color="3986C1" x="342" y="912" />
+			<entity schema="Default" name="audit_log" color="3986C1" x="931" y="57" />
+			<entity schema="Default" name="categories" color="3986C1" x="551" y="380" />
+			<entity schema="Default" name="category_rule_tags" color="3986C1" x="741" y="209" />
+			<entity schema="Default" name="category_rules" color="3986C1" x="285" y="95" >
 				<column name="id" />
 				<column name="account_id" />
 				<column name="merchant_id" />
@@ -667,15 +771,16 @@
 				<column name="created_at" />
 				<column name="ai_approved" />
 			</entity>
-			<entity schema="Default" name="merchant_aliases" color="3986C1" x="380" y="684" />
-			<entity schema="Default" name="merchants" color="3986C1" x="57" y="608" />
-			<entity schema="Default" name="recurring_patterns" color="3986C1" x="57" y="190" />
-			<entity schema="Default" name="settings" color="3986C1" x="95" y="76" />
-			<entity schema="Default" name="statement_types" color="3986C1" x="855" y="380" />
-			<entity schema="Default" name="statements" color="3986C1" x="1121" y="456" />
-			<entity schema="Default" name="tags" color="3986C1" x="969" y="171" />
-			<entity schema="Default" name="transaction_tags" color="3986C1" x="741" y="190" />
-			<entity schema="Default" name="transactions" color="3986C1" x="570" y="475" />
+			<entity schema="Default" name="merchant_aliases" color="3986C1" x="114" y="456" />
+			<entity schema="Default" name="merchants" color="3986C1" x="57" y="741" />
+			<entity schema="Default" name="recurring_patterns" color="3986C1" x="57" y="95" />
+			<entity schema="Default" name="statement_types" color="3986C1" x="1159" y="684" />
+			<entity schema="Default" name="statements" color="3986C1" x="874" y="627" />
+			<entity schema="Default" name="tags" color="3986C1" x="969" y="323" />
+			<entity schema="Default" name="transaction_tags" color="3986C1" x="741" y="342" />
+			<entity schema="Default" name="transactions" color="3986C1" x="570" y="627" />
+			<entity schema="Default" name="user_settings" color="3986C1" x="1178" y="57" />
+			<entity schema="Default" name="users" color="3986C1" x="1121" y="266" />
 		</diagram>
 	</diagram_group>
 </project>

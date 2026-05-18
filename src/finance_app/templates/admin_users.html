@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Users") }}</h2>
+        <p class="text-muted mb-0">{{ _("Owner-managed access for this FinScope deployment.") }}</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ _(message) }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('auth.create_user') }}" class="settings-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <section class="settings-section">
+                <div class="settings-section-header">
+                    <h5 class="settings-section-title">{{ _("Create user") }}</h5>
+                    <div class="settings-section-help">{{ _("When you create a user, FinScope generates a temporary password. Provide it to the user manually. They will be required to change it on first login.") }}</div>
+                </div>
+                <div class="settings-grid settings-grid-compact">
+                    <div class="settings-field">
+                        <label for="username" class="form-label">{{ _("Username") }}</label>
+                        <input id="username" class="form-control" type="text" name="username" autocomplete="off" required>
+                    </div>
+                    <div class="settings-field">
+                        <label for="display_name" class="form-label">{{ _("Display name") }}</label>
+                        <input id="display_name" class="form-control" type="text" name="display_name" autocomplete="off" required>
+                    </div>
+                    <fieldset class="settings-field">
+                        <legend class="form-label">{{ _("Role") }}</legend>
+                        <div class="btn-group role-toggle" role="group" aria-label="{{ _('Role') }}">
+                            {% for role in managed_roles %}
+                                {% set create_role_input_id = "create-role-" ~ role %}
+                                <input class="btn-check" type="radio" name="role" id="{{ create_role_input_id }}" value="{{ role }}" autocomplete="off" {% if loop.first %}checked{% endif %}>
+                                <label class="btn btn-outline-secondary" for="{{ create_role_input_id }}">{{ _(role|title) }}</label>
+                            {% endfor %}
+                        </div>
+                    </fieldset>
+                    <div class="settings-field user-create-actions">
+                        <button class="btn btn-primary" type="submit">
+                            <i class="bi bi-person-plus" aria-hidden="true"></i>{{ _("Create user") }}
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" data-no-row-select data-no-export>
+                <thead>
+                    <tr>
+                        <th>{{ _("Display name") }}</th>
+                        <th>{{ _("Username") }}</th>
+                        <th>{{ _("Role") }}</th>
+                        <th>{{ _("Status") }}</th>
+                        <th>{{ _("Last login") }}</th>
+                        <th>{{ _("Password change") }}</th>
+                        <th class="text-end">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user["display_name"] }}</td>
+                        <td>{{ user["username"] }}</td>
+                        <td>
+                            {% if user["role"] == "owner" %}
+                                <span class="badge text-bg-success">{{ _("Owner") }}</span>
+                                <div class="form-text">{{ _("Owner role is fixed for this deployment.") }}</div>
+                            {% else %}
+                                <form method="post" action="{{ url_for('auth.update_user_role', user_id=user['id']) }}" class="table-inline-form">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="btn-group btn-group-sm role-toggle" role="group" aria-label="{{ _('Role') }}">
+                                        {% for role in managed_roles %}
+                                            {% set role_input_id = "role-" ~ user["id"] ~ "-" ~ role %}
+                                            <input class="btn-check" type="radio" name="role" id="{{ role_input_id }}" value="{{ role }}" autocomplete="off" {% if user["role"] == role %}checked{% endif %}>
+                                            <label class="btn btn-outline-secondary" for="{{ role_input_id }}">{{ _(role|title) }}</label>
+                                        {% endfor %}
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary" type="submit">{{ _("Save") }}</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user["is_active"] %}
+                                <span class="badge text-bg-success">{{ _("Active") }}</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">{{ _("Inactive") }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user["last_login_at"] | datetimefmt if user["last_login_at"] else _("Never") }}</td>
+                        <td>
+                            {% if user["must_change_password"] %}
+                                <span class="badge text-bg-warning">{{ _("Required") }}</span>
+                            {% else %}
+                                <span class="text-muted">{{ _("Not required") }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="table-action-bar">
+                                {% if user["role"] == "owner" %}
+                                    <span class="text-muted small">{{ _("Owner password must be changed from the Account page.") }}</span>
+                                {% else %}
+                                    <form method="post" action="{{ url_for('auth.reset_password', user_id=user['id']) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                            <i class="bi bi-key" aria-hidden="true"></i>{{ _("Temporary password") }}
+                                        </button>
+                                    </form>
+                                    {% if user["is_active"] %}
+                                        <form method="post" action="{{ url_for('auth.deactivate_user', user_id=user['id']) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button class="btn btn-sm btn-outline-danger" type="submit">
+                                                <i class="bi bi-person-dash" aria-hidden="true"></i>{{ _("Deactivate") }}
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <form method="post" action="{{ url_for('auth.reactivate_user', user_id=user['id']) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                                <i class="bi bi-person-check" aria-hidden="true"></i>{{ _("Reactivate") }}
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3 border-danger ownership-handoff-section">
+    <div class="card-body">
+        <div class="settings-section-header">
+            <h5 class="settings-section-title text-danger">{{ _("Hand off ownership") }}</h5>
+            <div class="settings-section-help">{{ _("Transfer the Owner role to another active user only when this deployment should be managed by someone else.") }}</div>
+        </div>
+        {% if ownership_handoff_candidates %}
+            <form id="ownershipHandoffForm" method="post" action="{{ url_for('auth.handoff_ownership') }}" class="settings-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="settings-grid settings-grid-compact">
+                    <div class="settings-field">
+                        <label for="target_user_id" class="form-label">{{ _("New owner") }}</label>
+                        <select id="target_user_id" class="form-select" name="target_user_id" required>
+                            {% for user in ownership_handoff_candidates %}
+                                <option value="{{ user['id'] }}">{{ user["display_name"] }} ({{ user["username"] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="settings-field user-create-actions">
+                        <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#ownershipHandoffModal">
+                            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>{{ _("Hand off ownership") }}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        {% else %}
+            <p class="text-muted mb-0">{{ _("Create and activate another user before handing off ownership.") }}</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if ownership_handoff_candidates %}
+<div class="modal fade" id="ownershipHandoffModal" tabindex="-1" aria-labelledby="ownershipHandoffModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ownershipHandoffModalLabel">{{ _("Confirm ownership hand-off") }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-danger fw-semibold">{{ _("You will lose all Owner features and become a Viewer by default.") }}</p>
+                <p class="text-muted mb-0">{{ _("The selected user will become the only Owner and will manage users, settings, imports, editing, rules, taxonomy, and deletion actions.") }}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ _("Cancel") }}</button>
+                <button class="btn btn-danger" type="submit" form="ownershipHandoffForm">
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>{{ _("Hand off ownership") }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if temporary_password_modal %}
+<div class="modal fade" id="temporaryPasswordModal" tabindex="-1" aria-labelledby="temporaryPasswordModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="temporaryPasswordModalLabel">{{ _("Temporary password") }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">{{ _("Provide this temporary password to {name} manually. They will be required to change it on first login.", name=temporary_password_modal.display_name) }}</p>
+                <dl class="account-summary">
+                    <dt>{{ _("User") }}</dt>
+                    <dd>{{ temporary_password_modal.display_name }} <span class="text-muted">({{ temporary_password_modal.username }})</span></dd>
+                    <dt>{{ _("Temporary password") }}</dt>
+                    <dd>
+                        <div class="input-group">
+                            <input class="form-control font-monospace" type="text" value="{{ temporary_password_modal.temporary_password }}" readonly data-temporary-password>
+                            <button class="btn btn-outline-secondary" type="button" data-copy-temporary-password>
+                                <i class="bi bi-clipboard" aria-hidden="true"></i>{{ _("Copy") }}
+                            </button>
+                        </div>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const modal = document.getElementById("temporaryPasswordModal");
+        if (modal && window.bootstrap) {
+            window.bootstrap.Modal.getOrCreateInstance(modal).show();
+        }
+        const copyButton = document.querySelector("[data-copy-temporary-password]");
+        const passwordInput = document.querySelector("[data-temporary-password]");
+        if (copyButton && passwordInput && navigator.clipboard) {
+            copyButton.addEventListener("click", function() {
+                navigator.clipboard.writeText(passwordInput.value);
+            });
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

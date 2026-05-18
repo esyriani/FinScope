@@ -12,7 +12,6 @@ from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_CREDIT,
     CATEGORY_RULE_DIRECTION_DEBIT,
     CATEGORY_RULE_SOURCE_AUTOMATIC,
-    CATEGORY_RULE_SOURCE_DEFAULT,
     CATEGORY_RULE_SOURCE_MANUAL,
     UNKNOWN_CATEGORY,
 )
@@ -994,22 +993,12 @@ def taxonomy_payload_rows(names, taxonomy_rows):
 
 
 def build_rule_examples(rules, category_options):
-    """Build rule examples."""
-    examples = {}
+    """Return the legacy prompt examples payload for supported rule sources.
 
-    for rule in rules:
-        if rule["source"] != CATEGORY_RULE_SOURCE_DEFAULT:
-            continue
-
-        category = normalize_category(rule["category"], category_options)
-        if category not in category_options:
-            continue
-
-        keyword = normalize_merchant_description(rule["keyword"])
-        if keyword:
-            examples.setdefault(category, []).append(keyword)
-
-    return examples
+    Manual rules are sent through `current_manual_rules`, so this compatibility
+    payload remains intentionally empty.
+    """
+    return {}
 
 
 def parse_confidence(value):

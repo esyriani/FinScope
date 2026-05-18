@@ -196,6 +196,7 @@ def fetch_category_names(conn):
     """Fetch category names."""
     rows = conn.execute(
         select(categories_table.c.name).order_by(
+            case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
             func.lower(categories_table.c.name),
             categories_table.c.name,
         )

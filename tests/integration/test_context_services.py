@@ -134,16 +134,18 @@ def seed_reporting_data(conn):
     )
     conn.execute(
         """
-        UPDATE settings
+        UPDATE user_settings
         SET value = '2'
         WHERE key = 'home_top_category_limit'
+          AND user_id = (SELECT id FROM users WHERE username = 'owner')
         """
     )
     conn.execute(
         """
-        UPDATE settings
+        UPDATE user_settings
         SET value = '2'
         WHERE key = 'merchant_table_limit'
+          AND user_id = (SELECT id FROM users WHERE username = 'owner')
         """
     )
     conn.commit()

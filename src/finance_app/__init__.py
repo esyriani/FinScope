@@ -16,6 +16,8 @@ from finance_app.core.i18n import (
 )
 from finance_app.database.engine import register_core_db
 from finance_app.modules import register_blueprints
+from finance_app.modules.auth import register_auth
+from finance_app.modules.auth.permissions import current_user_can
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.settings.runtime import get_setting_with_fallback
 
@@ -107,6 +109,13 @@ def create_app():
     app.config["FINANCE_SETTINGS"] = settings
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = not settings.server_debug
+    app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+    app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+    app.config["REMEMBER_COOKIE_SECURE"] = not settings.server_debug
+
+    register_core_db(app)
+    register_auth(app)
 
     @app.before_request
     def load_runtime_language():
@@ -134,11 +143,11 @@ def create_app():
             "_": gettext,
             "client_i18n": client_translations(ui_language, CLIENT_TRANSLATION_MESSAGES),
             "untagged_tag_filter_value": UNTAGGED_TAG_FILTER,
+            "current_user_can": current_user_can,
         }
 
     register_filters(app)
     register_asset_helpers(app)
-    register_core_db(app)
     register_csrf(app)
     register_blueprints(app)
 

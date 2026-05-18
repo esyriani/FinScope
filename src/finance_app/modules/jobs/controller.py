@@ -8,6 +8,7 @@ from finance_app.background.runner import (
     list_background_jobs,
     undo_background_job,
 )
+from finance_app.modules.auth.permissions import PERMISSION_MANAGE_JOBS, permission_required
 from finance_app.core.config import settings
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.settings.runtime import get_int_setting
@@ -18,6 +19,7 @@ jobs_bp = Blueprint("jobs", __name__)
 
 
 @jobs_bp.route("/jobs")
+@permission_required(PERMISSION_MANAGE_JOBS)
 def jobs():
     """Render the background jobs page."""
     page = parse_page(request.args.get("page"))
@@ -42,6 +44,7 @@ def jobs():
 
 
 @jobs_bp.route("/jobs/<job_id>.json")
+@permission_required(PERMISSION_MANAGE_JOBS)
 def job_status(job_id):
     """Return the current status for a background job."""
     job = get_background_job(job_id)
@@ -51,6 +54,7 @@ def job_status(job_id):
 
 
 @jobs_bp.route("/jobs/<job_id>/undo", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_JOBS)
 def undo_job(job_id):
     """Request undo for a completed background job."""
     next_url = jobs_redirect_target()

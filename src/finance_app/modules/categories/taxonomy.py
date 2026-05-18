@@ -1,8 +1,9 @@
 """Category and tag taxonomy helpers."""
 
+from functools import lru_cache
 from pathlib import Path
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import case, delete, func, insert, literal, select, update
 
 from finance_app.core.constants import (
     BASE_DIR,
@@ -91,6 +92,25 @@ def load_category_seed(path=CATEGORY_SEED_PATH):
         "categories": [clean_taxonomy_item(item) for item in sections["categories"] if item.get("name")],
         "tags": [clean_taxonomy_item(item) for item in sections["tags"] if item.get("name")],
     }
+
+
+@lru_cache(maxsize=1)
+def builtin_tag_names():
+    """Return seed-defined tag names used for built-in tag ordering."""
+    return tuple(tag["name"] for tag in load_category_seed()["tags"])
+
+
+def is_builtin_tag_name(name):
+    """Return whether a tag name comes from the bundled taxonomy seed."""
+    return clean_label(name) in set(builtin_tag_names())
+
+
+def builtin_tag_order_expression():
+    """Return a Core expression that sorts seed-defined tags after user tags."""
+    names = builtin_tag_names()
+    if not names:
+        return literal(0)
+    return case((tags_table.c.name.in_(names), 1), else_=0)
 
 
 def unquote_yaml_scalar(value):
@@ -276,7 +296,11 @@ def get_category_rows(conn):
             categories_table.c.name,
             categories_table.c.description,
             categories_table.c.instruction,
-        ).order_by(func.lower(categories_table.c.name), categories_table.c.name)
+        ).order_by(
+            case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
+            func.lower(categories_table.c.name),
+            categories_table.c.name,
+        )
     ).mappings().fetchall()
 
 
@@ -297,7 +321,11 @@ def get_tag_rows(conn):
             tags_table.c.description,
             tags_table.c.instruction,
             tags_table.c.color,
-        ).order_by(func.lower(tags_table.c.name), tags_table.c.name)
+        ).order_by(
+            builtin_tag_order_expression(),
+            func.lower(tags_table.c.name),
+            tags_table.c.name,
+        )
     ).mappings().fetchall()
 
 

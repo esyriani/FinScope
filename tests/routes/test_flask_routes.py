@@ -158,6 +158,8 @@ def test_taxonomy_category_delete_route_refuses_in_use_category(client, db_conn)
     ).fetchone()["count"]
     assert response.status_code == 200
     assert b"Only unused categories can be deleted." in response.data
+    assert b"Category Transit cannot be deleted because it is in use" not in response.data
+    assert b"bi-lock" not in response.data
     assert category_count == 1
 
 
@@ -395,9 +397,10 @@ def test_financial_reporting_pages_render_french_copy(client, db_conn):
     """Verify reporting pages localize visible labels and explanatory text."""
     db_conn.execute(
         """
-        UPDATE settings
+        UPDATE user_settings
         SET value = 'fr'
         WHERE key = 'ui_language'
+          AND user_id = (SELECT id FROM users WHERE username = 'owner')
         """
     )
     db_conn.executemany(

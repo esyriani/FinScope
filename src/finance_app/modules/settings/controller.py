@@ -2,6 +2,10 @@
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
+from finance_app.modules.auth.permissions import (
+    PERMISSION_MANAGE_GLOBAL_SETTINGS,
+    permission_required,
+)
 from finance_app.modules.settings.service import (
     build_settings_context,
     save_settings_from_form,
@@ -28,6 +32,7 @@ def settings_page():
 
 
 @settings_bp.route("/settings/openai-model/validate", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_GLOBAL_SETTINGS)
 def validate_openai_model():
     """Validate openai model."""
     flash(validate_openai_model_from_form(request.form))

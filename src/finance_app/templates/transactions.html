@@ -18,6 +18,7 @@
 {% set selected_review = selected_review | default("") %}
 {% set selected_category_source = selected_category_source | default("") %}
 {% set selected_ignored = selected_ignored | default(ignored_filter_options[0][0]) %}
+{% set can_edit_transactions = current_user_can('edit_transactions') %}
 
 {% macro transaction_pagination(label) %}
 {% if total_pages > 1 %}
@@ -63,9 +64,17 @@
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Transactions") }}</h2>
-        <p class="text-muted mb-0">{{ _("Search, filter, and update transaction categories.") }}</p>
+        <p class="text-muted mb-0">
+            {% if can_edit_transactions %}
+                {{ _("Search, filter, and update transaction categories.") }}
+            {% else %}
+                {{ _("Search and filter transactions.") }}
+            {% endif %}
+        </p>
     </div>
+    {% if can_edit_transactions %}
     <a class="btn btn-outline-primary" href="{{ url_for('review.review') }}"><i class="bi bi-check2-square" aria-hidden="true"></i>{{ _("Review") }}</a>
+    {% endif %}
 </div>
 
 <div data-ajax-refresh-target="transactions-actions">
@@ -270,7 +279,7 @@
                 </thead>
                 <tbody>
                     {% for tx in transactions %}
-                    <tr {% if tx["ignored"] %}class="table-secondary"{% endif %} data-row-edit-target="#categorize-transaction-{{ tx['id'] }}">
+                    <tr {% if tx["ignored"] %}class="table-secondary"{% endif %}{% if can_edit_transactions %} data-row-edit-target="#categorize-transaction-{{ tx['id'] }}"{% endif %}>
                         <td>{{ tx["tx_date"] | datefmt }}</td>
                         <td>{{ tx["account_name"] or _("Personal") }}</td>
                         <td>{{ tx["description"] }}</td>
@@ -303,6 +312,7 @@
                             {% endif %}
                         </td>
                         <td>
+                            {% if can_edit_transactions %}
                             <form method="post" action="/transactions/{{ tx['id'] }}/verify" class="d-flex gap-2 align-items-center" data-row-action data-ajax-refresh-form>
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="next" value="{{ request.full_path }}">
@@ -315,8 +325,18 @@
                                     <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}</button>
                                 {% endif %}
                             </form>
+                            {% else %}
+                                {% if tx["needs_review"] %}
+                                    <span class="badge text-bg-warning">{{ _("Needs review") }}</span>
+                                {% elif tx["reviewed_at"] %}
+                                    <span class="badge text-bg-success">{{ _("Verified") }}</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{{ _("Unverified") }}</span>
+                                {% endif %}
+                            {% endif %}
                         </td>
                         <td>
+                            {% if can_edit_transactions %}
                             <form method="post" action="/transactions/{{ tx['id'] }}/ignored" class="d-flex gap-2 align-items-center" data-row-action data-ajax-refresh-form>
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="next" value="{{ request.full_path }}">
@@ -345,6 +365,13 @@
                                     </button>
                                 {% endif %}
                             </form>
+                            {% else %}
+                                {% if tx["ignored"] %}
+                                    <span class="badge text-bg-secondary">{{ _("Ignored") }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -358,6 +385,7 @@
     </div>
     {% endif %}
 </div>
+{% if can_edit_transactions %}
 {% for tx in transactions %}
 <div class="modal fade" id="categorize-transaction-{{ tx['id'] }}" tabindex="-1" aria-labelledby="categorize-transaction-{{ tx['id'] }}-title" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-fit-content">
@@ -445,6 +473,7 @@
     </div>
 </div>
 {% endfor %}
+{% endif %}
 {% else %}
 <div class="empty-state">
     {{ _("No transactions found.") }}

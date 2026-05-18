@@ -11,7 +11,6 @@ from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTIONS,
     CATEGORY_RULE_SOURCES,
     CATEGORY_RULE_SOURCE_AUTOMATIC,
-    CATEGORY_RULE_SOURCE_DEFAULT,
     CATEGORY_RULE_SOURCE_MANUAL,
 )
 from finance_app.core.money import money_to_float
@@ -50,7 +49,6 @@ RULE_SOURCE_FILTER_OPTIONS = (
     ("", "All sources"),
     (CATEGORY_RULE_SOURCE_MANUAL, "Manual"),
     (CATEGORY_RULE_SOURCE_AUTOMATIC, "Automatic"),
-    (CATEGORY_RULE_SOURCE_DEFAULT, "Default"),
 )
 
 
@@ -347,7 +345,6 @@ def rule_source_label(source):
     return {
         CATEGORY_RULE_SOURCE_MANUAL: "Manual",
         CATEGORY_RULE_SOURCE_AUTOMATIC: "Auto",
-        CATEGORY_RULE_SOURCE_DEFAULT: "Default",
     }.get(source, str(source or "").strip() or "Unknown")
 
 
@@ -356,7 +353,6 @@ def rule_source_badge_class(source):
     return {
         CATEGORY_RULE_SOURCE_MANUAL: "text-bg-primary",
         CATEGORY_RULE_SOURCE_AUTOMATIC: "text-bg-info",
-        CATEGORY_RULE_SOURCE_DEFAULT: "text-bg-secondary",
     }.get(source, "text-bg-secondary")
 
 

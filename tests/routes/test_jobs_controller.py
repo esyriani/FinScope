@@ -82,9 +82,10 @@ def test_jobs_page_paginates_and_renders_public_job_data(client, db_conn):
     """Verify that the jobs page renders paginated newest-first job rows."""
     db_conn.execute(
         """
-        UPDATE settings
+        UPDATE user_settings
         SET value = '2'
         WHERE key = 'default_table_page_size'
+          AND user_id = (SELECT id FROM users WHERE username = 'owner')
         """
     )
     db_conn.commit()

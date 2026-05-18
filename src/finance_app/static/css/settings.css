@@ -94,6 +94,35 @@
     max-width: 34rem;
 }
 
+.user-create-actions {
+    align-self: end;
+}
+
+.role-toggle .btn {
+    min-width: 5.25rem;
+}
+
+.role-toggle .btn-check:checked + .btn {
+    background-color: var(--app-accent-strong);
+    border-color: var(--app-accent-strong);
+    color: #052e16;
+    font-weight: 700;
+}
+
+.role-toggle .btn-check:focus + .btn {
+    box-shadow: var(--focus-shadow);
+}
+
+.ownership-handoff-section {
+    background:
+        linear-gradient(0deg, rgba(var(--app-danger-rgb), 0.05), rgba(var(--app-danger-rgb), 0.05)),
+        var(--app-surface);
+}
+
+.ownership-handoff-section .settings-section-header {
+    margin-bottom: 1rem;
+}
+
 .settings-form .form-label,
 .settings-form legend.form-label {
     color: var(--app-heading);

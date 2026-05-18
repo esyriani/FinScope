@@ -1,5 +1,7 @@
 """Application orchestration for the settings feature."""
 
+from flask_login import current_user
+
 from finance_app.core.config import settings as app_settings
 from finance_app.core.constants import (
     ACCOUNT_TYPES,
@@ -17,29 +19,29 @@ from finance_app.modules.settings.forms import (
     format_probability,
     normalize_minimum_int,
     normalize_theme_mode,
-    parse_settings_form,
+    parse_general_settings_form,
+    parse_global_settings_form,
 )
+from finance_app.modules.auth.permissions import current_user_can, PERMISSION_MANAGE_GLOBAL_SETTINGS
 from finance_app.modules.settings.runtime import (
+    GENERAL_SETTING_KEYS,
     get_all_settings,
     get_statement_type_options,
     seed_runtime_settings,
     sync_statement_types,
     upsert_setting,
+    upsert_user_setting,
 )
 
 
-SETTING_KEYS = (
-    "default_table_page_size",
-    "comparison_max_years",
-    "home_top_category_limit",
-    "merchant_table_limit",
-    "rule_preview_limit",
+GENERAL_SETTING_SAVE_KEYS = GENERAL_SETTING_KEYS
+
+
+GLOBAL_STRING_SETTING_KEYS = (
     "openai_model",
     "recurrence_minimum_occurrences",
     "recurrence_date_tolerance_days",
     "recurrence_missed_cycles_before_inactive",
-    "theme_mode",
-    "ui_language",
 )
 
 
@@ -57,10 +59,11 @@ DECIMAL_SETTING_KEYS = (
 
 def build_settings_context():
     """Build settings context."""
+    can_manage_global_settings = current_user_can(PERMISSION_MANAGE_GLOBAL_SETTINGS)
     with db_core_transaction() as conn:
         seed_runtime_settings(conn)
         current = get_all_settings(conn)
-        statement_types = get_statement_type_options(conn)
+        statement_types = get_statement_type_options(conn) if can_manage_global_settings else []
 
     return {
         "default_table_page_size": current.get("default_table_page_size", str(app_settings.default_table_page_size)),
@@ -107,22 +110,39 @@ def build_settings_context():
         "statement_type_parser_types": STATEMENT_TYPE_PARSER_TYPES,
         "statement_import_modes": STATEMENT_IMPORT_MODES,
         "account_types": ACCOUNT_TYPES,
+        "can_manage_global_settings": can_manage_global_settings,
     }
 
 
 def save_settings_from_form(form):
-    """Save settings from form."""
-    values = parse_settings_form(form, app_settings)
+    """Save user-bound General settings and owner-only advanced settings."""
+    if not current_user.is_authenticated:
+        raise ValueError("Please log in to continue.")
+
+    general_values = parse_general_settings_form(form, app_settings)
+    can_manage_global_settings = current_user_can(PERMISSION_MANAGE_GLOBAL_SETTINGS)
+    global_values = (
+        parse_global_settings_form(form, app_settings)
+        if can_manage_global_settings
+        else {}
+    )
+
     with db_core_transaction() as conn:
         seed_runtime_settings(conn)
-        for key in SETTING_KEYS:
-            upsert_setting(conn, key, str(values[key]))
-        for key in PROBABILITY_SETTING_KEYS:
-            upsert_setting(conn, key, format_probability(values[key]))
-        for key in DECIMAL_SETTING_KEYS:
-            upsert_setting(conn, key, format_decimal(values[key]))
+        for key in GENERAL_SETTING_SAVE_KEYS:
+            upsert_user_setting(conn, current_user.id, key, str(general_values[key]))
 
-        sync_statement_types(conn, values["statement_types"])
+        if not can_manage_global_settings:
+            return
+
+        for key in GLOBAL_STRING_SETTING_KEYS:
+            upsert_setting(conn, key, str(global_values[key]))
+        for key in PROBABILITY_SETTING_KEYS:
+            upsert_setting(conn, key, format_probability(global_values[key]))
+        for key in DECIMAL_SETTING_KEYS:
+            upsert_setting(conn, key, format_decimal(global_values[key]))
+
+        sync_statement_types(conn, global_values["statement_types"])
 
 
 def validate_openai_model_from_form(form):

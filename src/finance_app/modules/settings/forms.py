@@ -8,7 +8,15 @@ from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 
 
 def parse_settings_form(form, app_settings):
-    """Parse settings form."""
+    """Parse the full owner settings form."""
+    return {
+        **parse_general_settings_form(form, app_settings),
+        **parse_global_settings_form(form, app_settings),
+    }
+
+
+def parse_general_settings_form(form, app_settings):
+    """Parse user-specific General settings from a submitted form."""
     return {
         "default_table_page_size": parse_positive_int(
             form.get("default_table_page_size"),
@@ -32,6 +40,14 @@ def parse_settings_form(form, app_settings):
             form.get("rule_preview_limit"),
             app_settings.default_rule_preview_limit,
         ),
+        "theme_mode": normalize_theme_mode(form.get("theme_mode", THEME_MODE_DARK)),
+        "ui_language": normalize_language(form.get("ui_language", app_settings.locale)),
+    }
+
+
+def parse_global_settings_form(form, app_settings):
+    """Parse owner-only advanced settings from a submitted form."""
+    return {
         "llm_confidence_threshold": parse_probability(
             form.get("llm_confidence_threshold"),
             "LLM confidence threshold",
@@ -65,8 +81,6 @@ def parse_settings_form(form, app_settings):
             RECURRENCE_DETECTION_DEFAULTS.missed_cycles_before_inactive,
             label="Recurring missed cycles before inactive",
         ),
-        "theme_mode": normalize_theme_mode(form.get("theme_mode", THEME_MODE_DARK)),
-        "ui_language": normalize_language(form.get("ui_language", app_settings.locale)),
         "statement_types": parse_statement_types_form(form),
     }
 

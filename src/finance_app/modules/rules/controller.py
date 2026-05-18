@@ -5,6 +5,7 @@ from pathlib import Path
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
 
 from finance_app.background.runner import submit_background_job
+from finance_app.modules.auth.permissions import PERMISSION_MANAGE_RULES, permission_required
 from finance_app.core.config import settings
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.rules.engine import (
@@ -36,12 +37,14 @@ rules_bp = Blueprint("rules", __name__)
 
 
 @rules_bp.route("/rules")
+@permission_required(PERMISSION_MANAGE_RULES)
 def rules():
     """Render the rules page."""
     return render_template("rules.html", **build_rules_context(request.args))
 
 
 @rules_bp.route("/rules/create", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_RULES)
 def add_rule():
     """Add rule."""
     next_url = rules_redirect_target()
@@ -57,6 +60,7 @@ def add_rule():
 
 
 @rules_bp.route("/rules/preview", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_RULES)
 def preview_rule():
     """Preview rule."""
     try:
@@ -79,6 +83,7 @@ def preview_rule():
 
 
 @rules_bp.route("/rules/export.csv")
+@permission_required(PERMISSION_MANAGE_RULES)
 def export_rules():
     """Export rules."""
     output = export_rules_csv()
@@ -93,6 +98,7 @@ def export_rules():
 
 
 @rules_bp.route("/rules/import", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_RULES)
 def import_rules():
     """Import rules."""
     next_url = rules_redirect_target()
@@ -136,6 +142,7 @@ def import_rules():
 
 
 @rules_bp.route("/rules/<int:rule_id>/update", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_RULES)
 def update_rule(rule_id):
     """Update rule."""
     next_url = rules_redirect_target()
@@ -151,6 +158,7 @@ def update_rule(rule_id):
 
 
 @rules_bp.route("/rules/<int:rule_id>/approve", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_RULES)
 def approve_rule(rule_id):
     """Approve an automatic rule and return JSON for table actions."""
     next_url = rules_redirect_target()
@@ -183,6 +191,7 @@ def approve_rule(rule_id):
 
 
 @rules_bp.route("/rules/<int:rule_id>/apply", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_RULES)
 def apply_rule(rule_id):
     """Apply a rule and return JSON for table actions."""
     next_url = rules_redirect_target()
@@ -214,6 +223,7 @@ def apply_rule(rule_id):
 
 
 @rules_bp.route("/rules/apply-all", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_RULES)
 def apply_all_rules():
     """Apply all rules."""
     next_url = rules_redirect_target()
@@ -234,6 +244,7 @@ def apply_all_rules():
 
 
 @rules_bp.route("/rules/<int:rule_id>/delete", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_RULES)
 def delete_rule(rule_id):
     """Delete a rule and return JSON for table actions."""
     next_url = rules_redirect_target()

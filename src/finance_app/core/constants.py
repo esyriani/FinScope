@@ -25,6 +25,20 @@ THEME_MODES = (
     THEME_MODE_LIGHT,
 )
 
+USER_ROLE_OWNER = "owner"
+USER_ROLE_EDITOR = "editor"
+USER_ROLE_VIEWER = "viewer"
+USER_ROLES = (
+    USER_ROLE_OWNER,
+    USER_ROLE_EDITOR,
+    USER_ROLE_VIEWER,
+)
+
+
+def normalize_user_role(role):
+    """Return a normalized role value for persisted or submitted input."""
+    return str(role or "").strip().lower()
+
 ACCOUNT_TYPE_CHECKING = "checking"
 ACCOUNT_TYPE_SAVINGS = "savings"
 ACCOUNT_TYPE_CREDIT_CARD = "credit_card"
@@ -137,11 +151,9 @@ TRANSACTION_TAG_SOURCES = CATEGORY_SOURCES
 
 CATEGORY_RULE_SOURCE_MANUAL = "manual"
 CATEGORY_RULE_SOURCE_AUTOMATIC = "automatic"
-CATEGORY_RULE_SOURCE_DEFAULT = "default"
 CATEGORY_RULE_SOURCES = (
     CATEGORY_RULE_SOURCE_MANUAL,
     CATEGORY_RULE_SOURCE_AUTOMATIC,
-    CATEGORY_RULE_SOURCE_DEFAULT,
 )
 IMPORTABLE_CATEGORY_RULE_SOURCES = CATEGORY_RULE_SOURCES
 

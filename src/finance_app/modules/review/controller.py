@@ -3,6 +3,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from finance_app.background.runner import submit_background_job
+from finance_app.modules.auth.permissions import PERMISSION_EDIT_TRANSACTIONS, permission_required
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.service import get_category_options, normalize_category
@@ -23,12 +24,14 @@ review_bp = Blueprint("review", __name__)
 
 
 @review_bp.route("/review")
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
 def review():
     """Render the review page."""
     return render_template("review.html", **build_review_context(request.args))
 
 
 @review_bp.route("/review/apply", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
 def apply_review_group():
     """Apply review group."""
     next_url = review_redirect_target()

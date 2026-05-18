@@ -1,7 +1,11 @@
 """Runtime settings persistence helpers."""
 
+from datetime import datetime, timezone
+
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
+from flask import has_request_context
+from flask_login import current_user
 
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
@@ -21,10 +25,11 @@ from finance_app.core.config import settings
 from finance_app.core.i18n import normalize_language
 from finance_app.database.engine import db_core_connection
 from finance_app.database.tables import (
-    settings as settings_table,
     statement_types as statement_types_table,
+    user_settings as user_settings_table,
 )
 from finance_app.database.upsert import insert_or_select_unique_row
+from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 
 
@@ -46,22 +51,40 @@ SETTINGS_DEFAULTS = {
     "recurrence_missed_cycles_before_inactive": str(RECURRENCE_DETECTION_DEFAULTS.missed_cycles_before_inactive),
 }
 
+GENERAL_SETTING_KEYS = (
+    "default_table_page_size",
+    "comparison_max_years",
+    "home_top_category_limit",
+    "merchant_table_limit",
+    "rule_preview_limit",
+    "theme_mode",
+    "ui_language",
+)
+GLOBAL_SETTING_KEYS = ()
 EDITABLE_SETTING_KEYS = tuple(SETTINGS_DEFAULTS.keys())
 DATABASE_OPERATIONAL_ERRORS = (SqlAlchemyOperationalError,)
 
 
 def seed_runtime_settings(conn):
-    """Seed runtime settings."""
-    rows = [(key, value) for key, value in SETTINGS_DEFAULTS.items()]
-    for key, value in rows:
-        setting_select = select(settings_table.c["key"]).where(settings_table.c["key"] == key)
-        existing = conn.execute(setting_select).fetchone()
-        if existing is None:
-            insert_or_select_unique_row(
-                conn,
-                insert(settings_table).values(key=key, value=value),
-                setting_select,
+    """Seed default settings for existing users without changing saved values."""
+    for user in auth_repository.list_users(conn):
+        for key, value in SETTINGS_DEFAULTS.items():
+            setting_select = select(user_settings_table.c.user_id).where(
+                user_settings_table.c.user_id == user["id"],
+                user_settings_table.c["key"] == key,
             )
+            existing = conn.execute(setting_select).fetchone()
+            if existing is None:
+                insert_or_select_unique_row(
+                    conn,
+                    insert(user_settings_table).values(
+                        user_id=user["id"],
+                        key=key,
+                        value=value,
+                        updated_at=datetime.now(timezone.utc).replace(microsecond=0),
+                    ),
+                    setting_select,
+                )
 
 
 def seed_statement_types(conn):
@@ -292,32 +315,44 @@ def parse_optional_int(value):
         return None
 
 
-def get_all_settings(conn):
-    """Return all settings."""
-    try:
-        rows = conn.execute(
-            select(settings_table.c["key"], settings_table.c.value)
-        ).mappings().fetchall()
-    except DATABASE_OPERATIONAL_ERRORS:
-        rows = []
+def get_all_settings(conn, user_id=None):
+    """Return settings for the resolved user, falling back to defaults."""
+    values = dict(SETTINGS_DEFAULTS)
+    active_user_id = resolve_settings_user_id(conn, user_id)
+    if active_user_id is not None:
+        try:
+            user_values = auth_repository.get_user_settings(conn, active_user_id)
+        except DATABASE_OPERATIONAL_ERRORS:
+            user_values = {}
+        for key in EDITABLE_SETTING_KEYS:
+            if key in user_values:
+                values[key] = user_values[key]
 
-    values = {row["key"]: row["value"] for row in rows}
-    for key, default_value in SETTINGS_DEFAULTS.items():
-        values.setdefault(key, default_value)
     return values
 
 
-def get_setting(conn, key):
-    """Return setting."""
-    try:
-        row = conn.execute(
-            select(settings_table.c.value).where(settings_table.c["key"] == key)
-        ).mappings().fetchone()
-    except DATABASE_OPERATIONAL_ERRORS:
-        row = None
-    if row is None:
-        return SETTINGS_DEFAULTS.get(key)
-    return row["value"]
+def get_global_settings(conn):
+    """Return the owner fallback settings for non-request callers."""
+    return get_all_settings(conn)
+
+
+def get_setting(conn, key, user_id=None):
+    """Return one setting for the resolved user, falling back to defaults."""
+    active_user_id = resolve_settings_user_id(conn, user_id)
+    if active_user_id is not None:
+        try:
+            user_value = auth_repository.get_user_setting(conn, active_user_id, key)
+        except DATABASE_OPERATIONAL_ERRORS:
+            user_value = None
+        if user_value is not None:
+            return user_value
+
+    return SETTINGS_DEFAULTS.get(key)
+
+
+def get_global_setting(conn, key):
+    """Return one owner fallback setting for non-request callers."""
+    return get_setting(conn, key)
 
 
 def get_setting_with_fallback(key, fallback_value):
@@ -365,20 +400,48 @@ def get_unknown_category(conn):
 
 
 def upsert_setting(conn, key, value):
-    """Insert or update setting."""
-    setting_select = select(settings_table.c["key"]).where(settings_table.c["key"] == key)
-    existing = conn.execute(setting_select).fetchone()
-    if existing is None:
-        insert_or_select_unique_row(
-            conn,
-            insert(settings_table).values(key=key, value=str(value)),
-            setting_select,
-        )
+    """Insert or update a setting for the resolved user."""
+    user_id = resolve_settings_user_id(conn)
+    if user_id is None:
+        raise ValueError("No settings user is available.")
+    upsert_user_setting(conn, user_id, key, value)
 
-    conn.execute(
-        update(settings_table)
-        .where(settings_table.c["key"] == key)
-        .values(value=str(value))
+
+def upsert_user_setting(conn, user_id, key, value):
+    """Insert or update one user-specific General setting."""
+    auth_repository.upsert_user_setting(
+        conn,
+        user_id,
+        key,
+        value,
+        now=datetime.now(timezone.utc).replace(microsecond=0),
     )
+
+
+def resolve_settings_user_id(conn, explicit_user_id=None):
+    """Return the explicit, authenticated, or owner fallback user id."""
+    if explicit_user_id is not None:
+        try:
+            return int(explicit_user_id)
+        except (TypeError, ValueError):
+            return None
+    if has_request_context() and current_user.is_authenticated:
+        return int(current_user.id)
+    owner = auth_repository.get_first_active_owner(conn)
+    if owner is None:
+        return None
+    return int(owner["id"])
+
+
+def current_user_id(explicit_user_id=None):
+    """Return an explicit or authenticated user id without owner fallback."""
+    if explicit_user_id is not None:
+        try:
+            return int(explicit_user_id)
+        except (TypeError, ValueError):
+            return None
+    if not has_request_context() or not current_user.is_authenticated:
+        return None
+    return int(current_user.id)
 
 

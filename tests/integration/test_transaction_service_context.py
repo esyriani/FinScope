@@ -1,12 +1,13 @@
 """Tests for transaction list service context behavior."""
 
 from werkzeug.datastructures import MultiDict
-from sqlalchemy import insert, update
+from sqlalchemy import insert, select, update
 
 from finance_app.database.tables import (
     accounts as accounts_table,
-    settings as settings_table,
     transactions as transactions_table,
+    user_settings as user_settings_table,
+    users as users_table,
 )
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
@@ -49,8 +50,14 @@ def seed_transactions(conn):
     set_transaction_tags(conn, ids["Metro Grocery"], ["Tax"], source="rule")
     set_transaction_tags(conn, ids["Cafe Bistro"], ["Shared", "Tax"], source="manual")
     conn.execute(
-        update(settings_table)
-        .where(settings_table.c["key"] == "default_table_page_size")
+        update(user_settings_table)
+        .where(
+            user_settings_table.c["key"] == "default_table_page_size",
+            user_settings_table.c.user_id
+            == select(users_table.c.id)
+            .where(users_table.c.username == "owner")
+            .scalar_subquery(),
+        )
         .values(value="2")
     )
     conn.commit()

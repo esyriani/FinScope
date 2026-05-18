@@ -230,7 +230,6 @@ def test_rules_route_filters_by_source(client, db_conn):
     assert b'value="automatic" selected' in response.data
     assert b">Manual<" in response.data
     assert b">Automatic<" in response.data
-    assert b">Default<" in response.data
     assert b">Import<" not in response.data
     assert b">System<" not in response.data
 

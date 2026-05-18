@@ -3,8 +3,11 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h2 class="mb-1">{{ _("Home") }}</h2>
+        <h2 class="mb-1">{{ _(home_greeting.message, name=home_greeting.name) }}</h2>
         <p class="text-muted mb-0">{{ _("What needs attention, what changed, and where to act next.") }}</p>
+        {% if home_sharing.message %}
+            <p class="text-muted small mb-0">{{ _(home_sharing.message, names=home_sharing.params.names, count=home_sharing.params.count, owner=home_sharing.params.owner) }}</p>
+        {% endif %}
     </div>
 </div>
 
@@ -182,9 +185,9 @@
                 {% endif %}
             {% endfor %}
             {% if not suggested_actions %}
-                <a class="btn btn-outline-secondary shortcut-action" href="/upload">
-                    <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
-                    <span>{{ _("Import statement") }}</span>
+                <a class="btn btn-outline-secondary shortcut-action" href="/transactions">
+                    <i class="bi bi-receipt" aria-hidden="true"></i>
+                    <span>{{ _("Transactions") }}</span>
                 </a>
             {% endif %}
         </div>

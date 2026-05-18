@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-panel card">
+    <div class="card-body">
+        <div class="auth-heading">
+            <div class="brand-mark auth-brand-mark" aria-hidden="true">
+                <img src="{{ static_asset('img/favicon.png') }}" alt="">
+            </div>
+            <div>
+                <h2 class="mb-1">{{ _("Log in") }}</h2>
+                <p class="text-muted mb-0">{{ _("Access your FinScope database.") }}</p>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info" role="alert">{{ _(message) }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="post" class="auth-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="auth_action" value="login">
+            {% if next_url %}
+            <input type="hidden" name="next" value="{{ next_url }}">
+            {% endif %}
+
+            <div>
+                <label for="username" class="form-label">{{ _("Username") }}</label>
+                <input id="username" class="form-control" type="text" name="username" autocomplete="username" required autofocus>
+            </div>
+
+            <div>
+                <label for="password" class="form-label">{{ _("Password") }}</label>
+                <input id="password" class="form-control" type="password" name="password" autocomplete="current-password" required>
+            </div>
+
+            <button class="btn btn-primary w-100" type="submit">
+                <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>{{ _("Log in") }}
+            </button>
+        </form>
+    </div>
+</section>
+
+{% if force_password_change %}
+<div class="modal fade" id="forcedPasswordModal" tabindex="-1" aria-labelledby="forcedPasswordModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('auth.login') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="forcedPasswordModalLabel">{{ _("Change temporary password") }}</h5>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="auth_action" value="force_password_change">
+                    <p class="text-muted">{{ _("Before opening FinScope, choose a new password for {name}.", name=forced_user.display_name or forced_user.username) }}</p>
+                    {% if force_password_error %}
+                        <div class="alert alert-danger" role="alert">{{ _(force_password_error) }}</div>
+                    {% endif %}
+                    <div class="auth-form">
+                        <div>
+                            <label for="forced_current_password" class="form-label">{{ _("Current temporary password") }}</label>
+                            <input id="forced_current_password" class="form-control" type="password" name="current_password" autocomplete="current-password" required autofocus>
+                        </div>
+                        <div>
+                            <label for="forced_new_password" class="form-label">{{ _("New password") }}</label>
+                            <input id="forced_new_password" class="form-control" type="password" name="new_password" autocomplete="new-password" required>
+                        </div>
+                        <div>
+                            <label for="forced_confirm_password" class="form-label">{{ _("Confirm password") }}</label>
+                            <input id="forced_confirm_password" class="form-control" type="password" name="confirm_password" autocomplete="new-password" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-save" aria-hidden="true"></i>{{ _("Save password") }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const modal = document.getElementById("forcedPasswordModal");
+        if (modal && window.bootstrap) {
+            window.bootstrap.Modal.getOrCreateInstance(modal).show();
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

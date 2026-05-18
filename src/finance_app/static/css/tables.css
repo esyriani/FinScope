@@ -82,6 +82,63 @@
     min-width: 44rem;
 }
 
+.taxonomy-table-responsive {
+    overflow-x: visible;
+}
+
+.taxonomy-table-responsive > .taxonomy-table {
+    min-width: 0;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.taxonomy-table td {
+    overflow-wrap: anywhere;
+}
+
+.taxonomy-table th,
+.taxonomy-table thead .sort-link {
+    overflow-wrap: normal;
+    white-space: nowrap;
+}
+
+.taxonomy-table .taxonomy-transactions-column {
+    width: 8.25rem;
+}
+
+.taxonomy-table .taxonomy-rules-column {
+    width: 4.5rem;
+}
+
+.taxonomy-table .taxonomy-actions-column {
+    width: 5.75rem;
+}
+
+.taxonomy-table .action-cluster {
+    flex-wrap: nowrap;
+}
+
+.taxonomy-table .tag-pill {
+    white-space: normal;
+}
+
+.taxonomy-description {
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    display: -webkit-box;
+    overflow: hidden;
+}
+
+@media (max-width: 640px) {
+    .taxonomy-table-responsive {
+        overflow-x: auto;
+    }
+
+    .taxonomy-table-responsive > .taxonomy-table {
+        min-width: 38rem;
+    }
+}
+
 .table thead th {
     background: var(--table-head-bg);
     color: var(--table-head-color);

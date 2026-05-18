@@ -66,7 +66,7 @@ def test_parse_rules_csv_rejects_missing_required_fields():
     with pytest.raises(ValueError, match="Row 2: keyword or merchant_name is required"):
         parse_rules_csv("keyword,category\n,Utilities\n")
 
-    with pytest.raises(ValueError, match="source must be one of automatic, default, manual"):
+    with pytest.raises(ValueError, match="source must be one of automatic, manual"):
         parse_rules_csv("keyword,category,source\nStore,Groceries,system\n")
 
 

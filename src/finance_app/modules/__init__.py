@@ -1,5 +1,6 @@
 """Package marker for   init  .py."""
 
+from finance_app.modules.auth.controller import auth_bp
 from finance_app.modules.calendar.controller import calendar_bp
 from finance_app.modules.comparison.controller import comparison_bp
 from finance_app.modules.dashboard.controller import dashboard_bp
@@ -16,6 +17,7 @@ from finance_app.modules.upload.controller import upload_bp
 
 def register_blueprints(app):
     """Register blueprints."""
+    app.register_blueprint(auth_bp)
     app.register_blueprint(home_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(taxonomy_admin_bp)

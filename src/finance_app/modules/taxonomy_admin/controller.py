@@ -2,6 +2,7 @@
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
+from finance_app.modules.auth.permissions import PERMISSION_MANAGE_TAXONOMY, permission_required
 from finance_app.modules.taxonomy_admin.service import (
     build_taxonomy_context,
     create_category_from_form,
@@ -17,12 +18,14 @@ taxonomy_admin_bp = Blueprint("taxonomy_admin", __name__)
 
 
 @taxonomy_admin_bp.route("/taxonomy")
+@permission_required(PERMISSION_MANAGE_TAXONOMY)
 def taxonomy():
     """Render the taxonomy page."""
     return render_template("taxonomy.html", **build_taxonomy_context())
 
 
 @taxonomy_admin_bp.route("/taxonomy/categories/create", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_TAXONOMY)
 def create_category():
     """Create category."""
     try:
@@ -34,6 +37,7 @@ def create_category():
 
 
 @taxonomy_admin_bp.route("/taxonomy/categories/update", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_TAXONOMY)
 def update_category():
     """Update category."""
     try:
@@ -45,6 +49,7 @@ def update_category():
 
 
 @taxonomy_admin_bp.route("/taxonomy/tags/create", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_TAXONOMY)
 def create_tag():
     """Create tag."""
     try:
@@ -56,6 +61,7 @@ def create_tag():
 
 
 @taxonomy_admin_bp.route("/taxonomy/tags/update", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_TAXONOMY)
 def update_tag():
     """Update tag."""
     try:
@@ -67,6 +73,7 @@ def update_tag():
 
 
 @taxonomy_admin_bp.route("/taxonomy/categories/delete", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_TAXONOMY)
 def delete_category():
     """Delete category."""
     try:
@@ -78,6 +85,7 @@ def delete_category():
 
 
 @taxonomy_admin_bp.route("/taxonomy/tags/delete", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_TAXONOMY)
 def delete_tag():
     """Delete tag."""
     try:

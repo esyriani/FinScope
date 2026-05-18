@@ -3,6 +3,7 @@
 {% block content %}
 {% set selected_tags = selected_tags | default([]) %}
 {% set tag_options = tag_options | default([]) %}
+{% set can_edit_recurring = current_user_can('edit_recurring') %}
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Recurring") }}</h2>

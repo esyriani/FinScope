@@ -1,6 +1,6 @@
 # Architecture
 
-FinScope is organized as a local-first Flask application with feature modules, SQLite persistence, Jinja templates, and browser-side JavaScript for page behavior.
+FinScope is organized as a Flask application with feature modules, fully supported SQLite or MySQL persistence, Jinja templates, and browser-side JavaScript for page behavior.
 
 ## Application architecture diagram
 
@@ -70,6 +70,7 @@ src/finance_app/modules/rules/
 Runtime state belongs outside source-controlled code:
 
 - SQLite databases
+- MySQL databases
 - uploaded statements
 - generated logs
 - backups

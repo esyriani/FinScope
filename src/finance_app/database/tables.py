@@ -1,8 +1,8 @@
 """SQLAlchemy Core table metadata.
 
 Defines portable SQLAlchemy table objects that mirror the current FinScope
-schema. Runtime initialization creates these tables through SQLAlchemy Core
-while persistence helpers are migrated incrementally.
+schema. Runtime initialization creates the clean schema through SQLAlchemy Core
+for SQLite and MySQL deployments.
 """
 
 from sqlalchemy import (
@@ -23,6 +23,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects import mysql
 
 from finance_app.database.dates import ISODate, UTCDateTime
 from finance_app.core.constants import (
@@ -54,6 +55,7 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_EXPENSE,
     TRANSACTION_KINDS,
     TRANSACTION_TAG_SOURCES,
+    USER_ROLES,
 )
 
 
@@ -67,11 +69,29 @@ CONSTRAINT_NAMING_CONVENTION = {
 
 metadata = MetaData(naming_convention=CONSTRAINT_NAMING_CONVENTION)
 
+MYSQL_TABLE_OPTIONS = {
+    "mysql_engine": "InnoDB",
+    "mysql_charset": "utf8mb4",
+    "mysql_collate": "utf8mb4_unicode_ci",
+}
+AUTOINCREMENT_TABLE_OPTIONS = {
+    **MYSQL_TABLE_OPTIONS,
+    "sqlite_autoincrement": True,
+}
+
 
 MONEY_AMOUNT_TYPE = Numeric(14, 2)
 MONEY_NULL_SENTINEL_SQL = "-999999999999.00"
 DATE_TYPE = ISODate()
 TIMESTAMP_TYPE = UTCDateTime()
+PASSWORD_HASH_TYPE = Text().with_variant(
+    mysql.VARCHAR(255, charset="utf8mb4", collation="utf8mb4_bin"),
+    "mysql",
+)
+PASSWORD_HASH_TYPE = PASSWORD_HASH_TYPE.with_variant(
+    mysql.VARCHAR(255, charset="utf8mb4", collation="utf8mb4_bin"),
+    "mariadb",
+)
 
 
 def allowed_values_check_sql(column_name, values):
@@ -90,6 +110,57 @@ def non_empty_constraint(column_name, name):
     return CheckConstraint(func.trim(column(column_name)) != "", name=name)
 
 
+users = Table(
+    "users",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("username", String(150), nullable=False),
+    Column("display_name", String(150), nullable=False),
+    Column("password_hash", PASSWORD_HASH_TYPE, nullable=False),
+    Column("role", String(32), nullable=False),
+    Column("is_active", Integer, nullable=False, server_default=text("1")),
+    Column("must_change_password", Integer, nullable=False, server_default=text("0")),
+    Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    Column("updated_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    Column("last_login_at", TIMESTAMP_TYPE),
+    Column("failed_login_count", Integer, nullable=False, server_default=text("0")),
+    Column("locked_until", TIMESTAMP_TYPE),
+    UniqueConstraint("username", name="uq_users_username"),
+    non_empty_constraint("username", "users_username_non_empty"),
+    non_empty_constraint("display_name", "users_display_name_non_empty"),
+    allowed_values_constraint("role", USER_ROLES, "users_role_allowed"),
+    CheckConstraint("is_active IN (0, 1)", name="users_is_active_bool"),
+    CheckConstraint("must_change_password IN (0, 1)", name="users_must_change_password_bool"),
+    CheckConstraint("failed_login_count >= 0", name="users_failed_login_count_non_negative"),
+    **AUTOINCREMENT_TABLE_OPTIONS,
+)
+
+user_settings = Table(
+    "user_settings",
+    metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("key", String(255), primary_key=True),
+    Column("value", Text, nullable=False),
+    Column("updated_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    non_empty_constraint("key", "user_settings_key_non_empty"),
+    **MYSQL_TABLE_OPTIONS,
+)
+
+audit_log = Table(
+    "audit_log",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="SET NULL")),
+    Column("username", String(150)),
+    Column("action", String(64), nullable=False),
+    Column("details", Text),
+    Column("ip_address", String(64)),
+    Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    non_empty_constraint("action", "audit_log_action_non_empty"),
+    **AUTOINCREMENT_TABLE_OPTIONS,
+)
+
+
 accounts = Table(
     "accounts",
     metadata,
@@ -100,7 +171,7 @@ accounts = Table(
     UniqueConstraint("name", name="uq_accounts_name"),
     allowed_values_constraint("account_type", ACCOUNT_TYPES, "accounts_account_type_allowed"),
     non_empty_constraint("name", "accounts_name_non_empty"),
-    sqlite_autoincrement=True,
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 statement_types = Table(
@@ -119,7 +190,7 @@ statement_types = Table(
     allowed_values_constraint("import_mode", STATEMENT_IMPORT_MODES, "statement_types_import_mode_allowed"),
     allowed_values_constraint("default_account_type", ACCOUNT_TYPES, "statement_types_default_account_type_allowed"),
     CheckConstraint("active IN (0, 1)", name="statement_types_active_bool"),
-    sqlite_autoincrement=True,
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 categories = Table(
@@ -134,7 +205,7 @@ categories = Table(
     UniqueConstraint("name", name="uq_categories_name"),
     UniqueConstraint("builtin_key", name="uq_categories_builtin_key"),
     non_empty_constraint("name", "categories_name_non_empty"),
-    sqlite_autoincrement=True,
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 merchants = Table(
@@ -158,7 +229,7 @@ merchants = Table(
         "merchants_display_name_source_allowed",
     ),
     CheckConstraint("active IN (0, 1)", name="merchants_active_bool"),
-    sqlite_autoincrement=True,
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 category_rules = Table(
@@ -220,7 +291,7 @@ category_rules = Table(
         "amount_max_key",
         name="uq_category_rules_merchant_amount",
     ),
-    sqlite_autoincrement=True,
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 statements = Table(
@@ -252,7 +323,7 @@ statements = Table(
     CheckConstraint("skipped_count >= 0", name="statements_skipped_count_non_negative"),
     CheckConstraint("ignored_count >= 0", name="statements_ignored_count_non_negative"),
     CheckConstraint("llm_candidate_count >= 0", name="statements_llm_candidate_count_non_negative"),
-    sqlite_autoincrement=True,
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 transactions = Table(
@@ -288,7 +359,7 @@ transactions = Table(
         "category_confidence IS NULL OR (category_confidence >= 0 AND category_confidence <= 1)",
         name="transactions_category_confidence_probability",
     ),
-    sqlite_autoincrement=True,
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 merchant_aliases = Table(
@@ -306,15 +377,7 @@ merchant_aliases = Table(
     non_empty_constraint("alias_key", "merchant_aliases_alias_key_non_empty"),
     allowed_values_constraint("source", MERCHANT_ALIAS_SOURCES, "merchant_aliases_source_allowed"),
     allowed_values_constraint("confidence", MERCHANT_ALIAS_CONFIDENCES, "merchant_aliases_confidence_allowed"),
-    sqlite_autoincrement=True,
-)
-
-settings = Table(
-    "settings",
-    metadata,
-    Column("key", String(255), primary_key=True),
-    Column("value", Text, nullable=False),
-    non_empty_constraint("key", "settings_key_non_empty"),
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 recurring_patterns = Table(
@@ -341,6 +404,7 @@ recurring_patterns = Table(
     CheckConstraint("amount_tolerance IS NULL OR amount_tolerance >= 0", name="recurring_patterns_amount_tolerance_non_negative"),
     CheckConstraint("typical_amount IS NULL OR typical_amount >= 0", name="recurring_patterns_typical_amount_non_negative"),
     UniqueConstraint("merchant_id", "type", name="uq_recurring_patterns_merchant_type"),
+    **MYSQL_TABLE_OPTIONS,
 )
 
 tags = Table(
@@ -354,7 +418,7 @@ tags = Table(
     Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
     UniqueConstraint("name", name="uq_tags_name"),
     non_empty_constraint("name", "tags_name_non_empty"),
-    sqlite_autoincrement=True,
+    **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
 transaction_tags = Table(
@@ -366,6 +430,7 @@ transaction_tags = Table(
     Column("rule_id", Integer, ForeignKey("category_rules.id", ondelete="SET NULL")),
     Column("assigned_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
     allowed_values_constraint("source", TRANSACTION_TAG_SOURCES, "transaction_tags_source_allowed"),
+    **MYSQL_TABLE_OPTIONS,
 )
 
 category_rule_tags = Table(
@@ -373,6 +438,7 @@ category_rule_tags = Table(
     metadata,
     Column("rule_id", Integer, ForeignKey("category_rules.id", ondelete="CASCADE"), primary_key=True),
     Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+    **MYSQL_TABLE_OPTIONS,
 )
 
 
@@ -405,7 +471,6 @@ Index("idx_category_rules_amount_bounds", category_rules.c.amount_min, category_
 Index("idx_category_rules_category_id", category_rules.c.category_id)
 Index("idx_category_rules_source_approval", category_rules.c.source, category_rules.c.ai_approved)
 
-Index("idx_categories_name", categories.c.name)
 Index("idx_merchants_display_name", merchants.c.display_name)
 Index("idx_merchant_aliases_merchant", merchant_aliases.c.merchant_id)
 Index("idx_statement_types_active", statement_types.c.active, statement_types.c.name)
@@ -413,11 +478,17 @@ Index("idx_statements_account", statements.c.account_id)
 Index("idx_statements_statement_type", statements.c.statement_type_id)
 Index("idx_statements_uploaded_at", statements.c.uploaded_at)
 Index("idx_recurring_patterns_status", recurring_patterns.c.user_status, recurring_patterns.c.active)
-Index("idx_tags_name", tags.c.name)
 Index("idx_transaction_tags_tag", transaction_tags.c.tag_id)
 Index("idx_category_rule_tags_tag", category_rule_tags.c.tag_id)
+Index("idx_users_role_active", users.c.role, users.c.is_active)
+Index("idx_users_locked_until", users.c.locked_until)
+Index("idx_audit_log_created_at", audit_log.c.created_at)
+Index("idx_audit_log_user", audit_log.c.user_id)
 
 SCHEMA_TABLES = (
+    users,
+    user_settings,
+    audit_log,
     accounts,
     statement_types,
     statements,
@@ -426,7 +497,6 @@ SCHEMA_TABLES = (
     merchant_aliases,
     transactions,
     category_rules,
-    settings,
     recurring_patterns,
     tags,
     transaction_tags,

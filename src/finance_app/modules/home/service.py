@@ -1,9 +1,10 @@
 """Application orchestration for the home feature."""
 
-from datetime import date
+from datetime import date, datetime
 from urllib.parse import urlencode
 
 from flask import has_request_context
+from flask_login import current_user
 from sqlalchemy import case, func, select
 
 from finance_app.background.runner import list_background_jobs
@@ -24,6 +25,14 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.calendar.service import build_recurring_activity_context
+from finance_app.modules.auth import repository as auth_repository
+from finance_app.modules.auth.permissions import (
+    PERMISSION_EDIT_TRANSACTIONS,
+    PERMISSION_IMPORT_STATEMENTS,
+    PERMISSION_MANAGE_JOBS,
+    PERMISSION_MANAGE_RULES,
+    current_user_can,
+)
 from finance_app.modules.recurring.service import build_recurring_summary
 from finance_app.modules.review.presenter import review_groups, review_summary
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
@@ -63,6 +72,7 @@ def build_home_context():
         recent_reviewed = fetch_recent_reviewed_transactions(conn)
         recent_categorizations = fetch_recent_categorizations(conn)
         recent_rules = fetch_recent_rules(conn)
+        sharing_context = build_user_sharing_context(conn)
 
     recurring_context = (
         build_recurring_activity_context()
@@ -89,7 +99,9 @@ def build_home_context():
         "failed_jobs": len(failed_jobs),
         "rule_suggestions": rule_suggestion_count,
     }
-    suggested_actions = build_suggested_actions(attention_counts)
+    permissions = home_permissions()
+    visible_attention_counts = visible_home_attention_counts(attention_counts, permissions)
+    suggested_actions = build_suggested_actions(visible_attention_counts, permissions)
 
     return {
         "overview": overview,
@@ -106,13 +118,20 @@ def build_home_context():
         "ytd_spending": ytd_spending,
         "ytd_income": ytd_income,
         "ytd_cashflow": ytd_cashflow,
-        "financial_pulse": build_financial_pulse(overview, ytd_income, ytd_spending, ytd_cashflow, attention_counts),
-        "pulse_kpis": build_pulse_kpis(ytd_spending, ytd_cashflow, attention_counts),
-        "attention_counts": attention_counts,
+        "financial_pulse": build_financial_pulse(
+            overview,
+            ytd_income,
+            ytd_spending,
+            ytd_cashflow,
+            visible_attention_counts,
+        ),
+        "pulse_kpis": build_pulse_kpis(ytd_spending, ytd_cashflow, visible_attention_counts, permissions),
+        "attention_counts": visible_attention_counts,
         "attention_items": build_attention_items(
-            attention_counts,
+            visible_attention_counts,
             failed_imports["latest"],
             failed_jobs,
+            permissions,
         ),
         "recent_activity": build_recent_activity(
             recent_statements,
@@ -120,6 +139,7 @@ def build_home_context():
             recent_categorizations,
             recent_rules,
             recurring_items,
+            permissions,
         ),
         "suggested_actions": suggested_actions,
         "primary_action": build_primary_action(suggested_actions),
@@ -129,10 +149,111 @@ def build_home_context():
             statement_count,
             top_categories,
             recurring_summary,
+            permissions,
         ),
         "recurring_summary": recurring_summary,
         "review_summary": review_work,
+        "home_greeting": build_home_greeting(),
+        "home_sharing": sharing_context,
     }
+
+
+def build_home_greeting():
+    """Return the personalized Home greeting message and display name."""
+    display_name = "there"
+    if has_request_context() and getattr(current_user, "is_authenticated", False):
+        display_name = current_user.display_name or current_user.username
+
+    hour = datetime.now().hour
+    if hour < 12:
+        message = "Good morning, {name}"
+    elif hour < 18:
+        message = "Good afternoon, {name}"
+    else:
+        message = "Good evening, {name}"
+    return {"message": message, "name": display_name}
+
+
+def build_user_sharing_context(conn):
+    """Return subtle shared-access copy for the Home title area."""
+    if not has_request_context() or not getattr(current_user, "is_authenticated", False):
+        return {"message": "", "params": {}}
+
+    users = [dict(row) for row in auth_repository.list_users(conn) if row["is_active"]]
+    owner = next((user for user in users if user["role"] == "owner"), None)
+    current_user_id = int(current_user.id)
+    others = [user for user in users if int(user["id"]) != current_user_id]
+    owner_name = display_name_for_user(owner) if owner else "Owner"
+
+    if not others:
+        return sharing_context("Only you have access")
+
+    shared_params = sharing_names_or_count(others)
+    if owner and current_user_id == int(owner["id"]):
+        return sharing_context(shared_params["message"], **shared_params["params"])
+
+    return sharing_context(
+        f"{shared_params['message']} \u00b7 Owner: {{owner}}",
+        **shared_params["params"],
+        owner=owner_name,
+    )
+
+
+def sharing_names_or_count(users):
+    """Return shared-with message parts for a compact user list."""
+    names = [display_name_for_user(user) for user in users]
+    if len(names) <= 2:
+        return {"message": "Shared with {names}", "params": {"names": " and ".join(names)}}
+    return {"message": "Shared with {count} users", "params": {"count": len(names)}}
+
+
+def sharing_context(message, names="", count=0, owner=""):
+    """Return a complete Home sharing message object for templates."""
+    return {
+        "message": message,
+        "params": {
+            "names": names,
+            "count": count,
+            "owner": owner,
+        },
+    }
+
+
+def display_name_for_user(user):
+    """Return a user's display label for collaborative context."""
+    return (user or {}).get("display_name") or (user or {}).get("username") or ""
+
+
+def home_permissions():
+    """Return current-user permissions that affect Home links and actions."""
+    if not has_request_context():
+        return {
+            "can_edit_transactions": True,
+            "can_import_statements": True,
+            "can_manage_jobs": True,
+            "can_manage_rules": True,
+        }
+    return {
+        "can_edit_transactions": current_user_can(PERMISSION_EDIT_TRANSACTIONS),
+        "can_import_statements": current_user_can(PERMISSION_IMPORT_STATEMENTS),
+        "can_manage_jobs": current_user_can(PERMISSION_MANAGE_JOBS),
+        "can_manage_rules": current_user_can(PERMISSION_MANAGE_RULES),
+    }
+
+
+def visible_home_attention_counts(attention_counts, permissions):
+    """Return Home attention counts for workflows visible to the current user."""
+    counts = dict(attention_counts)
+    if not permissions["can_edit_transactions"]:
+        counts["needs_review"] = 0
+        counts["review_groups"] = 0
+    if not permissions["can_manage_rules"]:
+        counts["rule_suggestions"] = 0
+    if not permissions["can_import_statements"]:
+        counts["failed_imports"] = 0
+    if not permissions["can_manage_jobs"]:
+        counts["failed_jobs"] = 0
+    return counts
 
 
 def fetch_home_overview(conn, unknown_category, start_date):
@@ -403,7 +524,7 @@ def build_financial_pulse(overview, ytd_income, ytd_spending, ytd_cashflow, atte
     }
 
 
-def build_pulse_kpis(ytd_spending, ytd_cashflow, attention_counts):
+def build_pulse_kpis(ytd_spending, ytd_cashflow, attention_counts, permissions):
     """Build compact KPI cards for the command-center header."""
     return [
         {
@@ -426,11 +547,28 @@ def build_pulse_kpis(ytd_spending, ytd_cashflow, attention_counts):
             "label": "Open attention",
             "value": open_attention_count(attention_counts),
             "value_type": "count",
-            "href": "/review",
+            "href": open_attention_href(attention_counts, permissions),
             "tone": "warning" if open_attention_count(attention_counts) else "success",
             "detail": "Transactions or recurring items to clear.",
         },
     ]
+
+
+def open_attention_href(attention_counts, permissions):
+    """Return an allowed destination for the Home open-attention KPI."""
+    if attention_counts["unknown_transactions"] or attention_counts["needs_review"] or attention_counts["review_groups"]:
+        if permissions["can_edit_transactions"]:
+            return "/review"
+        return "/transactions?period=all&ignored=active&category_status=unknown"
+    if attention_counts["overdue_recurring"] or attention_counts["amount_changes"]:
+        return "/recurring"
+    if attention_counts["rule_suggestions"] and permissions["can_manage_rules"]:
+        return "/rules?approval=suggested"
+    if attention_counts["failed_imports"] and permissions["can_import_statements"]:
+        return "/upload"
+    if attention_counts["failed_jobs"] and permissions["can_manage_jobs"]:
+        return "/jobs"
+    return "/transactions"
 
 
 def open_attention_count(attention_counts):
@@ -449,7 +587,7 @@ def open_attention_count(attention_counts):
     )
 
 
-def build_attention_items(attention_counts, failed_imports, failed_jobs):
+def build_attention_items(attention_counts, failed_imports, failed_jobs, permissions):
     """Build prioritized operational items that need user attention."""
     items = []
     if attention_counts["unknown_transactions"]:
@@ -457,7 +595,11 @@ def build_attention_items(attention_counts, failed_imports, failed_jobs):
             attention_item(
                 "unknown_transactions",
                 "Unknown transactions",
-                "Categorize unknown rows before relying on reports.",
+                (
+                    "Categorize unknown rows before relying on reports."
+                    if permissions["can_edit_transactions"]
+                    else "Inspect uncategorized rows before relying on reports."
+                ),
                 attention_counts["unknown_transactions"],
                 "/transactions?period=all&ignored=active&category_status=unknown",
                 "bi-question-circle",
@@ -558,13 +700,22 @@ def attention_item(key, title, detail, count, href, icon, tone, latest=""):
     }
 
 
-def build_recent_activity(recent_statements, recent_reviewed, recent_categorizations, recent_rules, recurring_items):
+def build_recent_activity(
+    recent_statements,
+    recent_reviewed,
+    recent_categorizations,
+    recent_rules,
+    recurring_items,
+    permissions,
+):
     """Build a small mixed activity feed from existing operational sources."""
     items = []
-    items.extend(statement_activity_item(row) for row in recent_statements)
+    if permissions["can_import_statements"]:
+        items.extend(statement_activity_item(row) for row in recent_statements)
     items.extend(reviewed_activity_item(row) for row in recent_reviewed)
     items.extend(categorization_activity_item(row) for row in recent_categorizations)
-    items.extend(rule_activity_item(row) for row in recent_rules)
+    if permissions["can_manage_rules"]:
+        items.extend(rule_activity_item(row) for row in recent_rules)
     items.extend(recurring_activity_items(recurring_items))
 
     items.sort(key=lambda item: item["sort_key"], reverse=True)
@@ -664,13 +815,21 @@ def recurring_activity_items(recurring_items, limit=2):
     ]
 
 
-def build_suggested_actions(attention_counts):
+def build_suggested_actions(attention_counts, permissions):
     """Return primary Home actions with links into the existing workflow."""
     recurring_count = attention_counts["overdue_recurring"] + attention_counts["amount_changes"]
     actions = [
         {
-            "label": "Review unknown transactions",
-            "detail": "Clear the highest-risk categorization work.",
+            "label": (
+                "Review unknown transactions"
+                if permissions["can_edit_transactions"]
+                else "Unknown transactions"
+            ),
+            "detail": (
+                "Clear the highest-risk categorization work."
+                if permissions["can_edit_transactions"]
+                else "Inspect uncategorized rows before relying on reports."
+            ),
             "href": "/transactions?period=all&ignored=active&category_status=unknown",
             "icon": "bi-check2-square",
             "count": attention_counts["unknown_transactions"],
@@ -686,25 +845,31 @@ def build_suggested_actions(attention_counts):
             "primary": attention_counts["unknown_transactions"] == 0 and recurring_count > 0,
             "priority": 1,
         },
-        {
-            "label": "Create rule",
-            "detail": "Automate repeated merchant categorization.",
-            "href": "/rules",
-            "icon": "bi-tags",
-            "count": attention_counts["review_groups"],
-            "primary": False,
-            "priority": 2,
-        },
-        {
-            "label": "Import statement",
-            "detail": "Add new bank, credit card, or Interac activity.",
-            "href": "/upload",
-            "icon": "bi-cloud-arrow-up",
-            "count": None,
-            "primary": attention_counts["unknown_transactions"] == 0 and recurring_count == 0,
-            "priority": 3,
-        },
     ]
+    if permissions["can_manage_rules"]:
+        actions.append(
+            {
+                "label": "Create rule",
+                "detail": "Automate repeated merchant categorization.",
+                "href": "/rules",
+                "icon": "bi-tags",
+                "count": attention_counts["review_groups"],
+                "primary": False,
+                "priority": 2,
+            }
+        )
+    if permissions["can_import_statements"]:
+        actions.append(
+            {
+                "label": "Import statement",
+                "detail": "Add new bank, credit card, or Interac activity.",
+                "href": "/upload",
+                "icon": "bi-cloud-arrow-up",
+                "count": None,
+                "primary": attention_counts["unknown_transactions"] == 0 and recurring_count == 0,
+                "priority": 3,
+            }
+        )
     actions.sort(key=lambda action: (not action["primary"], action["priority"]))
     return actions[:SUGGESTED_ACTION_LIMIT]
 
@@ -715,7 +880,14 @@ def build_primary_action(suggested_actions):
     return primary_actions[0] if primary_actions else suggested_actions[0]
 
 
-def build_quick_insights(overview, latest_statement, statement_count, top_categories, recurring_summary):
+def build_quick_insights(
+    overview,
+    latest_statement,
+    statement_count,
+    top_categories,
+    recurring_summary,
+    permissions,
+):
     """Return compact insight rows that avoid dashboard-style analytics."""
     insights = []
     insights.append(
@@ -734,7 +906,7 @@ def build_quick_insights(overview, latest_statement, statement_count, top_catego
             "value": statement_count,
             "value_type": "count",
             "detail": latest_statement["filename"] if latest_statement else "No statements uploaded yet.",
-            "href": "/upload",
+            "href": "/upload" if permissions["can_import_statements"] else "/transactions?period=all",
             "icon": "bi-file-earmark-text",
         }
     )

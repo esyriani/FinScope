@@ -20,6 +20,7 @@ from finance_app.core.constants import (
     STATEMENT_TYPE_PARSER_TYPES,
     TRANSACTION_KINDS,
     TRANSACTION_TAG_SOURCES,
+    USER_ROLES,
 )
 from finance_app.database.seeds import seed_category_taxonomy_defaults
 from finance_app.database.tables import (
@@ -91,9 +92,10 @@ def assert_table_uses_allowed_values(table_name, column_name, values):
     assert allowed_values_check_sql(column_name, values) in constraints
 
 
-def test_core_schema_has_no_legacy_migration_tables(schema_conn):
-    """Verify Core metadata does not create legacy migration or review tables."""
-    legacy_tables = set(inspect(schema_conn).get_table_names()) & {
+def test_core_schema_has_no_retired_tables(schema_conn):
+    """Verify Core metadata does not create retired compatibility or review tables."""
+    retired_tables = set(inspect(schema_conn).get_table_names()) & {
+        "settings",
         "schema_migrations",
         "app_metadata",
         "category_suggestions",
@@ -102,7 +104,7 @@ def test_core_schema_has_no_legacy_migration_tables(schema_conn):
         "merchant_normalization_review_queue",
     }
 
-    assert legacy_tables == set()
+    assert retired_tables == set()
 
 
 def test_core_schema_creates_category_tag_tables(schema_conn):
@@ -132,6 +134,7 @@ def test_core_schema_text_constraints_match_shared_constants(schema_conn):
         ("recurring_patterns", "type", RECURRING_PATTERN_TYPES),
         ("recurring_patterns", "user_status", RECURRING_USER_STATUSES),
         ("transaction_tags", "source", TRANSACTION_TAG_SOURCES),
+        ("users", "role", USER_ROLES),
     )
 
     for table_name, column_name, values in expectations:

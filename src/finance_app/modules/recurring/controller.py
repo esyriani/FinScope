@@ -2,6 +2,7 @@
 
 from flask import Blueprint, jsonify, render_template, request
 
+from finance_app.modules.auth.permissions import PERMISSION_EDIT_RECURRING, permission_required
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.recurring.forms import parse_expected_day, recurring_pattern_payload
 from finance_app.modules.recurring.patterns import normalize_active, upsert_recurring_pattern
@@ -18,6 +19,7 @@ def recurring():
 
 
 @recurring_bp.route("/recurring/patterns/confirm", methods=["POST"])
+@permission_required(PERMISSION_EDIT_RECURRING)
 def confirm_recurring_pattern():
     """Handle the confirm recurring pattern route."""
     payload = request.get_json(silent=True) or {}
@@ -40,6 +42,7 @@ def confirm_recurring_pattern():
 
 
 @recurring_bp.route("/recurring/patterns/ignore", methods=["POST"])
+@permission_required(PERMISSION_EDIT_RECURRING)
 def ignore_recurring_pattern():
     """Ignore recurring pattern."""
     payload = request.get_json(silent=True) or {}
@@ -62,6 +65,7 @@ def ignore_recurring_pattern():
 
 
 @recurring_bp.route("/recurring/patterns/edit", methods=["POST"])
+@permission_required(PERMISSION_EDIT_RECURRING)
 def edit_recurring_pattern():
     """Edit recurring pattern."""
     payload = request.get_json(silent=True) or {}

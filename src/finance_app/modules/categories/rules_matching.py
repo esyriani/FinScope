@@ -9,7 +9,6 @@ from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_CREDIT,
     CATEGORY_RULE_DIRECTION_DEBIT,
     CATEGORY_RULE_SOURCE_AUTOMATIC,
-    CATEGORY_RULE_SOURCE_DEFAULT,
     CATEGORY_RULE_SOURCE_MANUAL,
 )
 from finance_app.core.money import money_to_float, quantize_money
@@ -225,7 +224,6 @@ def rule_source_adjustment(rule):
     return {
         CATEGORY_RULE_SOURCE_MANUAL: 0.02,
         CATEGORY_RULE_SOURCE_AUTOMATIC: -0.01,
-        CATEGORY_RULE_SOURCE_DEFAULT: -0.03,
     }.get(source, 0.0)
 
 

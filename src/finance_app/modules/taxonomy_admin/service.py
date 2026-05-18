@@ -1,6 +1,6 @@
 """Application orchestration for the taxonomy admin feature."""
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
@@ -14,7 +14,9 @@ from finance_app.database.tables import (
 from finance_app.modules.categories.builtins import is_builtin_category_name
 from finance_app.modules.categories.repository import rename_category
 from finance_app.modules.categories.taxonomy import (
+    builtin_tag_order_expression,
     clean_color,
+    is_builtin_tag_name,
     tag_color_for_name,
     upsert_category_metadata,
     upsert_tag_metadata,
@@ -197,7 +199,11 @@ def fetch_category_rows(conn):
             func.coalesce(categories_table.c.instruction, "").label("instruction"),
             transaction_count.label("transaction_count"),
             rule_count.label("rule_count"),
-        ).order_by(func.lower(categories_table.c.name), categories_table.c.name)
+        ).order_by(
+            case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
+            func.lower(categories_table.c.name),
+            categories_table.c.name,
+        )
     ).mappings().fetchall()
     return [
         {
@@ -233,13 +239,18 @@ def fetch_tag_rows(conn):
             tags_table.c.color,
             transaction_count.label("transaction_count"),
             rule_count.label("rule_count"),
-        ).order_by(func.lower(tags_table.c.name), tags_table.c.name)
+        ).order_by(
+            builtin_tag_order_expression(),
+            func.lower(tags_table.c.name),
+            tags_table.c.name,
+        )
     ).mappings().fetchall()
 
     return [
         {
             **dict(row),
             "color": clean_color(row["color"]) or tag_color_for_name(row["name"]),
+            "is_builtin": is_builtin_tag_name(row["name"]),
         }
         for row in rows
     ]

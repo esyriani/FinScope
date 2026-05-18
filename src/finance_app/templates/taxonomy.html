@@ -6,7 +6,7 @@
 
 <div class="page-header">
     <div>
-        <h2 class="mb-1">{{ _("Categories") }}</h2>
+        <h2 class="mb-1">{{ _("Taxonomy") }}</h2>
         <p class="text-muted mb-0">{{ _("Manage transaction categories and tags used by rules, review, and LLM categorization.") }}</p>
     </div>
     <div class="home-actions">
@@ -47,19 +47,22 @@
 
             <div class="card-body p-0">
                 {% if categories %}
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0" data-sortable-table>
+                    <div class="table-responsive taxonomy-table-responsive">
+                        <table class="table table-hover align-middle mb-0 taxonomy-table" data-sortable-table>
                             <thead>
                                 <tr>
-                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Name") }}</span></button></th>
-                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Transactions") }}</span></button></th>
-                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Rules") }}</span></button></th>
-                                    <th class="text-end">{{ _("Actions") }}</th>
+                                    <th class="taxonomy-name-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Name") }}</span></button></th>
+                                    <th class="taxonomy-transactions-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Transactions") }}</span></button></th>
+                                    <th class="taxonomy-rules-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Rules") }}</span></button></th>
+                                    <th class="text-end taxonomy-actions-column"></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for category in categories %}
-                                <tr data-row-edit-target="{% if category.is_builtin %}#view-category-{{ category.id }}{% else %}#edit-category-{{ category.id }}{% endif %}">
+                                <tr
+                                    data-sort-group="{% if category.is_builtin %}1{% else %}0{% endif %}"
+                                    data-row-edit-target="{% if category.is_builtin %}#view-category-{{ category.id }}{% else %}#edit-category-{{ category.id }}{% endif %}"
+                                >
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
                                             <div class="fw-semibold">{{ category.name }}</div>
@@ -68,7 +71,7 @@
                                             {% endif %}
                                         </div>
                                         {% if category.description %}
-                                            <div class="text-muted small">{{ category.description }}</div>
+                                            <div class="text-muted small taxonomy-description">{{ category.description }}</div>
                                         {% endif %}
                                     </td>
                                     <td class="text-muted small" data-sort-value="{{ category.transaction_count }}">{{ category.transaction_count }}</td>
@@ -111,17 +114,6 @@
                                                     >
                                                         <i class="bi bi-trash" aria-hidden="true"></i>
                                                     </button>
-                                                {% else %}
-                                                    <button
-                                                        class="btn btn-sm btn-outline-secondary btn-icon-only"
-                                                        type="button"
-                                                        disabled
-                                                        aria-label="{{ _('Category {name} cannot be deleted because it is in use', name=category.name) }}"
-                                                        title="{{ _('In use') }}"
-                                                        data-bs-tooltip
-                                                    >
-                                                        <i class="bi bi-lock" aria-hidden="true"></i>
-                                                    </button>
                                                 {% endif %}
                                             {% endif %}
                                         </div>
@@ -154,25 +146,28 @@
 
             <div class="card-body p-0">
                 {% if tags %}
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0" data-sortable-table>
+                    <div class="table-responsive taxonomy-table-responsive">
+                        <table class="table table-hover align-middle mb-0 taxonomy-table" data-sortable-table>
                             <thead>
                                 <tr>
-                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Name") }}</span></button></th>
-                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Transactions") }}</span></button></th>
-                                    <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Rules") }}</span></button></th>
-                                    <th class="text-end">{{ _("Actions") }}</th>
+                                    <th class="taxonomy-name-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Name") }}</span></button></th>
+                                    <th class="taxonomy-transactions-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Transactions") }}</span></button></th>
+                                    <th class="taxonomy-rules-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Rules") }}</span></button></th>
+                                    <th class="text-end taxonomy-actions-column">{{ _("Actions") }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for tag in tags %}
-                                <tr data-row-edit-target="#edit-tag-{{ tag.id }}">
+                                <tr
+                                    data-sort-group="{% if tag.is_builtin %}1{% else %}0{% endif %}"
+                                    data-row-edit-target="#edit-tag-{{ tag.id }}"
+                                >
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
                                             <span class="tag-pill" style="--tag-color: {{ tag.color }};">{{ tag.name }}</span>
                                         </div>
                                         {% if tag.description %}
-                                            <div class="text-muted small mt-1">{{ tag.description }}</div>
+                                            <div class="text-muted small mt-1 taxonomy-description">{{ tag.description }}</div>
                                         {% endif %}
                                     </td>
                                     <td class="text-muted small" data-sort-value="{{ tag.transaction_count }}">{{ tag.transaction_count }}</td>

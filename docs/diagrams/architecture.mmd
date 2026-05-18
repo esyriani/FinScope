@@ -29,7 +29,7 @@ flowchart TB
         translations["Translation catalogs<br/>translations/*.json"]
     end
 
-    sqlite[("SQLite database<br/>runtime/finance.db")]
+    db[("SQLite or MySQL database<br/>database.url")]
     openai["OpenAI API<br/><i>optional</i>"]
 
     browser --> flask
@@ -45,7 +45,7 @@ flowchart TB
     logic --> background
     logic -. optional .-> openai
 
-    persistence --> sqlite
+    persistence --> db
 
     templates --> static
     templates --> translations
@@ -69,7 +69,7 @@ flowchart TB
     class persistence persistenceLayer;
     class templates presentation;
     class static,translations asset;
-    class sqlite database;
+    class db database;
     class openai external;
 
     style app fill:#f8fafc,stroke:#cbd5e1,color:#0f172a;
