@@ -1,0 +1,502 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set overlap_table = audit_tables.overlaps %}
+{% set specificity_warning_table = audit_tables.specificity_warnings %}
+{% set shadowed_rule_table = audit_tables.shadowed_rules %}
+{% set stale_rule_table = audit_tables.stale_rules %}
+
+{% macro severity_badge(row) %}
+<span class="badge {{ row.severity_badge_class }}">{{ _(row.severity_label) }}</span>
+{% endmacro %}
+
+{% macro rule_summary(rule) %}
+<a class="rule-keyword" href="{{ url_for('rules.audit_rule_detail', rule_id=rule.id) }}">{{ rule.label }}</a>
+<div class="small text-muted">{{ rule.category }}</div>
+<div class="small text-muted">{{ _("Scope") }}: {{ _(rule.scope_label) }}</div>
+{% if rule.scope_value and rule.scope_value != rule.label %}
+    <div class="small text-muted">{{ _(rule.scope_label) }}: {{ rule.scope_value }}</div>
+{% endif %}
+{% if rule.direction != "any" %}
+    <div class="small text-muted">{{ _("Direction") }}: {{ _(rule.direction_label) }}</div>
+{% endif %}
+{% if rule.amount_min is not none or rule.amount_max is not none %}
+    <div class="small text-muted">{{ _("Amount") }}: {{ rule.amount_label }}</div>
+{% endif %}
+{% if rule.tag_label != "-" %}
+    <div class="small text-muted">{{ _("Tags") }}: {{ rule.tag_label }}</div>
+{% endif %}
+{% endmacro %}
+
+{% macro suggested_action_badge(action) %}
+{% set badge_class = "text-bg-secondary" %}
+{% if action in ["edit or narrow", "delete or narrow", "review or remove"] %}
+    {% set badge_class = "text-bg-warning" %}
+{% elif action in ["inspect tags", "inspect manually"] %}
+    {% set badge_class = "text-bg-info" %}
+{% elif action in ["mark harmless", "merge"] %}
+    {% set badge_class = "text-bg-success" %}
+{% endif %}
+<span class="badge {{ badge_class }}">{{ _(action) }}</span>
+{% endmacro %}
+
+{% macro audit_metric_card(label, value, tone, detail) %}
+<div class="metric-card audit-risk-card audit-risk-{{ tone }}">
+    <div class="metric-label">{{ _(label) }}</div>
+    <div class="metric-value">{{ value }}</div>
+    <div class="metric-detail">{{ _(detail) }}</div>
+</div>
+{% endmacro %}
+
+{% macro audit_pagination(table, label) %}
+{% if table.total_pages > 1 %}
+<nav aria-label="{{ label }}">
+    <ul class="pagination mb-0">
+        <li class="page-item {% if table.page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ table.page_url(table.page - 1) }}" data-ajax-refresh-link>{{ _("Previous") }}</a>
+        </li>
+
+        {% for page_number in range(1, table.total_pages + 1) %}
+            {% if page_number == 1 or page_number == table.total_pages or (page_number >= table.page - 2 and page_number <= table.page + 2) %}
+                <li class="page-item {% if page_number == table.page %}active{% endif %}">
+                    <a class="page-link" href="{{ table.page_url(page_number) }}" data-ajax-refresh-link>{{ page_number }}</a>
+                </li>
+            {% elif page_number == table.page - 3 or page_number == table.page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if table.page >= table.total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ table.page_url(table.page + 1) }}" data-ajax-refresh-link>{{ _("Next") }}</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endmacro %}
+
+{% macro table_status(table) %}
+{% if table.total_count %}
+<div class="text-muted small">
+    {{ _("Showing {start}-{end} of {total} findings", start=table.page_start, end=table.page_end, total=table.total_count) }}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro sort_header(table, sort_name, label, header_class="") %}
+<th{% if header_class %} class="{{ header_class }}"{% endif %}>
+    <a class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %}" href="{{ table.sort_url(sort_name) }}" data-ajax-refresh-link>
+        <span>{{ _(label) }}</span>{% if table.sort == sort_name %}<span class="sort-icon {{ table.direction }}" aria-hidden="true"></span>{% endif %}
+    </a>
+</th>
+{% endmacro %}
+
+{% macro overlap_detail_button(row) %}
+<a
+    class="btn btn-sm btn-outline-secondary"
+    href="{{ url_for('rules.audit_rule_overlap', rule_a_id=row.detail_url_rule_a_id, rule_b_id=row.detail_url_rule_b_id) }}"
+>
+    <i class="bi bi-search" aria-hidden="true"></i>{{ _("Details") }}
+</a>
+{% endmacro %}
+
+{% macro rule_detail_button(rule, label="Rule detail") %}
+<a
+    class="btn btn-sm btn-outline-secondary"
+    href="{{ url_for('rules.audit_rule_detail', rule_id=rule.id) }}"
+>
+    <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _(label) }}
+</a>
+{% endmacro %}
+
+{% macro preview_apply_button(rule, label="Preview apply") %}
+<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="apply_where_wins">
+    <input type="hidden" name="rule_id" value="{{ rule.id }}">
+    <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _('Preview apply where winner') }}">
+        <i class="bi bi-eye" aria-hidden="true"></i>{{ _(label) }}
+    </button>
+</form>
+{% endmacro %}
+
+{% macro preview_delete_button(rule) %}
+<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="delete_rule">
+    <input type="hidden" name="rule_id" value="{{ rule.id }}">
+    <button class="btn btn-sm btn-outline-danger" type="submit">
+        <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview delete") }}
+    </button>
+</form>
+{% endmacro %}
+
+{% macro table_footer(table, label) %}
+{% if table.total_pages > 1 %}
+<div class="card-footer d-flex justify-content-end">
+    {{ audit_pagination(table, label) }}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro collapsible_header(target_id, title, description, table, label, expanded=false) %}
+<div class="card-body border-bottom">
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+        <div>
+            <h5 class="mb-1">{{ _(title) }}</h5>
+            <p class="text-muted mb-0">{{ _(description) }}</p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center justify-content-end gap-3">
+            {{ table_status(table) }}
+            {{ audit_pagination(table, label) }}
+            <button
+                class="btn btn-sm btn-outline-secondary"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#{{ target_id }}"
+                aria-expanded="{{ 'true' if expanded else 'false' }}"
+                aria-controls="{{ target_id }}"
+                data-collapse-label-toggle
+                data-show-label="{{ _('Show table') }}"
+                data-hide-label="{{ _('Hide table') }}"
+            >
+                <i class="bi {{ 'bi-chevron-up' if expanded else 'bi-chevron-down' }}" aria-hidden="true" data-collapse-toggle-icon></i><span data-collapse-toggle-label>{{ _("Hide table") if expanded else _("Show table") }}</span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+<div data-ajax-refresh-target="rule-audit">
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Rule audit") }}</h2>
+        <p class="text-muted mb-0">{{ _("Inspect overlapping rules, conflicts, shadowed rules, and unused rules.") }}</p>
+    </div>
+    <div class="home-actions">
+        <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="apply_all_rules">
+            <button class="btn btn-outline-secondary" type="submit">
+                <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview apply all") }}
+            </button>
+        </form>
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}">
+            <i class="bi bi-tags" aria-hidden="true"></i>{{ _("Rules") }}
+        </a>
+    </div>
+</div>
+
+{% if limited %}
+<div class="alert alert-info" role="status">
+    {{ _("Audit is limited to recent transactions.") }}
+</div>
+{% endif %}
+
+<div class="alert alert-info" role="status">
+    {{ _("Multiple rules can match the same transaction.") }}
+    {% if summary.category_conflict_overlaps %}
+        {{ _("This is a category conflict. FinScope currently applies the winning rule silently.") }}
+    {% endif %}
+    {{ _("Preview impact before applying changes.") }}
+</div>
+
+<section class="mb-4" aria-label="{{ _('Audit summary') }}">
+    <div class="metric-grid audit-summary-grid">
+        {{ audit_metric_card("Active rules", summary.total_active_rules, "neutral", "Inventory") }}
+        {{ audit_metric_card("Overlap pairs", summary.overlapping_rule_pairs, "warning" if summary.overlapping_rule_pairs else "healthy", "Needs review" if summary.overlapping_rule_pairs else "All clear") }}
+        {{ audit_metric_card("Category conflicts", summary.category_conflict_overlaps, "critical" if summary.category_conflict_overlaps else "healthy", "High risk" if summary.category_conflict_overlaps else "All clear") }}
+        {{ audit_metric_card("Tag differences", summary.tag_difference_overlaps, "info" if summary.tag_difference_overlaps else "healthy", "Tag-only" if summary.tag_difference_overlaps else "All clear") }}
+        {{ audit_metric_card("Shadowed rules", summary.shadowed_rules, "warning" if summary.shadowed_rules else "healthy", "Maintenance" if summary.shadowed_rules else "All clear") }}
+        {{ audit_metric_card("Unused or stale", summary.stale_rules, "warning" if summary.stale_rules else "healthy", "Cleanup" if summary.stale_rules else "All clear") }}
+        {{ audit_metric_card("Precedence warnings", summary.specificity_warnings, "critical" if summary.specificity_warnings else "healthy", "Precedence risk" if summary.specificity_warnings else "All clear") }}
+    </div>
+</section>
+
+<section class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="rule-audit-search-row" data-ajax-refresh-form>
+            <input type="hidden" name="overlap_page" value="1">
+            <input type="hidden" name="overlap_sort" value="{{ overlap_table.sort }}">
+            <input type="hidden" name="overlap_direction" value="{{ overlap_table.direction }}">
+
+            <div class="rule-audit-search-field">
+                <label class="form-label" for="rule-audit-search">{{ _("Search") }}</label>
+                <input
+                    id="rule-audit-search"
+                    class="form-control"
+                    type="search"
+                    name="overlap_q"
+                    value="{{ overlap_query }}"
+                    placeholder="{{ _('Search rule, category, tag, scope, or action') }}"
+                >
+            </div>
+
+            <div class="rule-audit-filter-actions filter-actions">
+                <button class="btn btn-primary" type="submit">
+                    <i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}
+                </button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rules') }}" data-ajax-refresh-link>
+                    <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}
+                </a>
+            </div>
+
+            <div class="rule-audit-conflict-field">
+                <label class="form-label">{{ _("Conflict type") }}</label>
+                <div class="d-flex flex-wrap gap-1" role="group" aria-label="{{ _('Filter overlap findings') }}">
+                {% for option in overlap_filter_options %}
+                {% set filter_input_id = "overlap-filter-" ~ option.value %}
+                <input
+                    class="btn-check"
+                    type="radio"
+                    name="overlap_filter"
+                    id="{{ filter_input_id }}"
+                    value="{{ option.value }}"
+                    autocomplete="off"
+                    {% if option.value == overlap_filter %}checked{% endif %}
+                >
+                <label class="btn btn-sm btn-outline-secondary text-nowrap rule-audit-filter-option" for="{{ filter_input_id }}">
+                    {{ _(option.label) }}
+                    <span class="badge text-bg-secondary ms-1">{{ option.count }}</span>
+                </label>
+                {% endfor %}
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="card mb-4">
+    {{ collapsible_header(
+        "rule-overlap-findings",
+        "Rule overlap findings",
+        "Pairs below match at least one same historical transaction. Double-click a row to open details.",
+        overlap_table,
+        _("Overlap pages"),
+        overlap_filter != "all"
+    ) }}
+    <div class="collapse{% if overlap_filter != 'all' %} show{% endif %}" id="rule-overlap-findings">
+        {% if overlap_table.total_count %}
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            {{ sort_header(overlap_table, "rule_a", "Rule A") }}
+                            {{ sort_header(overlap_table, "rule_b", "Rule B") }}
+                            {{ sort_header(overlap_table, "shared", "Shared transactions") }}
+                            {{ sort_header(overlap_table, "severity", "Severity") }}
+                            {{ sort_header(overlap_table, "winner", "Winning rule") }}
+                            {{ sort_header(overlap_table, "current_applied", "Current applied") }}
+                            {{ sort_header(overlap_table, "suggested", "Suggested action") }}
+                            <th class="text-end">{{ _("Action") }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in overlap_table.rows %}
+                        <tr
+                            data-row-href="{{ url_for('rules.audit_rule_overlap', rule_a_id=row.detail_url_rule_a_id, rule_b_id=row.detail_url_rule_b_id) }}"
+                            data-row-drilldown="dblclick"
+                        >
+                            <td>{{ rule_summary(row.rule_a) }}</td>
+                            <td>{{ rule_summary(row.rule_b) }}</td>
+                            <td>{{ row.shared_count }}</td>
+                            <td>{{ severity_badge(row) }}</td>
+                            <td>
+                                <span class="fw-semibold">{{ _(row.winning_rule_side_label) }}</span>
+                                <div class="small text-muted">{{ row.winning_rule_label }}</div>
+                            </td>
+                            <td>{{ row.rule_a_applied_count }} / {{ row.rule_b_applied_count }}</td>
+                            <td>{{ suggested_action_badge(row.suggested_action) }}</td>
+                            <td class="text-end">{{ overlap_detail_button(row) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {{ table_footer(overlap_table, _("Overlap pages bottom")) }}
+        {% else %}
+        <div class="empty-state compact">{{ _("No overlapping rules found.") }}</div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="card mb-4">
+    {{ collapsible_header(
+        "specificity-warning-findings",
+        "Specificity and precedence warnings",
+        "A broader winning rule can hide a more constrained overlapping rule.",
+        specificity_warning_table,
+        _("Specificity warning pages")
+    ) }}
+    <div class="collapse" id="specificity-warning-findings">
+    {% if specificity_warning_table.total_count %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        {{ sort_header(specificity_warning_table, "broad_rule", "Broad winning rule") }}
+                        {{ sort_header(specificity_warning_table, "specific_rule", "More specific rule") }}
+                        {{ sort_header(specificity_warning_table, "shared", "Shared transactions") }}
+                        {{ sort_header(specificity_warning_table, "reason", "Reason") }}
+                        {{ sort_header(specificity_warning_table, "conflicts", "Category conflicts") }}
+                        {{ sort_header(specificity_warning_table, "suggested", "Suggested action") }}
+                        <th class="text-end">{{ _("Action") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in specificity_warning_table.rows %}
+                    <tr>
+                        <td>{{ rule_summary(row.broad_rule) }}</td>
+                        <td>{{ rule_summary(row.specific_rule) }}</td>
+                        <td>{{ row.shared_count }}</td>
+                        <td><span class="badge text-bg-secondary">{{ _(row.reason) }}</span></td>
+                        <td>{{ row.conflicting_count }}</td>
+                        <td>{{ suggested_action_badge(row.suggested_action) }}</td>
+                        <td class="text-end">
+                            <div class="d-flex flex-wrap justify-content-end gap-2">
+                                <a
+                                    class="btn btn-sm btn-outline-secondary"
+                                    href="{{ url_for('rules.audit_rule_overlap', rule_a_id=row.broad_rule.id, rule_b_id=row.specific_rule.id) }}"
+                                >
+                                    <i class="bi bi-search" aria-hidden="true"></i>{{ _("Details") }}
+                                </a>
+                                {{ rule_detail_button(row.broad_rule, "Broad winning rule") }}
+                                {{ rule_detail_button(row.specific_rule, "More specific rule") }}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {{ table_footer(specificity_warning_table, _("Specificity warning pages bottom")) }}
+    {% else %}
+    <div class="empty-state compact">{{ _("No specificity warnings found.") }}</div>
+    {% endif %}
+    </div>
+</section>
+
+<section class="card mb-4">
+    {{ collapsible_header(
+        "shadowed-rule-findings",
+        "Shadowed rules",
+        "This rule is shadowed. It matches transactions, but another rule is applied.",
+        shadowed_rule_table,
+        _("Shadowed rule pages")
+    ) }}
+    <div class="collapse" id="shadowed-rule-findings">
+    {% if shadowed_rule_table.total_count %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        {{ sort_header(shadowed_rule_table, "rule", "Rule") }}
+                        <th>{{ _("Status") }}</th>
+                        {{ sort_header(shadowed_rule_table, "matches", "Historical matches") }}
+                        {{ sort_header(shadowed_rule_table, "wins", "Wins") }}
+                        {{ sort_header(shadowed_rule_table, "losses", "Losses") }}
+                        {{ sort_header(shadowed_rule_table, "shadowing_rule", "Most common shadowing rule") }}
+                        {{ sort_header(shadowed_rule_table, "conflicts", "Conflicting losses") }}
+                        {{ sort_header(shadowed_rule_table, "suggested", "Suggested action") }}
+                        <th class="text-end">{{ _("Action") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in shadowed_rule_table.rows %}
+                    <tr>
+                        <td>{{ rule_summary(row.rule) }}</td>
+                        <td><span class="badge text-bg-warning">{{ _("Shadowed") }}</span></td>
+                        <td>{{ row.total_matches }}</td>
+                        <td>{{ row.total_wins }}</td>
+                        <td><span class="badge text-bg-warning">{{ row.total_losses }}</span></td>
+                        <td>
+                            {% if row.most_common_shadowing_rule %}
+                                {{ rule_summary(row.most_common_shadowing_rule) }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.conflicting_loss_count }}</td>
+                        <td>{{ suggested_action_badge(row.suggested_action) }}</td>
+                        <td class="text-end">
+                            <div class="d-flex flex-wrap justify-content-end gap-2">
+                                {{ rule_detail_button(row.rule) }}
+                                {{ preview_delete_button(row.rule) }}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {{ table_footer(shadowed_rule_table, _("Shadowed rule pages bottom")) }}
+    {% else %}
+    <div class="empty-state compact">{{ _("No shadowed rules found.") }}</div>
+    {% endif %}
+    </div>
+</section>
+
+<section class="card">
+    {{ collapsible_header(
+        "stale-rule-findings",
+        "Stale and unused rules",
+        "Rules with no historical matches are candidates for review.",
+        stale_rule_table,
+        _("Stale rule pages")
+    ) }}
+    <div class="collapse" id="stale-rule-findings">
+    {% if stale_rule_table.total_count %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        {{ sort_header(stale_rule_table, "rule", "Rule") }}
+                        {{ sort_header(stale_rule_table, "status", "Status") }}
+                        {{ sort_header(stale_rule_table, "matches", "Historical matches") }}
+                        {{ sort_header(stale_rule_table, "current_applied", "Current applied") }}
+                        {{ sort_header(stale_rule_table, "last_matched", "Last matched") }}
+                        {{ sort_header(stale_rule_table, "suggested", "Suggested action") }}
+                        <th class="text-end">{{ _("Action") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in stale_rule_table.rows %}
+                    <tr>
+                        <td>{{ rule_summary(row.rule) }}</td>
+                        <td><span class="badge {{ row.status_badge_class }}">{{ _(row.status_label) }}</span></td>
+                        <td>{{ row.total_matches }}</td>
+                        <td>{{ row.stored_applied_count }}</td>
+                        <td>
+                            {% if row.last_matched_date %}
+                                {{ row.last_matched_date | datefmt }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ suggested_action_badge(row.suggested_action) }}</td>
+                        <td class="text-end">
+                            <div class="d-flex flex-wrap justify-content-end gap-2">
+                                {{ rule_detail_button(row.rule) }}
+                                {{ preview_delete_button(row.rule) }}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {{ table_footer(stale_rule_table, _("Stale rule pages bottom")) }}
+    {% else %}
+    <div class="empty-state compact">{{ _("No stale or unused rules found.") }}</div>
+    {% endif %}
+    </div>
+</section>
+</div>
+{% endblock %}

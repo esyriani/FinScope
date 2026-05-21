@@ -39,6 +39,7 @@ SETTINGS_DEFAULTS = {
     "home_top_category_limit": str(settings.default_home_top_category_limit),
     "merchant_table_limit": str(settings.default_merchant_table_limit),
     "rule_preview_limit": str(settings.default_rule_preview_limit),
+    "rule_audit_transaction_limit": str(settings.default_rule_audit_transaction_limit),
     "theme_mode": THEME_MODE_DARK,
     "ui_language": normalize_language(settings.locale),
     "llm_confidence_threshold": str(settings.default_llm_confidence_threshold),
@@ -57,6 +58,7 @@ GENERAL_SETTING_KEYS = (
     "home_top_category_limit",
     "merchant_table_limit",
     "rule_preview_limit",
+    "rule_audit_transaction_limit",
     "theme_mode",
     "ui_language",
 )

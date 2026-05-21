@@ -31,6 +31,7 @@ def settings_form_data(conn, **overrides):
         "home_top_category_limit": "7",
         "merchant_table_limit": "11",
         "rule_preview_limit": "9",
+        "rule_audit_transaction_limit": "13",
         "llm_confidence_threshold": "0.75",
         "verify_threshold": "0.90",
         "openai_model": "gpt-4o-mini",
@@ -113,6 +114,7 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert owner_settings["home_top_category_limit"] == "7"
     assert owner_settings["merchant_table_limit"] == "11"
     assert owner_settings["rule_preview_limit"] == "9"
+    assert owner_settings["rule_audit_transaction_limit"] == "13"
     assert settings["llm_confidence_threshold"] == "0.75"
     assert settings["verify_threshold"] == "0.90"
     assert settings["openai_model"] == "gpt-4o-mini"

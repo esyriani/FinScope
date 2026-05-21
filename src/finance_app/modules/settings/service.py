@@ -75,6 +75,10 @@ def build_settings_context():
         "home_top_category_limit": current.get("home_top_category_limit", str(app_settings.default_home_top_category_limit)),
         "merchant_table_limit": current.get("merchant_table_limit", str(app_settings.default_merchant_table_limit)),
         "rule_preview_limit": current.get("rule_preview_limit", str(app_settings.default_rule_preview_limit)),
+        "rule_audit_transaction_limit": current.get(
+            "rule_audit_transaction_limit",
+            str(app_settings.default_rule_audit_transaction_limit),
+        ),
         "llm_confidence_threshold": current.get(
             "llm_confidence_threshold",
             format_probability(app_settings.default_llm_confidence_threshold),

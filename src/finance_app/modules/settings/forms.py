@@ -40,6 +40,11 @@ def parse_general_settings_form(form, app_settings):
             form.get("rule_preview_limit"),
             app_settings.default_rule_preview_limit,
         ),
+        "rule_audit_transaction_limit": parse_positive_int(
+            form.get("rule_audit_transaction_limit"),
+            app_settings.default_rule_audit_transaction_limit,
+            label="Rule audit transaction limit",
+        ),
         "theme_mode": normalize_theme_mode(form.get("theme_mode", THEME_MODE_DARK)),
         "ui_language": normalize_language(form.get("ui_language", app_settings.locale)),
     }

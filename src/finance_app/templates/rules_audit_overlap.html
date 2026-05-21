@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set transaction_table = transaction_table | default({}) %}
+
+{% macro rule_summary(rule) %}
+<div class="rule-keyword">{{ rule.label }}</div>
+<div class="small text-muted">{{ rule.category }}</div>
+{% if rule.tag_label != "-" %}
+    <div class="small text-muted">{{ _("Tags") }}: {{ rule.tag_label }}</div>
+{% endif %}
+<div class="mt-3">
+    <div class="small text-muted mb-1">{{ _("Specificity") }}</div>
+    <span class="badge {{ rule.specificity_comparison_badge_class }}">{{ _(rule.specificity_comparison_label) }}</span>
+</div>
+<div class="row g-2 mt-2 small text-muted">
+    {% for factor in rule.specificity_factors %}
+    <div class="col-sm-6">
+        <span class="fw-semibold">{{ _(factor.label) }}:</span> {{ _(factor.value) if factor.value is string else factor.value }}
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro match_summary(match) %}
+<div>{{ match.category }}</div>
+<div class="small text-muted">{{ _("Tags") }}: {{ match.tag_label }}</div>
+<div class="small text-muted">{{ _("Confidence") }}: {{ "%.3f"|format(match.confidence) }}</div>
+<div class="small text-muted">{{ _("Match score") }}: {{ "%.3f"|format(match.match_score) }}</div>
+{% endmacro %}
+
+{% macro detail_pagination(table, label) %}
+{% if table.total_pages > 1 %}
+<nav aria-label="{{ label }}">
+    <ul class="pagination mb-0">
+        <li class="page-item {% if table.page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ table.page_url(table.page - 1) }}">{{ _("Previous") }}</a>
+        </li>
+
+        {% for page_number in range(1, table.total_pages + 1) %}
+            {% if page_number == 1 or page_number == table.total_pages or (page_number >= table.page - 2 and page_number <= table.page + 2) %}
+                <li class="page-item {% if page_number == table.page %}active{% endif %}">
+                    <a class="page-link" href="{{ table.page_url(page_number) }}">{{ page_number }}</a>
+                </li>
+            {% elif page_number == table.page - 3 or page_number == table.page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if table.page >= table.total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ table.page_url(table.page + 1) }}">{{ _("Next") }}</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endmacro %}
+
+{% macro sort_header(table, sort_name, label, header_class="") %}
+<th{% if header_class %} class="{{ header_class }}"{% endif %}>
+    <a class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %}" href="{{ table.sort_url(sort_name) }}">
+        <span>{{ _(label) }}</span>{% if table.sort == sort_name %}<span class="sort-icon {{ table.direction }}" aria-hidden="true"></span>{% endif %}
+    </a>
+</th>
+{% endmacro %}
+
+{% macro rule_detail_button(rule) %}
+<a
+    class="btn btn-sm btn-outline-secondary"
+    href="{{ url_for('rules.audit_rule_detail', rule_id=rule.id) }}"
+>
+    <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule detail") }}
+</a>
+{% endmacro %}
+
+{% macro preview_apply_button(rule) %}
+<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="apply_where_wins">
+    <input type="hidden" name="rule_id" value="{{ rule.id }}">
+    <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _('Preview apply where winner') }}">
+        <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview apply") }}
+    </button>
+</form>
+{% endmacro %}
+
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Shared matching transactions") }}</h2>
+        <p class="text-muted mb-0">{{ _("Every row below is matched by both rules.") }}</p>
+    </div>
+    <div class="home-actions">
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rules') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule audit") }}
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}">
+            <i class="bi bi-tags" aria-hidden="true"></i>{{ _("Rules") }}
+        </a>
+    </div>
+</div>
+
+{% if limited %}
+<div class="alert alert-info" role="status">
+    {{ _("Audit is limited to recent transactions.") }}
+</div>
+{% endif %}
+
+<section class="metric-grid mb-4" aria-label="{{ _('Overlap summary') }}">
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Shared transactions") }}</div>
+        <div class="metric-value">{{ overlap.shared_count }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Severity") }}</div>
+        <div class="metric-value fs-5">
+            <span class="badge {{ overlap.severity_badge_class }}">{{ _(overlap.severity_label) }}</span>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Winning rule") }}</div>
+        <div class="metric-detail">{{ overlap.winning_rule_label }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Suggested action") }}</div>
+        <div class="metric-detail">{{ _(overlap.suggested_action) }}</div>
+    </div>
+</section>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <section class="card h-100">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+                    <h5 class="mb-0">{{ _("Winning rule") }}</h5>
+                    <div class="d-flex flex-wrap justify-content-end gap-2">
+                        {{ rule_detail_button(winning_rule) }}
+                        {{ preview_apply_button(winning_rule) }}
+                    </div>
+                </div>
+                {{ rule_summary(winning_rule) }}
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-6">
+        <section class="card h-100">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+                    <h5 class="mb-0">{{ _("Losing rule") }}</h5>
+                    <div class="d-flex flex-wrap justify-content-end gap-2">
+                        {{ rule_detail_button(losing_rule) }}
+                        {{ preview_apply_button(losing_rule) }}
+                    </div>
+                </div>
+                {{ rule_summary(losing_rule) }}
+            </div>
+        </section>
+    </div>
+</div>
+
+<section class="card">
+    <div class="card-body border-bottom">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+            <div>
+                <h5 class="mb-1">{{ _("Shared transactions") }}</h5>
+                <p class="text-muted mb-0">{{ _("The winning rule is selected by confidence, then match score, then specificity.") }}</p>
+            </div>
+            <div class="d-flex flex-wrap align-items-center justify-content-end gap-3">
+                {% if transaction_table.total_count %}
+                <div class="text-muted small">
+                    {{ _("Showing {start}-{end} of {total} transactions", start=transaction_table.page_start, end=transaction_table.page_end, total=transaction_table.total_count) }}
+                </div>
+                {% endif %}
+                {{ detail_pagination(transaction_table, _("Shared transaction pages")) }}
+            </div>
+        </div>
+    </div>
+    {% if transaction_table.total_count %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        {{ sort_header(transaction_table, "date", "Date") }}
+                        {{ sort_header(transaction_table, "account", "Account") }}
+                        {{ sort_header(transaction_table, "merchant", "Merchant") }}
+                        {{ sort_header(transaction_table, "description", "Description") }}
+                        {{ sort_header(transaction_table, "amount", "Amount", "text-end") }}
+                        {{ sort_header(transaction_table, "current_category", "Current category") }}
+                        {{ sort_header(transaction_table, "rule_a", "Winning rule result") }}
+                        {{ sort_header(transaction_table, "rule_b", "Losing rule result") }}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in transactions %}
+                    {% set tx = row.transaction %}
+                    <tr>
+                        <td>{{ tx.tx_date | datefmt }}</td>
+                        <td>{{ tx.account_name or _("Personal") }}</td>
+                        <td>
+                            <div>{{ tx.merchant_name or tx.canonical_merchant or "-" }}</div>
+                            <div class="small text-muted">{{ tx.merchant_key or "-" }}</div>
+                        </td>
+                        <td>
+                            <div>{{ tx.description }}</div>
+                            <div class="small text-muted">{{ tx.normalized_description or "-" }}</div>
+                        </td>
+                        <td class="text-end">{{ tx.amount | moneyfmt }}</td>
+                        <td>
+                            <div>{{ tx.category }}</div>
+                            <div class="small text-muted">{{ _("Tags") }}: {{ row.current_tag_label }}</div>
+                            {% if row.manual_reviewed %}
+                                <span class="badge text-bg-success">{{ _("Manually reviewed") }}</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">{{ _("Not manually reviewed") }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ match_summary(row.winning_rule_match) }}</td>
+                        <td>{{ match_summary(row.losing_rule_match) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if transaction_table.total_pages > 1 %}
+    <div class="card-footer d-flex justify-content-end">
+        {{ detail_pagination(transaction_table, _("Shared transaction pages bottom")) }}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state compact">{{ _("No shared transactions found.") }}</div>
+    {% endif %}
+</section>
+{% endblock %}

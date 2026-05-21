@@ -15,6 +15,7 @@ from finance_app.modules.rules.import_export import (
     import_rules_override,
     import_rules_add,
     parse_rules_csv,
+    preview_rules_import,
     undo_import_rules_job,
     undo_rules_override_import,
 )
@@ -113,6 +114,42 @@ def test_import_rules_add_skips_duplicates_and_persists_tags(db_conn):
     assert get_rule_tags_by_rule_id(db_conn, [row["id"]])[row["id"]] == ["Government", "Tax"]
     assert undo_state["mode"] == "add"
     assert len(undo_state["inserted_rules"]) == 1
+
+
+def test_preview_rules_import_add_skips_without_writing(db_conn):
+    """Verify add-mode import preview reports skipped rows without mutation."""
+    db_conn.execute(
+        """
+        INSERT INTO category_rules (keyword, category, source)
+        VALUES ('HYDRO QUEBEC', 'Utilities', 'manual')
+        """
+    )
+    db_conn.commit()
+
+    preview = preview_rules_import(
+        db_conn,
+        "\n".join(
+            [
+                "keyword,category,tags",
+                "Hydro Quebec,Utilities,Tax",
+                "Hydro Quebec,Utilities,Tax",
+                "Metro Grocery,Food,Grocery",
+            ]
+        ),
+        "add",
+    )
+    stored_metro = db_conn.execute(
+        "SELECT id FROM category_rules WHERE keyword = 'METRO GROCERY'"
+    ).fetchone()
+
+    assert preview.total_rows == 3
+    assert preview.skipped_existing == 1
+    assert preview.skipped_duplicate == 1
+    assert len(preview.proposed_rules) == 1
+    assert preview.proposed_rules[0]["id"] < 0
+    assert preview.proposed_rules[0]["keyword"] == "METRO GROCERY"
+    assert preview.proposed_rules[0]["tags"] == ["Grocery"]
+    assert stored_metro is None
 
 
 def test_import_rules_add_persists_account_and_direction_scope(db_conn):
@@ -348,6 +385,64 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(d
     )
     assert [tuple(row) for row in restored_rules] == [(original_rule_id, "OLD STORE", "Utilities")]
     assert restored_tx["category_rule_id"] == original_rule_id
+
+
+def test_preview_rules_import_override_reports_without_writing(db_conn):
+    """Verify override-mode import preview reports replacement impact only."""
+    first_rule_id = db_conn.execute(
+        """
+        INSERT INTO category_rules (keyword, category, source)
+        VALUES ('OLD STORE', 'Utilities', 'manual')
+        """
+    ).lastrowid
+    db_conn.execute(
+        """
+        INSERT INTO category_rules (keyword, category, source)
+        VALUES ('OTHER STORE', 'Food', 'manual')
+        """
+    )
+    tx_id = db_conn.execute(
+        """
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            category_rule_id,
+            fingerprint
+        )
+        VALUES ('2026-01-02', 'OLD STORE', 12.34, 'Utilities', ?, 'preview-override-ref')
+        """,
+        (first_rule_id,),
+    ).lastrowid
+    db_conn.commit()
+
+    preview = preview_rules_import(
+        db_conn,
+        "\n".join(
+            [
+                "keyword,category,tags",
+                "Metro Grocery,Food,Tax",
+                "Metro Grocery,Food,Tax",
+            ]
+        ),
+        "override",
+    )
+    rules_after_preview = db_conn.execute(
+        "SELECT keyword FROM category_rules ORDER BY keyword"
+    ).fetchall()
+    tx_after_preview = db_conn.execute(
+        "SELECT category_rule_id FROM transactions WHERE id = ?",
+        (tx_id,),
+    ).fetchone()
+
+    assert preview.total_rows == 2
+    assert preview.skipped_duplicate == 1
+    assert preview.replaced_rules == 2
+    assert preview.cleared_transaction_rule_refs == 1
+    assert len(preview.proposed_rules) == 1
+    assert [row["keyword"] for row in rules_after_preview] == ["OLD STORE", "OTHER STORE"]
+    assert tx_after_preview["category_rule_id"] == first_rule_id
 
 
 def test_undo_rules_override_import_rejects_changed_rules(db_conn):

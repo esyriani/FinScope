@@ -21,6 +21,10 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.audit-summary-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
 .metric-card {
     min-height: 108px;
     padding: 1rem;

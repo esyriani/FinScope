@@ -125,6 +125,12 @@
                             <input id="rule_preview_limit" class="form-control" type="number" min="1" name="rule_preview_limit" value="{{ rule_preview_limit }}">
                             <div class="form-text">{{ _("Matching transactions shown while previewing rules.") }}</div>
                         </div>
+
+                        <div class="settings-field">
+                            <label for="rule_audit_transaction_limit" class="form-label">{{ _("Rule audit transaction limit") }}</label>
+                            <input id="rule_audit_transaction_limit" class="form-control" type="number" min="1" name="rule_audit_transaction_limit" value="{{ rule_audit_transaction_limit }}">
+                            <div class="form-text">{{ _("Newest historical transactions analyzed by Rule audit before the limited-audit notice appears.") }}</div>
+                        </div>
                     </div>
                 </div>
             </section>

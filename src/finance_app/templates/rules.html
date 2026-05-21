@@ -68,11 +68,15 @@
         <p class="text-muted mb-0">{{ _("Manual rules are applied before automatic suggestions.") }}</p>
     </div>
     <div class="home-actions">
-        <form method="post" action="/rules/apply-all" class="d-inline">
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rules') }}">
+            <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule audit") }}
+        </a>
+        <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="hidden" name="action" value="apply_all_rules">
             <button class="btn btn-outline-primary" type="submit">
-                <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Apply all rules") }}
+                <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview apply all") }}
             </button>
         </form>
         <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#import-rules-modal">
@@ -120,11 +124,11 @@
                             <div class="form-text text-danger">{{ _("Removes all existing rules and replaces them with the imported file. The job can be undone from Jobs.") }}</div>
                         </div>
                     </div>
-                    <p class="text-muted mb-0">{{ _("The import runs as a background job so the Rules page remains usable.") }}</p>
+                    <p class="text-muted mb-0">{{ _("The import is previewed before a background job is queued.") }}</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
-                    <button class="btn btn-primary" type="submit"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import rules") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview import") }}</button>
                 </div>
             </form>
         </div>
@@ -256,9 +260,10 @@
 <div class="modal fade" id="create-rule-modal" tabindex="-1" aria-labelledby="create-rule-title" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="post" action="/rules/create" data-rule-editor data-rule-preview-url="/rules/preview">
+            <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" data-rule-editor data-rule-preview-url="/rules/preview">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="action" value="create_rule">
                 <div class="modal-header">
                     <h5 class="modal-title" id="create-rule-title">{{ _("New rule") }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
@@ -274,7 +279,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save rule") }}</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview create") }}</button>
                 </div>
             </form>
         </div>
@@ -394,29 +399,33 @@
                                     <i class="bi bi-pencil-square" aria-hidden="true"></i>
                                 </button>
                                 {% if rule["requires_approval"] %}
-                                <form method="post" action="/rules/{{ rule['id'] }}/approve" class="d-inline" data-rule-table-action="approve" data-rule-id="{{ rule['id'] }}">
+                                <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <input type="hidden" name="action" value="approve_rule">
+                                    <input type="hidden" name="rule_id" value="{{ rule['id'] }}">
                                     <button
                                         class="btn btn-sm btn-outline-success"
                                         type="submit"
-                                        aria-label="{{ _('Approve rule {keyword}', keyword=rule['keyword']) }}"
+                                        aria-label="{{ _('Preview approving rule {keyword}', keyword=rule['keyword']) }}"
                                     >
-                                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}
+                                        <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview approve") }}
                                     </button>
                                 </form>
                                 {% endif %}
-                                <form method="post" action="/rules/{{ rule['id'] }}/apply" class="d-inline" data-rule-table-action="apply" data-rule-id="{{ rule['id'] }}">
+                                <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <input type="hidden" name="action" value="apply_where_wins">
+                                    <input type="hidden" name="rule_id" value="{{ rule['id'] }}">
                                     <button
                                         class="btn btn-sm btn-outline-secondary btn-icon-only"
                                         type="submit"
-                                        aria-label="{{ _('Apply rule {keyword} to existing transactions', keyword=rule['keyword']) }}"
-                                        title="{{ _('Apply rule') }}"
+                                        aria-label="{{ _('Preview applying rule {keyword}', keyword=rule['keyword']) }}"
+                                        title="{{ _('Preview apply') }}"
                                         data-bs-tooltip
                                     >
-                                        <i class="bi bi-play-circle" aria-hidden="true"></i>
+                                        <i class="bi bi-eye" aria-hidden="true"></i>
                                     </button>
                                 </form>
                                 <button
@@ -449,9 +458,11 @@
 <div class="modal fade" id="edit-rule-{{ rule['id'] }}" tabindex="-1" aria-labelledby="edit-rule-{{ rule['id'] }}-title" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="post" action="/rules/{{ rule['id'] }}/update" data-rule-editor data-rule-preview-url="/rules/preview" data-ajax-refresh-form>
+            <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" data-rule-editor data-rule-preview-url="/rules/preview">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="action" value="edit_rule">
+                <input type="hidden" name="rule_id" value="{{ rule['id'] }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="edit-rule-{{ rule['id'] }}-title">{{ _("Edit rule") }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
@@ -472,7 +483,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
-                    <button class="btn btn-primary" type="submit"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save rule") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview changes") }}</button>
                 </div>
             </form>
         </div>
@@ -482,19 +493,21 @@
 <div class="modal fade" id="delete-rule-{{ rule['id'] }}" tabindex="-1" aria-labelledby="delete-rule-{{ rule['id'] }}-title" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="post" action="/rules/{{ rule['id'] }}/delete" data-rule-table-action="delete" data-rule-id="{{ rule['id'] }}">
+            <form method="post" action="{{ url_for('rules.audit_rule_preview') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="action" value="delete_rule">
+                <input type="hidden" name="rule_id" value="{{ rule['id'] }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="delete-rule-{{ rule['id'] }}-title">{{ _("Delete rule") }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="mb-0">{{ _("Delete rule") }} <strong>{{ rule["keyword"] }}</strong>?</p>
+                    <p class="mb-0">{{ _("Preview impact before deleting") }} <strong>{{ rule["keyword"] }}</strong>.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
-                    <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete") }}</button>
+                    <button class="btn btn-outline-danger" type="submit"><i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview delete") }}</button>
                 </div>
             </form>
         </div>

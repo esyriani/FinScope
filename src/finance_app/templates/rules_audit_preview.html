@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Impact preview") }}</h2>
+        <p class="text-muted mb-0">
+            {{ _(preview.action_label) }}{% if preview.rule %}: {{ preview.rule.label }}{% elif preview.proposed_rule %}: {{ preview.proposed_rule.label }}{% endif %}
+        </p>
+    </div>
+    <div class="home-actions">
+        {% if preview.rule %}
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule detail") }}
+        </a>
+        {% endif %}
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rules') }}">
+            <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule audit") }}
+        </a>
+    </div>
+</div>
+
+{% if limited %}
+<div class="alert alert-info" role="status">
+    {{ _("Audit is limited to recent transactions.") }}
+</div>
+{% endif %}
+
+<div class="alert alert-info" role="status">
+    {{ _("Preview is read-only and does not modify rules or transactions.") }}
+</div>
+
+{% if not preview.has_transaction_impacts %}
+<div class="alert alert-warning" role="status">
+    {{ _("No historical transactions would change. This action may still affect future matches.") }}
+</div>
+{% elif not preview.has_category_or_tag_changes %}
+<div class="alert alert-info" role="status">
+    {{ _("Historical categories and tags would stay the same. Review any winning-rule changes before confirming.") }}
+</div>
+{% endif %}
+
+{% if preview.action == "delete_rule" and preview.rule %}
+<section class="card mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h5 class="mb-1">{{ _("Confirm delete") }}</h5>
+            <p class="text-muted mb-0">{{ _("Deleting this rule keeps existing transaction categories and tags, but future rule matching will ignore it.") }}</p>
+        </div>
+        <form method="post" action="{{ url_for('rules.delete_rule', rule_id=preview.rule.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm_preview" value="1">
+            <input type="hidden" name="next" value="{{ url_for('rules.audit_rules') }}">
+            <button class="btn btn-outline-danger" type="submit">
+                <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete rule") }}
+            </button>
+        </form>
+    </div>
+</section>
+{% endif %}
+
+{% if preview.action in ["apply_where_wins", "force_apply_rule"] and preview.rule %}
+<section class="card mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h5 class="mb-1">{{ _("Confirm apply") }}</h5>
+            {% if preview.action == "apply_where_wins" %}
+                <p class="text-muted mb-0">{{ _("This applies the rule only where it wins normal rule precedence.") }}</p>
+            {% else %}
+                <p class="text-muted mb-0">{{ _("This force applies the rule to all matching transactions, including transactions where another rule would normally win.") }}</p>
+            {% endif %}
+        </div>
+        <form method="post" action="{{ url_for('rules.apply_rule', rule_id=preview.rule.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm_preview" value="1">
+            <input type="hidden" name="mode" value="{{ preview.action }}">
+            <input type="hidden" name="next" value="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Apply rule") }}
+            </button>
+        </form>
+    </div>
+</section>
+{% endif %}
+
+{% if preview.action == "approve_rule" and preview.rule %}
+<section class="card mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h5 class="mb-1">{{ _("Confirm approve") }}</h5>
+            <p class="text-muted mb-0">{{ _("This approves the suggested rule after confirming matching behavior is unchanged.") }}</p>
+        </div>
+        <form method="post" action="{{ url_for('rules.approve_rule', rule_id=preview.rule.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm_preview" value="1">
+            <input type="hidden" name="next" value="{{ url_for('rules.rules') }}">
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}
+            </button>
+        </form>
+    </div>
+</section>
+{% endif %}
+
+{% if preview.action == "apply_all_rules" %}
+<section class="card mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h5 class="mb-1">{{ _("Confirm apply all") }}</h5>
+            <p class="text-muted mb-0">{{ _("This queues all current winning rules for application using normal rule precedence.") }}</p>
+        </div>
+        <form method="post" action="{{ url_for('rules.apply_all_rules') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm_preview" value="1">
+            <input type="hidden" name="next" value="{{ url_for('rules.audit_rules') }}">
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Apply all rules") }}
+            </button>
+        </form>
+    </div>
+</section>
+{% endif %}
+
+{% if preview.action == "create_rule" and preview.proposed_rule %}
+<section class="card mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+            <h5 class="mb-1">{{ _("Confirm create") }}</h5>
+            <p class="text-muted mb-3">{{ _("This saves the rule only after reviewing the impact below.") }}</p>
+            <dl class="row mb-0">
+                <dt class="col-sm-4">{{ _("Keyword") }}</dt>
+                <dd class="col-sm-8">{{ preview.proposed_rule.keyword }}</dd>
+
+                <dt class="col-sm-4">{{ _("Category") }}</dt>
+                <dd class="col-sm-8">{{ preview.proposed_rule.category }}</dd>
+
+                <dt class="col-sm-4">{{ _("Tags") }}</dt>
+                <dd class="col-sm-8">{{ preview.proposed_rule.tag_label }}</dd>
+
+                <dt class="col-sm-4">{{ _("Direction") }}</dt>
+                <dd class="col-sm-8">{{ _(preview.proposed_rule.direction_label) }}</dd>
+
+                <dt class="col-sm-4">{{ _("Amount constraint") }}</dt>
+                <dd class="col-sm-8">{{ preview.proposed_rule.amount_label }}</dd>
+            </dl>
+        </div>
+        <form method="post" action="{{ url_for('rules.add_rule') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm_preview" value="1">
+            <input type="hidden" name="next" value="{{ url_for('rules.rules') }}">
+            <input type="hidden" name="keyword" value="{{ preview.proposed_rule.keyword }}">
+            <input type="hidden" name="merchant_id" value="{{ preview.proposed_rule.merchant_id or '' }}">
+            <input type="hidden" name="account_id" value="{{ preview.proposed_rule.account_id or '' }}">
+            <input type="hidden" name="category" value="{{ preview.proposed_rule.category }}">
+            {% for tag in preview.proposed_rule.tags %}
+                <input type="hidden" name="tags" value="{{ tag }}">
+            {% endfor %}
+            <input type="hidden" name="direction" value="{{ preview.proposed_rule.direction }}">
+            <input type="hidden" name="amount_min" value="{{ preview.proposed_rule.amount_min if preview.proposed_rule.amount_min is not none else '' }}">
+            <input type="hidden" name="amount_max" value="{{ preview.proposed_rule.amount_max if preview.proposed_rule.amount_max is not none else '' }}">
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save rule") }}
+            </button>
+        </form>
+    </div>
+</section>
+{% endif %}
+
+{% if preview.action == "edit_rule" and preview.rule and preview.proposed_rule %}
+<section class="card mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+            <h5 class="mb-1">{{ _("Confirm update") }}</h5>
+            <p class="text-muted mb-3">{{ _("This updates the rule only after reviewing the impact below.") }}</p>
+            <dl class="row mb-0">
+                <dt class="col-sm-4">{{ _("Keyword") }}</dt>
+                <dd class="col-sm-8">{{ preview.proposed_rule.keyword }}</dd>
+
+                <dt class="col-sm-4">{{ _("Category") }}</dt>
+                <dd class="col-sm-8">{{ preview.proposed_rule.category }}</dd>
+
+                <dt class="col-sm-4">{{ _("Tags") }}</dt>
+                <dd class="col-sm-8">{{ preview.proposed_rule.tag_label }}</dd>
+
+                <dt class="col-sm-4">{{ _("Direction") }}</dt>
+                <dd class="col-sm-8">{{ _(preview.proposed_rule.direction_label) }}</dd>
+
+                <dt class="col-sm-4">{{ _("Amount constraint") }}</dt>
+                <dd class="col-sm-8">{{ preview.proposed_rule.amount_label }}</dd>
+            </dl>
+        </div>
+        <form method="post" action="{{ url_for('rules.update_rule', rule_id=preview.rule.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm_preview" value="1">
+            <input type="hidden" name="next" value="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">
+            <input type="hidden" name="keyword" value="{{ preview.proposed_rule.keyword }}">
+            <input type="hidden" name="merchant_id" value="{{ preview.proposed_rule.merchant_id or '' }}">
+            <input type="hidden" name="account_id" value="{{ preview.proposed_rule.account_id or '' }}">
+            <input type="hidden" name="category" value="{{ preview.proposed_rule.category }}">
+            {% for tag in preview.proposed_rule.tags %}
+                <input type="hidden" name="tags" value="{{ tag }}">
+            {% endfor %}
+            <input type="hidden" name="direction" value="{{ preview.proposed_rule.direction }}">
+            <input type="hidden" name="amount_min" value="{{ preview.proposed_rule.amount_min if preview.proposed_rule.amount_min is not none else '' }}">
+            <input type="hidden" name="amount_max" value="{{ preview.proposed_rule.amount_max if preview.proposed_rule.amount_max is not none else '' }}">
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save rule") }}
+            </button>
+        </form>
+    </div>
+</section>
+{% endif %}
+
+<section class="metric-grid mb-4" aria-label="{{ _('Impact summary') }}">
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Affected transactions") }}</div>
+        <div class="metric-value">{{ preview.summary.total_affected_transactions }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Winning rule changes") }}</div>
+        <div class="metric-value">{{ preview.summary.winning_rule_changes }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Category changes") }}</div>
+        <div class="metric-value">{{ preview.summary.category_changes }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Tag changes") }}</div>
+        <div class="metric-value">{{ preview.summary.tag_changes }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Would become UNKNOWN") }}</div>
+        <div class="metric-value">{{ preview.summary.would_become_unknown }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Would require review") }}</div>
+        <div class="metric-value">{{ preview.summary.newly_require_review }}</div>
+    </div>
+</section>
+
+{% for group in impact_groups %}
+<section class="card mb-4">
+    <div class="card-body border-bottom d-flex justify-content-between align-items-center gap-3">
+        <div>
+            <h5 class="mb-1">{{ _(group.label) }}</h5>
+            <p class="text-muted mb-0">{{ _("{count} transactions", count=group.count) }}</p>
+        </div>
+        <span class="badge {{ group.badge_class }}">{{ group.count }}</span>
+    </div>
+    {% if group.impacts %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table
+                class="table table-hover align-middle mb-0"
+                data-no-row-select
+                data-sortable-table
+                data-paginated-table
+                data-page-size="{{ preview_page_size }}"
+                data-pagination-label="{{ _('Preview impact pages') }}"
+            >
+                <thead>
+                    <tr>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Date") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Account") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Description") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="number"><span>{{ _("Amount") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Current winner") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Proposed winner") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="6" data-sort-type="text"><span>{{ _("Current category") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="7" data-sort-type="text"><span>{{ _("Proposed category") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="8" data-sort-type="text"><span>{{ _("Tags") }}</span></button></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in group.impacts %}
+                    {% set tx = row.transaction %}
+                    <tr>
+                        <td data-sort-value="{{ tx.tx_date }}">{{ tx.tx_date | datefmt }}</td>
+                        <td>{{ tx.account_name or "-" }}</td>
+                        <td>
+                            <div>{{ tx.description }}</div>
+                            {% if tx.canonical_merchant %}
+                                <div class="small text-muted">{{ tx.canonical_merchant }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end" data-sort-value="{{ tx.amount }}">{{ tx.amount | moneyfmt }}</td>
+                        <td>
+                            {{ row.current_winner.label }}
+                            {% if row.current_winner.category %}
+                                <div class="small text-muted">{{ row.current_winner.category }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ row.proposed_winner.label }}
+                            {% if row.proposed_winner.category %}
+                                <div class="small text-muted">{{ row.proposed_winner.category }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.current_category }}</td>
+                        <td>{{ row.proposed_category }}</td>
+                        <td>
+                            <div>{{ row.current_tags }}</div>
+                            {% if row.current_tags != row.proposed_tags %}
+                                <div class="small text-muted">{{ _("Proposed") }}: {{ row.proposed_tags }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No transactions in this group.") }}</div>
+    {% endif %}
+</section>
+{% else %}
+<section class="card mb-4">
+    <div class="empty-state compact">{{ _("No transaction-level changes found.") }}</div>
+</section>
+{% endfor %}
+{% endblock %}

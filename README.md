@@ -11,7 +11,7 @@ FinScope is a single-tenant Flask application with owner-managed user access, sh
 > Project owner: Eugene Syriani  
 > Current deployment target: local desktop  
 > License: [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`)  
-> Last modification: 2026-05-18
+> Last modification: 2026-05-20
 
 ![FinScope splash screen](docs/img/splash.png)
 
@@ -49,7 +49,7 @@ $env:FINANCE_PORT = "5001"
 - Deduplicate transactions with account-aware fingerprints.
 - Categorize transactions with rules, historical matches, manual edits, optional LLM assistance, and persisted decision evidence.
 - Manage categories and tags from the admin taxonomy page.
-- Preview, import, export, apply, and undo supported rules and jobs.
+- Audit overlapping category rules, preview rule changes, import, export, apply, and undo supported rules and jobs.
 - Retry or reprocess stored statement imports without uploading the same file again.
 - Use a dark-first interface with a light mode available from Settings.
 - Switch the user interface language between English and French from Settings.
@@ -150,6 +150,7 @@ Common settings:
 | `uploads.allowed_extensions` | `FINANCE_ALLOWED_EXTENSIONS` | Supported statement upload extensions. |
 | `api_keys.openai_api_key` | `OPENAI_API_KEY` | Enables optional LLM categorization. |
 | `setting_defaults.categorization_model` | `FINANCE_DEFAULT_CATEGORIZATION_MODEL` | Default LLM model name. |
+| `setting_defaults.rule_audit_transaction_limit` | `FINANCE_DEFAULT_RULE_AUDIT_TRANSACTION_LIMIT` | Maximum newest historical transactions analyzed by Rule audit before the limited-audit notice appears. |
 
 FinScope loads `src/finance_app/config.example.ini`, overlays `src/finance_app/config.ini` when present, then applies environment variable overrides.
 
@@ -199,6 +200,8 @@ From the repository root:
 Imported transactions normally keep their original statement descriptions for auditability. Ledger uploads create transaction rows; enrichment uploads, such as Interac e-Transfer history, update matched rows without adding duplicate ledger activity. Merchant grouping is persisted separately through `merchants` and `merchant_aliases`, which gives recurring activity, merchant filters, categorization rules, and analytics a stable merchant identity. Rules and recurring patterns can still remain keyword-fuzzy when no merchant ID is stored.
 
 The first request to a database without an owner redirects to `/auth/bootstrap`. Create exactly one owner account there, then use Users to create editor and viewer accounts. FinScope generates a temporary password for each owner-created user; provide it manually and the user must change it on first login. All users in one deployment access the same finance dataset; FinScope does not create workspaces, tenant IDs, organizations, or per-user databases. Use a separate deployment and database for a separate finance workspace.
+
+Rule audit is available from Rules. It analyzes the shared finance dataset for overlapping rules, category conflicts, tag differences, shadowed rules, stale or unused rules, and specificity warnings. Rule audit is preview-first: create, edit, delete, approve, apply-all, apply-where-winner, force-apply, and import flows render an impact preview before mutating rules or transactions. The audit uses the same rule matcher as imports and rule application, and the `rule_audit_transaction_limit` setting caps the newest historical transactions analyzed on large datasets.
 
 Statement import type and account reporting role are intentionally separate. The statement import type controls the parser and whether the upload creates ledger rows or enriches existing rows. The account reporting role controls how the account behaves in reports, with roles such as checking, savings, or credit card. Credit card statements are treated as ledger sources because they contain purchase-level detail, while the matching checking-account card payments are marked as payments/transfers so reports do not double-count spending.
 

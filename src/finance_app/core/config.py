@@ -35,6 +35,7 @@ class AppSettings:
     default_home_top_category_limit: int
     default_merchant_table_limit: int
     default_rule_preview_limit: int
+    default_rule_audit_transaction_limit: int
     default_llm_confidence_threshold: float
     default_verify_threshold: float
     default_categorization_model: str
@@ -105,6 +106,13 @@ def load_settings(config_path=CONFIG_PATH):
         default_rule_preview_limit=parse_positive_int(
             env("FINANCE_DEFAULT_RULE_PREVIEW_LIMIT", parser.get("setting_defaults", "rule_preview_limit", fallback="10")),
             10,
+        ),
+        default_rule_audit_transaction_limit=parse_positive_int(
+            env(
+                "FINANCE_DEFAULT_RULE_AUDIT_TRANSACTION_LIMIT",
+                parser.get("setting_defaults", "rule_audit_transaction_limit", fallback="5000"),
+            ),
+            5000,
         ),
         default_llm_confidence_threshold=parse_probability(
             env("FINANCE_DEFAULT_LLM_CONFIDENCE_THRESHOLD", parser.get("setting_defaults", "llm_confidence_threshold", fallback="0.85")),

@@ -56,6 +56,18 @@
     .recurring-filter-actions {
         justify-content: flex-end;
     }
+
+    .rule-audit-search-row {
+        grid-template-areas:
+            "search"
+            "conflicts"
+            "actions";
+        grid-template-columns: 1fr;
+    }
+
+    .rule-audit-filter-actions {
+        justify-content: flex-end;
+    }
 }
 
 @media (max-width: 850px) {
