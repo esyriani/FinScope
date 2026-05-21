@@ -46,7 +46,7 @@
             <input type="hidden" name="action" value="delete_rule">
             <input type="hidden" name="rule_id" value="{{ rule.id }}">
             <button class="btn btn-outline-secondary" type="submit">
-                <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview delete") }}
+                <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview removal impact") }}
             </button>
         </form>
         <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
@@ -179,41 +179,24 @@
     <div class="col-lg-6">
         <section class="card h-100">
             <div class="card-body border-bottom">
-                <h5 class="mb-1">{{ _("Findings") }}</h5>
+                <h5 class="mb-1">{{ _("Assessment") }}</h5>
             </div>
             <div class="card-body">
-                {% if shadowed_finding or stale_finding or category_conflicts or tag_differences %}
-                    <div class="d-flex flex-column gap-3">
-                        {% if shadowed_finding %}
-                        <div>
-                            <span class="badge text-bg-warning">{{ _("Shadowed") }}</span>
-                            <span>{{ _("This rule is shadowed. It matches transactions, but another rule is applied.") }}</span>
-                            <div class="small text-muted">{{ _("Suggested action") }}: {{ _(shadowed_finding.suggested_action) }}</div>
-                        </div>
-                        {% endif %}
-                        {% if stale_finding %}
-                        <div>
-                            <span class="badge {{ stale_finding.status_badge_class }}">{{ _(stale_finding.status_label) }}</span>
-                            <span>{{ _("Rules with no historical matches are candidates for review.") }}</span>
-                            <div class="small text-muted">{{ _("Suggested action") }}: {{ _(stale_finding.suggested_action) }}</div>
-                        </div>
-                        {% endif %}
-                        {% if category_conflicts %}
-                        <div>
-                            <span class="badge text-bg-warning">{{ _("Category conflict") }}</span>
-                            <span>{{ _("This is a category conflict. FinScope currently applies the winning rule silently.") }}</span>
-                        </div>
-                        {% endif %}
-                        {% if tag_differences %}
-                        <div>
-                            <span class="badge text-bg-info">{{ _("Tag difference") }}</span>
-                            <span>{{ _("These overlaps keep the same category but assign different tags.") }}</span>
-                        </div>
-                        {% endif %}
+                <div class="d-flex flex-column gap-3">
+                    <div>
+                        <span class="badge {{ assessment.badge_class }}">{{ _(assessment.badge_label) }}</span>
                     </div>
-                {% else %}
-                    <div class="empty-state compact">{{ _("No specific findings for this rule.") }}</div>
-                {% endif %}
+                    {% for paragraph in assessment.paragraphs %}
+                        <p class="mb-0">{{ _(paragraph) }}</p>
+                    {% endfor %}
+                    {% if assessment.recommended_action_label %}
+                    <div>
+                        <div class="small text-muted">{{ _("Recommended action") }}</div>
+                        <div class="fw-semibold">{{ _(assessment.recommended_action_label) }}</div>
+                        <div class="small text-muted">{{ _(assessment.recommended_action_detail) }}</div>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </section>
     </div>
@@ -241,7 +224,7 @@
                         {{ client_sort_header(1, "Shared transactions", "number") }}
                         {{ client_sort_header(2, "Severity") }}
                         {{ client_sort_header(3, "Winning rule") }}
-                        {{ client_sort_header(4, "Suggested action") }}
+                        {{ client_sort_header(4, "Recommended action") }}
                         <th class="text-end">{{ _("Action") }}</th>
                     </tr>
                 </thead>
@@ -253,7 +236,10 @@
                         <td>{{ row.shared_count }}</td>
                         <td>{{ severity_badge(row) }}</td>
                         <td>{{ row.winning_rule_label }}</td>
-                        <td>{{ _(row.suggested_action) }}</td>
+                        <td>
+                            <span class="badge {{ row.suggested_action_badge_class }}">{{ _(row.suggested_action_label) }}</span>
+                            <div class="small text-muted mt-1">{{ _(row.suggested_action_reason) }}</div>
+                        </td>
                         <td class="text-end">
                             {{ overlap_detail_button(row.detail_url_rule_a_id, row.detail_url_rule_b_id) }}
                         </td>

@@ -34,6 +34,7 @@ from finance_app.modules.rules.audit import (
     get_rule_audit_summary,
     last_matched_date,
     overlap_severity_rank,
+    precedence_win_reason,
     preview_rule_change,
     preview_rule_set_change,
     rule_id_from_match,
@@ -57,7 +58,7 @@ from finance_app.modules.rules.import_export import (
 
 
 SEVERITY_LABELS = {
-    OVERLAP_HARMLESS: "Harmless",
+    OVERLAP_HARMLESS: "Harmless overlap",
     OVERLAP_TAG_DIFFERENCE: "Tag difference",
     OVERLAP_CATEGORY_CONFLICT: "Category conflict",
     OVERLAP_CRITICAL_CONFLICT: "Critical conflict",
@@ -74,12 +75,32 @@ STALE_LABELS = {
 }
 STALE_BADGE_CLASSES = {
     STALE_UNUSED: "text-bg-secondary",
-    STALE_STALE: "text-bg-warning",
+    STALE_STALE: "text-bg-secondary",
+}
+SUGGESTED_ACTION_LABELS = {
+    "mark harmless or merge": "Mark as harmless",
+    "inspect tags": "Inspect tag difference",
+    "inspect manually": "Review category conflict",
+    "edit or narrow": "Edit or narrow rule",
+    "delete or narrow": "Review removal impact",
+    "inspect overlaps": "Inspect overlapping rules",
+    "review or remove": "Review unused rule",
+    "review": "Review stale rule",
+}
+SUGGESTED_ACTION_BADGE_CLASSES = {
+    "Mark as harmless": "text-bg-success",
+    "Inspect tag difference": "text-bg-info",
+    "Review category conflict": "text-bg-warning",
+    "Edit or narrow rule": "text-bg-warning",
+    "Review removal impact": "text-bg-secondary",
+    "Inspect overlapping rules": "text-bg-info",
+    "Review unused rule": "text-bg-secondary",
+    "Review stale rule": "text-bg-secondary",
 }
 PREVIEW_ACTION_LABELS = {
-    PREVIEW_REMOVE_RULE: "Preview deleting rule",
+    PREVIEW_REMOVE_RULE: "Preview removal impact",
     PREVIEW_CREATE_RULE: "Preview creating rule",
-    PREVIEW_DELETE_RULE: "Preview deleting rule",
+    PREVIEW_DELETE_RULE: "Preview removal impact",
     PREVIEW_EDIT_RULE: "Preview editing rule",
     PREVIEW_APPROVE_RULE: "Preview approving rule",
     PREVIEW_APPLY_WHERE_WINS: "Preview applying where rule wins",
@@ -131,6 +152,7 @@ def build_rule_audit_context(conn, args=None, transaction_limit=None):
         for warning in specificity_warnings
     ]
     overlap_filter = parse_overlap_filter(request_arg(args, "overlap_filter"))
+    open_section = parse_audit_open_section(request_arg(args, "open"))
     overlap_query = clean_overlap_search_query(request_arg(args, "overlap_q"))
     searched_overlap_rows = search_overlap_rows(overlap_rows, overlap_query)
     searched_shadowed_rows = search_shadowed_rows(shadowed_rows, overlap_query)
@@ -150,6 +172,10 @@ def build_rule_audit_context(conn, args=None, transaction_limit=None):
         for row in searched_overlap_rows
         if row["severity"] == OVERLAP_TAG_DIFFERENCE
     ]
+    summary = get_rule_audit_summary(audit_data)
+    summary["critical_conflict_overlaps"] = sum(
+        1 for row in overlap_rows if row["severity"] == OVERLAP_CRITICAL_CONFLICT
+    )
     audit_tables = {
         "overlaps": build_audit_table_context(
             args,
@@ -208,10 +234,15 @@ def build_rule_audit_context(conn, args=None, transaction_limit=None):
     }
 
     return {
-        "summary": get_rule_audit_summary(audit_data),
+        "summary": summary,
+        "recommended_next_step": recommended_next_step(
+            summary,
+            shadowed_rows,
+        ),
         "overlap_filter": overlap_filter,
         "overlap_query": overlap_query,
         "overlap_filter_options": overlap_filter_options(args, searched_overlap_rows),
+        "open_section": open_section,
         "audit_tables": audit_tables,
         "overlaps": audit_tables["overlaps"]["rows"],
         "category_conflicts": audit_tables["category_conflicts"]["rows"],
@@ -261,6 +292,12 @@ def build_rule_overlap_detail_context(conn, rule_a_id, rule_b_id, args=None, tra
         "overlap": present_overlap(overlap, audit_data.rule_by_id),
         "winning_rule": present_rule_with_specificity_comparison(winning_rule, losing_rule),
         "losing_rule": present_rule_with_specificity_comparison(losing_rule, winning_rule),
+        "win_explanation": build_win_explanation(
+            shared_audits,
+            winning_rule_id,
+            losing_rule_id,
+            audit_data.rule_by_id,
+        ),
         "transactions": transaction_table["rows"],
         "transaction_table": transaction_table,
         "limited": audit_data.limited,
@@ -338,6 +375,14 @@ def build_rule_detail_context(conn, rule_id, transaction_limit=None):
             else None
         ),
         "stale_finding": present_stale_rule(stale_finding) if stale_finding else None,
+        "assessment": build_rule_assessment(
+            total_matches,
+            total_wins,
+            total_losses,
+            shadowed_finding,
+            stale_finding,
+            overlaps,
+        ),
         "table_page_size": page_size,
         "limited": audit_data.limited,
     }
@@ -460,6 +505,7 @@ def build_audit_table_context(args, table_name, rows, page_size, sort_options, d
     direction_param = f"{table_name}_direction"
     sort = parse_audit_table_sort(request_arg(args, sort_param), sort_options, default_sort)
     direction = parse_sort_direction(request_arg(args, direction_param), default=default_direction)
+    open_section = audit_table_open_section_id(table_name)
     ordered_rows = sorted(rows, key=sort_options[sort], reverse=direction == "desc")
     total_count = len(ordered_rows)
     total_pages = max(1, (total_count + page_size - 1) // page_size)
@@ -477,13 +523,20 @@ def build_audit_table_context(args, table_name, rows, page_size, sort_options, d
         "total_pages": total_pages,
         "page_start": offset + 1 if total_count else 0,
         "page_end": min(offset + page_size, total_count),
-        "page_url": lambda page_number: audit_table_url(args, {page_param: page_number}),
+        "page_url": lambda page_number: audit_table_url(
+            args,
+            {
+                page_param: page_number,
+                "open": open_section,
+            },
+        ),
         "sort_url": lambda sort_name: audit_table_url(
             args,
             {
                 sort_param: parse_audit_table_sort(sort_name, sort_options, default_sort),
                 direction_param: next_audit_sort_direction(sort_name, sort, direction, default_direction),
                 page_param: 1,
+                "open": open_section,
             },
         ),
     }
@@ -540,6 +593,28 @@ def request_arg(args, name, default=None):
     if hasattr(args, "get"):
         return args.get(name, default)
     return default
+
+
+def parse_audit_open_section(value):
+    """Return a whitelisted Rule Audit section id to expand after navigation."""
+    allowed = set(audit_table_open_section_id(name) for name in AUDIT_TABLE_OPEN_SECTIONS)
+    normalized = str(value or "").strip()
+    return normalized if normalized in allowed else ""
+
+
+AUDIT_TABLE_OPEN_SECTIONS = {
+    "overlap": "rule-overlap-findings",
+    "conflict": "rule-overlap-findings",
+    "tag": "rule-overlap-findings",
+    "warning": "specificity-warning-findings",
+    "shadowed": "shadowed-rule-findings",
+    "stale": "stale-rule-findings",
+}
+
+
+def audit_table_open_section_id(table_name):
+    """Return the collapse id associated with one audit table prefix."""
+    return AUDIT_TABLE_OPEN_SECTIONS.get(table_name, "")
 
 
 def parse_audit_table_sort(value, sort_options, default):
@@ -615,6 +690,8 @@ def overlap_search_text(row):
         row.get("winning_rule_label"),
         row.get("losing_rule_label"),
         row.get("suggested_action"),
+        row.get("suggested_action_label"),
+        row.get("suggested_action_reason"),
     ]
     for key in ("rule_a", "rule_b"):
         rule = row.get(key) or {}
@@ -641,6 +718,8 @@ def specificity_warning_search_text(row):
         rule_search_text(row.get("specific_rule") or {}),
         row.get("reason"),
         row.get("suggested_action"),
+        row.get("suggested_action_label"),
+        row.get("suggested_action_reason"),
         row.get("shared_count"),
         row.get("conflicting_count"),
     ]
@@ -654,6 +733,8 @@ def shadowed_rule_search_text(row):
         rule_search_text(row.get("rule") or {}),
         rule_search_text(row.get("most_common_shadowing_rule") or {}),
         row.get("suggested_action"),
+        row.get("suggested_action_label"),
+        row.get("suggested_action_reason"),
         row.get("total_matches"),
         row.get("total_wins"),
         row.get("total_losses"),
@@ -669,6 +750,8 @@ def stale_rule_search_text(row):
         row.get("status_label"),
         rule_search_text(row.get("rule") or {}),
         row.get("suggested_action"),
+        row.get("suggested_action_label"),
+        row.get("suggested_action_reason"),
         row.get("total_matches"),
         row.get("total_wins"),
         row.get("stored_applied_count"),
@@ -702,6 +785,12 @@ def filter_overlap_rows(rows, overlap_filter):
     """Return overlap rows matching the selected severity filter."""
     if overlap_filter == "all":
         return rows
+    if overlap_filter == OVERLAP_CATEGORY_CONFLICT:
+        return [
+            row
+            for row in rows
+            if row["severity"] in {OVERLAP_CATEGORY_CONFLICT, OVERLAP_CRITICAL_CONFLICT}
+        ]
     return [row for row in rows if row["severity"] == overlap_filter]
 
 
@@ -717,6 +806,9 @@ def overlap_filter_options(args, rows):
     for row in rows:
         if row["severity"] in counts:
             counts[row["severity"]] += 1
+    category_conflict_count = (
+        counts[OVERLAP_CATEGORY_CONFLICT] + counts[OVERLAP_CRITICAL_CONFLICT]
+    )
     return [
         {
             "value": "all",
@@ -736,7 +828,7 @@ def overlap_filter_options(args, rows):
         {
             "value": OVERLAP_CATEGORY_CONFLICT,
             "label": "Category conflicts",
-            "count": counts[OVERLAP_CATEGORY_CONFLICT],
+            "count": category_conflict_count,
             "url": audit_table_url(
                 args,
                 {"overlap_filter": OVERLAP_CATEGORY_CONFLICT, "overlap_page": 1},
@@ -945,6 +1037,7 @@ def present_overlap(overlap, rule_by_id):
         rule_a_id,
         rule_b_id,
     )
+    action_label = suggested_action_label(overlap.suggested_action)
     return {
         "rule_a": present_rule(overlap.rule_a),
         "rule_b": present_rule(overlap.rule_b),
@@ -964,6 +1057,9 @@ def present_overlap(overlap, rule_by_id):
         "rule_a_applied_count": overlap.rule_a_applied_count,
         "rule_b_applied_count": overlap.rule_b_applied_count,
         "suggested_action": overlap.suggested_action,
+        "suggested_action_label": action_label,
+        "suggested_action_badge_class": suggested_action_badge_class(action_label),
+        "suggested_action_reason": overlap_action_reason(overlap),
         "detail_url_rule_a_id": rule_a_id,
         "detail_url_rule_b_id": rule_b_id,
     }
@@ -1042,6 +1138,7 @@ def present_rule_interactions(interactions, rule_by_id):
 
 def present_specificity_warning(warning):
     """Return a display mapping for one specificity or precedence warning."""
+    action_label = suggested_action_label(warning.suggested_action)
     return {
         "broad_rule": present_rule(warning.broad_rule),
         "specific_rule": present_rule(warning.specific_rule),
@@ -1049,6 +1146,9 @@ def present_specificity_warning(warning):
         "reason": warning.reason,
         "conflicting_count": warning.conflicting_count,
         "suggested_action": warning.suggested_action,
+        "suggested_action_label": action_label,
+        "suggested_action_badge_class": suggested_action_badge_class(action_label),
+        "suggested_action_reason": "A broader rule wins even though another matching rule is more specific.",
     }
 
 
@@ -1098,6 +1198,7 @@ def present_preview_match(match):
 def present_shadowed_rule(finding, rule_by_id):
     """Return a display mapping for one shadowed-rule finding."""
     shadowing_rule = rule_by_id.get(finding.most_common_shadowing_rule_id, {})
+    action_label = suggested_action_label(finding.suggested_action)
     return {
         "rule": present_rule(finding.rule),
         "total_matches": finding.total_matches,
@@ -1106,11 +1207,15 @@ def present_shadowed_rule(finding, rule_by_id):
         "most_common_shadowing_rule": present_rule(shadowing_rule) if shadowing_rule else None,
         "conflicting_loss_count": finding.conflicting_loss_count,
         "suggested_action": finding.suggested_action,
+        "suggested_action_label": action_label,
+        "suggested_action_badge_class": suggested_action_badge_class(action_label),
+        "suggested_action_reason": shadowed_action_reason(finding, shadowing_rule),
     }
 
 
 def present_stale_rule(finding):
     """Return a display mapping for one stale or unused rule finding."""
+    action_label = suggested_action_label(finding.suggested_action)
     return {
         "rule": present_rule(finding.rule),
         "status": finding.status,
@@ -1122,6 +1227,273 @@ def present_stale_rule(finding):
         "last_matched_date": finding.last_matched_date,
         "recent_matches": finding.recent_matches,
         "suggested_action": finding.suggested_action,
+        "suggested_action_label": action_label,
+        "suggested_action_badge_class": suggested_action_badge_class(action_label),
+        "suggested_action_reason": stale_action_reason(finding),
+    }
+
+
+def suggested_action_label(action):
+    """Return clearer user-facing wording for an advisory audit action."""
+    return SUGGESTED_ACTION_LABELS.get(action, action)
+
+
+def suggested_action_badge_class(label):
+    """Return a consistent badge class for one suggested action label."""
+    return SUGGESTED_ACTION_BADGE_CLASSES.get(label, "text-bg-secondary")
+
+
+def overlap_action_reason(overlap):
+    """Return a short reason explaining the recommended overlap action."""
+    rule_a_category = overlap.rule_a.get("category") or ""
+    rule_b_category = overlap.rule_b.get("category") or ""
+    rule_a_tags = rule_tags_label(overlap.rule_a)
+    rule_b_tags = rule_tags_label(overlap.rule_b)
+    if overlap.severity == OVERLAP_HARMLESS:
+        return gettext("Both rules assign the same category and tags.")
+    if overlap.severity == OVERLAP_TAG_DIFFERENCE:
+        return gettext(
+            "Both rules assign {category}, but the tag sets differ: {tags_a} versus {tags_b}.",
+            category=rule_a_category,
+            tags_a=rule_a_tags,
+            tags_b=rule_b_tags,
+        )
+    if overlap.severity == OVERLAP_CRITICAL_CONFLICT:
+        return gettext(
+            "These rules assign different categories across multiple shared transactions."
+        )
+    if overlap.severity == OVERLAP_CATEGORY_CONFLICT:
+        return gettext(
+            "These rules assign different categories: {category_a} versus {category_b}.",
+            category_a=rule_a_category,
+            category_b=rule_b_category,
+        )
+    return gettext("Review the shared transactions before changing either rule.")
+
+
+def shadowed_action_reason(finding, shadowing_rule):
+    """Return a short reason explaining a shadowed-rule recommendation."""
+    reason = gettext(
+        "This rule matched {matches} historical transactions and won {wins}.",
+        matches=finding.total_matches,
+        wins=finding.total_wins,
+    )
+    if shadowing_rule:
+        reason = gettext(
+            "{reason} It is most often shadowed by {rule}.",
+            reason=reason,
+            rule=rule_label(shadowing_rule),
+        )
+    return reason
+
+
+def stale_action_reason(finding):
+    """Return a short reason explaining a stale or unused rule recommendation."""
+    if finding.status == STALE_UNUSED:
+        return gettext("No historical transaction matches this rule.")
+    if finding.last_matched_date:
+        return gettext(
+            "This rule has not matched since {date}.",
+            date=finding.last_matched_date,
+        )
+    return gettext("This rule has not matched recently.")
+
+
+def rule_tags_label(rule):
+    """Return a readable tag label for a raw or presented rule."""
+    tags = rule.get("tags") or []
+    return ", ".join(tags) or "-"
+
+
+def recommended_next_step(summary, shadowed_rows):
+    """Return the highest-priority recommended next step for the audit page."""
+    if summary.get("critical_conflict_overlaps", 0):
+        return {
+            "title": "Recommended next step",
+            "headline": "Review critical conflicts first.",
+            "detail": "These overlaps assign different categories and affect multiple transactions.",
+            "href": url_for(
+                "rules.audit_rules",
+                overlap_filter=OVERLAP_CRITICAL_CONFLICT,
+                overlap_page=1,
+                open="rule-overlap-findings",
+            ),
+            "target": "",
+        }
+    category_conflicts = summary.get("category_conflict_overlaps", 0)
+    if category_conflicts:
+        return {
+            "title": "Recommended next step",
+            "headline": "Review category conflicts.",
+            "detail": "These overlaps assign different categories, so only the winning rule is applied.",
+            "href": url_for(
+                "rules.audit_rules",
+                overlap_filter=OVERLAP_CATEGORY_CONFLICT,
+                overlap_page=1,
+                open="rule-overlap-findings",
+            ),
+            "target": "",
+        }
+    if any(row.get("conflicting_loss_count", 0) for row in shadowed_rows):
+        return {
+            "title": "Recommended next step",
+            "headline": "Review shadowed rules with conflicts.",
+            "detail": "These rules match transactions but lose to rules that assign different categories.",
+            "href": "#shadowed-rule-findings",
+            "target": "#shadowed-rule-findings",
+        }
+    return None
+
+
+def build_win_explanation(shared_audits, winning_rule_id, losing_rule_id, rule_by_id):
+    """Return a readable explanation of why the displayed overlap winner wins."""
+    for audit in shared_audits:
+        match_by_rule_id = {
+            rule_id_from_match(match): match
+            for match in audit.matches
+        }
+        winning_match = match_by_rule_id.get(winning_rule_id)
+        losing_match = match_by_rule_id.get(losing_rule_id)
+        if winning_match is None or losing_match is None:
+            continue
+        reason = precedence_win_reason(winning_match, losing_match)
+        winning_rule = rule_by_id.get(winning_rule_id, {})
+        losing_rule = rule_by_id.get(losing_rule_id, {})
+        return {
+            "winner_label": rule_label(winning_rule),
+            "loser_label": rule_label(losing_rule),
+            "reason": reason,
+            "sentence": win_explanation_sentence(winning_rule, reason),
+            "winner_confidence": winning_match.confidence,
+            "loser_confidence": losing_match.confidence,
+            "winner_match_score": winning_match.match_score,
+            "loser_match_score": losing_match.match_score,
+            "winner_specificity": specificity_comparison_label(
+                winning_match.specificity,
+                losing_match.specificity,
+            ),
+            "loser_specificity": specificity_comparison_label(
+                losing_match.specificity,
+                winning_match.specificity,
+            ),
+        }
+    return {}
+
+
+def win_explanation_sentence(winning_rule, reason):
+    """Return one sentence explaining the winning rule decision."""
+    label = rule_label(winning_rule)
+    return {
+        "Higher confidence": gettext(
+            "{label} wins because it has higher confidence.",
+            label=label,
+        ),
+        "Higher match score": gettext(
+            "{label} wins because it has a higher match score.",
+            label=label,
+        ),
+        "Higher specificity": gettext(
+            "{label} wins because it is more specific.",
+            label=label,
+        ),
+        "Stable precedence": gettext(
+            "{label} wins by the stable deterministic tie-breaker.",
+            label=label,
+        ),
+    }.get(
+        reason,
+        gettext("{label} wins under the current precedence model.", label=label),
+    )
+
+
+def specificity_comparison_label(left, right):
+    """Return a readable specificity comparison between two specificity tuples."""
+    if left > right:
+        return "More specific"
+    if left < right:
+        return "Less specific"
+    return "Same specificity"
+
+
+def build_rule_assessment(total_matches, total_wins, total_losses, shadowed, stale, overlaps):
+    """Return summary paragraphs and a recommended action for a rule detail page."""
+    category_conflicts = [
+        overlap for overlap in overlaps
+        if overlap.severity in {OVERLAP_CATEGORY_CONFLICT, OVERLAP_CRITICAL_CONFLICT}
+    ]
+    tag_differences = [
+        overlap for overlap in overlaps
+        if overlap.severity == OVERLAP_TAG_DIFFERENCE
+    ]
+    if category_conflicts:
+        return {
+            "badge_label": "Category conflict",
+            "badge_class": "text-bg-warning",
+            "paragraphs": [
+                "Category conflict. This rule overlaps with another rule that assigns a different category.",
+                "FineScope currently applies the highest-scoring rule.",
+            ],
+            "recommended_action_label": "Review category conflict",
+            "recommended_action_detail": "Inspect the shared transactions and consider narrowing one rule.",
+        }
+    if tag_differences:
+        return {
+            "badge_label": "Tag difference",
+            "badge_class": "text-bg-info",
+            "paragraphs": [
+                "Tag difference only. Both rules assign the same category.",
+                "The winning rule is the only rule that assigns tags.",
+            ],
+            "recommended_action_label": "Inspect tag difference",
+            "recommended_action_detail": "Check whether the extra tag is intended or mark the overlap as harmless.",
+        }
+    if shadowed:
+        return {
+            "badge_label": "Shadowed",
+            "badge_class": "text-bg-warning",
+            "paragraphs": [
+                gettext(
+                    "This rule matched {matches} historical transactions and won {wins}.",
+                    matches=total_matches,
+                    wins=total_wins,
+                ),
+                "It is shadowed because another matching rule wins under the current scoring model.",
+            ],
+            "recommended_action_label": suggested_action_label(shadowed.suggested_action),
+            "recommended_action_detail": "Inspect the overlap, then remove or narrow the rule if it is redundant.",
+        }
+    if stale:
+        return {
+            "badge_label": STALE_LABELS.get(stale.status, "Stale"),
+            "badge_class": STALE_BADGE_CLASSES.get(stale.status, "text-bg-secondary"),
+            "paragraphs": [
+                "This rule has no historical matches." if stale.status == STALE_UNUSED else "This rule has not matched recently.",
+            ],
+            "recommended_action_label": suggested_action_label(stale.suggested_action),
+            "recommended_action_detail": "Review whether this rule is still needed. If not, preview removal impact.",
+        }
+    if total_losses:
+        return {
+            "badge_label": "Review",
+            "badge_class": "text-bg-secondary",
+            "paragraphs": [
+                gettext(
+                    "This rule matched {matches} historical transactions and lost {losses} times.",
+                    matches=total_matches,
+                    losses=total_losses,
+                ),
+            ],
+            "recommended_action_label": "Inspect overlapping rules",
+            "recommended_action_detail": "Review overlaps before changing this rule.",
+        }
+    return {
+        "badge_label": "No specific findings",
+        "badge_class": "text-bg-success",
+        "paragraphs": [
+            "No specific audit findings were detected for this rule.",
+        ],
+        "recommended_action_label": "",
+        "recommended_action_detail": "",
     }
 
 

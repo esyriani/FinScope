@@ -120,10 +120,42 @@
         <div class="metric-detail">{{ overlap.winning_rule_label }}</div>
     </div>
     <div class="metric-card">
-        <div class="metric-label">{{ _("Suggested action") }}</div>
-        <div class="metric-detail">{{ _(overlap.suggested_action) }}</div>
+        <div class="metric-label">{{ _("Recommended action") }}</div>
+        <div class="metric-detail">{{ _(overlap.suggested_action_label) }}</div>
+        <div class="metric-detail">{{ _(overlap.suggested_action_reason) }}</div>
     </div>
 </section>
+
+{% if win_explanation %}
+<section class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+            <div>
+                <h5 class="mb-1">{{ _("Why this rule wins") }}</h5>
+                <p class="text-muted mb-0">{{ win_explanation.sentence }}</p>
+            </div>
+            <span class="badge text-bg-success">{{ _("Final winner") }}: {{ win_explanation.winner_label }}</span>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="small text-muted">{{ _("Confidence") }}</div>
+                <div class="fw-semibold">{{ win_explanation.winner_label }}: {{ "%.3f"|format(win_explanation.winner_confidence) }}</div>
+                <div class="small text-muted">{{ win_explanation.loser_label }}: {{ "%.3f"|format(win_explanation.loser_confidence) }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted">{{ _("Match score") }}</div>
+                <div class="fw-semibold">{{ win_explanation.winner_label }}: {{ "%.3f"|format(win_explanation.winner_match_score) }}</div>
+                <div class="small text-muted">{{ win_explanation.loser_label }}: {{ "%.3f"|format(win_explanation.loser_match_score) }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted">{{ _("Specificity") }}</div>
+                <div class="fw-semibold">{{ win_explanation.winner_label }}: {{ _(win_explanation.winner_specificity) }}</div>
+                <div class="small text-muted">{{ win_explanation.loser_label }}: {{ _(win_explanation.loser_specificity) }}</div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endif %}
 
 <div class="row g-4 mb-4">
     <div class="col-lg-6">

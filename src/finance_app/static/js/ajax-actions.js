@@ -109,6 +109,9 @@ function runAjaxRefreshInitializers(root = document) {
     window.setupRulePreviewForms?.(root);
     window.setupReviewTransactionSelectors?.(root);
     window.setupTableRowInteractions?.(root);
+    window.setupCollapseToggleLabels?.(root);
+    window.setupAuditSectionLinks?.(root);
+    window.openAuditSectionFromLocation?.(root);
     window.setupSortableTables?.(root);
     window.setupPaginatedTables?.(root);
     window.setupUploadAccountBehavior?.();

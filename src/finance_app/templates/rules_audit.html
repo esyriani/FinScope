@@ -28,24 +28,22 @@
 {% endif %}
 {% endmacro %}
 
-{% macro suggested_action_badge(action) %}
-{% set badge_class = "text-bg-secondary" %}
-{% if action in ["edit or narrow", "delete or narrow", "review or remove"] %}
-    {% set badge_class = "text-bg-warning" %}
-{% elif action in ["inspect tags", "inspect manually"] %}
-    {% set badge_class = "text-bg-info" %}
-{% elif action in ["mark harmless", "merge"] %}
-    {% set badge_class = "text-bg-success" %}
-{% endif %}
-<span class="badge {{ badge_class }}">{{ _(action) }}</span>
+{% macro suggested_action_badge(row) %}
+<span class="badge {{ row.suggested_action_badge_class }}">{{ _(row.suggested_action_label) }}</span>
 {% endmacro %}
 
-{% macro audit_metric_card(label, value, tone, detail) %}
-<div class="metric-card audit-risk-card audit-risk-{{ tone }}">
+{% macro audit_metric_card(label, value, tone, detail, href="", target="") %}
+{% set tag = "a" if href else "div" %}
+<{{ tag }}
+    class="metric-card audit-risk-card audit-risk-{{ tone }}{% if href %} audit-summary-link text-reset text-decoration-none{% endif %}"
+    {% if href %}href="{{ href }}"{% endif %}
+    {% if target %}data-audit-open-section="{{ target }}"{% endif %}
+    {% if href and not target %}data-ajax-refresh-link{% endif %}
+>
     <div class="metric-label">{{ _(label) }}</div>
     <div class="metric-value">{{ value }}</div>
     <div class="metric-detail">{{ _(detail) }}</div>
-</div>
+</{{ tag }}>
 {% endmacro %}
 
 {% macro audit_pagination(table, label) %}
@@ -125,7 +123,7 @@
     <input type="hidden" name="action" value="delete_rule">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
     <button class="btn btn-sm btn-outline-danger" type="submit">
-        <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview delete") }}
+        <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview removal impact") }}
     </button>
 </form>
 {% endmacro %}
@@ -192,25 +190,36 @@
 </div>
 {% endif %}
 
-<div class="alert alert-info" role="status">
-    {{ _("Multiple rules can match the same transaction.") }}
-    {% if summary.category_conflict_overlaps %}
-        {{ _("This is a category conflict. FinScope currently applies the winning rule silently.") }}
-    {% endif %}
-    {{ _("Preview impact before applying changes.") }}
-</div>
-
 <section class="mb-4" aria-label="{{ _('Audit summary') }}">
     <div class="metric-grid audit-summary-grid">
         {{ audit_metric_card("Active rules", summary.total_active_rules, "neutral", "Inventory") }}
-        {{ audit_metric_card("Overlap pairs", summary.overlapping_rule_pairs, "warning" if summary.overlapping_rule_pairs else "healthy", "Needs review" if summary.overlapping_rule_pairs else "All clear") }}
-        {{ audit_metric_card("Category conflicts", summary.category_conflict_overlaps, "critical" if summary.category_conflict_overlaps else "healthy", "High risk" if summary.category_conflict_overlaps else "All clear") }}
-        {{ audit_metric_card("Tag differences", summary.tag_difference_overlaps, "info" if summary.tag_difference_overlaps else "healthy", "Tag-only" if summary.tag_difference_overlaps else "All clear") }}
-        {{ audit_metric_card("Shadowed rules", summary.shadowed_rules, "warning" if summary.shadowed_rules else "healthy", "Maintenance" if summary.shadowed_rules else "All clear") }}
-        {{ audit_metric_card("Unused or stale", summary.stale_rules, "warning" if summary.stale_rules else "healthy", "Cleanup" if summary.stale_rules else "All clear") }}
-        {{ audit_metric_card("Precedence warnings", summary.specificity_warnings, "critical" if summary.specificity_warnings else "healthy", "Precedence risk" if summary.specificity_warnings else "All clear") }}
+        {{ audit_metric_card("Overlap pairs", summary.overlapping_rule_pairs, "warning" if summary.overlapping_rule_pairs else "healthy", "Needs review" if summary.overlapping_rule_pairs else "All clear", "#rule-overlap-findings", "#rule-overlap-findings") }}
+        {{ audit_metric_card("Category conflicts", summary.category_conflict_overlaps, "critical" if summary.category_conflict_overlaps else "healthy", "High risk" if summary.category_conflict_overlaps else "All clear", url_for('rules.audit_rules', overlap_filter='category_conflict', overlap_page=1, open='rule-overlap-findings')) }}
+        {{ audit_metric_card("Tag differences", summary.tag_difference_overlaps, "info" if summary.tag_difference_overlaps else "healthy", "Tag-only" if summary.tag_difference_overlaps else "All clear", url_for('rules.audit_rules', overlap_filter='tag_difference', overlap_page=1, open='rule-overlap-findings')) }}
+        {{ audit_metric_card("Shadowed rules", summary.shadowed_rules, "warning" if summary.shadowed_rules else "healthy", "Maintenance" if summary.shadowed_rules else "All clear", "#shadowed-rule-findings", "#shadowed-rule-findings") }}
+        {{ audit_metric_card("Unused or stale", summary.stale_rules, "warning" if summary.stale_rules else "healthy", "Cleanup" if summary.stale_rules else "All clear", "#stale-rule-findings", "#stale-rule-findings") }}
+        {{ audit_metric_card("Precedence warnings", summary.specificity_warnings, "critical" if summary.specificity_warnings else "healthy", "Precedence risk" if summary.specificity_warnings else "All clear", "#specificity-warning-findings", "#specificity-warning-findings") }}
     </div>
 </section>
+
+{% if recommended_next_step %}
+<section class="card mb-4 border-warning">
+    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <div class="metric-label mb-1">{{ _(recommended_next_step.title) }}</div>
+            <h5 class="mb-1">{{ _(recommended_next_step.headline) }}</h5>
+            <p class="text-muted mb-0">{{ _(recommended_next_step.detail) }}</p>
+        </div>
+        <a
+            class="btn btn-primary"
+            href="{{ recommended_next_step.href }}"
+            {% if recommended_next_step.target %}data-audit-open-section="{{ recommended_next_step.target }}"{% else %}data-ajax-refresh-link{% endif %}
+        >
+            <i class="bi bi-arrow-right" aria-hidden="true"></i>{{ _("Review next") }}
+        </a>
+    </div>
+</section>
+{% endif %}
 
 <section class="card mb-4">
     <div class="card-body">
@@ -272,9 +281,9 @@
         "Pairs below match at least one same historical transaction. Double-click a row to open details.",
         overlap_table,
         _("Overlap pages"),
-        overlap_filter != "all"
+        overlap_filter != "all" or open_section == "rule-overlap-findings"
     ) }}
-    <div class="collapse{% if overlap_filter != 'all' %} show{% endif %}" id="rule-overlap-findings">
+    <div class="collapse{% if overlap_filter != 'all' or open_section == 'rule-overlap-findings' %} show{% endif %}" id="rule-overlap-findings">
         {% if overlap_table.total_count %}
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -287,7 +296,7 @@
                             {{ sort_header(overlap_table, "severity", "Severity") }}
                             {{ sort_header(overlap_table, "winner", "Winning rule") }}
                             {{ sort_header(overlap_table, "current_applied", "Current applied") }}
-                            {{ sort_header(overlap_table, "suggested", "Suggested action") }}
+                            {{ sort_header(overlap_table, "suggested", "Recommended action") }}
                             <th class="text-end">{{ _("Action") }}</th>
                         </tr>
                     </thead>
@@ -306,7 +315,10 @@
                                 <div class="small text-muted">{{ row.winning_rule_label }}</div>
                             </td>
                             <td>{{ row.rule_a_applied_count }} / {{ row.rule_b_applied_count }}</td>
-                            <td>{{ suggested_action_badge(row.suggested_action) }}</td>
+                            <td>
+                                {{ suggested_action_badge(row) }}
+                                <div class="small text-muted mt-1">{{ _(row.suggested_action_reason) }}</div>
+                            </td>
                             <td class="text-end">{{ overlap_detail_button(row) }}</td>
                         </tr>
                         {% endfor %}
@@ -327,9 +339,10 @@
         "Specificity and precedence warnings",
         "A broader winning rule can hide a more constrained overlapping rule.",
         specificity_warning_table,
-        _("Specificity warning pages")
+        _("Specificity warning pages"),
+        open_section == "specificity-warning-findings"
     ) }}
-    <div class="collapse" id="specificity-warning-findings">
+    <div class="collapse{% if open_section == 'specificity-warning-findings' %} show{% endif %}" id="specificity-warning-findings">
     {% if specificity_warning_table.total_count %}
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -341,7 +354,7 @@
                         {{ sort_header(specificity_warning_table, "shared", "Shared transactions") }}
                         {{ sort_header(specificity_warning_table, "reason", "Reason") }}
                         {{ sort_header(specificity_warning_table, "conflicts", "Category conflicts") }}
-                        {{ sort_header(specificity_warning_table, "suggested", "Suggested action") }}
+                        {{ sort_header(specificity_warning_table, "suggested", "Recommended action") }}
                         <th class="text-end">{{ _("Action") }}</th>
                     </tr>
                 </thead>
@@ -353,7 +366,10 @@
                         <td>{{ row.shared_count }}</td>
                         <td><span class="badge text-bg-secondary">{{ _(row.reason) }}</span></td>
                         <td>{{ row.conflicting_count }}</td>
-                        <td>{{ suggested_action_badge(row.suggested_action) }}</td>
+                        <td>
+                            {{ suggested_action_badge(row) }}
+                            <div class="small text-muted mt-1">{{ _(row.suggested_action_reason) }}</div>
+                        </td>
                         <td class="text-end">
                             <div class="d-flex flex-wrap justify-content-end gap-2">
                                 <a
@@ -385,9 +401,10 @@
         "Shadowed rules",
         "This rule is shadowed. It matches transactions, but another rule is applied.",
         shadowed_rule_table,
-        _("Shadowed rule pages")
+        _("Shadowed rule pages"),
+        open_section == "shadowed-rule-findings"
     ) }}
-    <div class="collapse" id="shadowed-rule-findings">
+    <div class="collapse{% if open_section == 'shadowed-rule-findings' %} show{% endif %}" id="shadowed-rule-findings">
     {% if shadowed_rule_table.total_count %}
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -401,7 +418,7 @@
                         {{ sort_header(shadowed_rule_table, "losses", "Losses") }}
                         {{ sort_header(shadowed_rule_table, "shadowing_rule", "Most common shadowing rule") }}
                         {{ sort_header(shadowed_rule_table, "conflicts", "Conflicting losses") }}
-                        {{ sort_header(shadowed_rule_table, "suggested", "Suggested action") }}
+                        {{ sort_header(shadowed_rule_table, "suggested", "Recommended action") }}
                         <th class="text-end">{{ _("Action") }}</th>
                     </tr>
                 </thead>
@@ -421,7 +438,10 @@
                             {% endif %}
                         </td>
                         <td>{{ row.conflicting_loss_count }}</td>
-                        <td>{{ suggested_action_badge(row.suggested_action) }}</td>
+                        <td>
+                            {{ suggested_action_badge(row) }}
+                            <div class="small text-muted mt-1">{{ _(row.suggested_action_reason) }}</div>
+                        </td>
                         <td class="text-end">
                             <div class="d-flex flex-wrap justify-content-end gap-2">
                                 {{ rule_detail_button(row.rule) }}
@@ -447,9 +467,10 @@
         "Stale and unused rules",
         "Rules with no historical matches are candidates for review.",
         stale_rule_table,
-        _("Stale rule pages")
+        _("Stale rule pages"),
+        open_section == "stale-rule-findings"
     ) }}
-    <div class="collapse" id="stale-rule-findings">
+    <div class="collapse{% if open_section == 'stale-rule-findings' %} show{% endif %}" id="stale-rule-findings">
     {% if stale_rule_table.total_count %}
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -461,7 +482,7 @@
                         {{ sort_header(stale_rule_table, "matches", "Historical matches") }}
                         {{ sort_header(stale_rule_table, "current_applied", "Current applied") }}
                         {{ sort_header(stale_rule_table, "last_matched", "Last matched") }}
-                        {{ sort_header(stale_rule_table, "suggested", "Suggested action") }}
+                        {{ sort_header(stale_rule_table, "suggested", "Recommended action") }}
                         <th class="text-end">{{ _("Action") }}</th>
                     </tr>
                 </thead>
@@ -479,7 +500,10 @@
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td>{{ suggested_action_badge(row.suggested_action) }}</td>
+                        <td>
+                            {{ suggested_action_badge(row) }}
+                            <div class="small text-muted mt-1">{{ _(row.suggested_action_reason) }}</div>
+                        </td>
                         <td class="text-end">
                             <div class="d-flex flex-wrap justify-content-end gap-2">
                                 {{ rule_detail_button(row.rule) }}

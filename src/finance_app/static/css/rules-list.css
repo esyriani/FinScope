@@ -350,6 +350,17 @@ legend.form-label {
     position: relative;
 }
 
+.audit-summary-link {
+    cursor: pointer;
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.audit-summary-link:hover,
+.audit-summary-link:focus-visible {
+    box-shadow: var(--focus-shadow);
+    transform: translateY(-1px);
+}
+
 .audit-risk-card::before {
     content: "";
     height: 4px;

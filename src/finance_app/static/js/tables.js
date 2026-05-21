@@ -84,9 +84,59 @@ function setupCollapseToggleLabels(root = document) {
     });
 }
 
+function setupAuditSectionLinks(root = document) {
+    root.querySelectorAll("[data-audit-open-section]").forEach((link) => {
+        if (link.dataset.auditOpenSectionReady === "true") {
+            return;
+        }
+
+        link.dataset.auditOpenSectionReady = "true";
+        link.addEventListener("click", (event) => {
+            const targetSelector = link.dataset.auditOpenSection || link.getAttribute("href");
+            const target = targetSelector ? document.querySelector(targetSelector) : null;
+            if (!target) {
+                return;
+            }
+
+            event.preventDefault();
+            if (target.classList.contains("collapse") && window.bootstrap?.Collapse) {
+                window.bootstrap.Collapse.getOrCreateInstance(target, { toggle: false }).show();
+            }
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+            if (target.id) {
+                window.history.replaceState(window.history.state, "", `#${target.id}`);
+            }
+        });
+    });
+}
+
+function openAuditSectionFromLocation(root = document) {
+    const params = new URL(window.location.href).searchParams;
+    const sectionId = params.get("open") || window.location.hash.replace(/^#/, "");
+    if (!sectionId) {
+        return;
+    }
+
+    const escapedSectionId = window.CSS?.escape
+        ? CSS.escape(sectionId)
+        : sectionId.replaceAll('"', '\\"');
+    const target = root.querySelector(`#${escapedSectionId}`) || document.getElementById(sectionId);
+    if (!target || !target.classList.contains("collapse")) {
+        return;
+    }
+
+    if (window.bootstrap?.Collapse) {
+        window.bootstrap.Collapse.getOrCreateInstance(target, { toggle: false }).show();
+    } else {
+        target.classList.add("show");
+    }
+}
+
 setupDashboardDrilldownInteractions();
 setupTableRowInteractions();
 setupCollapseToggleLabels();
+setupAuditSectionLinks();
+openAuditSectionFromLocation();
 
 function setupSortableTables(root = document) {
     const tables = Array.from(root.querySelectorAll("[data-sortable-table]"));
@@ -302,3 +352,7 @@ function setupPaginatedTables(root = document) {
 }
 
 setupPaginatedTables();
+
+window.setupCollapseToggleLabels = setupCollapseToggleLabels;
+window.setupAuditSectionLinks = setupAuditSectionLinks;
+window.openAuditSectionFromLocation = openAuditSectionFromLocation;

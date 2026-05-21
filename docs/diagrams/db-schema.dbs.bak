@@ -13,17 +13,45 @@
 			<index name="pk_accounts" unique="PRIMARY_KEY" >
 				<column name="id" />
 			</index>
-			<index name="unq_accounts_name" unique="UNIQUE_KEY" >
+			<index name="uq_accounts_name" unique="UNIQUE_KEY" >
 				<column name="name" />
 			</index>
-			<constraint name="CK_accounts" type="CHECK" options="" >
+			<constraint name="ck_accounts_accounts_account_type_allowed" type="CHECK" options="" >
 				<string><![CDATA[account_type IN ('checking', 'credit_card', 'savings')]]></string>
 			</constraint>
-			<constraint name="CK_accounts_001" type="CHECK" options="" >
-				<string><![CDATA[TRIM(name) <> '']]></string>
+			<constraint name="ck_accounts_accounts_name_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(name) != '']]></string>
 			</constraint>
 			<fk name="FK_accounts accounts" to_schema="Default" to_table="accounts" delete_action="setNull" >
 				<fk_column name="paid_from_account_id" pk="id" />
+			</fk>
+		</table>
+		<table name="audit_log" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="user_id" type="INTEGER" />
+			<column name="username" type="TEXT" length="150" />
+			<column name="action" type="TEXT" length="64" mandatory="y" />
+			<column name="details" type="TEXT" />
+			<column name="ip_address" type="TEXT" length="64" />
+			<column name="created_at" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_audit_log" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="idx_audit_log_created_at" unique="NORMAL" >
+				<column name="created_at" />
+			</index>
+			<index name="idx_audit_log_user" unique="NORMAL" >
+				<column name="user_id" />
+			</index>
+			<constraint name="ck_audit_log_audit_log_action_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(action) != '']]></string>
+			</constraint>
+			<fk name="fk_audit_log_user_id_users" to_schema="Default" to_table="users" delete_action="setNull" >
+				<fk_column name="user_id" pk="id" />
 			</fk>
 		</table>
 		<table name="categories" spec="" >
@@ -36,14 +64,18 @@
 			<column name="created_at" type="TEXT" mandatory="y" >
 				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
 			</column>
+			<column name="builtin_key" type="TEXT" length="64" />
 			<index name="pk_categories" unique="PRIMARY_KEY" >
 				<column name="id" />
+			</index>
+			<index name="uq_categories_builtin_key" unique="UNIQUE_KEY" >
+				<column name="builtin_key" />
 			</index>
 			<index name="idx_categories_name" unique="NORMAL" >
 				<column name="name" />
 			</index>
-			<constraint name="CK_categories" type="CHECK" options="" >
-				<string><![CDATA[TRIM(name) <> '']]></string>
+			<constraint name="ck_categories_categories_name_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(name) != '']]></string>
 			</constraint>
 		</table>
 		<table name="category_rule_tags" spec="" >
@@ -67,12 +99,28 @@
 			<column name="id" type="INTEGER" mandatory="y" >
 				<identity><![CDATA[AUTOINCREMENT]]></identity>
 			</column>
+			<column name="account_id" type="INTEGER" />
 			<column name="merchant_id" type="INTEGER" />
 			<column name="keyword" type="TEXT" mandatory="y" />
 			<column name="category" type="TEXT" />
 			<column name="category_id" type="INTEGER" />
-			<column name="amount_min" type="REAL" />
-			<column name="amount_max" type="REAL" />
+			<column name="amount_min" type="NUMERIC" length="14" decimal="2" />
+			<column name="amount_max" type="NUMERIC" length="14" decimal="2" />
+			<column name="direction" type="TEXT" length="16" mandatory="y" >
+				<defo><![CDATA['any']]></defo>
+			</column>
+			<column name="keyword_scope_key" type="TEXT" length="255" >
+				<identity><![CDATA[GENERATED  ALWAYS AS (CASE WHEN merchant_id IS NULL THEN keyword ELSE NULL END)]]></identity>
+			</column>
+			<column name="account_id_key" type="INTEGER" >
+				<identity><![CDATA[GENERATED  ALWAYS AS (COALESCE(account_id, -1))]]></identity>
+			</column>
+			<column name="amount_min_key" type="NUMERIC" length="14" decimal="2" >
+				<identity><![CDATA[GENERATED  ALWAYS AS (COALESCE(amount_min, -999999999999.00))]]></identity>
+			</column>
+			<column name="amount_max_key" type="NUMERIC" length="14" decimal="2" >
+				<identity><![CDATA[GENERATED  ALWAYS AS (COALESCE(amount_max, -999999999999.00))]]></identity>
+			</column>
 			<column name="source" type="TEXT" mandatory="y" >
 				<defo><![CDATA['manual']]></defo>
 			</column>
@@ -98,34 +146,57 @@
 			<index name="idx_category_rules_category_id" unique="NORMAL" >
 				<column name="category_id" />
 			</index>
-			<index name="idx_category_rules_keyword_amount_unique" unique="UNIQUE_INDEX" options="WHERE merchant_id IS NULL" >
-				<column name="keyword" />
-				<column name="IFNULL(amount_min, -999999999999.0)" />
-				<column name="IFNULL(amount_max, -999999999999.0)" />
-			</index>
-			<index name="idx_category_rules_merchant_amount_unique" unique="UNIQUE_INDEX" options="WHERE merchant_id IS NOT NULL" >
-				<column name="merchant_id" />
-				<column name="IFNULL(amount_min, -999999999999.0)" />
-				<column name="IFNULL(amount_max, -999999999999.0)" />
-			</index>
 			<index name="idx_category_rules_source_approval" unique="NORMAL" >
 				<column name="source" />
 				<column name="ai_approved" />
 			</index>
-			<constraint name="CK_category_rules" type="CHECK" options="" >
-				<string><![CDATA[TRIM(keyword) <> '']]></string>
+			<index name="uq_category_rules_keyword_amount" unique="UNIQUE_KEY" >
+				<column name="keyword_scope_key" />
+				<column name="account_id_key" />
+				<column name="direction" />
+				<column name="amount_min_key" />
+				<column name="amount_max_key" />
+			</index>
+			<index name="uq_category_rules_merchant_amount" unique="UNIQUE_KEY" >
+				<column name="merchant_id" />
+				<column name="account_id_key" />
+				<column name="direction" />
+				<column name="amount_min_key" />
+				<column name="amount_max_key" />
+			</index>
+			<index name="idx_category_rules_account" unique="NORMAL" >
+				<column name="account_id" />
+			</index>
+			<index name="idx_category_rules_direction" unique="NORMAL" >
+				<column name="direction" />
+			</index>
+			<index name="idx_category_rules_amount_bounds" unique="NORMAL" >
+				<column name="amount_min" />
+				<column name="amount_max" />
+			</index>
+			<constraint name="ck_category_rules_category_rules_source_allowed" type="CHECK" options="" >
+				<string><![CDATA[source IN ('automatic', 'manual')]]></string>
 			</constraint>
-			<constraint name="CK_category_rules_001" type="CHECK" options="" >
-				<string><![CDATA[source IN ('automatic', 'default', 'manual')]]></string>
+			<constraint name="ck_category_rules_category_rules_ai_approved_bool" type="CHECK" options="" >
+				<string><![CDATA[ai_approved IN (0, 1)]]></string>
 			</constraint>
-			<constraint name="CK_category_rules_002" type="CHECK" options="" >
+			<constraint name="ck_category_rules_category_rules_amount_range_order" type="CHECK" options="" >
 				<string><![CDATA[amount_min IS NULL OR amount_max IS NULL OR amount_min <= amount_max]]></string>
+			</constraint>
+			<constraint name="ck_category_rules_category_rules_keyword_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(keyword) != '']]></string>
+			</constraint>
+			<constraint name="ck_category_rules_category_rules_direction_allowed" type="CHECK" options="" >
+				<string><![CDATA[direction IN ('any', 'credit', 'debit')]]></string>
 			</constraint>
 			<fk name="FK_category_rules merchants" to_schema="Default" to_table="merchants" delete_action="setNull" >
 				<fk_column name="merchant_id" pk="id" />
 			</fk>
 			<fk name="FK_category_rules categories" to_schema="Default" to_table="categories" delete_action="setNull" >
 				<fk_column name="category_id" pk="id" />
+			</fk>
+			<fk name="fk_category_rules_account_id_accounts" to_schema="Default" to_table="accounts" delete_action="setNull" options="" >
+				<fk_column name="account_id" pk="id" />
 			</fk>
 		</table>
 		<table name="merchant_aliases" spec="" >
@@ -150,20 +221,20 @@
 			<index name="pk_merchant_aliases" unique="PRIMARY_KEY" >
 				<column name="id" />
 			</index>
-			<index name="unq_merchant_aliases_alias_key" unique="UNIQUE_KEY" >
+			<index name="uq_merchant_aliases_alias_key" unique="UNIQUE_KEY" >
 				<column name="alias_key" />
 			</index>
 			<index name="idx_merchant_aliases_merchant" unique="NORMAL" >
 				<column name="merchant_id" />
 			</index>
-			<constraint name="CK_merchant_aliases" type="CHECK" options="" >
-				<string><![CDATA[TRIM(alias_key) <> '']]></string>
-			</constraint>
-			<constraint name="CK_merchant_aliases_001" type="CHECK" options="" >
+			<constraint name="ck_merchant_aliases_merchant_aliases_source_allowed" type="CHECK" options="" >
 				<string><![CDATA[source IN ('alias', 'fallback', 'import', 'rule', 'system', 'user')]]></string>
 			</constraint>
-			<constraint name="CK_merchant_aliases_002" type="CHECK" options="" >
+			<constraint name="ck_merchant_aliases_merchant_aliases_confidence_allowed" type="CHECK" options="" >
 				<string><![CDATA[confidence IN ('high', 'low', 'medium')]]></string>
+			</constraint>
+			<constraint name="ck_merchant_aliases_merchant_aliases_alias_key_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(alias_key) != '']]></string>
 			</constraint>
 			<fk name="FK_merchant_aliases merchants" to_schema="Default" to_table="merchants" delete_action="cascade" >
 				<fk_column name="merchant_id" pk="id" />
@@ -191,26 +262,26 @@
 			<index name="pk_merchants" unique="PRIMARY_KEY" >
 				<column name="id" />
 			</index>
-			<index name="unq_merchants_canonical_key" unique="UNIQUE_KEY" >
+			<index name="uq_merchants_canonical_key" unique="UNIQUE_KEY" >
 				<column name="canonical_key" />
 			</index>
 			<index name="idx_merchants_display_name" unique="NORMAL" >
 				<column name="display_name" />
 			</index>
-			<constraint name="CK_merchants" type="CHECK" options="" >
-				<string><![CDATA[TRIM(canonical_key) <> '']]></string>
-			</constraint>
-			<constraint name="CK_merchants_001" type="CHECK" options="" >
-				<string><![CDATA[TRIM(system_name) <> '']]></string>
-			</constraint>
-			<constraint name="CK_merchants_002" type="CHECK" options="" >
-				<string><![CDATA[TRIM(display_name) <> '']]></string>
-			</constraint>
-			<constraint name="CK_merchants_003" type="CHECK" options="" >
+			<constraint name="ck_merchants_merchants_display_name_source_allowed" type="CHECK" options="" >
 				<string><![CDATA[display_name_source IN ('system', 'user')]]></string>
 			</constraint>
-			<constraint name="CK_merchants_004" type="CHECK" options="" >
+			<constraint name="ck_merchants_merchants_active_bool" type="CHECK" options="" >
 				<string><![CDATA[active IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="ck_merchants_merchants_canonical_key_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(canonical_key) != '']]></string>
+			</constraint>
+			<constraint name="ck_merchants_merchants_system_name_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(system_name) != '']]></string>
+			</constraint>
+			<constraint name="ck_merchants_merchants_display_name_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(display_name) != '']]></string>
 			</constraint>
 		</table>
 		<table name="recurring_patterns" spec="" >
@@ -223,9 +294,9 @@
 			</column>
 			<column name="frequency" type="TEXT" />
 			<column name="expected_day" type="INTEGER" />
-			<column name="typical_amount" type="REAL" />
+			<column name="typical_amount" type="NUMERIC" length="14" decimal="2" />
 			<column name="date_tolerance_days" type="INTEGER" />
-			<column name="amount_tolerance" type="REAL" />
+			<column name="amount_tolerance" type="NUMERIC" length="14" decimal="2" />
 			<column name="active" type="INTEGER" mandatory="y" >
 				<defo><![CDATA[1]]></defo>
 			</column>
@@ -242,29 +313,29 @@
 				<column name="user_status" />
 				<column name="active" />
 			</index>
-			<index name="idx_recurring_patterns_merchant_type" unique="UNIQUE_INDEX" options="WHERE merchant_id IS NOT NULL" >
+			<index name="uq_recurring_patterns_merchant_type" unique="UNIQUE_KEY" >
 				<column name="merchant_id" />
 				<column name="type" />
 			</index>
-			<constraint name="CK_recurring_patterns" type="CHECK" options="" >
+			<constraint name="ck_recurring_patterns_recurring_patterns_type_allowed" type="CHECK" options="" >
 				<string><![CDATA[type IN ('income', 'spending')]]></string>
 			</constraint>
-			<constraint name="CK_recurring_patterns_001" type="CHECK" options="" >
+			<constraint name="ck_recurring_patterns_recurring_patterns_user_status_allowed" type="CHECK" options="" >
 				<string><![CDATA[user_status IN ('confirmed', 'detected', 'edited', 'ignored')]]></string>
 			</constraint>
-			<constraint name="CK_recurring_patterns_002" type="CHECK" options="" >
+			<constraint name="ck_recurring_patterns_recurring_patterns_active_bool" type="CHECK" options="" >
 				<string><![CDATA[active IN (0, 1)]]></string>
 			</constraint>
-			<constraint name="CK_recurring_patterns_003" type="CHECK" options="" >
+			<constraint name="ck_recurring_patterns_recurring_patterns_expected_day_range" type="CHECK" options="" >
 				<string><![CDATA[expected_day IS NULL OR (expected_day >= 1 AND expected_day <= 31)]]></string>
 			</constraint>
-			<constraint name="CK_recurring_patterns_004" type="CHECK" options="" >
+			<constraint name="ck_recurring_patterns_recurring_patterns_date_tolerance_non_negative" type="CHECK" options="" >
 				<string><![CDATA[date_tolerance_days IS NULL OR date_tolerance_days >= 0]]></string>
 			</constraint>
-			<constraint name="CK_recurring_patterns_005" type="CHECK" options="" >
+			<constraint name="ck_recurring_patterns_recurring_patterns_amount_tolerance_non_negative" type="CHECK" options="" >
 				<string><![CDATA[amount_tolerance IS NULL OR amount_tolerance >= 0]]></string>
 			</constraint>
-			<constraint name="CK_recurring_patterns_006" type="CHECK" options="" >
+			<constraint name="ck_recurring_patterns_recurring_patterns_typical_amount_non_negative" type="CHECK" options="" >
 				<string><![CDATA[typical_amount IS NULL OR typical_amount >= 0]]></string>
 			</constraint>
 			<fk name="FK_recurring_patterns merchants" to_schema="Default" to_table="merchants" delete_action="setNull" >
@@ -272,9 +343,13 @@
 			</fk>
 		</table>
 		<table name="settings" spec="" >
+			<column name="key" type="TEXT" length="255" mandatory="y" />
 			<column name="value" type="TEXT" mandatory="y" />
-			<constraint name="CK_settings" type="CHECK" options="" >
-				<string><![CDATA[TRIM(key) <> '']]></string>
+			<index name="pk_settings" unique="PRIMARY_KEY" >
+				<column name="key" />
+			</index>
+			<constraint name="ck_settings_settings_key_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim("key") != '']]></string>
 			</constraint>
 		</table>
 		<table name="statement_types" spec="" >
@@ -300,27 +375,27 @@
 			<index name="pk_statement_types" unique="PRIMARY_KEY" >
 				<column name="id" />
 			</index>
-			<index name="unq_statement_types_name" unique="UNIQUE_KEY" >
+			<index name="uq_statement_types_name" unique="UNIQUE_KEY" >
 				<column name="name" />
 			</index>
 			<index name="idx_statement_types_active" unique="NORMAL" >
 				<column name="active" />
 				<column name="name" />
 			</index>
-			<constraint name="CK_statement_types" type="CHECK" options="" >
-				<string><![CDATA[TRIM(name) <> '']]></string>
-			</constraint>
-			<constraint name="CK_statement_types_001" type="CHECK" options="" >
+			<constraint name="ck_statement_types_statement_types_parser_type_allowed" type="CHECK" options="" >
 				<string><![CDATA[parser_type IN ('bank_account', 'credit_card', 'interac_etransfer')]]></string>
 			</constraint>
-			<constraint name="CK_statement_types_002" type="CHECK" options="" >
+			<constraint name="ck_statement_types_statement_types_import_mode_allowed" type="CHECK" options="" >
 				<string><![CDATA[import_mode IN ('enrichment', 'ledger')]]></string>
 			</constraint>
-			<constraint name="CK_statement_types_003" type="CHECK" options="" >
+			<constraint name="ck_statement_types_statement_types_default_account_type_allowed" type="CHECK" options="" >
 				<string><![CDATA[default_account_type IN ('checking', 'credit_card', 'savings')]]></string>
 			</constraint>
-			<constraint name="CK_statement_types_004" type="CHECK" options="" >
+			<constraint name="ck_statement_types_statement_types_active_bool" type="CHECK" options="" >
 				<string><![CDATA[active IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="ck_statement_types_statement_types_name_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(name) != '']]></string>
 			</constraint>
 		</table>
 		<table name="statements" spec="" >
@@ -362,7 +437,7 @@
 			<index name="pk_statements" unique="PRIMARY_KEY" >
 				<column name="id" />
 			</index>
-			<index name="unq_statements_checksum" unique="UNIQUE_KEY" >
+			<index name="uq_statements_checksum" unique="UNIQUE_KEY" >
 				<column name="checksum" />
 			</index>
 			<index name="idx_statements_account" unique="NORMAL" >
@@ -374,29 +449,29 @@
 			<index name="idx_statements_uploaded_at" unique="NORMAL" >
 				<column name="uploaded_at" />
 			</index>
-			<constraint name="CK_statements" type="CHECK" options="" >
-				<string><![CDATA[TRIM(filename) <> '']]></string>
-			</constraint>
-			<constraint name="CK_statements_001" type="CHECK" options="" >
-				<string><![CDATA[TRIM(checksum) <> '']]></string>
-			</constraint>
-			<constraint name="CK_statements_002" type="CHECK" options="" >
+			<constraint name="ck_statements_statements_import_status_allowed" type="CHECK" options="" >
 				<string><![CDATA[import_status IN ('completed', 'failed', 'pending', 'queued', 'running')]]></string>
 			</constraint>
-			<constraint name="CK_statements_003" type="CHECK" options="" >
+			<constraint name="ck_statements_statements_interac_direction_allowed" type="CHECK" options="" >
 				<string><![CDATA[interac_direction IN ('auto', 'received', 'sent')]]></string>
 			</constraint>
-			<constraint name="CK_statements_004" type="CHECK" options="" >
+			<constraint name="ck_statements_statements_imported_count_non_negative" type="CHECK" options="" >
 				<string><![CDATA[imported_count >= 0]]></string>
 			</constraint>
-			<constraint name="CK_statements_005" type="CHECK" options="" >
+			<constraint name="ck_statements_statements_skipped_count_non_negative" type="CHECK" options="" >
 				<string><![CDATA[skipped_count >= 0]]></string>
 			</constraint>
-			<constraint name="CK_statements_006" type="CHECK" options="" >
+			<constraint name="ck_statements_statements_ignored_count_non_negative" type="CHECK" options="" >
 				<string><![CDATA[ignored_count >= 0]]></string>
 			</constraint>
-			<constraint name="CK_statements_007" type="CHECK" options="" >
+			<constraint name="ck_statements_statements_llm_candidate_count_non_negative" type="CHECK" options="" >
 				<string><![CDATA[llm_candidate_count >= 0]]></string>
+			</constraint>
+			<constraint name="ck_statements_statements_filename_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(filename) != '']]></string>
+			</constraint>
+			<constraint name="ck_statements_statements_checksum_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(checksum) != '']]></string>
 			</constraint>
 			<fk name="FK_statements accounts" to_schema="Default" to_table="accounts" >
 				<fk_column name="account_id" pk="id" />
@@ -422,8 +497,8 @@
 			<index name="idx_tags_name" unique="NORMAL" >
 				<column name="name" />
 			</index>
-			<constraint name="CK_tags" type="CHECK" options="" >
-				<string><![CDATA[TRIM(name) <> '']]></string>
+			<constraint name="ck_tags_tags_name_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(name) != '']]></string>
 			</constraint>
 		</table>
 		<table name="transaction_tags" spec="" >
@@ -443,8 +518,8 @@
 			<index name="idx_transaction_tags_tag" unique="NORMAL" >
 				<column name="tag_id" />
 			</index>
-			<constraint name="CK_transaction_tags" type="CHECK" options="" >
-				<string><![CDATA[source IN ('ai', 'manual', 'rule', 'unknown')]]></string>
+			<constraint name="ck_transaction_tags_transaction_tags_source_allowed" type="CHECK" options="" >
+				<string><![CDATA[source IN ('ai', 'history', 'manual', 'rule', 'unknown')]]></string>
 			</constraint>
 			<fk name="FK_transaction_tags transactions" to_schema="Default" to_table="transactions" delete_action="cascade" >
 				<fk_column name="transaction_id" pk="id" />
@@ -465,7 +540,7 @@
 			<column name="merchant_id" type="INTEGER" />
 			<column name="tx_date" type="TEXT" mandatory="y" />
 			<column name="description" type="TEXT" mandatory="y" />
-			<column name="amount" type="REAL" mandatory="y" />
+			<column name="amount" type="NUMERIC" length="14" decimal="2" mandatory="y" />
 			<column name="category" type="TEXT" />
 			<column name="category_id" type="INTEGER" />
 			<column name="needs_review" type="INTEGER" mandatory="y" >
@@ -474,8 +549,9 @@
 			<column name="category_source" type="TEXT" mandatory="y" >
 				<defo><![CDATA['unknown']]></defo>
 			</column>
-			<column name="category_confidence" type="REAL" />
+			<column name="category_confidence" type="FLOAT" />
 			<column name="category_rule_id" type="INTEGER" />
+			<column name="category_metadata" type="TEXT" />
 			<column name="categorized_at" type="TEXT" />
 			<column name="reviewed_at" type="TEXT" />
 			<column name="ignored" type="INTEGER" mandatory="y" >
@@ -491,7 +567,7 @@
 			<index name="pk_transactions" unique="PRIMARY_KEY" >
 				<column name="id" />
 			</index>
-			<index name="unq_transactions_fingerprint" unique="UNIQUE_KEY" >
+			<index name="uq_transactions_fingerprint" unique="UNIQUE_KEY" >
 				<column name="fingerprint" />
 			</index>
 			<index name="idx_transactions_date" unique="NORMAL" >
@@ -545,26 +621,39 @@
 			<index name="idx_transactions_kind" unique="NORMAL" >
 				<column name="transaction_kind" />
 			</index>
-			<constraint name="CK_transactions" type="CHECK" options="" >
-				<string><![CDATA[TRIM(tx_date) <> '']]></string>
-			</constraint>
-			<constraint name="CK_transactions_001" type="CHECK" options="" >
-				<string><![CDATA[TRIM(description) <> '']]></string>
-			</constraint>
-			<constraint name="CK_transactions_002" type="CHECK" options="" >
+			<index name="idx_transactions_ignored_merchant" unique="NORMAL" >
+				<column name="ignored" />
+				<column name="merchant_id" />
+			</index>
+			<index name="idx_transactions_ignored_account" unique="NORMAL" >
+				<column name="ignored" />
+				<column name="account_id" />
+			</index>
+			<index name="idx_transactions_ignored_category_id" unique="NORMAL" >
+				<column name="ignored" />
+				<column name="category_id" />
+			</index>
+			<index name="idx_transactions_ignored_date" unique="NORMAL" >
+				<column name="ignored" />
+				<column name="tx_date" />
+			</index>
+			<constraint name="ck_transactions_transactions_needs_review_bool" type="CHECK" options="" >
 				<string><![CDATA[needs_review IN (0, 1)]]></string>
 			</constraint>
-			<constraint name="CK_transactions_003" type="CHECK" options="" >
+			<constraint name="ck_transactions_transactions_ignored_bool" type="CHECK" options="" >
 				<string><![CDATA[ignored IN (0, 1)]]></string>
 			</constraint>
-			<constraint name="CK_transactions_004" type="CHECK" options="" >
+			<constraint name="ck_transactions_transactions_transaction_kind_allowed" type="CHECK" options="" >
 				<string><![CDATA[transaction_kind IN ('expense', 'income', 'payment', 'refund', 'transfer')]]></string>
 			</constraint>
-			<constraint name="CK_transactions_005" type="CHECK" options="" >
-				<string><![CDATA[category_source IN ('ai', 'manual', 'rule', 'unknown')]]></string>
-			</constraint>
-			<constraint name="CK_transactions_006" type="CHECK" options="" >
+			<constraint name="ck_transactions_transactions_category_confidence_probability" type="CHECK" options="" >
 				<string><![CDATA[category_confidence IS NULL OR (category_confidence >= 0 AND category_confidence <= 1)]]></string>
+			</constraint>
+			<constraint name="ck_transactions_transactions_description_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(description) != '']]></string>
+			</constraint>
+			<constraint name="ck_transactions_transactions_category_source_allowed" type="CHECK" options="" >
+				<string><![CDATA[category_source IN ('ai', 'history', 'manual', 'rule', 'unknown')]]></string>
 			</constraint>
 			<fk name="FK_transactions statements" to_schema="Default" to_table="statements" >
 				<fk_column name="statement_id" pk="id" />
@@ -582,33 +671,116 @@
 				<fk_column name="category_rule_id" pk="id" />
 			</fk>
 		</table>
+		<table name="user_settings" spec="" >
+			<column name="user_id" type="INTEGER" mandatory="y" />
+			<column name="key" type="TEXT" length="255" mandatory="y" />
+			<column name="value" type="TEXT" mandatory="y" />
+			<column name="updated_at" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<index name="pk_user_settings" unique="PRIMARY_KEY" >
+				<column name="user_id" />
+				<column name="key" />
+			</index>
+			<constraint name="ck_user_settings_user_settings_key_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim("key") != '']]></string>
+			</constraint>
+			<fk name="fk_user_settings_user_id_users" to_schema="Default" to_table="users" delete_action="cascade" >
+				<fk_column name="user_id" pk="id" />
+			</fk>
+		</table>
+		<table name="users" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="username" type="TEXT" length="150" mandatory="y" />
+			<column name="display_name" type="TEXT" length="150" mandatory="y" />
+			<column name="password_hash" type="TEXT" mandatory="y" />
+			<column name="role" type="TEXT" length="32" mandatory="y" />
+			<column name="is_active" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[1]]></defo>
+			</column>
+			<column name="must_change_password" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="created_at" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<column name="updated_at" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA[CURRENT_TIMESTAMP]]></defo>
+			</column>
+			<column name="last_login_at" type="TEXT" length="32" />
+			<column name="failed_login_count" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="locked_until" type="TEXT" length="32" />
+			<index name="pk_users" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="uq_users_username" unique="UNIQUE_KEY" >
+				<column name="username" />
+			</index>
+			<index name="idx_users_locked_until" unique="NORMAL" >
+				<column name="locked_until" />
+			</index>
+			<index name="idx_users_role_active" unique="NORMAL" >
+				<column name="role" />
+				<column name="is_active" />
+			</index>
+			<constraint name="ck_users_users_username_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(username) != '']]></string>
+			</constraint>
+			<constraint name="ck_users_users_display_name_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(display_name) != '']]></string>
+			</constraint>
+			<constraint name="ck_users_users_role_allowed" type="CHECK" options="" >
+				<string><![CDATA[role IN ('editor', 'owner', 'viewer')]]></string>
+			</constraint>
+			<constraint name="ck_users_users_is_active_bool" type="CHECK" options="" >
+				<string><![CDATA[is_active IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="ck_users_users_must_change_password_bool" type="CHECK" options="" >
+				<string><![CDATA[must_change_password IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="ck_users_users_failed_login_count_non_negative" type="CHECK" options="" >
+				<string><![CDATA[failed_login_count >= 0]]></string>
+			</constraint>
+		</table>
 	</schema>
 	<diagram_group name="Default" id="5efe017b-d39a-474c-bb2e-525343b35f94" >
 		<diagram name="Diagram" id="cbc92950-0bb0-484f-816c-daebf3ecff94" show_relation="columns" color="333333" >
-			<entity schema="Default" name="accounts" color="3986C1" x="722" y="912" />
-			<entity schema="Default" name="categories" color="3986C1" x="551" y="266" />
-			<entity schema="Default" name="category_rule_tags" color="3986C1" x="741" y="57" />
-			<entity schema="Default" name="category_rules" color="3986C1" x="380" y="95" >
+			<entity schema="Default" name="accounts" color="3986C1" x="342" y="912" />
+			<entity schema="Default" name="audit_log" color="3986C1" x="931" y="57" />
+			<entity schema="Default" name="categories" color="3986C1" x="551" y="380" />
+			<entity schema="Default" name="category_rule_tags" color="3986C1" x="741" y="209" />
+			<entity schema="Default" name="category_rules" color="3986C1" x="285" y="95" >
 				<column name="id" />
+				<column name="account_id" />
 				<column name="merchant_id" />
 				<column name="keyword" />
 				<column name="category" />
 				<column name="category_id" />
 				<column name="amount_min" />
 				<column name="amount_max" />
+				<column name="direction" />
+				<column name="keyword_scope_key" />
+				<column name="account_id_key" />
+				<column name="amount_min_key" />
+				<column name="amount_max_key" />
 				<column name="source" />
 				<column name="created_at" />
 				<column name="ai_approved" />
 			</entity>
-			<entity schema="Default" name="merchant_aliases" color="3986C1" x="380" y="741" />
-			<entity schema="Default" name="merchants" color="3986C1" x="57" y="703" />
-			<entity schema="Default" name="recurring_patterns" color="3986C1" x="57" y="266" />
-			<entity schema="Default" name="settings" color="3986C1" x="57" y="950" />
-			<entity schema="Default" name="statement_types" color="3986C1" x="950" y="456" />
-			<entity schema="Default" name="statements" color="3986C1" x="950" y="722" />
-			<entity schema="Default" name="tags" color="3986C1" x="988" y="190" />
-			<entity schema="Default" name="transaction_tags" color="3986C1" x="741" y="190" />
-			<entity schema="Default" name="transactions" color="3986C1" x="532" y="513" />
+			<entity schema="Default" name="merchant_aliases" color="3986C1" x="114" y="456" />
+			<entity schema="Default" name="merchants" color="3986C1" x="57" y="741" />
+			<entity schema="Default" name="recurring_patterns" color="3986C1" x="57" y="95" />
+			<entity schema="Default" name="statement_types" color="3986C1" x="1159" y="684" />
+			<entity schema="Default" name="statements" color="3986C1" x="874" y="627" />
+			<entity schema="Default" name="tags" color="3986C1" x="969" y="323" />
+			<entity schema="Default" name="transaction_tags" color="3986C1" x="741" y="342" />
+			<entity schema="Default" name="transactions" color="3986C1" x="570" y="627" />
+			<entity schema="Default" name="user_settings" color="3986C1" x="1178" y="57" />
+			<entity schema="Default" name="users" color="3986C1" x="1121" y="266" />
 		</diagram>
 	</diagram_group>
 </project>

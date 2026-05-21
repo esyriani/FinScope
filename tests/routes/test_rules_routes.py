@@ -222,15 +222,18 @@ def test_rules_audit_route_renders_summary_and_findings(client, db_conn):
     assert b"UNUSED SHOP" in response.data
     assert "Showing 1-1 of 1 findings" in body
     assert "overlap_sort=shared" in body
-    assert b"Preview delete" in response.data
+    assert b"Preview removal impact" in response.data
     assert b"Rule A" in response.data or b"Rule B" in response.data
     assert b"Rule detail" in response.data
+    assert b"Recommended next step" in response.data
+    assert b"Recommended action" in response.data
+    assert b"Review category conflict" in response.data
     assert (
         f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}".encode() in response.data
         or f"/rules/audit/overlap/{specific_rule_id}/{broad_rule_id}".encode() in response.data
     )
     assert f"/rules/audit/rule/{broad_rule_id}".encode() in response.data
-    assert b"This is a category conflict. FinScope currently applies the winning rule silently." in response.data
+    assert b"These rules assign different categories:" in response.data
     assert broad_rule_id is not None
 
 
@@ -269,11 +272,11 @@ def test_rules_audit_route_paginates_and_sorts_overlap_table(client, db_conn):
     assert "CAFE" not in overlap_section
     assert (
         'href="/rules/audit?overlap_sort=rule_a&amp;'
-        'overlap_direction=asc&amp;overlap_page=1"'
+        'overlap_direction=asc&amp;overlap_page=1&amp;open=rule-overlap-findings"'
     ) in overlap_section
     assert (
         'href="/rules/audit?overlap_sort=shared&amp;'
-        'overlap_direction=asc&amp;overlap_page=1"'
+        'overlap_direction=asc&amp;overlap_page=1&amp;open=rule-overlap-findings"'
     ) in overlap_section
 
 
@@ -397,6 +400,9 @@ def test_rules_audit_overlap_route_renders_shared_transactions(client, db_conn):
     assert b"Winning rule result" in response.data
     assert b"Losing rule result" in response.data
     assert b"Losing rule" in response.data
+    assert b"Why this rule wins" in response.data
+    assert b"Final winner" in response.data
+    assert b"Recommended action" in response.data
     assert b"Confidence" in response.data
     assert b"Match score" in response.data
     assert b"Specificity" in response.data
@@ -809,10 +815,12 @@ def test_rules_audit_rule_route_renders_rule_diagnostics(client, db_conn):
     assert response.status_code == 200
     assert b"Rule detail" in response.data
     assert b"This page is read-only and does not change rule behavior." in response.data
-    assert b"Preview delete" in response.data
+    assert b"Preview removal impact" in response.data
     assert b"Preview apply where winner" in response.data
     assert b"Preview force apply" in response.data
     assert b"Rule summary" in response.data
+    assert b"Assessment" in response.data
+    assert b"Recommended action" in response.data
     assert b"Historical matches" in response.data
     assert b"Win rate" in response.data
     assert b"Overlapping rules" in response.data
