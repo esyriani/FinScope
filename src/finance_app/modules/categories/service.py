@@ -30,7 +30,11 @@ from finance_app.modules.categories.rules_matching import (
     merchant_category_cache_key,
     merchant_match_candidates,
     rule_amount_matches,
+    rule_match_precedence_key,
+    rule_specificity,
     score_category_rule_match,
+    score_category_rule_matches,
+    select_winning_rule_match,
 )
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
@@ -69,8 +73,12 @@ __all__ = [
     "request_llm_categories",
     "resolve_category_id",
     "rule_amount_matches",
+    "rule_match_precedence_key",
+    "rule_specificity",
     "sanitize_openai_error",
     "save_category_rule",
     "score_category_rule_match",
+    "score_category_rule_matches",
+    "select_winning_rule_match",
     "taxonomy_prompt_line",
 ]

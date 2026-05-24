@@ -812,14 +812,14 @@ def build_data_quality(summary):
             "compact_metrics": compact_source_metrics,
         },
     ]
-    review_unknown_count = unknown_needs_review_count
+    review_count = needs_review_count + max(0, uncategorized_count - unknown_needs_review_count)
     review_label = gettext(
         (
-            "Review {count} unknown transaction"
-            if review_unknown_count == 1
-            else "Review {count} unknown transactions"
+            "Review {count} transaction needing review"
+            if review_count == 1
+            else "Review {count} transactions needing review"
         ),
-        count=review_unknown_count,
+        count=review_count,
     )
 
     return {

@@ -289,6 +289,141 @@ legend.form-label {
     --bs-btn-hover-color: #2b050c;
 }
 
+.rule-audit-search-row {
+    align-items: end;
+    display: grid;
+    gap: 0.85rem;
+    grid-template-areas: "search conflicts actions";
+    grid-template-columns: minmax(260px, 1fr) minmax(360px, 2fr) auto;
+}
+
+.rule-audit-search-row .form-label {
+    font-size: 0.86rem;
+    margin-bottom: 0.35rem;
+}
+
+.rule-audit-search-field {
+    grid-area: search;
+    min-width: 0;
+}
+
+.rule-audit-conflict-field {
+    grid-area: conflicts;
+    min-width: 0;
+}
+
+.rule-audit-filter-actions {
+    grid-area: actions;
+    justify-content: flex-end;
+}
+
+.btn-check:checked + .rule-audit-filter-option {
+    --bs-btn-active-bg: var(--app-accent);
+    --bs-btn-active-border-color: var(--app-accent);
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-bg: var(--app-accent);
+    --bs-btn-border-color: var(--app-accent);
+    --bs-btn-color: #ffffff;
+    --bs-btn-hover-bg: var(--app-accent-strong);
+    --bs-btn-hover-border-color: var(--app-accent-strong);
+    --bs-btn-hover-color: #ffffff;
+}
+
+.btn-check:checked + .rule-audit-filter-option .badge {
+    background-color: rgba(255, 255, 255, 0.24) !important;
+    color: #ffffff !important;
+}
+
+[data-bs-theme="dark"] .btn-check:checked + .rule-audit-filter-option {
+    --bs-btn-active-color: #041714;
+    --bs-btn-color: #05201c;
+    --bs-btn-hover-color: #041714;
+}
+
+[data-bs-theme="dark"] .btn-check:checked + .rule-audit-filter-option .badge {
+    background-color: rgba(5, 32, 28, 0.18) !important;
+    color: #05201c !important;
+}
+
+.audit-risk-card {
+    overflow: hidden;
+    position: relative;
+}
+
+.audit-summary-link {
+    cursor: pointer;
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.audit-summary-link:hover,
+.audit-summary-link:focus-visible {
+    box-shadow: var(--focus-shadow);
+    transform: translateY(-1px);
+}
+
+.audit-risk-card::before {
+    content: "";
+    height: 4px;
+    inset: 0 0 auto;
+    position: absolute;
+}
+
+.audit-risk-card .metric-value {
+    color: var(--app-heading);
+}
+
+.audit-risk-neutral {
+    border-color: rgba(var(--app-accent-rgb), 0.28);
+}
+
+.audit-risk-neutral::before {
+    background: rgba(var(--app-accent-rgb), 0.86);
+}
+
+.audit-risk-healthy {
+    background:
+        linear-gradient(135deg, rgba(var(--app-success-rgb), 0.12), transparent 72%),
+        var(--app-surface);
+    border-color: rgba(var(--app-success-rgb), 0.46);
+}
+
+.audit-risk-healthy::before {
+    background: rgba(var(--app-success-rgb), 0.9);
+}
+
+.audit-risk-info {
+    background:
+        linear-gradient(135deg, rgba(var(--app-accent-rgb), 0.12), transparent 72%),
+        var(--app-surface);
+    border-color: rgba(var(--app-accent-rgb), 0.46);
+}
+
+.audit-risk-info::before {
+    background: rgba(var(--app-accent-rgb), 0.9);
+}
+
+.audit-risk-warning {
+    background:
+        linear-gradient(135deg, rgba(var(--app-warning-rgb), 0.16), transparent 72%),
+        var(--app-surface);
+    border-color: rgba(var(--app-warning-rgb), 0.5);
+}
+
+.audit-risk-warning::before {
+    background: rgba(var(--app-warning-rgb), 0.92);
+}
+
+.audit-risk-critical {
+    background:
+        linear-gradient(135deg, rgba(var(--app-danger-rgb), 0.16), transparent 72%),
+        var(--app-surface);
+    border-color: rgba(var(--app-danger-rgb), 0.55);
+}
+
+.audit-risk-critical::before {
+    background: rgba(var(--app-danger-rgb), 0.94);
+}
+
 .theme-mode-field {
     border: 0;
     margin: 0;

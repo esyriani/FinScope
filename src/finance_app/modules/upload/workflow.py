@@ -1,11 +1,19 @@
 """Background workflow helpers for the upload feature."""
 
+import json
 from datetime import timedelta
 
 from sqlalchemy import delete, func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 
-from finance_app.background.runner import submit_background_job
+from finance_app.background.runner import (
+    AI_JOB_QUEUE,
+    append_background_job_log,
+    is_job_cancel_requested,
+    raise_if_cancel_requested,
+    submit_background_job,
+    update_background_job_progress,
+)
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -45,6 +53,7 @@ from finance_app.modules.categories.sources import (
     utc_timestamp,
 )
 from finance_app.modules.categories.decision import DECISION_SOURCE_RULE
+from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.service import categorize_transactions
 from finance_app.modules.categories.taxonomy import (
@@ -55,7 +64,7 @@ from finance_app.modules.merchants.repository import (
     get_or_create_merchant_for_description,
     get_or_create_merchant_for_name,
 )
-from finance_app.modules.settings.runtime import get_unknown_category
+from finance_app.modules.settings.runtime import get_bool_setting, get_unknown_category
 from finance_app.modules.statements.importer import parse_csv_transactions
 from finance_app.modules.transactions.importer import filter_new_transactions
 
@@ -779,12 +788,10 @@ def import_statement_transactions_job(
             )
         raise
 
-    if llm_candidate_count:
-        submit_background_job(
-            f"LLM categorize statement {statement_id}",
-            categorize_statement_unknown_transactions_job,
-        statement_id,
-    )
+    llm_job_queued = False
+    if llm_candidate_count and auto_llm_categorization_enabled():
+        queue_statement_llm_categorization(statement_id)
+        llm_job_queued = True
 
     return upload_result_message(
         statement_type,
@@ -793,6 +800,32 @@ def import_statement_transactions_job(
         skipped_count,
         ignored_count,
         llm_candidate_count=llm_candidate_count,
+        llm_job_queued=llm_job_queued,
+    )
+
+
+def auto_llm_categorization_enabled():
+    """Return whether imports should automatically queue AI categorization."""
+    with db_core_transaction() as conn:
+        return get_bool_setting(conn, "auto_llm_categorization_enabled", fallback=True)
+
+
+def queue_statement_llm_categorization(statement_id):
+    """Queue AI categorization for unknown transactions from one statement."""
+    return submit_background_job(
+        f"AI categorize statement {statement_id}",
+        categorize_statement_unknown_transactions_job,
+        statement_id,
+        queue=AI_JOB_QUEUE,
+    )
+
+
+def queue_all_unknown_llm_categorization():
+    """Queue AI categorization for all current unknown transactions."""
+    return submit_background_job(
+        "AI categorize all unknown transactions",
+        categorize_all_unknown_transactions_job,
+        queue=AI_JOB_QUEUE,
     )
 
 
@@ -836,25 +869,205 @@ def update_statement_import_state(conn, statement_id, status, **fields):
 
 def count_statement_unknown_transactions(conn, statement_id):
     """Count statement unknown transactions."""
+    return count_unknown_transactions(conn, statement_id=statement_id)
+
+
+def count_unknown_transactions(conn, statement_id=None):
+    """Count active unknown transactions, optionally scoped to one statement."""
     unknown_category = get_unknown_category(conn)
     return conn.execute(
         select(func.count().label("count"))
         .select_from(transactions_table)
-        .where(
-            transactions_table.c.statement_id == statement_id,
-            (
-                transactions_table.c.category.is_(None)
-                | (transactions_table.c.category == unknown_category)
-            ),
-        )
+        .where(*unknown_transaction_conditions(unknown_category, statement_id=statement_id))
     ).scalar_one()
+
+
+def unknown_transaction_conditions(unknown_category, statement_id=None, excluded_ids=None):
+    """Return Core predicates for active transactions eligible for AI reruns."""
+    conditions = [
+        transactions_table.c.ignored == 0,
+        (
+            transactions_table.c.category.is_(None)
+            | (transactions_table.c.category == unknown_category)
+        ),
+    ]
+    if statement_id is not None:
+        conditions.append(transactions_table.c.statement_id == statement_id)
+    if excluded_ids:
+        conditions.append(~transactions_table.c.id.in_(list(excluded_ids)))
+    return conditions
 
 
 def categorize_statement_unknown_transactions_job(statement_id):
     """Categorize statement unknown transactions job."""
+    return categorize_unknown_transactions_job(statement_id=statement_id)
+
+
+def categorize_all_unknown_transactions_job():
+    """Categorize all active unknown transactions with AI assistance."""
+    return categorize_unknown_transactions_job(statement_id=None)
+
+
+def categorize_unknown_transactions_job(statement_id=None):
+    """Categorize unknown transactions in bounded, resumable AI batches.
+
+    The job commits after each batch so previously updated transactions survive
+    later timeouts, process shutdowns, or cooperative cancellation requests.
+    """
+    processed_ids = set()
+    processed_count = 0
+    updated_count = 0
+    source_counts = {}
+    with db_core_transaction() as conn:
+        total_candidates = count_unknown_transactions(conn, statement_id=statement_id)
+
+    if not total_candidates:
+        update_ai_categorization_progress(
+            0,
+            0,
+            0,
+            log_message="No unknown transactions needed AI categorization.",
+        )
+        return "No unknown transactions needed AI categorization."
+
+    update_ai_categorization_progress(
+        0,
+        total_candidates,
+        0,
+        log_message="Starting AI categorization for {total} unknown transactions.",
+        log_params={"total": total_candidates},
+    )
+
+    while True:
+        if is_job_cancel_requested():
+            append_ai_categorization_log(
+                "Cancellation requested; stopping before the next batch.",
+                level="warning",
+            )
+        raise_if_cancel_requested("AI categorization cancelled after the current batch.")
+        with db_core_transaction() as conn:
+            unknown_category = get_unknown_category(conn)
+            rows = unknown_transaction_rows(
+                conn,
+                unknown_category,
+                statement_id=statement_id,
+                excluded_ids=processed_ids,
+                limit=llm_module.LLM_BATCH_SIZE,
+            )
+
+        if not rows:
+            break
+
+        batch_start = processed_count + 1
+        batch_end = processed_count + len(rows)
+        append_ai_categorization_log(
+            "Starting batch {start}-{end} of {total}.",
+            params={
+                "start": batch_start,
+                "end": batch_end,
+                "total": total_candidates,
+            },
+        )
+        update_ai_categorization_progress(
+            processed_count,
+            total_candidates,
+            updated_count,
+            message="Processing {start}-{end} of {total}; {updated} categorized so far.",
+            params={
+                "start": batch_start,
+                "end": batch_end,
+                "total": total_candidates,
+                "updated": updated_count,
+            },
+        )
+        processed_ids.update(row["id"] for row in rows)
+        try:
+            batch_updated_count, batch_source_counts, batch_report = categorize_unknown_transaction_rows(rows)
+        except Exception as exc:
+            error_params = {
+                "start": batch_start,
+                "end": batch_end,
+                "error_type": type(exc).__name__,
+                "detail": str(exc),
+            }
+            append_ai_categorization_log(
+                "Batch {start}-{end} failed: {error_type}: {detail}",
+                params=error_params,
+                level="error",
+            )
+            update_ai_categorization_progress(
+                processed_count,
+                total_candidates,
+                updated_count,
+                message="Batch {start}-{end} failed: {error_type}: {detail}",
+                params={
+                    **error_params,
+                    "total": total_candidates,
+                    "updated": updated_count,
+                },
+            )
+            raise
+        processed_count += len(rows)
+        updated_count += batch_updated_count
+        merge_source_counts(source_counts, batch_source_counts)
+        log_ai_batch_report(batch_start, batch_end, len(rows), batch_updated_count, updated_count, batch_report)
+        update_ai_categorization_progress(
+            processed_count,
+            total_candidates,
+            updated_count,
+        )
+
+    summary = automatic_categorization_message(updated_count, source_counts)
+    append_ai_categorization_log(
+        "AI categorization completed: {summary}",
+        params={"summary": summary},
+    )
+    return summary
+
+
+def update_ai_categorization_progress(
+    current,
+    total,
+    updated,
+    message=None,
+    params=None,
+    log_message=None,
+    log_params=None,
+    log_level="info",
+):
+    """Publish progress for the currently running AI categorization job."""
+    default_message = "Processed {current} of {total}; {updated} categorized."
+    progress_params = {
+        "current": current,
+        "total": total,
+        "updated": updated,
+    }
+    if params:
+        progress_params.update(params)
+    update_background_job_progress(
+        current=current,
+        total=total,
+        message=message or default_message,
+        params=progress_params,
+    )
+    if log_message:
+        append_ai_categorization_log(
+            log_message,
+            params={**progress_params, **(log_params or {})},
+            level=log_level,
+        )
+
+
+def append_ai_categorization_log(message, params=None, level="info"):
+    """Append an AI categorization log entry to the current background job."""
+    append_background_job_log(message, params=params, level=level)
+
+
+def categorize_unknown_transaction_rows(rows):
+    """Categorize and persist one batch of unknown transaction rows."""
+    llm_module.clear_llm_request_status()
     with db_core_transaction() as conn:
         unknown_category = get_unknown_category(conn)
-        rows = statement_unknown_transaction_rows(conn, statement_id, unknown_category)
         transactions = [
             {
                 "id": row["id"],
@@ -868,10 +1081,8 @@ def categorize_statement_unknown_transactions_job(statement_id):
             }
             for row in rows
         ]
-        if not transactions:
-            return "No unknown transactions needed LLM categorization."
-
         categorized = categorize_transactions(transactions, conn=conn, use_llm=True)
+        batch_report = ai_batch_report(categorized, llm_module.last_llm_request_status())
         updated_count = 0
         source_counts = {}
         for tx in categorized:
@@ -892,7 +1103,108 @@ def categorize_statement_unknown_transactions_job(statement_id):
                 source = tx.get("category_source") or CATEGORY_SOURCE_UNKNOWN
                 source_counts[source] = source_counts.get(source, 0) + 1
 
-    return automatic_categorization_message(updated_count, source_counts)
+    return updated_count, source_counts, batch_report
+
+
+def ai_batch_report(categorized, request_status):
+    """Return concise AI request and unresolved-result details for one batch."""
+    failure_counts = llm_failure_counts(categorized)
+    return {
+        "request_status": dict(request_status or {}),
+        "failure_counts": failure_counts,
+        "unknown_count": sum(failure_counts.values()),
+    }
+
+
+def llm_failure_counts(transactions):
+    """Count LLM failure reasons from categorized transaction metadata."""
+    counts = {}
+    for tx in transactions:
+        metadata = transaction_category_metadata(tx)
+        reason = metadata.get("failure_reason")
+        if reason:
+            counts[reason] = counts.get(reason, 0) + 1
+    return counts
+
+
+def transaction_category_metadata(transaction):
+    """Return category metadata as a dictionary when available."""
+    metadata = transaction.get("category_metadata")
+    if not metadata:
+        return {}
+    if isinstance(metadata, dict):
+        return metadata
+    try:
+        parsed = json.loads(metadata)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def log_ai_batch_report(batch_start, batch_end, processed, batch_updated, total_updated, report):
+    """Append useful AI batch request details to the current job log."""
+    request_status = report.get("request_status") or {}
+    if ai_request_status_needs_log(request_status):
+        append_ai_categorization_log(
+            "AI request issue in batch {start}-{end}: {error_type}: {detail}",
+            params={
+                "start": batch_start,
+                "end": batch_end,
+                "error_type": request_status.get("error_type") or request_status.get("status") or "AI",
+                "detail": request_status.get("detail") or "",
+            },
+            level="warning",
+        )
+
+    unknown_count = int(report.get("unknown_count") or 0)
+    if unknown_count:
+        message = (
+            "Batch {start}-{end} kept {unknown} transaction unknown for review."
+            if unknown_count == 1
+            else "Batch {start}-{end} kept {unknown} transactions unknown for review."
+        )
+        append_ai_categorization_log(
+            message,
+            params={
+                "start": batch_start,
+                "end": batch_end,
+                "unknown": unknown_count,
+                "reasons": format_failure_counts(report.get("failure_counts") or {}),
+            },
+            level="warning",
+        )
+
+    append_ai_categorization_log(
+        "Finished batch {start}-{end}: {processed} processed; {updated} categorized total.",
+        params={
+            "start": batch_start,
+            "end": batch_end,
+            "processed": processed,
+            "updated": total_updated,
+            "batch_updated": batch_updated,
+        },
+    )
+
+
+def ai_request_status_needs_log(status):
+    """Return whether an LLM request status should be surfaced in the job log."""
+    if not status:
+        return False
+    return status.get("status") not in {"ok", "not_requested"}
+
+
+def format_failure_counts(counts):
+    """Return compact failure reason counts for progress logs."""
+    return ", ".join(
+        f"{reason}: {count}"
+        for reason, count in sorted(counts.items())
+    )
+
+
+def merge_source_counts(target, source):
+    """Add source-count values into an aggregate dictionary."""
+    for key, value in source.items():
+        target[key] = target.get(key, 0) + value
 
 
 def automatic_categorization_message(updated_count, source_counts=None):
@@ -926,7 +1238,12 @@ def automatic_categorization_breakdown(source_counts):
 
 def statement_unknown_transaction_rows(conn, statement_id, unknown_category):
     """Return statement transactions that still need unknown-category LLM categorization."""
-    return conn.execute(
+    return unknown_transaction_rows(conn, unknown_category, statement_id=statement_id)
+
+
+def unknown_transaction_rows(conn, unknown_category, statement_id=None, excluded_ids=None, limit=None):
+    """Return active unknown transactions eligible for AI categorization."""
+    statement = (
         select(
             transactions_table.c.id,
             transactions_table.c.account_id,
@@ -938,14 +1255,19 @@ def statement_unknown_transaction_rows(conn, statement_id, unknown_category):
             transactions_table.c.transaction_kind,
         )
         .where(
-            transactions_table.c.statement_id == statement_id,
-            transactions_table.c.ignored == 0,
-            (
-                transactions_table.c.category.is_(None)
-                | (transactions_table.c.category == unknown_category)
-            ),
+            *unknown_transaction_conditions(
+                unknown_category,
+                statement_id=statement_id,
+                excluded_ids=excluded_ids,
+            )
         )
         .order_by(transactions_table.c.id)
+    )
+    if limit is not None:
+        statement = statement.limit(limit)
+
+    return conn.execute(
+        statement
     ).mappings().fetchall()
 
 
@@ -1075,7 +1397,15 @@ def restore_enriched_transaction(conn, change):
     )
 
 
-def upload_result_message(statement_type, extension, inserted_count, skipped_count, ignored_count, llm_candidate_count=0):
+def upload_result_message(
+    statement_type,
+    extension,
+    inserted_count,
+    skipped_count,
+    ignored_count,
+    llm_candidate_count=0,
+    llm_job_queued=False,
+):
     """Render result message."""
     if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
         message = f"Interac history processed. Enriched {inserted_count} existing transactions. "
@@ -1107,10 +1437,16 @@ def upload_result_message(statement_type, extension, inserted_count, skipped_cou
         message += "PDF text was captured for review; automatic PDF transaction parsing is not enabled yet. "
 
     if llm_candidate_count:
-        message += (
-            f"Queued LLM categorization for {llm_candidate_count} unknown transaction"
-            f"{'' if llm_candidate_count == 1 else 's'}. "
-        )
+        if llm_job_queued:
+            message += (
+                f"Queued AI categorization for {llm_candidate_count} unknown transaction"
+                f"{'' if llm_candidate_count == 1 else 's'}. "
+            )
+        else:
+            message += (
+                f"{llm_candidate_count} unknown transaction"
+                f"{'' if llm_candidate_count == 1 else 's'} can be categorized with AI from Uploaded statements. "
+            )
 
     message += "The original file was not stored."
     return message

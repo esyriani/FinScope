@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Rule import preview") }}</h2>
+        <p class="text-muted mb-0">{{ import_preview.filename }} - {{ _(import_preview.mode_label) }}</p>
+    </div>
+    <div class="home-actions">
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rules") }}
+        </a>
+    </div>
+</div>
+
+{% if limited %}
+<div class="alert alert-info" role="status">
+    {{ _("Audit is limited to recent transactions.") }}
+</div>
+{% endif %}
+
+<div class="alert alert-info" role="status">
+    {{ _("Preview is read-only and does not modify rules or transactions.") }}
+</div>
+
+{% if import_preview.mode == "override" %}
+<div class="alert alert-warning" role="status">
+    {{ _("Override import will replace existing rules and clear stored rule references before adding imported rules.") }}
+</div>
+{% endif %}
+
+{% if not preview.has_transaction_impacts %}
+<div class="alert alert-warning" role="status">
+    {{ _("No historical transactions would change. This action may still affect future matches.") }}
+</div>
+{% elif not preview.has_category_or_tag_changes %}
+<div class="alert alert-info" role="status">
+    {{ _("Historical categories and tags would stay the same. Review any winning-rule changes before confirming.") }}
+</div>
+{% endif %}
+
+<section class="card mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+            <h5 class="mb-1">{{ _("Confirm import") }}</h5>
+            <p class="text-muted mb-0">{{ _("This queues the import only after reviewing the parsed rules and impact below.") }}</p>
+        </div>
+        <form method="post" action="{{ url_for('rules.import_rules') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm_preview" value="1">
+            <input type="hidden" name="next" value="{{ url_for('rules.rules') }}">
+            <input type="hidden" name="mode" value="{{ import_preview.mode }}">
+            <input type="hidden" name="filename" value="{{ import_preview.filename }}">
+            <textarea class="d-none" name="raw_text">{{ import_preview.raw_text }}</textarea>
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import rules") }}
+            </button>
+        </form>
+    </div>
+</section>
+
+<section class="metric-grid mb-4" aria-label="{{ _('Import summary') }}">
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Parsed rows") }}</div>
+        <div class="metric-value">{{ import_preview.total_rows }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Rules to import") }}</div>
+        <div class="metric-value">{{ import_preview.rules_to_import }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Existing rules skipped") }}</div>
+        <div class="metric-value">{{ import_preview.skipped_existing }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Duplicate rows skipped") }}</div>
+        <div class="metric-value">{{ import_preview.skipped_duplicate }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Rules replaced") }}</div>
+        <div class="metric-value">{{ import_preview.replaced_rules }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Rule references cleared") }}</div>
+        <div class="metric-value">{{ import_preview.cleared_transaction_rule_refs }}</div>
+    </div>
+</section>
+
+<section class="metric-grid mb-4" aria-label="{{ _('Impact summary') }}">
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Affected transactions") }}</div>
+        <div class="metric-value">{{ preview.summary.total_affected_transactions }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Winning rule changes") }}</div>
+        <div class="metric-value">{{ preview.summary.winning_rule_changes }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Category changes") }}</div>
+        <div class="metric-value">{{ preview.summary.category_changes }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Tag changes") }}</div>
+        <div class="metric-value">{{ preview.summary.tag_changes }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Would become UNKNOWN") }}</div>
+        <div class="metric-value">{{ preview.summary.would_become_unknown }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Would require review") }}</div>
+        <div class="metric-value">{{ preview.summary.newly_require_review }}</div>
+    </div>
+</section>
+
+<section class="card mb-4">
+    <div class="card-body border-bottom">
+        <h5 class="mb-1">{{ _("Rules to import") }}</h5>
+        <p class="text-muted mb-0">{{ _("These parsed rules will be inserted if you confirm the import.") }}</p>
+    </div>
+    {% if import_preview.rules %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table
+                class="table table-hover align-middle mb-0"
+                data-no-row-select
+                data-sortable-table
+                data-paginated-table
+                data-page-size="{{ preview_page_size }}"
+                data-pagination-label="{{ _('Imported rule pages') }}"
+            >
+                <thead>
+                    <tr>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Keyword") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Category") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Tags") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="text"><span>{{ _("Amount") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Direction") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Source") }}</span></button></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in import_preview.rules %}
+                    <tr>
+                        <td>
+                            <div class="rule-keyword">{{ rule.label }}</div>
+                            {% if rule.merchant_name %}
+                                <div class="small text-muted">{{ _("Merchant") }}: {{ rule.merchant_name }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ rule.category }}</td>
+                        <td>{{ rule.tag_label }}</td>
+                        <td>{{ rule.amount_label }}</td>
+                        <td>{{ _(rule.direction_label) }}</td>
+                        <td><span class="badge {{ rule.source_badge_class }}">{{ _(rule.source_label) }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No rules would be imported.") }}</div>
+    {% endif %}
+</section>
+
+{% for group in impact_groups %}
+<section class="card mb-4">
+    <div class="card-body border-bottom d-flex justify-content-between align-items-center gap-3">
+        <div>
+            <h5 class="mb-1">{{ _(group.label) }}</h5>
+            <p class="text-muted mb-0">{{ _("{count} transactions", count=group.count) }}</p>
+        </div>
+        <span class="badge {{ group.badge_class }}">{{ group.count }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table
+                class="table table-hover align-middle mb-0"
+                data-no-row-select
+                data-sortable-table
+                data-paginated-table
+                data-page-size="{{ preview_page_size }}"
+                data-pagination-label="{{ _('Preview impact pages') }}"
+            >
+                <thead>
+                    <tr>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Date") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Account") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Description") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="number"><span>{{ _("Amount") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Current winner") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Proposed winner") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="6" data-sort-type="text"><span>{{ _("Current category") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="7" data-sort-type="text"><span>{{ _("Proposed category") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="8" data-sort-type="text"><span>{{ _("Tags") }}</span></button></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in group.impacts %}
+                    {% set tx = row.transaction %}
+                    <tr>
+                        <td data-sort-value="{{ tx.tx_date }}">{{ tx.tx_date | datefmt }}</td>
+                        <td>{{ tx.account_name or "-" }}</td>
+                        <td>
+                            <div>{{ tx.description }}</div>
+                            {% if tx.canonical_merchant %}
+                                <div class="small text-muted">{{ tx.canonical_merchant }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end" data-sort-value="{{ tx.amount }}">{{ tx.amount | moneyfmt }}</td>
+                        <td>
+                            {{ row.current_winner.label }}
+                            {% if row.current_winner.category %}
+                                <div class="small text-muted">{{ row.current_winner.category }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ row.proposed_winner.label }}
+                            {% if row.proposed_winner.category %}
+                                <div class="small text-muted">{{ row.proposed_winner.category }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.current_category }}</td>
+                        <td>{{ row.proposed_category }}</td>
+                        <td>
+                            <div>{{ row.current_tags }}</div>
+                            {% if row.current_tags != row.proposed_tags %}
+                                <div class="small text-muted">{{ _("Proposed") }}: {{ row.proposed_tags }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% else %}
+<section class="card mb-4">
+    <div class="empty-state compact">{{ _("No transaction-level changes found.") }}</div>
+</section>
+{% endfor %}
+{% endblock %}

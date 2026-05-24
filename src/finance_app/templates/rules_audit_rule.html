@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% macro severity_badge(row) %}
+<span class="badge {{ row.severity_badge_class }}">{{ _(row.severity_label) }}</span>
+{% endmacro %}
+
+{% macro rule_link(row) %}
+<a class="rule-keyword" href="{{ url_for('rules.audit_rule_detail', rule_id=row.id) }}">{{ row.label }}</a>
+<div class="mt-1">
+    <span class="badge {{ row.status_badge_class }}">{{ _(row.status_label) }}</span>
+</div>
+<div class="small text-muted">{{ row.category }}</div>
+{% if row.tag_label != "-" %}
+    <div class="small text-muted">{{ _("Tags") }}: {{ row.tag_label }}</div>
+{% endif %}
+{% endmacro %}
+
+{% macro client_sort_header(column, label, sort_type="text", header_class="") %}
+<th{% if header_class %} class="{{ header_class }}"{% endif %}>
+    <button
+        class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %} border-0 bg-transparent p-0"
+        type="button"
+        data-sort-column="{{ column }}"
+        data-sort-type="{{ sort_type }}"
+    >
+        <span>{{ _(label) }}</span>
+    </button>
+</th>
+{% endmacro %}
+
+{% macro overlap_detail_button(rule_a_id, rule_b_id) %}
+<a
+    class="btn btn-sm btn-outline-secondary"
+    href="{{ url_for('rules.audit_rule_overlap', rule_a_id=rule_a_id, rule_b_id=rule_b_id) }}"
+>
+    <i class="bi bi-search" aria-hidden="true"></i>{{ _("Details") }}
+</a>
+{% endmacro %}
+
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Rule detail") }}</h2>
+        <p class="text-muted mb-0">{{ rule.label }}</p>
+    </div>
+    <div class="home-actions">
+        {% if rule.can_delete_without_preview %}
+        <form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ url_for('rules.audit_rules') }}">
+            <button class="btn btn-outline-danger" type="submit">
+                <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete rule") }}
+            </button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="delete_rule">
+            <input type="hidden" name="rule_id" value="{{ rule.id }}">
+            <button class="btn btn-outline-secondary" type="submit">
+                <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview removal impact") }}
+            </button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="apply_where_wins">
+            <input type="hidden" name="rule_id" value="{{ rule.id }}">
+            <button class="btn btn-outline-secondary" type="submit">
+                <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Preview apply where winner") }}
+            </button>
+        </form>
+        <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="force_apply_rule">
+            <input type="hidden" name="rule_id" value="{{ rule.id }}">
+            <button class="btn btn-outline-secondary" type="submit">
+                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>{{ _("Preview force apply") }}
+            </button>
+        </form>
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rules') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule audit") }}
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}">
+            <i class="bi bi-tags" aria-hidden="true"></i>{{ _("Rules") }}
+        </a>
+    </div>
+</div>
+
+{% if limited %}
+<div class="alert alert-info" role="status">
+    {{ _("Audit is limited to recent transactions.") }}
+</div>
+{% endif %}
+
+<div class="alert alert-info" role="status">
+    {{ _("This page is read-only and does not change rule behavior.") }}
+</div>
+
+<section class="metric-grid mb-4" aria-label="{{ _('Rule audit summary') }}">
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Historical matches") }}</div>
+        <div class="metric-value">{{ metrics.total_matches }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Wins") }}</div>
+        <div class="metric-value">{{ metrics.total_wins }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Losses") }}</div>
+        <div class="metric-value">{{ metrics.total_losses }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Win rate") }}</div>
+        <div class="metric-value">{{ metrics.win_rate }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Current applied") }}</div>
+        <div class="metric-value">{{ metrics.stored_applied_count }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Last matched") }}</div>
+        <div class="metric-value">
+            {% if metrics.last_matched_date %}
+                {{ metrics.last_matched_date | datefmt }}
+            {% else %}
+                -
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <section class="card h-100">
+            <div class="card-body border-bottom">
+                <h5 class="mb-1">{{ _("Rule summary") }}</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">{{ _("Status") }}</dt>
+                    <dd class="col-sm-8"><span class="badge {{ rule.status_badge_class }}">{{ _(rule.status_label) }}</span></dd>
+
+                    <dt class="col-sm-4">{{ _("Source") }}</dt>
+                    <dd class="col-sm-8"><span class="badge {{ rule.source_badge_class }}">{{ _(rule.source_label) }}</span></dd>
+
+                    <dt class="col-sm-4">{{ _("Approval") }}</dt>
+                    <dd class="col-sm-8">
+                        {% if rule.approval_label != "-" %}
+                            <span class="badge {{ rule.approval_badge_class }}">{{ _(rule.approval_label) }}</span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-4">{{ _("Match scope") }}</dt>
+                    <dd class="col-sm-8">
+                        {% if rule.merchant_name %}
+                            {{ _("Merchant") }}: {{ rule.merchant_name }}
+                        {% else %}
+                            {{ _("Keyword") }}: {{ rule.keyword }}
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-4">{{ _("Assigned category") }}</dt>
+                    <dd class="col-sm-8">{{ rule.category }}</dd>
+
+                    <dt class="col-sm-4">{{ _("Tags") }}</dt>
+                    <dd class="col-sm-8">{{ rule.tag_label }}</dd>
+
+                    <dt class="col-sm-4">{{ _("Direction") }}</dt>
+                    <dd class="col-sm-8">{{ _(rule.direction_label) }}</dd>
+
+                    <dt class="col-sm-4">{{ _("Amount constraint") }}</dt>
+                    <dd class="col-sm-8">{{ rule.amount_label }}</dd>
+
+                    <dt class="col-sm-4">{{ _("Specificity") }}</dt>
+                    <dd class="col-sm-8">
+                        <div class="row g-2 small text-muted">
+                            {% for factor in rule.specificity_factors %}
+                            <div class="col-sm-6">
+                                <span class="fw-semibold">{{ _(factor.label) }}:</span> {{ _(factor.value) if factor.value is string else factor.value }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </dd>
+                </dl>
+            </div>
+        </section>
+    </div>
+
+    <div class="col-lg-6">
+        <section class="card h-100">
+            <div class="card-body border-bottom">
+                <h5 class="mb-1">{{ _("Assessment") }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-column gap-3">
+                    <div>
+                        <span class="badge {{ assessment.badge_class }}">{{ _(assessment.badge_label) }}</span>
+                    </div>
+                    {% for paragraph in assessment.paragraphs %}
+                        <p class="mb-0">{{ _(paragraph) }}</p>
+                    {% endfor %}
+                    {% if assessment.recommended_action_label %}
+                    <div>
+                        <div class="small text-muted">{{ _("Recommended action") }}</div>
+                        <div class="fw-semibold">{{ _(assessment.recommended_action_label) }}</div>
+                        <div class="small text-muted">{{ _(assessment.recommended_action_detail) }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<section class="card mb-4">
+    <div class="card-body border-bottom">
+        <h5 class="mb-1">{{ _("Overlapping rules") }}</h5>
+        <p class="text-muted mb-0">{{ _("Pairs below match at least one same historical transaction.") }}</p>
+    </div>
+    {% if overlaps %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table
+                class="table table-hover align-middle mb-0"
+                data-no-row-select
+                data-sortable-table
+                data-paginated-table
+                data-page-size="{{ table_page_size }}"
+                data-pagination-label="{{ _('Rule interaction pages') }}"
+            >
+                <thead>
+                    <tr>
+                        {{ client_sort_header(0, "Other rule") }}
+                        {{ client_sort_header(1, "Shared transactions", "number") }}
+                        {{ client_sort_header(2, "Severity") }}
+                        {{ client_sort_header(3, "Winning rule") }}
+                        {{ client_sort_header(4, "Recommended action") }}
+                        <th class="text-end">{{ _("Action") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in overlaps %}
+                    {% set other_rule = row.rule_b if row.rule_a.id == rule.id else row.rule_a %}
+                    <tr>
+                        <td>{{ rule_link(other_rule) }}</td>
+                        <td>{{ row.shared_count }}</td>
+                        <td>{{ severity_badge(row) }}</td>
+                        <td>{{ row.winning_rule_label }}</td>
+                        <td>
+                            <span class="badge {{ row.suggested_action_badge_class }}">{{ _(row.suggested_action_label) }}</span>
+                            <div class="small text-muted mt-1">{{ _(row.suggested_action_reason) }}</div>
+                        </td>
+                        <td class="text-end">
+                            {{ overlap_detail_button(row.detail_url_rule_a_id, row.detail_url_rule_b_id) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No overlaps found for this rule.") }}</div>
+    {% endif %}
+</section>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <section class="card h-100">
+            <div class="card-body border-bottom">
+                <h5 class="mb-1">{{ _("Rules this rule shadows") }}</h5>
+            </div>
+            {% if rules_shadowed_by_this %}
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table
+                        class="table table-hover align-middle mb-0"
+                        data-no-row-select
+                        data-sortable-table
+                        data-paginated-table
+                        data-page-size="{{ table_page_size }}"
+                        data-pagination-label="{{ _('Rule interaction pages') }}"
+                    >
+                        <thead>
+                            <tr>
+                                {{ client_sort_header(0, "Rule") }}
+                                {{ client_sort_header(1, "Shared transactions", "number") }}
+                                {{ client_sort_header(2, "Category conflicts", "number") }}
+                                <th class="text-end">{{ _("Action") }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rules_shadowed_by_this %}
+                            <tr>
+                                <td>{{ rule_link(row.rule) }}</td>
+                                <td>{{ row.shared_count }}</td>
+                                <td>{{ row.conflicting_count }}</td>
+                                <td class="text-end">{{ overlap_detail_button(rule.id, row.rule.id) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-state compact">{{ _("This rule does not shadow other rules.") }}</div>
+            {% endif %}
+        </section>
+    </div>
+
+    <div class="col-lg-6">
+        <section class="card h-100">
+            <div class="card-body border-bottom">
+                <h5 class="mb-1">{{ _("Rules shadowing this rule") }}</h5>
+            </div>
+            {% if rules_shadowing_this %}
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table
+                        class="table table-hover align-middle mb-0"
+                        data-no-row-select
+                        data-sortable-table
+                        data-paginated-table
+                        data-page-size="{{ table_page_size }}"
+                        data-pagination-label="{{ _('Rule interaction pages') }}"
+                    >
+                        <thead>
+                            <tr>
+                                {{ client_sort_header(0, "Rule") }}
+                                {{ client_sort_header(1, "Shared transactions", "number") }}
+                                {{ client_sort_header(2, "Category conflicts", "number") }}
+                                <th class="text-end">{{ _("Action") }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rules_shadowing_this %}
+                            <tr>
+                                <td>{{ rule_link(row.rule) }}</td>
+                                <td>{{ row.shared_count }}</td>
+                                <td>{{ row.conflicting_count }}</td>
+                                <td class="text-end">{{ overlap_detail_button(rule.id, row.rule.id) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-state compact">{{ _("No rules shadow this rule.") }}</div>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

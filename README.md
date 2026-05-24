@@ -11,7 +11,7 @@ FinScope is a single-tenant Flask application with owner-managed user access, sh
 > Project owner: Eugene Syriani  
 > Current deployment target: local desktop  
 > License: [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`)  
-> Last modification: 2026-05-18
+> Last modification: 2026-05-22
 
 ![FinScope splash screen](docs/img/splash.png)
 
@@ -48,8 +48,9 @@ $env:FINANCE_PORT = "5001"
 - Capture PDF statement text for review.
 - Deduplicate transactions with account-aware fingerprints.
 - Categorize transactions with rules, historical matches, manual edits, optional LLM assistance, and persisted decision evidence.
+- Control AI categorization separately from imports, including manual reruns for remaining unknown transactions.
 - Manage categories and tags from the admin taxonomy page.
-- Preview, import, export, apply, and undo supported rules and jobs.
+- Audit overlapping category rules, preview rule changes, import, export, apply, and undo supported rules and jobs.
 - Retry or reprocess stored statement imports without uploading the same file again.
 - Use a dark-first interface with a light mode available from Settings.
 - Switch the user interface language between English and French from Settings.
@@ -71,6 +72,7 @@ $env:FINANCE_PORT = "5001"
 
 <ul style="list-style: none; padding-left: 0;">
   <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="18" /> Python 3.10+ <em>(developed and tested with Python 3.11.9)</em></li>
+  <li>tzdata for IANA timezone display on Windows and minimal hosts</li>
   <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/flask/flask-original.svg" width="18" /> Flask 3.1.3</li>
   <li>Flask-Login 0.6.3</li>
   <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/sqlite/sqlite-original.svg" width="18" /> SQLite 3.31+ <em>(developed and tested with SQLite 3.45.1)</em></li>
@@ -142,6 +144,7 @@ Common settings:
 | Setting | Environment variable | Purpose |
 | --- | --- | --- |
 | `app.secret_key` | `FINANCE_SECRET_KEY` | Flask session signing key. |
+| `app.timezone` | `FINANCE_TIMEZONE` | IANA timezone used for displaying UTC timestamps, such as `America/Toronto`. |
 | `database.url` | `FINANCE_DATABASE_URL` | SQLAlchemy database URL used by the runtime database layer. Leave blank to derive a SQLite URL from `database.path`. |
 | `database.path` | `FINANCE_DB_PATH` | SQLite database path. |
 | `server.host` | `FINANCE_HOST` | Flask bind host. |
@@ -150,6 +153,7 @@ Common settings:
 | `uploads.allowed_extensions` | `FINANCE_ALLOWED_EXTENSIONS` | Supported statement upload extensions. |
 | `api_keys.openai_api_key` | `OPENAI_API_KEY` | Enables optional LLM categorization. |
 | `setting_defaults.categorization_model` | `FINANCE_DEFAULT_CATEGORIZATION_MODEL` | Default LLM model name. |
+| `setting_defaults.rule_audit_transaction_limit` | `FINANCE_DEFAULT_RULE_AUDIT_TRANSACTION_LIMIT` | Maximum newest historical transactions analyzed by Rule audit before the limited-audit notice appears. |
 
 FinScope loads `src/finance_app/config.example.ini`, overlays `src/finance_app/config.ini` when present, then applies environment variable overrides.
 
@@ -200,6 +204,8 @@ Imported transactions normally keep their original statement descriptions for au
 
 The first request to a database without an owner redirects to `/auth/bootstrap`. Create exactly one owner account there, then use Users to create editor and viewer accounts. FinScope generates a temporary password for each owner-created user; provide it manually and the user must change it on first login. All users in one deployment access the same finance dataset; FinScope does not create workspaces, tenant IDs, organizations, or per-user databases. Use a separate deployment and database for a separate finance workspace.
 
+Rule audit is available from Rules. It analyzes the shared finance dataset for overlapping rules, category conflicts, tag differences, shadowed rules, stale or unused rules, and specificity warnings. Rule audit is preview-first: create, edit, delete, approve, apply-all, apply-where-winner, force-apply, and import flows render an impact preview before mutating rules or transactions. The audit uses the same rule matcher as imports and rule application, and the `rule_audit_transaction_limit` setting caps the newest historical transactions analyzed on large datasets.
+
 Statement import type and account reporting role are intentionally separate. The statement import type controls the parser and whether the upload creates ledger rows or enriches existing rows. The account reporting role controls how the account behaves in reports, with roles such as checking, savings, or credit card. Credit card statements are treated as ledger sources because they contain purchase-level detail, while the matching checking-account card payments are marked as payments/transfers so reports do not double-count spending.
 
 ## Typical user workflows
@@ -216,6 +222,7 @@ Statement import type and account reporting role are intentionally separate. The
 8. Use Transactions, Review, and Jobs to inspect the result.
 9. If import processing fails, use Upload > Uploaded statements to retry from stored statement text.
 10. If parser behavior or statement settings changed, use Reprocess to clear that statement's imported transactions and import them again.
+11. If AI categorization is paused or was interrupted, use Jobs > Run AI on unknowns or Upload > Uploaded statements > Run AI to rerun categorization for remaining unknown transactions.
 
 Statement import type examples:
 
@@ -251,6 +258,12 @@ Rule sources are persisted as `manual` or `automatic`. The UI labels these as Ma
 3. Open a group and use Show all transactions when only some rows should be categorized differently.
 4. Assign categories and tags.
 5. Save reusable mappings as rules when appropriate.
+
+### Control AI categorization
+
+AI categorization runs in a separate background queue so OpenAI timeouts do not block statement imports, rule jobs, or review jobs. Owners can turn off automatic AI categorization after imports from Settings > Categorization. Unknown transactions remain available for manual reruns from Jobs or from an individual uploaded statement.
+
+Use Jobs to run AI on all active unknown transactions, cancel a queued or running AI job, or clear queued AI jobs. Running AI jobs stop cooperatively after the current batch. Manual reruns only target active transactions whose category is still unknown, so they do not overwrite manually reviewed or already categorized rows.
 
 ### Manage taxonomy
 

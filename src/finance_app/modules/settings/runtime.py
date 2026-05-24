@@ -39,10 +39,12 @@ SETTINGS_DEFAULTS = {
     "home_top_category_limit": str(settings.default_home_top_category_limit),
     "merchant_table_limit": str(settings.default_merchant_table_limit),
     "rule_preview_limit": str(settings.default_rule_preview_limit),
+    "rule_audit_transaction_limit": str(settings.default_rule_audit_transaction_limit),
     "theme_mode": THEME_MODE_DARK,
     "ui_language": normalize_language(settings.locale),
     "llm_confidence_threshold": str(settings.default_llm_confidence_threshold),
     "verify_threshold": str(settings.default_verify_threshold),
+    "auto_llm_categorization_enabled": "1",
     "openai_model": settings.default_categorization_model,
     "recurrence_minimum_occurrences": str(RECURRENCE_DETECTION_DEFAULTS.minimum_occurrences),
     "recurrence_date_tolerance_days": str(RECURRENCE_DETECTION_DEFAULTS.date_tolerance_days),
@@ -57,6 +59,7 @@ GENERAL_SETTING_KEYS = (
     "home_top_category_limit",
     "merchant_table_limit",
     "rule_preview_limit",
+    "rule_audit_transaction_limit",
     "theme_mode",
     "ui_language",
 )
@@ -391,6 +394,20 @@ def get_float_setting(conn, key, fallback, minimum=None, maximum=None):
     if maximum is not None and parsed > maximum:
         return fallback
     return parsed
+
+
+def get_bool_setting(conn, key, fallback=False):
+    """Return boolean setting from a stored runtime value."""
+    value = get_setting(conn, key)
+    if value is None:
+        return bool(fallback)
+
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return bool(fallback)
 
 
 def get_unknown_category(conn):

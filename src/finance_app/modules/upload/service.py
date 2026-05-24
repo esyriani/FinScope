@@ -8,6 +8,7 @@ from finance_app.core.constants import (
     INTERAC_DIRECTIONS,
     STATEMENT_IMPORT_MODES,
     STATEMENT_TYPE_PARSER_TYPES,
+    UNKNOWN_CATEGORY,
 )
 from finance_app.core.query import parse_page
 from finance_app.database.engine import db_core_transaction
@@ -46,6 +47,19 @@ def build_upload_context(args):
             select(func.count())
             .select_from(transactions_table)
             .where(transactions_table.c.statement_id == statements_table.c.id)
+            .scalar_subquery()
+        )
+        unknown_transaction_count = (
+            select(func.count())
+            .select_from(transactions_table)
+            .where(
+                transactions_table.c.statement_id == statements_table.c.id,
+                transactions_table.c.ignored == 0,
+                (
+                    transactions_table.c.category.is_(None)
+                    | (transactions_table.c.category == UNKNOWN_CATEGORY)
+                ),
+            )
             .scalar_subquery()
         )
         statements_join = (
@@ -87,6 +101,7 @@ def build_upload_context(args):
                 ).label("raw_text_preview"),
                 func.length(func.coalesce(statements_table.c.raw_text, "")).label("raw_text_size"),
                 transaction_count.label("transaction_count"),
+                unknown_transaction_count.label("unknown_transaction_count"),
                 accounts_table.c.name.label("account_name"),
                 accounts_table.c.account_type.label("account_type"),
                 paid_from_accounts.c.name.label("paid_from_account_name"),

@@ -44,6 +44,10 @@ GLOBAL_STRING_SETTING_KEYS = (
     "recurrence_missed_cycles_before_inactive",
 )
 
+BOOLEAN_SETTING_KEYS = (
+    "auto_llm_categorization_enabled",
+)
+
 
 PROBABILITY_SETTING_KEYS = (
     "llm_confidence_threshold",
@@ -75,11 +79,18 @@ def build_settings_context():
         "home_top_category_limit": current.get("home_top_category_limit", str(app_settings.default_home_top_category_limit)),
         "merchant_table_limit": current.get("merchant_table_limit", str(app_settings.default_merchant_table_limit)),
         "rule_preview_limit": current.get("rule_preview_limit", str(app_settings.default_rule_preview_limit)),
+        "rule_audit_transaction_limit": current.get(
+            "rule_audit_transaction_limit",
+            str(app_settings.default_rule_audit_transaction_limit),
+        ),
         "llm_confidence_threshold": current.get(
             "llm_confidence_threshold",
             format_probability(app_settings.default_llm_confidence_threshold),
         ),
         "verify_threshold": current.get("verify_threshold", format_probability(app_settings.default_verify_threshold)),
+        "auto_llm_categorization_enabled": str(
+            current.get("auto_llm_categorization_enabled", "1")
+        ).strip().lower() not in {"0", "false", "no", "off"},
         "openai_model": current.get("openai_model", app_settings.default_categorization_model),
         "recurrence_minimum_occurrences": current.get(
             "recurrence_minimum_occurrences",
@@ -137,6 +148,8 @@ def save_settings_from_form(form):
 
         for key in GLOBAL_STRING_SETTING_KEYS:
             upsert_setting(conn, key, str(global_values[key]))
+        for key in BOOLEAN_SETTING_KEYS:
+            upsert_setting(conn, key, "1" if global_values[key] else "0")
         for key in PROBABILITY_SETTING_KEYS:
             upsert_setting(conn, key, format_probability(global_values[key]))
         for key in DECIMAL_SETTING_KEYS:

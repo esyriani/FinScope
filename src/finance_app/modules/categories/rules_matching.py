@@ -34,6 +34,11 @@ class ScoredRuleMatch:
     category: str
     tags: tuple[str, ...]
 
+    @property
+    def specificity(self):
+        """Return the rule specificity tuple used to break equivalent matches."""
+        return rule_specificity(self.rule)
+
 
 HIGH_CONFIDENCE_THRESHOLD = 0.95
 MEDIUM_CONFIDENCE_THRESHOLD = 0.85
@@ -79,6 +84,31 @@ def score_category_rule_match(
     `match_category_rule`. New categorization workflows can opt into fuzzy
     medium-confidence evidence by leaving `include_fuzzy` enabled.
     """
+    return select_winning_rule_match(
+        score_category_rule_matches(
+            merchant_key,
+            amount,
+            rules,
+            canonical_name=canonical_name,
+            merchant_id=merchant_id,
+            account_id=account_id,
+            transaction_kind=transaction_kind,
+            include_fuzzy=include_fuzzy,
+        )
+    )
+
+
+def score_category_rule_matches(
+    merchant_key,
+    amount,
+    rules,
+    canonical_name=None,
+    merchant_id=None,
+    account_id=None,
+    transaction_kind=None,
+    include_fuzzy=True,
+):
+    """Return all category rules matching a transaction with deterministic scores."""
     candidates = merchant_match_candidates(merchant_key, canonical_name)
     matches = []
     for rule in rules:
@@ -119,16 +149,25 @@ def score_category_rule_match(
                 )
             )
 
+    return matches
+
+
+def select_winning_rule_match(matches):
+    """Return the winning match using the existing rule precedence model."""
     if not matches:
         return None
-
     return max(
         matches,
-        key=lambda match: (
-            match.confidence,
-            match.match_score,
-            rule_specificity(match.rule),
-        ),
+        key=rule_match_precedence_key,
+    )
+
+
+def rule_match_precedence_key(match):
+    """Return the precedence tuple used to select the winning rule match."""
+    return (
+        match.confidence,
+        match.match_score,
+        match.specificity,
     )
 
 

@@ -1,10 +1,10 @@
-function ajaxRefreshTargetSelector(form) {
-    const explicitSelector = form.dataset.ajaxRefreshTarget;
+function ajaxRefreshTargetSelector(element) {
+    const explicitSelector = element.dataset.ajaxRefreshTarget;
     if (explicitSelector) {
         return explicitSelector;
     }
 
-    const target = form.closest("[data-ajax-refresh-target]");
+    const target = element.closest("[data-ajax-refresh-target]");
     if (!target) {
         return "";
     }
@@ -101,14 +101,22 @@ function updateAjaxRefreshUrl(url) {
 
 function runAjaxRefreshInitializers(root = document) {
     setupAjaxRefreshForms(root);
+    setupAjaxRefreshLinks(root);
     window.setupTooltips?.();
+    window.setupJobsAutoRefresh?.(root);
+    window.setupAiJobProgressPolling?.(root);
     window.setupTagMultiselects?.(root);
     window.setupRuleSaveModeControls?.(root);
     window.setupRuleAmountControls?.(root);
     window.setupRulePreviewForms?.(root);
+    window.setupRuleTableActions?.(root);
     window.setupReviewTransactionSelectors?.(root);
     window.setupTableRowInteractions?.(root);
+    window.setupCollapseToggleLabels?.(root);
+    window.setupAuditSectionLinks?.(root);
+    window.openAuditSectionFromLocation?.(root);
     window.setupSortableTables?.(root);
+    window.setupPaginatedTables?.(root);
     window.setupUploadAccountBehavior?.();
 }
 
@@ -220,18 +228,27 @@ async function submitAjaxRefreshForm(form, submitter) {
         control.disabled = true;
     });
     form.setAttribute("aria-busy", "true");
+    const method = (form.method || "POST").toUpperCase();
 
     try {
-        const response = await fetch(form.action || window.location.href, {
-            method: (form.method || "POST").toUpperCase(),
-            body: formData,
+        const actionUrl = new URL(form.action || window.location.href, window.location.href);
+        const fetchOptions = {
+            method,
             headers: {
                 "X-Requested-With": "fetch",
                 "X-CSRF-Token": getCsrfToken(),
             },
             credentials: "same-origin",
             redirect: "follow",
-        });
+        };
+
+        if (method === "GET") {
+            actionUrl.search = new URLSearchParams(formData).toString();
+        } else {
+            fetchOptions.body = formData;
+        }
+
+        const response = await fetch(actionUrl, fetchOptions);
         await handleAjaxRefreshResponse(response, form, selector);
     } catch (error) {
         showAjaxRefreshError(
@@ -247,6 +264,64 @@ async function submitAjaxRefreshForm(form, submitter) {
             form.removeAttribute("aria-busy");
         }
     }
+}
+
+function setupAjaxRefreshLinks(root = document) {
+    const links = Array.from(root.querySelectorAll("a[data-ajax-refresh-link]"));
+
+    links.forEach((link) => {
+        if (link.dataset.ajaxRefreshLinkReady === "true") {
+            return;
+        }
+
+        link.dataset.ajaxRefreshLinkReady = "true";
+        link.addEventListener("click", async (event) => {
+            if (
+                event.defaultPrevented
+                || event.button !== 0
+                || event.metaKey
+                || event.ctrlKey
+                || event.shiftKey
+                || event.altKey
+                || link.target
+                || link.hasAttribute("download")
+            ) {
+                return;
+            }
+
+            const selector = link.dataset.ajaxRefreshTarget || ajaxRefreshTargetSelector(link);
+            if (!selector) {
+                return;
+            }
+
+            const url = new URL(link.href, window.location.href);
+            if (url.origin !== window.location.origin) {
+                return;
+            }
+
+            event.preventDefault();
+            const target = link.closest("[data-ajax-refresh-target]") || ajaxRefreshTargetElements(selector)[0];
+            target?.setAttribute("aria-busy", "true");
+            link.setAttribute("aria-disabled", "true");
+
+            try {
+                await ajaxRefreshFromUrl(url, selector);
+            } catch (error) {
+                showAjaxRefreshError(
+                    target || link,
+                    selector,
+                    error?.message || "The page section could not be refreshed."
+                );
+            } finally {
+                if (document.body.contains(link)) {
+                    link.removeAttribute("aria-disabled");
+                }
+                if (target && document.body.contains(target)) {
+                    target.removeAttribute("aria-busy");
+                }
+            }
+        });
+    });
 }
 
 function setupAjaxRefreshForms(root = document) {

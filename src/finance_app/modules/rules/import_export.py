@@ -3,6 +3,7 @@
 import csv
 import io
 import re
+from dataclasses import dataclass
 
 from sqlalchemy import case, delete, func, select, update
 
@@ -30,6 +31,8 @@ from .repository import (
     insert_imported_rule,
     remove_imported_categories,
     restore_category_rules,
+    resolve_rule_account_id,
+    resolve_rule_merchant_id,
     rule_reference_count,
     rule_snapshots_equal,
     snapshot_category_rules,
@@ -54,6 +57,33 @@ RULE_EXPORT_COLUMNS = (
     "created_at",
 )
 RULE_SOURCE_VALUES = set(IMPORTABLE_CATEGORY_RULE_SOURCES)
+
+
+@dataclass(frozen=True)
+class RuleImportPreview:
+    """Represent a read-only rule import plan.
+
+    Attributes:
+        mode: Import mode that will be used if the preview is confirmed.
+        total_rows: Parsed non-empty CSV rows.
+        proposed_rules: Rules that would be inserted by the import.
+        skipped_existing: Add-mode rows skipped because an equivalent rule
+            already exists.
+        skipped_duplicate: Rows skipped because the same import key appears
+            earlier in the file.
+        replaced_rules: Override-mode count of current rules that would be
+            removed before import.
+        cleared_transaction_rule_refs: Override-mode transaction rule
+            references that would be cleared.
+    """
+
+    mode: str
+    total_rows: int
+    proposed_rules: tuple[dict, ...]
+    skipped_existing: int = 0
+    skipped_duplicate: int = 0
+    replaced_rules: int = 0
+    cleared_transaction_rule_refs: int = 0
 
 
 def export_rules_csv(conn=None):
@@ -145,6 +175,124 @@ def import_rules_job(raw_text, mode, undo_state):
             return import_rules_override(conn, imported_rules, undo_state)
 
         return import_rules_add(conn, imported_rules, undo_state)
+
+
+def preview_rules_import(conn, raw_text, mode):
+    """Return a read-only import plan using the normal import parser.
+
+    Args:
+        conn: Open SQLAlchemy Core connection used for current-rule checks and
+            account or merchant resolution.
+        raw_text: Uploaded CSV text.
+        mode: Import mode, either add or override.
+
+    Returns:
+        A RuleImportPreview describing rows that would be imported, skipped, or
+        replaced. The function does not write rules, categories, or merchants.
+
+    Raises:
+        ValueError: If the mode or CSV content is invalid.
+    """
+    if mode not in RULE_IMPORT_MODES:
+        raise ValueError("Choose whether to add new rules or override existing rules.")
+
+    imported_rules = parse_rules_csv(raw_text)
+    if not imported_rules:
+        raise ValueError("No importable rules were found.")
+
+    if mode == RULE_IMPORT_MODE_OVERRIDE:
+        return preview_rules_import_override(conn, imported_rules)
+
+    return preview_rules_import_add(conn, imported_rules)
+
+
+def preview_rules_import_add(conn, imported_rules):
+    """Return a read-only add-mode import plan."""
+    proposed_rules = []
+    skipped_existing = 0
+    skipped_duplicate = 0
+    seen_keys = set()
+
+    for index, rule in enumerate(imported_rules, start=1):
+        key = rule_import_key(rule)
+        if key in seen_keys:
+            skipped_duplicate += 1
+            continue
+        seen_keys.add(key)
+
+        if category_rule_exists(conn, rule):
+            skipped_existing += 1
+            continue
+
+        proposed_rules.append(preview_imported_rule(conn, rule, -index))
+
+    return RuleImportPreview(
+        mode=RULE_IMPORT_MODE_ADD,
+        total_rows=len(imported_rules),
+        proposed_rules=tuple(proposed_rules),
+        skipped_existing=skipped_existing,
+        skipped_duplicate=skipped_duplicate,
+    )
+
+
+def preview_rules_import_override(conn, imported_rules):
+    """Return a read-only override-mode import plan."""
+    proposed_rules = []
+    skipped_duplicate = 0
+    seen_keys = set()
+
+    for index, rule in enumerate(imported_rules, start=1):
+        key = rule_import_key(rule)
+        if key in seen_keys:
+            skipped_duplicate += 1
+            continue
+        seen_keys.add(key)
+        proposed_rules.append(preview_imported_rule(conn, rule, -index))
+
+    replaced_rules = conn.execute(
+        select(func.count()).select_from(category_rules_table)
+    ).scalar_one()
+    cleared_refs = conn.execute(
+        select(func.count())
+        .select_from(transactions_table)
+        .where(transactions_table.c.category_rule_id.is_not(None))
+    ).scalar_one()
+    return RuleImportPreview(
+        mode=RULE_IMPORT_MODE_OVERRIDE,
+        total_rows=len(imported_rules),
+        proposed_rules=tuple(proposed_rules),
+        skipped_duplicate=skipped_duplicate,
+        replaced_rules=replaced_rules,
+        cleared_transaction_rule_refs=cleared_refs,
+    )
+
+
+def preview_imported_rule(conn, rule, synthetic_id):
+    """Return an import rule mapping suitable for read-only matching.
+
+    Merchant-bound imports that reference a new merchant receive a synthetic
+    negative merchant id so preview matching mirrors the future stored rule: it
+    will not keyword-match unrelated existing transactions.
+    """
+    merchant_id = resolve_rule_merchant_id(conn, rule, create=False)
+    if merchant_id is None and str(rule.get("merchant_name") or "").strip():
+        merchant_id = synthetic_id
+
+    return {
+        "id": synthetic_id,
+        "account_id": resolve_rule_account_id(conn, rule, require_existing=True),
+        "merchant_id": merchant_id,
+        "merchant_name": rule.get("merchant_name") or "",
+        "keyword": rule["keyword"],
+        "category": rule["category"],
+        "category_id": None,
+        "amount_min": rule.get("amount_min"),
+        "amount_max": rule.get("amount_max"),
+        "direction": rule.get("direction") or CATEGORY_RULE_DIRECTION_ANY,
+        "source": rule["source"],
+        "ai_approved": int(rule.get("ai_approved") or 0),
+        "tags": list(rule.get("tags") or []),
+    }
 
 
 def import_rules_add(conn, imported_rules, undo_state):

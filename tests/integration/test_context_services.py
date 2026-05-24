@@ -211,6 +211,31 @@ def seed_dashboard_unknown_only(conn):
     conn.commit()
 
 
+def seed_dashboard_review_queue_data(conn):
+    """Seed dashboard data with both UNKNOWN and categorized review candidates."""
+    rows = [
+        ("2026-08-01", "Unknown Market", 20.00, "UNKNOWN", 1, "unknown", "dashboard-review-unknown"),
+        ("2026-08-02", "Low Confidence Cafe", 30.00, "Food", 1, "ai", "dashboard-review-food"),
+        ("2026-08-03", "Approved Grocery", 40.00, "Food", 0, "rule", "dashboard-review-approved"),
+    ]
+    conn.executemany(
+        """
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            category_source,
+            fingerprint
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+    conn.commit()
+
+
 def seed_reimbursable_dashboard_data(conn):
     """Seed tagged expenses and reimbursement credits for dashboard cash flow."""
     rows = [
@@ -514,7 +539,7 @@ def test_dashboard_context_totals_filters_custom_dates_and_sorting(app, db_conn)
     assert context["uncategorized_count"] == 0
     assert context["data_quality"]["transaction_count"] == 5
     assert context["data_quality"]["quality_score"] == 80
-    assert context["data_quality"]["review_label"] == "Review 1 unknown transaction"
+    assert context["data_quality"]["review_label"] == "Review 1 transaction needing review"
     assert context["data_quality"]["level"] == "warning"
     assert "quick_view=categorized" not in context["data_quality"]["categorized_url"]
     insights = context["dashboard_insights"]
@@ -914,8 +939,28 @@ def test_dashboard_context_handles_all_unknown_quick_view(app, db_conn):
     assert context["category_rows"] == []
     assert context["category_labels"] == []
     assert context["data_quality"]["level"] == "danger"
-    assert context["data_quality"]["review_label"] == "Review 2 unknown transactions"
+    assert context["data_quality"]["review_label"] == "Review 2 transactions needing review"
     assert quick_view_count(context, "unknown") == 2
+
+
+def test_dashboard_review_cta_uses_full_review_queue_count(app, db_conn):
+    """Verify dashboard review CTA counts all rows that the Review page will show."""
+    seed_dashboard_review_queue_data(db_conn)
+    args = MultiDict(
+        [
+            ("period", "custom"),
+            ("date_from", "2026-08-01"),
+            ("date_to", "2026-08-31"),
+        ]
+    )
+
+    with app.test_request_context("/dashboard"):
+        context = build_dashboard_context(args)
+
+    assert quick_view_count(context, "unknown") == 1
+    assert quick_view_count(context, "needs_review") == 2
+    assert context["data_quality"]["review_label"] == "Review 2 transactions needing review"
+    assert context["data_quality"]["review_url"] == "/review"
 
 
 def test_dashboard_context_calculates_previous_period_merchant_deltas(app, db_conn):

@@ -986,6 +986,12 @@ def test_request_llm_categories_handles_api_exceptions_and_sanitizes_logs(monkey
         )
 
     assert results == []
+    status = llm.last_llm_request_status()
+    assert status["status"] == "request_error"
+    assert status["error_type"] == "TimeoutError"
+    assert status["requested_count"] == 1
+    assert "sk-testsecret123" not in status["detail"]
+    assert "sk-***" in status["detail"]
     assert "OpenAI categorization request failed: TimeoutError" in caplog.text
     assert "sk-testsecret123" not in caplog.text
     assert "sk-***" in caplog.text

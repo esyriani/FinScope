@@ -45,8 +45,8 @@
 
 <div class="page-header">
     <div>
-        <h2 class="mb-1">{{ _("Review categories") }}</h2>
-        <p class="text-muted mb-0">{{ _("Grouped active transactions waiting for category review.") }}</p>
+        <h2 class="mb-1">{{ _("Bulk category review") }}</h2>
+        <p class="text-muted mb-0">{{ _("Categorize grouped transactions and optionally save rules for future matches.") }}</p>
     </div>
     <div class="home-actions">
         <a class="btn btn-outline-secondary" href="{{ url_for('transactions.transactions', review='needs_review', period='all') }}"><i class="bi bi-receipt" aria-hidden="true"></i>{{ _("Transactions") }}</a>
@@ -135,7 +135,7 @@
                     <tr>
                         <th>
                             <a class="sort-link" href="{{ review_sort_url('merchant') if review_sort_url else url_for('review.review', sort='merchant', direction='asc') }}">
-                                <span>{{ _("Merchant") }}</span>{% if sort == "merchant" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                                <span>{{ _("Merchant group") }}</span>{% if sort == "merchant" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
                             </a>
                         </th>
                         <th>
@@ -199,7 +199,7 @@
                                     data-bs-toggle="modal"
                                     data-bs-target="#review-group-{{ loop.index }}"
                                 >
-                                    <i class="bi bi-check2-square" aria-hidden="true"></i>{{ _("Review") }}
+                                    <i class="bi bi-check2-square" aria-hidden="true"></i>{{ _("Review group") }}
                                 </button>
                             </div>
                         </td>

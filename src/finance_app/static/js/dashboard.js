@@ -20,7 +20,7 @@ function setupDashboardDrilldownInteractions() {
     if (!scope) return;
 
     const drilldownLinks = scope.querySelectorAll(
-        ".metric-card[href], .status-strip a[href], .quality-panel a[href], .dashboard-grid table tbody a[href]"
+        ".metric-card[href], .status-strip a[href], .dashboard-grid table tbody a[href]"
     );
 
     drilldownLinks.forEach((link) => {

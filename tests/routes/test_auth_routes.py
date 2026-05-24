@@ -2,6 +2,7 @@
 
 from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_OWNER, USER_ROLE_VIEWER
 from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from finance_app.core.filters import format_datetime
 from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.auth.service import create_managed_user, hash_password, utc_now
 
@@ -262,7 +263,7 @@ def test_owner_user_management_and_last_owner_guard(client, db_conn):
 
     users_html = client.get("/admin/users").get_data(as_text=True)
     assert "Owner password must be changed from the Account page." in users_html
-    assert "17-May-2026 14:42:11" in users_html
+    assert format_datetime("2026-05-17T14:42:11Z") in users_html
     assert f"/admin/users/{owner['id']}/reset-password" not in users_html
     assert f"/admin/users/{owner['id']}/deactivate" not in users_html
     assert 'value="owner"' not in users_html

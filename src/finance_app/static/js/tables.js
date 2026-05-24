@@ -53,8 +53,90 @@ function setupTableRowInteractions(root = document) {
     });
 }
 
+function setupCollapseToggleLabels(root = document) {
+    root.querySelectorAll("[data-collapse-label-toggle]").forEach((button) => {
+        if (button.dataset.collapseLabelReady === "true") {
+            return;
+        }
+
+        button.dataset.collapseLabelReady = "true";
+        const targetSelector = button.getAttribute("data-bs-target") || button.getAttribute("href");
+        const target = targetSelector ? document.querySelector(targetSelector) : null;
+        const icon = button.querySelector("[data-collapse-toggle-icon]");
+        const label = button.querySelector("[data-collapse-toggle-label]");
+        const showLabel = button.dataset.showLabel || "Show table";
+        const hideLabel = button.dataset.hideLabel || "Hide table";
+
+        function setExpanded(expanded) {
+            button.setAttribute("aria-expanded", expanded ? "true" : "false");
+            if (label) {
+                label.textContent = expanded ? hideLabel : showLabel;
+            }
+            if (icon) {
+                icon.classList.toggle("bi-chevron-down", !expanded);
+                icon.classList.toggle("bi-chevron-up", expanded);
+            }
+        }
+
+        setExpanded(target?.classList.contains("show") || button.getAttribute("aria-expanded") === "true");
+        target?.addEventListener("shown.bs.collapse", () => setExpanded(true));
+        target?.addEventListener("hidden.bs.collapse", () => setExpanded(false));
+    });
+}
+
+function setupAuditSectionLinks(root = document) {
+    root.querySelectorAll("[data-audit-open-section]").forEach((link) => {
+        if (link.dataset.auditOpenSectionReady === "true") {
+            return;
+        }
+
+        link.dataset.auditOpenSectionReady = "true";
+        link.addEventListener("click", (event) => {
+            const targetSelector = link.dataset.auditOpenSection || link.getAttribute("href");
+            const target = targetSelector ? document.querySelector(targetSelector) : null;
+            if (!target) {
+                return;
+            }
+
+            event.preventDefault();
+            if (target.classList.contains("collapse") && window.bootstrap?.Collapse) {
+                window.bootstrap.Collapse.getOrCreateInstance(target, { toggle: false }).show();
+            }
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+            if (target.id) {
+                window.history.replaceState(window.history.state, "", `#${target.id}`);
+            }
+        });
+    });
+}
+
+function openAuditSectionFromLocation(root = document) {
+    const params = new URL(window.location.href).searchParams;
+    const sectionId = params.get("open") || window.location.hash.replace(/^#/, "");
+    if (!sectionId) {
+        return;
+    }
+
+    const escapedSectionId = window.CSS?.escape
+        ? CSS.escape(sectionId)
+        : sectionId.replaceAll('"', '\\"');
+    const target = root.querySelector(`#${escapedSectionId}`) || document.getElementById(sectionId);
+    if (!target || !target.classList.contains("collapse")) {
+        return;
+    }
+
+    if (window.bootstrap?.Collapse) {
+        window.bootstrap.Collapse.getOrCreateInstance(target, { toggle: false }).show();
+    } else {
+        target.classList.add("show");
+    }
+}
+
 setupDashboardDrilldownInteractions();
 setupTableRowInteractions();
+setupCollapseToggleLabels();
+setupAuditSectionLinks();
+openAuditSectionFromLocation();
 
 function setupSortableTables(root = document) {
     const tables = Array.from(root.querySelectorAll("[data-sortable-table]"));
@@ -117,9 +199,160 @@ function setupSortableTables(root = document) {
 
                 [...sortableRows, ...ignoredRows].forEach((row) => tbody.appendChild(row));
                 setSortIcon(button, nextDirection);
+                table.dispatchEvent(new CustomEvent("finance:table-sorted"));
             });
         });
     });
 }
 
 setupSortableTables();
+
+function translateTableMessage(message, variables = {}) {
+    const translator = window.financeTranslate;
+    if (typeof translator === "function") {
+        return translator(message, variables);
+    }
+
+    return Object.entries(variables).reduce(
+        (result, entry) => result.replaceAll(`{${entry[0]}}`, String(entry[1])),
+        message
+    );
+}
+
+function setupPaginatedTables(root = document) {
+    const tables = Array.from(root.querySelectorAll("[data-paginated-table]"));
+
+    tables.forEach((table) => {
+        if (table.dataset.paginatedTableReady === "true") {
+            return;
+        }
+
+        const tbody = table.tBodies[0];
+        if (!tbody) {
+            return;
+        }
+
+        table.dataset.paginatedTableReady = "true";
+        const pageSize = Math.max(1, Number(table.dataset.pageSize || 25) || 25);
+        const state = { page: 1 };
+        const footer = document.createElement("div");
+        footer.className = "table-pagination-footer d-flex flex-wrap justify-content-between align-items-center gap-3";
+        const status = document.createElement("div");
+        status.className = "text-muted";
+        const nav = document.createElement("nav");
+        nav.setAttribute("aria-label", table.dataset.paginationLabel || "Table pages");
+        const pagination = document.createElement("ul");
+        pagination.className = "pagination mb-0";
+
+        nav.appendChild(pagination);
+        footer.append(status, nav);
+        (table.closest(".table-responsive") || table).insertAdjacentElement("afterend", footer);
+
+        function tableRows() {
+            return Array.from(tbody.rows).filter((row) => !row.hasAttribute("data-sort-ignore"));
+        }
+
+        function totalPages(totalRows) {
+            return Math.max(1, Math.ceil(totalRows / pageSize));
+        }
+
+        function setPage(pageNumber) {
+            state.page = Math.min(Math.max(1, pageNumber), totalPages(tableRows().length));
+            render();
+        }
+
+        function addPageButton(label, pageNumber, options = {}) {
+            const item = document.createElement("li");
+            item.className = `page-item${options.active ? " active" : ""}${options.disabled ? " disabled" : ""}`;
+            const button = document.createElement("button");
+            button.className = "page-link";
+            button.type = "button";
+            button.textContent = label;
+            button.disabled = Boolean(options.disabled);
+            if (options.active) {
+                button.setAttribute("aria-current", "page");
+            }
+            button.addEventListener("click", () => setPage(pageNumber));
+            item.appendChild(button);
+            pagination.appendChild(item);
+        }
+
+        function addEllipsis() {
+            const item = document.createElement("li");
+            item.className = "page-item disabled";
+            const marker = document.createElement("span");
+            marker.className = "page-link";
+            marker.textContent = "...";
+            item.appendChild(marker);
+            pagination.appendChild(item);
+        }
+
+        function visiblePageNumbers(pageCount) {
+            const pages = new Set([1, pageCount]);
+            for (let page = state.page - 2; page <= state.page + 2; page += 1) {
+                if (page >= 1 && page <= pageCount) {
+                    pages.add(page);
+                }
+            }
+            return Array.from(pages).sort((left, right) => left - right);
+        }
+
+        function render() {
+            const rows = tableRows();
+            const totalRows = rows.length;
+            const pageCount = totalPages(totalRows);
+            state.page = Math.min(state.page, pageCount);
+            const startIndex = totalRows ? (state.page - 1) * pageSize : 0;
+            const endIndex = Math.min(startIndex + pageSize, totalRows);
+
+            rows.forEach((row, index) => {
+                row.hidden = totalRows > pageSize && (index < startIndex || index >= endIndex);
+            });
+
+            footer.hidden = totalRows <= pageSize;
+            if (footer.hidden) {
+                return;
+            }
+
+            status.textContent = translateTableMessage(
+                "Showing {start}-{end} of {total} rows",
+                {
+                    start: startIndex + 1,
+                    end: endIndex,
+                    total: totalRows,
+                }
+            );
+            pagination.replaceChildren();
+            addPageButton(translateTableMessage("Previous"), state.page - 1, {
+                disabled: state.page <= 1,
+            });
+
+            let previousPage = 0;
+            visiblePageNumbers(pageCount).forEach((pageNumber) => {
+                if (previousPage && pageNumber - previousPage > 1) {
+                    addEllipsis();
+                }
+                addPageButton(String(pageNumber), pageNumber, {
+                    active: pageNumber === state.page,
+                });
+                previousPage = pageNumber;
+            });
+
+            addPageButton(translateTableMessage("Next"), state.page + 1, {
+                disabled: state.page >= pageCount,
+            });
+        }
+
+        table.addEventListener("finance:table-sorted", () => {
+            state.page = 1;
+            render();
+        });
+        render();
+    });
+}
+
+setupPaginatedTables();
+
+window.setupCollapseToggleLabels = setupCollapseToggleLabels;
+window.setupAuditSectionLinks = setupAuditSectionLinks;
+window.openAuditSectionFromLocation = openAuditSectionFromLocation;

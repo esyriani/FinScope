@@ -178,6 +178,7 @@ def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(clie
         "/rules/create",
         data={
             CSRF_FIELD_NAME: set_csrf_token(client),
+            "confirm_preview": "1",
             "keyword": "Smoke Grocery",
             "category": "Food",
             "tags": ["Tax"],

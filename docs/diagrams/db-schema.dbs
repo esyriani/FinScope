@@ -71,7 +71,7 @@
 			<index name="uq_categories_builtin_key" unique="UNIQUE_KEY" >
 				<column name="builtin_key" />
 			</index>
-			<index name="idx_categories_name" unique="NORMAL" >
+			<index name="idx_categories_name" unique="UNIQUE_KEY" >
 				<column name="name" />
 			</index>
 			<constraint name="ck_categories_categories_name_non_empty" type="CHECK" options="" >
@@ -342,16 +342,6 @@
 				<fk_column name="merchant_id" pk="id" />
 			</fk>
 		</table>
-		<table name="settings" spec="" >
-			<column name="key" type="TEXT" length="255" mandatory="y" />
-			<column name="value" type="TEXT" mandatory="y" />
-			<index name="pk_settings" unique="PRIMARY_KEY" >
-				<column name="key" />
-			</index>
-			<constraint name="ck_settings_settings_key_non_empty" type="CHECK" options="" >
-				<string><![CDATA[trim("key") != '']]></string>
-			</constraint>
-		</table>
 		<table name="statement_types" spec="" >
 			<column name="id" type="INTEGER" mandatory="y" >
 				<identity><![CDATA[AUTOINCREMENT]]></identity>
@@ -494,7 +484,7 @@
 			<index name="pk_tags" unique="PRIMARY_KEY" >
 				<column name="id" />
 			</index>
-			<index name="idx_tags_name" unique="NORMAL" >
+			<index name="idx_tags_name" unique="UNIQUE_KEY" >
 				<column name="name" />
 			</index>
 			<constraint name="ck_tags_tags_name_non_empty" type="CHECK" options="" >

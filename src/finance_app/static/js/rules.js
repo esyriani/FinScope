@@ -344,3 +344,4 @@ function setupRuleTableActions(root = document) {
 }
 
 setupRuleTableActions();
+window.setupRuleTableActions = setupRuleTableActions;

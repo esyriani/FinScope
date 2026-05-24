@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from threading import local
 
 from sqlalchemy import func, select
 
@@ -47,11 +48,27 @@ from finance_app.modules.settings.runtime import get_setting
 
 
 logger = logging.getLogger(__name__)
+_request_context = local()
 LLM_BATCH_SIZE = 20
 LLM_TIMEOUT_SECONDS = 60
 COMMON_CATEGORY_LIMIT = 6
 MAX_CANDIDATE_CATEGORIES = 10
 MAX_CANDIDATE_TAGS = 16
+
+
+def clear_llm_request_status():
+    """Clear the thread-local status for the next LLM categorization request."""
+    _request_context.status = {"status": "not_requested"}
+
+
+def last_llm_request_status():
+    """Return the last thread-local LLM request status for progress logging."""
+    return dict(getattr(_request_context, "status", {"status": "not_requested"}))
+
+
+def record_llm_request_status(status, **fields):
+    """Record thread-local LLM request status details."""
+    _request_context.status = {"status": status, **fields}
 
 
 def chunked(items, size):
@@ -743,14 +760,28 @@ def request_llm_categories(
     verify_threshold,
 ):
     """Request llm categories."""
+    requested_count = len(unknown_items)
+    record_llm_request_status("started", requested_count=requested_count)
     if not settings.openai_api_key:
         logger.info("OpenAI API key is not configured; keeping unknown categories unchanged.")
+        record_llm_request_status(
+            "configuration_missing",
+            requested_count=requested_count,
+            error_type="Configuration",
+            detail="OpenAI API key is not configured.",
+        )
         return []
 
     try:
         from openai import OpenAI
     except ImportError:
         logger.warning("OpenAI package is not installed; keeping unknown categories unchanged.")
+        record_llm_request_status(
+            "dependency_missing",
+            requested_count=requested_count,
+            error_type="ImportError",
+            detail="OpenAI package is not installed.",
+        )
         return []
 
     system_prompt = build_llm_system_prompt(category_rows, tag_rows, verify_threshold)
@@ -781,19 +812,43 @@ def request_llm_categories(
         payload = json.loads(content)
     except json.JSONDecodeError as exc:
         logger.warning("OpenAI categorization response was not valid JSON: %s", exc)
+        record_llm_request_status(
+            "invalid_json",
+            requested_count=requested_count,
+            error_type=type(exc).__name__,
+            detail=str(exc),
+        )
         return []
     except Exception as exc:
+        detail = sanitize_openai_error(exc)
         logger.warning(
             "OpenAI categorization request failed: %s: %s",
             type(exc).__name__,
-            sanitize_openai_error(exc),
+            detail,
+        )
+        record_llm_request_status(
+            "request_error",
+            requested_count=requested_count,
+            error_type=type(exc).__name__,
+            detail=detail,
         )
         return []
 
     results = payload.get("results")
     if not isinstance(results, list):
         logger.warning("OpenAI categorization response did not include a results list.")
+        record_llm_request_status(
+            "invalid_response",
+            requested_count=requested_count,
+            error_type="Invalid response",
+            detail="The response did not include a results list.",
+        )
         return []
+    record_llm_request_status(
+        "ok",
+        requested_count=requested_count,
+        result_count=len(results),
+    )
     return results if isinstance(results, list) else []
 
 

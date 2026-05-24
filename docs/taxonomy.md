@@ -157,6 +157,18 @@ Rule priority is deterministic. Higher-priority rules are evaluated first based 
 4. account-scoped and direction-scoped rules,
 5. longer keywords vs shorter keywords.
 
+### Rule audit
+
+Rule audit is the diagnostic surface for category-rule behavior. It uses the same matcher and deterministic precedence model as imports, apply-all, and selected-rule application, but exposes all matching rules rather than only the winner.
+
+The main audit page reports overlap pairs, harmless overlaps, category conflicts, tag differences, shadowed rules, stale or unused rules, and specificity or precedence warnings. Detail pages show the shared transactions behind an overlap, the winning rule, losing rule matches, confidence, match score, specificity, current stored category and tags, and whether the winner agrees with the stored category.
+
+Rule changes remain preview-first. Creating, editing, deleting, approving, applying all rules, applying a selected rule where it would normally win, force-applying a selected rule, and importing rules all render a read-only impact preview before any mutation is allowed. The preview groups transaction-level effects by category changes, tag changes, winning-rule-only changes, and no material changes.
+
+FinScope is single-tenant: all authenticated users with rule-management permission audit the same shared finance dataset for the deployment. The audit intentionally does not filter by per-user transaction ownership because transactions and rules are not workspace-scoped in the current schema. Use a separate deployment and database for separate finance workspaces.
+
+For large histories, the `rule_audit_transaction_limit` setting caps the newest historical transactions analyzed. Pages show a limited-audit notice when more eligible rows exist than the configured cap.
+
 
 ### Historical categorization
 
@@ -169,6 +181,13 @@ High-confidence matches require strong agreement across similar transactions bef
 
 Automatic and manual category writes persist compact JSON evidence in `transactions.category_metadata`. The metadata uses a controlled audit `decision_source`: `rule`, `similar_transactions`, `llm`, `llm_with_similar_transactions`, `combined`, `manual`, or `unknown`.
 
-LLM categorization is optional and requires `OPENAI_API_KEY`
+LLM categorization is optional and requires `OPENAI_API_KEY`.
 The LLM receives unresolved transactions, rule evidence, historical evidence, a compact candidate taxonomy, and candidate tags/categories.
 The prompt contract requires category IDs and tag IDs from the candidate taxonomy. Returned results are validated conservatively: invalid JSON, invalid category IDs, invalid tag IDs, invalid confidence values, low-confidence results, or inconsistent evidence remain categorized as `Unknown` or are marked for review according to the shared confidence policy.
+
+LLM categorization is operationally separate from statement import. Imports apply
+rules and historical evidence first, then optionally queue AI categorization for
+remaining unknown rows. Owners can pause automatic AI queueing from Settings and
+rerun AI manually from Jobs or from an uploaded statement. Reruns only target
+active transactions that are still null or `UNKNOWN`, so existing manual,
+rule-based, historical, transfer, and accepted AI categories are not overwritten.

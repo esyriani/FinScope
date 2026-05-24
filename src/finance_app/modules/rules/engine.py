@@ -247,6 +247,78 @@ def apply_single_rule_to_transactions(conn, rule):
     return updated_count
 
 
+def apply_rule_where_it_wins_to_transactions(conn, rule):
+    """Apply one rule only to transactions where it wins normal precedence.
+
+    Uses the current category rule matcher to select the normal winning rule
+    for each active transaction, then updates only rows where the selected
+    rule is that winner. The caller owns the database transaction and receives
+    the number of changed transaction rows.
+    """
+    selected_rule_id = rule["id"] if "id" in rule.keys() else rule.get("id")
+    updated_count = 0
+    unknown_category = get_unknown_category(conn)
+    rules = get_category_rules(conn)
+    rows = active_transaction_rows(conn, rules=rules)
+
+    for row in rows:
+        normalized_merchant = normalize_merchant(row["description"], conn=conn)
+        winning_rule = match_category_rule(
+            normalized_merchant.cleaned_key,
+            money_to_float(row["amount"]),
+            rules,
+            canonical_name=normalized_merchant.canonical_name,
+            merchant_id=row["merchant_id"],
+            account_id=row["account_id"],
+            transaction_kind=row["transaction_kind"],
+        )
+        winning_rule_id = winning_rule["id"] if winning_rule and "id" in winning_rule.keys() else None
+        if winning_rule_id != selected_rule_id:
+            continue
+
+        category_id = (
+            rule["category_id"]
+            if "category_id" in rule.keys() and rule["category_id"] is not None
+            else resolve_category_id(conn, rule["category"])
+        )
+        state = TransactionCategoryState(
+            category=rule["category"],
+            category_id=category_id,
+            needs_review=0,
+            assignment=category_assignment(
+                rule["category"],
+                unknown_category,
+                CATEGORY_SOURCE_RULE,
+                confidence=1.0,
+                rule_id=selected_rule_id,
+                metadata=rule_assignment_metadata(
+                    rule,
+                    rule["category"],
+                    rule.get("tags") or (),
+                    confidence=1.0,
+                    reason="single_rule_winning_application",
+                ),
+            ),
+            tags=tuple(rule.get("tags") or ()),
+        )
+        update_transaction_state(
+            conn,
+            row["id"],
+            state,
+            rule_transaction_kind(rule["category"], money_to_float(row["amount"]), row["transaction_kind"]),
+        )
+        set_transaction_tags(
+            conn,
+            row["id"],
+            list(state.tags),
+            source=state.assignment.category_source,
+            rule_id=state.assignment.category_rule_id,
+        )
+        updated_count += 1
+
+    return updated_count
+
+
 def apply_all_rules_to_transactions(conn, capture_undo=False):
     """Apply all rules to transactions."""
     rules = get_category_rules(conn)

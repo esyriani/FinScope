@@ -40,6 +40,11 @@ def parse_general_settings_form(form, app_settings):
             form.get("rule_preview_limit"),
             app_settings.default_rule_preview_limit,
         ),
+        "rule_audit_transaction_limit": parse_positive_int(
+            form.get("rule_audit_transaction_limit"),
+            app_settings.default_rule_audit_transaction_limit,
+            label="Rule audit transaction limit",
+        ),
         "theme_mode": normalize_theme_mode(form.get("theme_mode", THEME_MODE_DARK)),
         "ui_language": normalize_language(form.get("ui_language", app_settings.locale)),
     }
@@ -55,6 +60,9 @@ def parse_global_settings_form(form, app_settings):
         "verify_threshold": parse_probability(
             form.get("verify_threshold"),
             "Verify threshold",
+        ),
+        "auto_llm_categorization_enabled": parse_checkbox(
+            form.get("auto_llm_categorization_enabled")
         ),
         "openai_model": clean_openai_model(form.get("openai_model"))
         or app_settings.default_categorization_model,
@@ -131,6 +139,11 @@ def parse_non_negative_float(value, label):
         raise ValueError(f"{label} must be at least 0.")
 
     return parsed
+
+
+def parse_checkbox(value):
+    """Return whether a checkbox-style form value is enabled."""
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def format_probability(value):
