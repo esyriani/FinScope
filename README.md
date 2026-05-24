@@ -11,7 +11,7 @@ FinScope is a single-tenant Flask application with owner-managed user access, sh
 > Project owner: Eugene Syriani  
 > Current deployment target: local desktop  
 > License: [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`)  
-> Last modification: 2026-05-20
+> Last modification: 2026-05-22
 
 ![FinScope splash screen](docs/img/splash.png)
 
@@ -48,6 +48,7 @@ $env:FINANCE_PORT = "5001"
 - Capture PDF statement text for review.
 - Deduplicate transactions with account-aware fingerprints.
 - Categorize transactions with rules, historical matches, manual edits, optional LLM assistance, and persisted decision evidence.
+- Control AI categorization separately from imports, including manual reruns for remaining unknown transactions.
 - Manage categories and tags from the admin taxonomy page.
 - Audit overlapping category rules, preview rule changes, import, export, apply, and undo supported rules and jobs.
 - Retry or reprocess stored statement imports without uploading the same file again.
@@ -71,6 +72,7 @@ $env:FINANCE_PORT = "5001"
 
 <ul style="list-style: none; padding-left: 0;">
   <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="18" /> Python 3.10+ <em>(developed and tested with Python 3.11.9)</em></li>
+  <li>tzdata for IANA timezone display on Windows and minimal hosts</li>
   <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/flask/flask-original.svg" width="18" /> Flask 3.1.3</li>
   <li>Flask-Login 0.6.3</li>
   <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/sqlite/sqlite-original.svg" width="18" /> SQLite 3.31+ <em>(developed and tested with SQLite 3.45.1)</em></li>
@@ -142,6 +144,7 @@ Common settings:
 | Setting | Environment variable | Purpose |
 | --- | --- | --- |
 | `app.secret_key` | `FINANCE_SECRET_KEY` | Flask session signing key. |
+| `app.timezone` | `FINANCE_TIMEZONE` | IANA timezone used for displaying UTC timestamps, such as `America/Toronto`. |
 | `database.url` | `FINANCE_DATABASE_URL` | SQLAlchemy database URL used by the runtime database layer. Leave blank to derive a SQLite URL from `database.path`. |
 | `database.path` | `FINANCE_DB_PATH` | SQLite database path. |
 | `server.host` | `FINANCE_HOST` | Flask bind host. |
@@ -219,6 +222,7 @@ Statement import type and account reporting role are intentionally separate. The
 8. Use Transactions, Review, and Jobs to inspect the result.
 9. If import processing fails, use Upload > Uploaded statements to retry from stored statement text.
 10. If parser behavior or statement settings changed, use Reprocess to clear that statement's imported transactions and import them again.
+11. If AI categorization is paused or was interrupted, use Jobs > Run AI on unknowns or Upload > Uploaded statements > Run AI to rerun categorization for remaining unknown transactions.
 
 Statement import type examples:
 
@@ -254,6 +258,12 @@ Rule sources are persisted as `manual` or `automatic`. The UI labels these as Ma
 3. Open a group and use Show all transactions when only some rows should be categorized differently.
 4. Assign categories and tags.
 5. Save reusable mappings as rules when appropriate.
+
+### Control AI categorization
+
+AI categorization runs in a separate background queue so OpenAI timeouts do not block statement imports, rule jobs, or review jobs. Owners can turn off automatic AI categorization after imports from Settings > Categorization. Unknown transactions remain available for manual reruns from Jobs or from an individual uploaded statement.
+
+Use Jobs to run AI on all active unknown transactions, cancel a queued or running AI job, or clear queued AI jobs. Running AI jobs stop cooperatively after the current batch. Manual reruns only target active transactions whose category is still unknown, so they do not overwrite manually reviewed or already categorized rows.
 
 ### Manage taxonomy
 

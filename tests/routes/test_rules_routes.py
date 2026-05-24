@@ -66,6 +66,12 @@ def rule_by_id(conn, rule_id):
     ).fetchone()
 
 
+def html_fragment_after(body, marker, length=500):
+    """Return a short HTML fragment after a marker for scoped assertions."""
+    start = body.index(marker)
+    return body[start:start + length]
+
+
 def set_default_table_page_size(conn, size):
     """Set the owner's default table page size for route rendering tests."""
     set_owner_setting(conn, "default_table_page_size", size)
@@ -151,13 +157,7 @@ def test_rules_create_route_requires_preview_confirmation(client, db_conn):
 
 def test_rules_route_renders_automatic_source_badge(client, db_conn):
     """Verify that automatic rules show the automatic source badge."""
-    db_conn.execute(
-        """
-        INSERT INTO category_rules (keyword, category, source)
-        VALUES ('METRO GROCERY', 'Food', 'automatic')
-        """
-    )
-    db_conn.commit()
+    rule_id = insert_rule(db_conn, keyword="METRO GROCERY", category="Food", source="automatic")
 
     response = client.get("/rules")
 
@@ -167,6 +167,8 @@ def test_rules_route_renders_automatic_source_badge(client, db_conn):
     assert b"Automatic" in response.data
     assert b"Suggested" in response.data
     assert b"Approve" in response.data
+    assert b"Preview approve" not in response.data
+    assert f'action="/rules/{rule_id}/approve"'.encode() in response.data
 
 
 def test_rules_route_links_to_rule_audit(client):
@@ -184,11 +186,53 @@ def test_rules_route_links_to_rule_audit(client):
     assert b"Preview create" in response.data
 
 
+def test_rules_route_uses_direct_delete_for_unapplied_rules(client, db_conn):
+    """Verify unapplied rules show a direct delete confirmation."""
+    rule_id = insert_rule(db_conn, keyword="UNUSED STORE", category="Food")
+
+    response = client.get("/rules")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert f'action="/rules/{rule_id}/delete"' in body
+    assert "This rule is not applied to any transactions." in body
+
+
+def test_rules_route_keeps_delete_preview_for_applied_rules(client, db_conn):
+    """Verify applied rules keep the delete impact preview action."""
+    rule_id = insert_rule(db_conn, keyword="APPLIED STORE", category="Food")
+    db_conn.execute(
+        """
+        INSERT INTO transactions (
+            tx_date, description, amount, category, category_source,
+            category_rule_id, needs_review, fingerprint
+        )
+        VALUES (
+            '2026-01-02', 'Applied Store', 12.34, 'Food', 'rule',
+            ?, 0, 'rules-page-applied-delete'
+        )
+        """,
+        (rule_id,),
+    )
+    db_conn.commit()
+
+    response = client.get("/rules")
+    body = response.get_data(as_text=True)
+    delete_modal = body.split(f'id="delete-rule-{rule_id}"', 1)[1]
+
+    assert response.status_code == 200
+    assert 'action="/rules/audit/preview"' in delete_modal
+    assert 'name="action" value="delete_rule"' in delete_modal
+    assert "Preview removal impact" in delete_modal
+
+
 def test_rules_audit_route_renders_summary_and_findings(client, db_conn):
     """Verify the rule audit route renders overlap, shadowed, and unused findings."""
     broad_rule_id = insert_rule(db_conn, keyword="METRO", category="Food")
     specific_rule_id = insert_rule(db_conn, keyword="METRO GROCERY", category="Utilities")
     insert_rule(db_conn, keyword="UNUSED SHOP", category="Food")
+    insert_rule(db_conn, keyword="AI SUGGESTED SHOP", category="Food", source="automatic")
+    insert_rule(db_conn, keyword="AI APPROVED SHOP", category="Food", source="automatic", ai_approved=1)
     db_conn.execute(
         """
         INSERT INTO transactions (
@@ -220,9 +264,13 @@ def test_rules_audit_route_renders_summary_and_findings(client, db_conn):
     assert b"METRO" in response.data
     assert b"METRO GROCERY" in response.data
     assert b"UNUSED SHOP" in response.data
+    assert b"Manual" in response.data
+    assert b"Suggested" in response.data
+    assert "Suggested" in html_fragment_after(body, "AI SUGGESTED SHOP")
+    assert "Approved" in html_fragment_after(body, "AI APPROVED SHOP")
     assert "Showing 1-1 of 1 findings" in body
     assert "overlap_sort=shared" in body
-    assert b"Preview removal impact" in response.data
+    assert b"Delete rule" in response.data
     assert b"Rule A" in response.data or b"Rule B" in response.data
     assert b"Rule detail" in response.data
     assert b"Recommended next step" in response.data
@@ -374,8 +422,14 @@ def test_rules_audit_route_limits_historical_transactions(client, db_conn):
 
 def test_rules_audit_overlap_route_renders_shared_transactions(client, db_conn):
     """Verify overlap detail shows shared transactions and match explanations."""
-    broad_rule_id = insert_rule(db_conn, keyword="METRO", category="Food")
-    specific_rule_id = insert_rule(db_conn, keyword="METRO GROCERY", category="Utilities")
+    broad_rule_id = insert_rule(db_conn, keyword="METRO", category="Food", source="automatic")
+    specific_rule_id = insert_rule(
+        db_conn,
+        keyword="METRO GROCERY",
+        category="Utilities",
+        source="automatic",
+        ai_approved=1,
+    )
     db_conn.execute(
         """
         INSERT INTO transactions (
@@ -392,6 +446,7 @@ def test_rules_audit_overlap_route_renders_shared_transactions(client, db_conn):
     db_conn.commit()
 
     response = client.get(f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}")
+    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert b"Shared matching transactions" in response.data
@@ -408,6 +463,10 @@ def test_rules_audit_overlap_route_renders_shared_transactions(client, db_conn):
     assert b"Specificity" in response.data
     assert b"More specific" in response.data
     assert b"Less specific" in response.data
+    assert b"Suggested" in response.data
+    assert b"Approved" in response.data
+    assert "Suggested" in html_fragment_after(body, '<div class="rule-keyword">METRO</div>')
+    assert "Approved" in html_fragment_after(body, '<div class="rule-keyword">METRO GROCERY</div>')
     assert b"Winner agrees" not in response.data
     assert b">No<" not in response.data
     assert f'href="/rules/audit/rule/{broad_rule_id}"'.encode() in response.data
@@ -815,10 +874,11 @@ def test_rules_audit_rule_route_renders_rule_diagnostics(client, db_conn):
     assert response.status_code == 200
     assert b"Rule detail" in response.data
     assert b"This page is read-only and does not change rule behavior." in response.data
-    assert b"Preview removal impact" in response.data
+    assert b"Delete rule" in response.data
     assert b"Preview apply where winner" in response.data
     assert b"Preview force apply" in response.data
     assert b"Rule summary" in response.data
+    assert b"Manual" in response.data
     assert b"Assessment" in response.data
     assert b"Recommended action" in response.data
     assert b"Historical matches" in response.data
@@ -835,6 +895,32 @@ def test_rules_audit_rule_route_renders_rule_diagnostics(client, db_conn):
         f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}".encode() in response.data
         or f"/rules/audit/overlap/{specific_rule_id}/{broad_rule_id}".encode() in response.data
     )
+
+
+def test_rules_audit_rule_route_renders_automatic_approval_status(client, db_conn):
+    """Verify automatic rule detail shows suggested or approved status."""
+    suggested_rule_id = insert_rule(
+        db_conn,
+        keyword="AI SUGGESTED DETAIL",
+        category="Food",
+        source="automatic",
+        ai_approved=0,
+    )
+    approved_rule_id = insert_rule(
+        db_conn,
+        keyword="AI APPROVED DETAIL",
+        category="Food",
+        source="automatic",
+        ai_approved=1,
+    )
+
+    suggested_response = client.get(f"/rules/audit/rule/{suggested_rule_id}")
+    approved_response = client.get(f"/rules/audit/rule/{approved_rule_id}")
+
+    assert suggested_response.status_code == 200
+    assert approved_response.status_code == 200
+    assert b"Suggested" in suggested_response.data
+    assert b"Approved" in approved_response.data
 
 
 def test_rules_route_renders_scope_selector_for_merchant_bound_rule(client, db_conn):
@@ -1072,28 +1158,8 @@ def test_rules_update_route_approves_automatic_rule_without_changing_source(clie
     assert tuple(rule[1:]) == ("AUTO STORE", "Utilities", None, None, "automatic", 1)
 
 
-def test_rules_approve_route_marks_automatic_rule_approved(client, db_conn):
-    """Verify the approve route marks only automatic rules approved."""
-    rule_id = insert_rule(db_conn, keyword="AUTO STORE", category="Food", source="automatic")
-
-    response = client.post(
-        f"/rules/{rule_id}/approve",
-        data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
-            "confirm_preview": "1",
-        },
-        follow_redirects=True,
-    )
-
-    rule = rule_by_id(db_conn, rule_id)
-    assert response.status_code == 200
-    assert b"Rule approved: AUTO STORE" in response.data
-    assert rule["source"] == "automatic"
-    assert rule["ai_approved"] == 1
-
-
-def test_rules_approve_route_requires_preview_confirmation(client, db_conn):
-    """Verify direct approval is blocked until preview confirmation."""
+def test_rules_approve_route_does_not_require_preview_confirmation(client, db_conn):
+    """Verify direct approval is allowed because it only changes rule metadata."""
     rule_id = insert_rule(db_conn, keyword="AUTO STORE", category="Food", source="automatic")
 
     response = client.post(
@@ -1104,8 +1170,9 @@ def test_rules_approve_route_requires_preview_confirmation(client, db_conn):
 
     rule = rule_by_id(db_conn, rule_id)
     assert response.status_code == 200
-    assert b"Preview approval before approving a rule." in response.data
-    assert rule["ai_approved"] == 0
+    assert b"Rule approved: AUTO STORE" in response.data
+    assert rule["source"] == "automatic"
+    assert rule["ai_approved"] == 1
 
 
 def test_rules_approve_route_returns_json_for_table_action(client, db_conn):
@@ -1116,7 +1183,6 @@ def test_rules_approve_route_returns_json_for_table_action(client, db_conn):
         f"/rules/{rule_id}/approve",
         data={
             CSRF_FIELD_NAME: set_csrf_token(client),
-            "confirm_preview": "1",
         },
         headers={"X-Requested-With": "fetch"},
     )
@@ -1138,7 +1204,6 @@ def test_rules_approve_route_rejects_manual_rule(client, db_conn):
         f"/rules/{rule_id}/approve",
         data={
             CSRF_FIELD_NAME: set_csrf_token(client),
-            "confirm_preview": "1",
         },
         follow_redirects=True,
     )
@@ -1250,9 +1315,38 @@ def test_rules_preview_route_returns_validation_error_json(client):
     }
 
 
-def test_rules_delete_route_requires_preview_confirmation(client, db_conn):
-    """Verify direct rule deletion is blocked until preview confirmation."""
+def test_rules_delete_route_removes_unapplied_rule_without_preview(client, db_conn):
+    """Verify direct rule deletion is allowed when no transaction references it."""
     rule_id = insert_rule(db_conn)
+
+    response = client.post(
+        f"/rules/{rule_id}/delete",
+        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Rule deleted." in response.data
+    assert rule_by_id(db_conn, rule_id) is None
+
+
+def test_rules_delete_route_requires_preview_when_rule_is_applied(client, db_conn):
+    """Verify direct deletion is blocked when a transaction references the rule."""
+    rule_id = insert_rule(db_conn)
+    db_conn.execute(
+        """
+        INSERT INTO transactions (
+            tx_date, description, amount, category, category_source,
+            category_rule_id, needs_review, fingerprint
+        )
+        VALUES (
+            '2026-01-02', 'Metro Grocery', 12.34, 'Food', 'rule',
+            ?, 0, 'delete-route-applied'
+        )
+        """,
+        (rule_id,),
+    )
+    db_conn.commit()
 
     response = client.post(
         f"/rules/{rule_id}/delete",
@@ -1283,9 +1377,44 @@ def test_rules_delete_route_removes_rule_after_preview_confirmation(client, db_c
     assert rule_by_id(db_conn, rule_id) is None
 
 
-def test_rules_delete_route_rejects_unconfirmed_json_delete(client, db_conn):
-    """Verify AJAX delete also requires preview confirmation."""
+def test_rules_delete_route_returns_json_for_unapplied_delete(client, db_conn):
+    """Verify AJAX deletion succeeds without preview for unapplied rules."""
     rule_id = insert_rule(db_conn)
+
+    response = client.post(
+        f"/rules/{rule_id}/delete",
+        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        headers={"X-Requested-With": "fetch"},
+    )
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload == {
+        "ok": True,
+        "action": "delete",
+        "rule_id": rule_id,
+        "message": "Rule deleted.",
+    }
+    assert rule_by_id(db_conn, rule_id) is None
+
+
+def test_rules_delete_route_rejects_unconfirmed_json_delete_when_applied(client, db_conn):
+    """Verify AJAX deletion still requires preview for applied rules."""
+    rule_id = insert_rule(db_conn)
+    db_conn.execute(
+        """
+        INSERT INTO transactions (
+            tx_date, description, amount, category, category_source,
+            category_rule_id, needs_review, fingerprint
+        )
+        VALUES (
+            '2026-01-02', 'Metro Grocery', 12.34, 'Food', 'rule',
+            ?, 0, 'delete-route-ajax-applied'
+        )
+        """,
+        (rule_id,),
+    )
+    db_conn.commit()
 
     response = client.post(
         f"/rules/{rule_id}/delete",

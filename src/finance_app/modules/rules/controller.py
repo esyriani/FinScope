@@ -34,6 +34,7 @@ from finance_app.modules.rules.listing import build_rules_context
 from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.modules.rules.service import (
     approve_automatic_rule,
+    count_rule_transaction_references,
     create_rule_from_form,
     delete_rule as delete_rule_record,
     get_rule_for_apply,
@@ -303,20 +304,14 @@ def update_rule(rule_id):
 @rules_bp.route("/rules/<int:rule_id>/approve", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
 def approve_rule(rule_id):
-    """Approve an automatic rule after an impact preview confirmation.
+    """Approve an automatic rule without requiring an impact preview.
 
-    Requires a manage-rules session and CSRF-protected POST with
-    ``confirm_preview=1``. Returns JSON for fetch callers and otherwise
+    Requires a manage-rules session and CSRF-protected POST. Approval only
+    changes rule metadata, so it does not need the read-only transaction impact
+    preview used by write actions. Returns JSON for fetch callers and otherwise
     flashes a message before redirecting.
     """
     next_url = rules_redirect_target()
-    if request.form.get("confirm_preview") != "1":
-        message = gettext("Preview approval before approving a rule.")
-        if wants_json_response():
-            return jsonify({"ok": False, "message": message}), 400
-        flash(message)
-        return redirect(next_url)
-
     try:
         with db_core_transaction() as conn:
             keyword, changed = approve_automatic_rule(conn, rule_id)
@@ -439,16 +434,24 @@ def apply_all_rules():
 @rules_bp.route("/rules/<int:rule_id>/delete", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
 def delete_rule(rule_id):
-    """Delete a rule and return JSON for table actions."""
-    next_url = rules_redirect_target()
-    if request.form.get("confirm_preview") != "1":
-        message = gettext("Preview deletion before deleting a rule.")
-        if wants_json_response():
-            return jsonify({"ok": False, "message": message}), 400
-        flash(message)
-        return redirect(next_url)
+    """Delete a rule after preview unless it has no transaction references.
 
+    Unconfirmed POSTs are allowed only when no existing transaction stores the
+    rule as a category assignment or rule-applied tag. Applied rules still
+    require ``confirm_preview=1`` so the user can inspect the impact before the
+    rule is removed. Returns JSON for fetch/table actions.
+    """
+    next_url = rules_redirect_target()
     with db_core_transaction() as conn:
+        confirmed = request.form.get("confirm_preview") == "1"
+        reference_count = count_rule_transaction_references(conn, rule_id)
+        if not confirmed and reference_count:
+            message = gettext("Preview deletion before deleting a rule.")
+            if wants_json_response():
+                return jsonify({"ok": False, "message": message}), 400
+            flash(message)
+            return redirect(next_url)
+
         deleted = delete_rule_record(conn, rule_id)
 
     message = "Rule deleted." if deleted else "Rule not found."

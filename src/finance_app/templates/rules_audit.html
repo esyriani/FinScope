@@ -12,6 +12,9 @@
 
 {% macro rule_summary(rule) %}
 <a class="rule-keyword" href="{{ url_for('rules.audit_rule_detail', rule_id=rule.id) }}">{{ rule.label }}</a>
+<div class="mt-1">
+    <span class="badge {{ rule.status_badge_class }}">{{ _(rule.status_label) }}</span>
+</div>
 <div class="small text-muted">{{ rule.category }}</div>
 <div class="small text-muted">{{ _("Scope") }}: {{ _(rule.scope_label) }}</div>
 {% if rule.scope_value and rule.scope_value != rule.label %}
@@ -118,6 +121,15 @@
 {% endmacro %}
 
 {% macro preview_delete_button(rule) %}
+{% if rule.can_delete_without_preview %}
+<form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <button class="btn btn-sm btn-outline-danger" type="submit">
+        <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete rule") }}
+    </button>
+</form>
+{% else %}
 <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="delete_rule">
@@ -126,6 +138,7 @@
         <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview removal impact") }}
     </button>
 </form>
+{% endif %}
 {% endmacro %}
 
 {% macro table_footer(table, label) %}
