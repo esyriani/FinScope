@@ -5,9 +5,6 @@
 
 {% macro rule_summary(rule) %}
 <div class="rule-keyword">{{ rule.label }}</div>
-<div class="mt-1">
-    <span class="badge {{ rule.status_badge_class }}">{{ _(rule.status_label) }}</span>
-</div>
 <div class="small text-muted">{{ rule.category }}</div>
 {% if rule.tag_label != "-" %}
     <div class="small text-muted">{{ _("Tags") }}: {{ rule.tag_label }}</div>
