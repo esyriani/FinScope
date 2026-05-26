@@ -62,10 +62,18 @@
     --bs-pagination-active-color: #05201c;
 }
 
+.table-pagination-header,
 .table-pagination-footer {
     background: var(--app-surface);
-    border-top: 1px solid var(--app-border);
     padding: 0.9rem 1rem;
+}
+
+.table-pagination-header {
+    border-bottom: 1px solid var(--app-border);
+}
+
+.table-pagination-footer {
+    border-top: 1px solid var(--app-border);
 }
 
 .empty-state {

@@ -1,6 +1,6 @@
 function renderTags(multiselect) {
     const tagsContainer = multiselect.querySelector("[data-tag-multiselect-tags]");
-    const checkedInputs = Array.from(multiselect.querySelectorAll("input[type='checkbox']:checked"));
+    const checkedInputs = optionInputs(multiselect).filter((input) => input.checked);
     const placeholder = multiselect.dataset.placeholder || "Select";
 
     if (!tagsContainer) return;
@@ -32,6 +32,8 @@ function renderTags(multiselect) {
                 e.stopPropagation();
                 input.checked = false;
                 renderTags(multiselect);
+                updateSelectAllState(multiselect);
+                updateMenuPosition();
             });
             
             tag.appendChild(textSpan);
@@ -39,6 +41,62 @@ function renderTags(multiselect) {
             tagsContainer.appendChild(tag);
         });
     }
+}
+
+function optionInputs(multiselect) {
+    return Array.from(multiselect.querySelectorAll("input[type='checkbox']:not([data-tag-multiselect-select-all])"));
+}
+
+function enabledOptionInputs(multiselect) {
+    return optionInputs(multiselect).filter((input) => !input.disabled);
+}
+
+function selectAllInput(multiselect) {
+    return multiselect.querySelector("[data-tag-multiselect-select-all]");
+}
+
+function ensureSelectAllOption(multiselect) {
+    const labelText = multiselect.dataset.selectAllLabel;
+    const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
+    if (!labelText || !menu || selectAllInput(multiselect)) {
+        return;
+    }
+
+    const label = document.createElement("label");
+    label.className = "tag-multiselect-option tag-multiselect-option-all";
+
+    const input = document.createElement("input");
+    input.className = "form-check-input";
+    input.type = "checkbox";
+    input.setAttribute("data-tag-multiselect-select-all", "");
+
+    const text = document.createElement("span");
+    text.textContent = labelText;
+
+    label.append(input, text);
+    menu.prepend(label);
+}
+
+function updateSelectAllState(multiselect) {
+    const input = selectAllInput(multiselect);
+    if (!input) {
+        return;
+    }
+
+    const options = enabledOptionInputs(multiselect);
+    const checkedCount = options.filter((option) => option.checked).length;
+    input.disabled = options.length === 0;
+    input.checked = options.length > 0 && checkedCount === options.length;
+    input.indeterminate = checkedCount > 0 && checkedCount < options.length;
+}
+
+function setAllOptions(multiselect, checked) {
+    enabledOptionInputs(multiselect).forEach((input) => {
+        input.checked = checked;
+    });
+    renderTags(multiselect);
+    updateSelectAllState(multiselect);
+    updateMenuPosition();
 }
 
 
@@ -92,16 +150,20 @@ function setupTagMultiselects(root = document) {
     const multiselects = Array.from(root.querySelectorAll("[data-tag-multiselect]"));
 
     multiselects.forEach((multiselect) => {
+        ensureSelectAllOption(multiselect);
         if (multiselect.dataset.tagMultiselectReady === "true") {
             renderTags(multiselect);
+            updateSelectAllState(multiselect);
             return;
         }
 
         multiselect.dataset.tagMultiselectReady = "true";
         const toggle = multiselect.querySelector("[data-tag-multiselect-toggle]");
-        const inputs = Array.from(multiselect.querySelectorAll("input[type='checkbox']"));
+        const inputs = optionInputs(multiselect);
+        const selectAll = selectAllInput(multiselect);
 
         renderTags(multiselect);
+        updateSelectAllState(multiselect);
 
         if (toggle) {
             toggle.addEventListener("click", (e) => {
@@ -146,8 +208,13 @@ function setupTagMultiselects(root = document) {
         inputs.forEach((input) => {
             input.addEventListener("change", () => {
                 renderTags(multiselect);
+                updateSelectAllState(multiselect);
                 updateMenuPosition();
             });
+        });
+
+        selectAll?.addEventListener("change", () => {
+            setAllOptions(multiselect, selectAll.checked);
         });
     });
 }

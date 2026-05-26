@@ -27,7 +27,7 @@ from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.transactions.constants import AMOUNT_TYPE_SPENDING
 from .filters import apply_quick_view_core_filter
 from .urls import dashboard_transactions_url
-from .constants import QUICK_VIEW_ALL
+from .constants import DASHBOARD_INCOME_CATEGORY, QUICK_VIEW_ALL
 from .presenter import (
     build_merchant_aggregates,
     merchant_matching_rules,
@@ -41,10 +41,11 @@ def non_transfer_clause():
     return reportable_transaction_clause()
 
 
-def fetch_spending_by_category(conn, filters, unknown_category):
-    """Fetch spending by category."""
+def fetch_spending_by_category(conn, filters, unknown_category, include_income_category=False):
+    """Fetch spending by category, optionally retaining rows categorized as income."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
     total = func.sum(transactions_table.c.amount)
+    income_filter = [] if include_income_category else [category != DASHBOARD_INCOME_CATEGORY]
     return conn.execute(
         select(
             category.label("category"),
@@ -54,6 +55,7 @@ def fetch_spending_by_category(conn, filters, unknown_category):
             spending_impact_clause(),
             non_transfer_clause(),
             category != unknown_category,
+            *income_filter,
             *filters,
         )
         .group_by(category)
@@ -61,14 +63,16 @@ def fetch_spending_by_category(conn, filters, unknown_category):
     ).mappings().fetchall()
 
 
-def fetch_spending_by_tag(conn, filters):
+def fetch_spending_by_tag(conn, filters, include_income_category=False):
     """Fetch spending totals associated with each transaction tag.
 
     Tagged totals intentionally count the full transaction amount for every tag
     attached to the transaction. A transaction with multiple tags can therefore
     contribute to multiple rows.
     """
+    category = func.coalesce(transactions_table.c.category, "")
     total = func.sum(transactions_table.c.amount)
+    income_filter = [] if include_income_category else [category != DASHBOARD_INCOME_CATEGORY]
     tagged_rows = conn.execute(
         select(
             tags_table.c.name.label("category"),
@@ -86,6 +90,7 @@ def fetch_spending_by_tag(conn, filters):
         .where(
             spending_impact_clause(),
             non_transfer_clause(),
+            *income_filter,
             *filters,
         )
         .group_by(tags_table.c.name)
@@ -101,6 +106,7 @@ def fetch_spending_by_tag(conn, filters):
             spending_impact_clause(),
             non_transfer_clause(),
             ~has_tag,
+            *income_filter,
             *filters,
         )
     ).mappings().fetchone()

@@ -44,6 +44,7 @@ from .constants import (
     DASHBOARD_BREAKDOWN_TAG,
     DASHBOARD_CATEGORY_SORTS,
     DASHBOARD_CATEGORY_SORT_SPENDING,
+    DASHBOARD_INCOME_CATEGORY,
     DASHBOARD_MERCHANT_SORT_SPENDING,
     DASHBOARD_MERCHANT_SORTS,
     DASHBOARD_TABLE_CATEGORY,
@@ -76,6 +77,7 @@ def build_dashboard_context(args):
         breakdown_mode == DASHBOARD_BREAKDOWN_TAG
         and parse_dashboard_flag(args.get("show_untagged"))
     )
+    show_income = parse_dashboard_flag(args.get("show_income"))
     merchant_sort = parse_dashboard_table_sort(
         args.get("merchant_sort"),
         DASHBOARD_MERCHANT_SORTS,
@@ -157,8 +159,17 @@ def build_dashboard_context(args):
 
         category_options = get_category_options(conn)
         tag_options = get_tag_option_rows(conn)
-        spending_by_category = fetch_spending_by_category(conn, filter_criteria, unknown_category)
-        spending_by_tag = fetch_spending_by_tag(conn, filter_criteria)
+        spending_by_category_all = fetch_spending_by_category(
+            conn,
+            filter_criteria,
+            unknown_category,
+            include_income_category=True,
+        )
+        spending_by_tag = fetch_spending_by_tag(
+            conn,
+            filter_criteria,
+            include_income_category=show_income,
+        )
         monthly_expenses = fetch_monthly_expenses(conn, filter_criteria)
         monthly_income = fetch_monthly_income(
             conn,
@@ -195,6 +206,20 @@ def build_dashboard_context(args):
     total_spending = rounded_money_float(summary["total_spending"])
     total_income = rounded_money_float(summary["total_income"])
     cash_flow_summary = build_cash_flow_summary(total_income, total_spending)
+    income_category_name = DASHBOARD_INCOME_CATEGORY.casefold()
+    income_category_spending = sum(
+        money_to_float(row["total"])
+        for row in spending_by_category_all
+        if str(row["category"]).casefold() == income_category_name
+    )
+    spending_by_category = (
+        spending_by_category_all
+        if show_income
+        else [
+            row for row in spending_by_category_all
+            if str(row["category"]).casefold() != income_category_name
+        ]
+    )
     spending_breakdown = (
         spending_by_tag
         if breakdown_mode == DASHBOARD_BREAKDOWN_TAG
@@ -205,11 +230,13 @@ def build_dashboard_context(args):
             row for row in spending_breakdown
             if not row.get("untagged")
         ]
-    breakdown_total = (
-        total_spending
-        if breakdown_mode == DASHBOARD_BREAKDOWN_TAG
-        else sum(money_to_float(row["total"]) for row in spending_by_category)
-    )
+    if breakdown_mode == DASHBOARD_BREAKDOWN_TAG:
+        breakdown_total = total_spending if show_income else max(
+            0,
+            total_spending - rounded_money_float(income_category_spending),
+        )
+    else:
+        breakdown_total = sum(money_to_float(row["total"]) for row in spending_by_category)
     category_rows = build_category_rows(
         spending_breakdown,
         breakdown_total,
@@ -313,6 +340,11 @@ def build_dashboard_context(args):
             args,
             breakdown=DASHBOARD_BREAKDOWN_TAG,
             show_untagged="" if show_untagged else "1",
+        ),
+        show_income=show_income,
+        show_income_url=dashboard_url(
+            args,
+            show_income="" if show_income else "1",
         ),
         total_spending=total_spending,
         total_income=total_income,

@@ -122,3 +122,10 @@
 .tag-multiselect-option:hover {
     background: var(--app-surface-soft);
 }
+
+.tag-multiselect-option-all {
+    border-bottom: 1px solid var(--app-border);
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    padding-bottom: 0.6rem;
+}

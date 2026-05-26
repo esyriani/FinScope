@@ -388,6 +388,10 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, db_conn):
     assert b"Tag detail" in tag_response.data
     assert b"Tagged spending can count the same transaction more than once." in tag_response.data
     assert b"Show untagged" in tag_response.data
+    assert b"Show income" in response.data
+    assert b"Select all categories" in response.data
+    assert b"Select all tags" in response.data
+    assert b"data-ajax-refresh-link" in response.data
     assert b'"categoryLabels": []' in tag_response.data
     assert b"Hide untagged" in untagged_response.data
     assert b'"categoryLabels": ["Untagged"]' in untagged_response.data
