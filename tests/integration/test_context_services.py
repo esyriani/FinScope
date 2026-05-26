@@ -733,6 +733,61 @@ def test_dashboard_tag_cashflow_includes_tagged_transfer_credits(app, db_conn):
     assert "amount_type=credit" in reimbursable_context["dashboard_links"]["income"]
 
 
+def test_dashboard_breakdown_hides_income_category_by_default(app, db_conn):
+    """Verify dashboard category and tag breakdowns only show income when requested."""
+    seed_reporting_data(db_conn)
+    income_tx_id = db_conn.execute(
+        """
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            category_source,
+            ignored,
+            transaction_kind,
+            fingerprint
+        )
+        VALUES (
+            '2026-01-09',
+            'Misclassified income category expense',
+            25.00,
+            'Income',
+            0,
+            'manual',
+            0,
+            'expense',
+            'dashboard-income-category-expense'
+        )
+        """
+    ).lastrowid
+    set_transaction_tags(db_conn, income_tx_id, ["Shared"], source="manual")
+    db_conn.commit()
+    date_args = [
+        ("period", "custom"),
+        ("date_from", "2026-01-01"),
+        ("date_to", "2026-02-28"),
+        ("quick_view", "all"),
+    ]
+
+    with app.test_request_context("/dashboard"):
+        category_context = build_dashboard_context(MultiDict(date_args))
+        income_context = build_dashboard_context(MultiDict([*date_args, ("show_income", "1")]))
+        tag_context = build_dashboard_context(MultiDict([*date_args, ("breakdown", "tag")]))
+        income_tag_context = build_dashboard_context(
+            MultiDict([*date_args, ("breakdown", "tag"), ("show_income", "1")])
+        )
+
+    assert category_context["show_income"] is False
+    assert "show_income=1" in category_context["show_income_url"]
+    assert "Income" not in category_totals(category_context)
+    assert category_totals(income_context)["Income"] == 25.00
+    assert "show_income" not in income_context["show_income_url"]
+    assert category_totals(tag_context)["Shared"] == 40.00
+    assert category_totals(income_tag_context)["Shared"] == 65.00
+
+
 def test_comparison_context_year_and_period_metrics(app, db_conn, monkeypatch):
     """Verify comparison context year totals, category filters, and period metrics."""
     seed_reporting_data(db_conn)

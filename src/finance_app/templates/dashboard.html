@@ -9,7 +9,7 @@
     {% if active_sort == column %}<span class="sort-icon {{ active_direction }}" aria-hidden="true"></span>{% endif %}
 {%- endmacro %}
 
-<div data-dashboard-drilldown-scope>
+<div id="dashboard-page" data-dashboard-drilldown-scope data-ajax-refresh-target="dashboard-page">
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Dashboard") }}</h2>
@@ -85,7 +85,7 @@
                 data-dashboard-custom-categories
             >
                 <label class="form-label" id="dashboard-categories-label">{{ _("Categories") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}">
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}" data-select-all-label="{{ _('Select all categories') }}">
                     <div
                         class="tag-multiselect-control"
                         role="button"
@@ -121,7 +121,7 @@
                 data-dashboard-custom-tags
             >
                 <label class="form-label" id="dashboard-tags-label">{{ _("Tags") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}">
+                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
                     <div
                         class="tag-multiselect-control"
                         role="button"
@@ -180,7 +180,17 @@
         </div>
         <a class="quality-message text-reset text-decoration-none" href="{{ data_quality.needs_review_url }}">{{ data_quality.message }}</a>
         <div class="d-flex gap-2 justify-content-end">
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#dashboard-quality-details" aria-expanded="false" aria-controls="dashboard-quality-details">
+            <button
+                class="btn btn-sm btn-outline-secondary"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#dashboard-quality-details"
+                aria-expanded="false"
+                aria-controls="dashboard-quality-details"
+                data-dashboard-quality-toggle
+                data-show-label="{{ _('More') }}"
+                data-hide-label="{{ _('Less') }}"
+            >
                 {{ _("More") }}
             </button>
             <a class="btn btn-sm btn-outline-secondary" href="{{ data_quality.review_url }}"><i class="bi bi-check2-square" aria-hidden="true"></i>{{ data_quality.review_label }}</a>
@@ -290,6 +300,7 @@
                         class="btn btn-sm {% if option.active %}btn-primary{% else %}btn-outline-secondary{% endif %}"
                         href="{{ option.url }}"
                         aria-pressed="{{ 'true' if option.active else 'false' }}"
+                        data-ajax-refresh-link
                     >
                         {{ _(option.label) }}
                     </a>
@@ -300,10 +311,19 @@
                     class="btn btn-sm {% if show_untagged %}btn-primary{% else %}btn-outline-secondary{% endif %}"
                     href="{{ show_untagged_url }}"
                     aria-pressed="{{ 'true' if show_untagged else 'false' }}"
+                    data-ajax-refresh-link
                 >
                     {{ _("Hide untagged") if show_untagged else _("Show untagged") }}
                 </a>
             {% endif %}
+            <a
+                class="btn btn-sm {% if show_income %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                href="{{ show_income_url }}"
+                aria-pressed="{{ 'true' if show_income else 'false' }}"
+                data-ajax-refresh-link
+            >
+                {{ _("Hide income") if show_income else _("Show income") }}
+            </a>
         </div>
     </div>
 
@@ -505,22 +525,6 @@
     "netMonthTotals": net_month_totals | default([]),
     "netMonthUrls": net_month_urls | default([]),
 } | tojson }}
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const collapseElement = document.getElementById('dashboard-quality-details');
-    const button = document.querySelector('[data-bs-target="#dashboard-quality-details"]');
-    
-    if (collapseElement && button) {
-        collapseElement.addEventListener('show.bs.collapse', function() {
-            button.textContent = '{{ _("Less") }}';
-        });
-        
-        collapseElement.addEventListener('hide.bs.collapse', function() {
-            button.textContent = '{{ _("More") }}';
-        });
-    }
-});
 </script>
 <script src="{{ static_asset('js/dashboard-charts.js') }}"></script>
 {% else %}

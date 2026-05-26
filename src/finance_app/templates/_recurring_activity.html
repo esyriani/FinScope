@@ -3,88 +3,108 @@
         <div class="section-title px-4 pt-4">
             <div>
                 <h5 class="card-title mb-1">{{ _("Recurring activity") }}</h5>
-                <div class="text-muted small">{{ _("Detected bills, income, subscriptions, and other repeating transactions.") }}</div>
+                <div class="text-muted small">{{ _("Repeating merchants detected for the selected month.") }}</div>
             </div>
         </div>
         <div class="text-muted small px-4 pb-3">
-            {{ _("Occurred means date and amount are within tolerance. Amount changed means timing is close but amount is outside tolerance. Likely occurred means the merchant appeared this month, but timing is outside tolerance. Possibly inactive means the pattern missed multiple expected cycles.") }}
-        </div>
-        <div class="d-flex flex-wrap gap-2 px-4 pb-3" data-recurring-activity-filters>
-            <button class="btn btn-sm btn-primary" type="button" data-recurring-activity-filter="all" aria-pressed="true">{{ _("All") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="occurred" aria-pressed="false">{{ _("Occurred") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="amount_changed" aria-pressed="false">{{ _("Amount changed") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="likely_occurred" aria-pressed="false">{{ _("Likely occurred") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="expected" aria-pressed="false">{{ _("Expected") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="overdue" aria-pressed="false">{{ _("Overdue") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-activity-filter="possibly_inactive" aria-pressed="false">{{ _("Possibly inactive") }}</button>
+            {{ _("Status explains the current month: occurred matched date and amount; amount changed matched timing but not amount; likely occurred found the merchant outside the date tolerance; possibly inactive missed expected cycles.") }}
         </div>
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" data-no-export data-sortable-table>
+            <table
+                id="recurring-activity-table"
+                class="table table-hover align-middle mb-0"
+                data-no-export
+                data-sortable-table
+                data-paginated-table
+                data-page-size="{{ table_page_size }}"
+                data-pagination-label="{{ _('Recurring activity pages') }}"
+            >
                 <thead>
                     <tr>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Expected date") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Status") }}</span></button></th>
                         <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Merchant") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Category") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="text"><span>{{ _("Status") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Frequency") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Date") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="number"><span>{{ _("Amount") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="number"><span>{{ _("Change") }}</span></button></th>
                         <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Confidence") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="6" data-sort-type="number"><span>{{ _("Typical amount") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="7" data-sort-type="number"><span>{{ _("Change") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="8" data-sort-type="text"><span>{{ _("Last seen") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="9" data-sort-type="number"><span>{{ _("Observed months") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="6" data-sort-type="text"><span>{{ _("Last seen") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="7" data-sort-type="number"><span>{{ _("Observed months") }}</span></button></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in recurring_items %}
+                    {% set actual_amount = item.match_details.matched_amount if item.match_details and item.match_details.matched_amount is not none else none %}
+                    {% set matched_date = item.match_details.matched_date if item.match_details and item.match_details.matched_date else none %}
+                    {% set user_status_labels = {"confirmed": "Confirmed by you", "edited": "Edited by you"} %}
+                    {% set user_status_label = user_status_labels.get(item.user_status) %}
                     <tr
                         data-recurring-activity-row
                         data-recurring-status="{{ item.status }}"
                         data-recurring-id="{{ item.id }}"
+                        data-export-row-id="{{ item.id }}"
+                        data-recurring-user-status="{{ item.user_status }}"
+                        data-recurring-active="{{ item.active }}"
                         role="button"
                         tabindex="0"
                         title="{{ _('Double-click to view recurring activity details') }}"
                     >
-                        <td data-sort-value="{{ item.date }}">{{ item.date | datefmt }}</td>
-                        <td>{{ item.merchant }}</td>
-                        <td>{{ item.category }}</td>
-                        {% set status_labels = {
-                            "occurred": "Occurred",
-                            "amount_changed": "Amount changed",
-                            "likely_occurred": "Likely occurred",
-                            "expected": "Expected",
-                            "overdue": "Overdue",
-                            "possibly_inactive": "Possibly inactive",
-                            "matched": "Likely occurred"
-                        } %}
-                        {% set status_label = status_labels.get(item.status, item.status | title) %}
-                        <td>{{ _(status_label) }}</td>
-                        <td>{{ _(item.frequency) }}</td>
-                        {% set confidence_badges = {"High": "text-bg-success", "Medium": "text-bg-warning", "Low": "text-bg-secondary"} %}
-                        <td><span class="badge {{ confidence_badges.get(item.confidence, 'text-bg-secondary') }}">{{ _(item.confidence) }}</span></td>
-                        <td class="text-end {% if item.type == 'income' %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ item.amount }}">{{ item.amount | moneyfmt }}</td>
+                        <td data-sort-value="{{ item.status_label }}">
+                            <span class="recurring-status-pill recurring-status-{{ item.status }}">{{ _(item.status_label) }}</span>
+                            <div class="recurring-table-detail">{{ item.status_detail }}</div>
+                            <div class="recurring-table-detail recurring-user-state {% if not user_status_label %}d-none{% endif %}" data-recurring-row-state>{% if user_status_label %}{{ _(user_status_label) }}{% endif %}</div>
+                        </td>
+                        <td>
+                            <div class="recurring-table-primary">{{ item.merchant }}</div>
+                            <div class="recurring-table-detail">{{ item.category }} &middot; {{ _(item.frequency) }}</div>
+                        </td>
+                        <td data-sort-value="{{ item.date }}">
+                            <div class="recurring-table-primary">{{ item.date | datefmt }}</div>
+                            {% if matched_date %}
+                                <div class="recurring-table-detail">{{ _("Matched {date}", date=matched_date | datefmt) }}</div>
+                            {% else %}
+                                <div class="recurring-table-detail">{{ _("Expected date") }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end" data-sort-value="{{ item.amount }}">
+                            <div class="{% if item.type == 'income' %}text-success{% else %}text-danger{% endif %} recurring-table-primary">{{ item.amount | moneyfmt }}</div>
+                            {% if actual_amount is not none %}
+                                <div class="recurring-table-detail">{{ _("Actual {amount}", amount=actual_amount | moneyfmt) }}</div>
+                            {% else %}
+                                <div class="recurring-table-detail">{{ _("Typical") }}</div>
+                            {% endif %}
+                        </td>
                         {% if item.amount_change %}
-                            <td class="text-end {% if item.amount_change.difference >= 0 %}text-danger{% else %}text-success{% endif %}" data-sort-value="{{ item.amount_change.difference }}">
-                                {{ item.amount_change.difference | moneyfmt }}
+                            {% set change_is_favorable = (item.type == 'income' and item.amount_change.difference >= 0) or (item.type == 'spending' and item.amount_change.difference < 0) %}
+                            <td class="text-end {% if change_is_favorable %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ item.amount_change.difference }}">
+                                <div class="recurring-table-primary">{{ item.amount_change.difference | moneyfmt }}</div>
                                 {% if item.amount_change.percent is not none %}
-                                    <span class="text-muted small">({{ "%+.1f"|format(item.amount_change.percent) }}%)</span>
+                                    <div class="recurring-table-detail">{{ "%+.1f"|format(item.amount_change.percent) }}%</div>
                                 {% endif %}
                             </td>
                         {% else %}
                             <td class="text-end text-muted" data-sort-value="0">-</td>
                         {% endif %}
+                        {% set confidence_badges = {"High": "text-bg-success", "Medium": "text-bg-warning", "Low": "text-bg-secondary"} %}
+                        <td data-sort-value="{{ item.confidence }}">
+                            <span class="badge {{ confidence_badges.get(item.confidence, 'text-bg-secondary') }}">{{ _(item.confidence) }}</span>
+                            <div class="recurring-table-detail">
+                                {% if item.observed_months == 1 %}
+                                    {{ _("{count} distinct month", count=item.observed_months) }}
+                                {% else %}
+                                    {{ _("{count} distinct months", count=item.observed_months) }}
+                                {% endif %}
+                            </div>
+                        </td>
                         <td data-sort-value="{{ item.last_seen }}">{{ item.last_seen | datefmt }}</td>
                         <td class="text-end" data-sort-value="{{ item.observed_months }}">{{ item.observed_months }}</td>
                     </tr>
                     {% else %}
                     <tr data-sort-ignore>
-                        <td colspan="10" class="text-muted">{{ _("No recurring-looking activity detected yet.") }}</td>
+                        <td colspan="8">
+                            <div class="empty-state compact mb-0">{{ recurring_empty_state_message }}</div>
+                        </td>
                     </tr>
                     {% endfor %}
-                    {% if recurring_items %}
-                    <tr data-recurring-activity-empty data-sort-ignore hidden>
-                        <td colspan="10" class="text-muted">{{ _("No recurring activity matches this status.") }}</td>
-                    </tr>
-                    {% endif %}
                 </tbody>
             </table>
         </div>

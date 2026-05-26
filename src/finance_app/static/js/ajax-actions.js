@@ -102,6 +102,8 @@ function updateAjaxRefreshUrl(url) {
 function runAjaxRefreshInitializers(root = document) {
     setupAjaxRefreshForms(root);
     setupAjaxRefreshLinks(root);
+    window.setupDashboardPage?.(root);
+    window.setupDashboardCharts?.(root);
     window.setupTooltips?.();
     window.setupJobsAutoRefresh?.(root);
     window.setupAiJobProgressPolling?.(root);
@@ -133,6 +135,7 @@ function replaceAjaxRefreshTargets(selector, html, responseUrl) {
     const replacements = [];
     currentTargets.forEach((target, index) => {
         disposeAjaxRefreshTooltips(target);
+        window.disposeDashboardCharts?.(target);
         const replacement = document.importNode(freshTargets[index], true);
         target.replaceWith(replacement);
         replacements.push(replacement);

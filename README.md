@@ -269,7 +269,8 @@ Use Jobs to run AI on all active unknown transactions, cancel a queued or runnin
 
 1. Go to Admin > Taxonomy.
 2. Create or edit categories and tags.
-3. Delete unused taxonomy values when they are no longer referenced.
+3. Export or import the taxonomy as YAML when moving category and tag metadata between databases.
+4. Delete unused taxonomy values when they are no longer referenced.
 
 ## Project docs
 

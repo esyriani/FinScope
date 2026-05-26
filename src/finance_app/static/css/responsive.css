@@ -46,8 +46,6 @@
         grid-template-areas:
             "categories"
             "tags"
-            "navigation"
-            "status"
             "confidence"
             "actions";
     }

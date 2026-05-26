@@ -3,16 +3,13 @@
         <div class="section-title">
             <div>
                 <h5 class="card-title mb-1">{{ month_label }}</h5>
-                <div class="text-muted small">{{ _("Expected and matched recurring activity by date.") }}</div>
+                <div class="text-muted small">{{ _("Matched items use the transaction date; unmatched items stay on the expected date.") }}</div>
             </div>
-            {% if recurring_calendar_legend %}
-            <div class="recurring-calendar-legend" aria-label="{{ _('Recurring status legend') }}">
-                {% for item in recurring_calendar_legend %}
-                    <span class="recurring-calendar-legend-item recurring-status-{{ item.status }}">{{ _(item.label) }}</span>
-                {% endfor %}
-            </div>
-            {% endif %}
         </div>
+
+        {% if not recurring_items %}
+        <div class="empty-state compact mb-3">{{ recurring_empty_state_message }}</div>
+        {% endif %}
 
         <div class="calendar-scroll">
             <div class="calendar-weekdays" aria-hidden="true">
@@ -25,13 +22,27 @@
                 {% for day in recurring_calendar_days %}
                 <section
                     class="calendar-day recurring-calendar-day {% if not day.in_month %}calendar-day-muted{% endif %} {% if day.is_today %}calendar-day-today{% endif %}"
-                    tabindex="0"
-                    role="button"
+                    {% if day.item_count %}
                     data-recurring-calendar-day="{{ day.date }}"
                     aria-label="{{ _('Open recurring items for {date}', date=day.date) }}"
+                    {% endif %}
                 >
                     <div class="calendar-day-head">
                         <span>{{ day.day_number }}</span>
+                        {% if day.item_count %}
+                            <button
+                                class="recurring-calendar-day-open"
+                                type="button"
+                                data-recurring-day-open="{{ day.date }}"
+                                aria-label="{{ _('Open recurring items for {date}', date=day.date) }}"
+                            >
+                                {% if day.item_count == 1 %}
+                                    {{ _("{count} item", count=day.item_count) }}
+                                {% else %}
+                                    {{ _("{count} items", count=day.item_count) }}
+                                {% endif %}
+                            </button>
+                        {% endif %}
                     </div>
 
                     <div class="recurring-calendar-chip-list">
@@ -40,12 +51,16 @@
                             class="recurring-calendar-chip recurring-status-{{ item.status }}"
                             type="button"
                             data-recurring-id="{{ item.id }}"
+                            data-recurring-user-status="{{ item.user_status }}"
+                            data-recurring-active="{{ item.active }}"
                             aria-label="{{ item.aria_label }}"
                             title="{{ _(item.status_label) }} - {{ item.merchant }} - {{ item.amount_label }}"
                         >
-                            <span>{{ _(item.status_label) }}</span>
-                            <strong>{{ item.merchant }}</strong>
-                            <em class="{{ item.amount_class }}">{{ item.amount_label }}</em>
+                            <span class="recurring-calendar-chip-main">
+                                <strong>{{ item.merchant }}</strong>
+                            </span>
+                            <em class="recurring-calendar-chip-amount {{ item.amount_class }}">{{ item.amount_label }}</em>
+                            <span class="recurring-calendar-chip-meta">{{ _(item.status_label) }}</span>
                         </button>
                         {% endfor %}
                         {% if day.more_count %}

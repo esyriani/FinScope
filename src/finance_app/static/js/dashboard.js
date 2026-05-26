@@ -15,8 +15,12 @@ function selectDashboardDrilldownItem(element) {
     element.classList.add("dashboard-drilldown-selected");
 }
 
-function setupDashboardDrilldownInteractions() {
-    const scope = document.querySelector("[data-dashboard-drilldown-scope]");
+function dashboardScopedElement(root, selector) {
+    return root.matches?.(selector) ? root : root.querySelector(selector);
+}
+
+function setupDashboardDrilldownInteractions(root = document) {
+    const scope = dashboardScopedElement(root, "[data-dashboard-drilldown-scope]");
     if (!scope) return;
 
     const drilldownLinks = scope.querySelectorAll(
@@ -40,12 +44,12 @@ function setupDashboardDrilldownInteractions() {
     });
 }
 
-function setupDashboardCustomRange() {
-    const periodSelect = document.getElementById("dashboard-period");
+function setupDashboardCustomRange(root = document) {
+    const periodSelect = dashboardScopedElement(root, "#dashboard-period");
     if (!periodSelect) return;
 
-    const fields = document.querySelectorAll("[data-dashboard-custom-range]");
-    const dateInputs = document.querySelectorAll("[data-dashboard-custom-range] [data-flatpickr-date]");
+    const fields = root.querySelectorAll("[data-dashboard-custom-range]");
+    const dateInputs = root.querySelectorAll("[data-dashboard-custom-range] [data-flatpickr-date]");
 
     const updateVisibility = () => {
         const isCustom = periodSelect.value === "custom";
@@ -55,19 +59,22 @@ function setupDashboardCustomRange() {
         });
     };
 
-    periodSelect.addEventListener("change", updateVisibility);
+    if (periodSelect.dataset.dashboardPeriodReady !== "true") {
+        periodSelect.dataset.dashboardPeriodReady = "true";
+        periodSelect.addEventListener("change", updateVisibility);
+    }
     updateVisibility();
 }
 
-function setupDashboardQuickView() {
-    const input = document.querySelector("[data-dashboard-quick-view-input]");
+function setupDashboardQuickView(root = document) {
+    const input = dashboardScopedElement(root, "[data-dashboard-quick-view-input]");
     if (!input) return;
 
-    const buttons = document.querySelectorAll("[data-dashboard-quick-view]");
-    const customGroups = Array.from(document.querySelectorAll(
+    const buttons = root.querySelectorAll("[data-dashboard-quick-view]");
+    const customGroups = Array.from(root.querySelectorAll(
         "[data-dashboard-custom-categories], [data-dashboard-custom-tags]"
     ));
-    const customBreak = document.querySelector("[data-dashboard-custom-filter-break]");
+    const customBreak = dashboardScopedElement(root, "[data-dashboard-custom-filter-break]");
 
     const updateCustomFilters = () => {
         const isCustom = input.value === "custom";
@@ -114,6 +121,11 @@ function setupDashboardQuickView() {
     };
 
     buttons.forEach((button) => {
+        if (button.dataset.dashboardQuickViewReady === "true") {
+            return;
+        }
+
+        button.dataset.dashboardQuickViewReady = "true";
         button.addEventListener("click", (event) => {
             const nextView = button.dataset.dashboardQuickView || "all";
             input.value = nextView;
@@ -131,12 +143,37 @@ function setupDashboardQuickView() {
     updateButtons();
 }
 
-function setupDashboardPage() {
-    if (typeof setupFlatpickrInputs === "function") {
-        setupFlatpickrInputs();
+function setupDashboardQualityPanel(root = document) {
+    const button = dashboardScopedElement(root, "[data-dashboard-quality-toggle]");
+    if (!button || button.dataset.dashboardQualityReady === "true") return;
+
+    const targetSelector = button.getAttribute("data-bs-target");
+    const collapseElement = targetSelector ? root.querySelector(targetSelector) || document.querySelector(targetSelector) : null;
+    if (!collapseElement) return;
+
+    button.dataset.dashboardQualityReady = "true";
+    const showLabel = button.dataset.showLabel || "More";
+    const hideLabel = button.dataset.hideLabel || "Less";
+    collapseElement.addEventListener("show.bs.collapse", () => {
+        button.textContent = hideLabel;
+    });
+    collapseElement.addEventListener("hide.bs.collapse", () => {
+        button.textContent = showLabel;
+    });
+}
+
+function setupDashboardPage(root = document) {
+    if (!dashboardScopedElement(root, "[data-dashboard-drilldown-scope]")) {
+        return;
     }
-    setupDashboardCustomRange();
-    setupDashboardQuickView();
+
+    if (typeof setupFlatpickrInputs === "function") {
+        setupFlatpickrInputs(root);
+    }
+    setupDashboardDrilldownInteractions(root);
+    setupDashboardCustomRange(root);
+    setupDashboardQuickView(root);
+    setupDashboardQualityPanel(root);
 }
 
 if (document.readyState === "loading") {
@@ -144,3 +181,5 @@ if (document.readyState === "loading") {
 } else {
     setupDashboardPage();
 }
+
+window.setupDashboardPage = setupDashboardPage;

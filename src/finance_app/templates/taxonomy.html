@@ -10,12 +10,44 @@
         <p class="text-muted mb-0">{{ _("Manage transaction categories and tags used by rules, review, and LLM categorization.") }}</p>
     </div>
     <div class="home-actions">
+        <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#import-taxonomy-modal">
+            <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import taxonomy") }}
+        </button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('taxonomy_admin.export_taxonomy') }}">
+            <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>{{ _("Export YAML") }}
+        </a>
         <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-tag-modal">
             <i class="bi bi-tag" aria-hidden="true"></i>{{ _("New tag") }}
         </button>
         <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-category-modal">
             <i class="bi bi-folder-plus" aria-hidden="true"></i>{{ _("New category") }}
         </button>
+    </div>
+</div>
+
+<div class="modal fade" id="import-taxonomy-modal" tabindex="-1" aria-labelledby="import-taxonomy-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('taxonomy_admin.import_taxonomy') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="import-taxonomy-title">{{ _("Import taxonomy") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="taxonomy-file">{{ _("Taxonomy YAML") }}</label>
+                        <input id="taxonomy-file" class="form-control" type="file" name="taxonomy_file" accept=".yml,.yaml,application/x-yaml,text/yaml,text/x-yaml" required>
+                        <div class="form-text">{{ _("Use the taxonomy YAML export format with categories and tags.") }}</div>
+                    </div>
+                    <p class="text-muted mb-0">{{ _("Existing user-managed categories and tags are updated by name. Built-in categories are skipped.") }}</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import") }}</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 

@@ -235,18 +235,30 @@ function setupPaginatedTables(root = document) {
         table.dataset.paginatedTableReady = "true";
         const pageSize = Math.max(1, Number(table.dataset.pageSize || 25) || 25);
         const state = { page: 1 };
-        const footer = document.createElement("div");
-        footer.className = "table-pagination-footer d-flex flex-wrap justify-content-between align-items-center gap-3";
-        const status = document.createElement("div");
-        status.className = "text-muted";
-        const nav = document.createElement("nav");
-        nav.setAttribute("aria-label", table.dataset.paginationLabel || "Table pages");
-        const pagination = document.createElement("ul");
-        pagination.className = "pagination mb-0";
+        const paginationLabel = table.dataset.paginationLabel || "Table pages";
+        const tableContainer = table.closest(".table-responsive") || table;
+        const controls = [
+            createPaginationControls("table-pagination-header", paginationLabel),
+            createPaginationControls("table-pagination-footer", paginationLabel),
+        ];
 
-        nav.appendChild(pagination);
-        footer.append(status, nav);
-        (table.closest(".table-responsive") || table).insertAdjacentElement("afterend", footer);
+        tableContainer.insertAdjacentElement("beforebegin", controls[0].container);
+        tableContainer.insertAdjacentElement("afterend", controls[1].container);
+
+        function createPaginationControls(className, label) {
+            const container = document.createElement("div");
+            container.className = `${className} d-flex flex-wrap justify-content-between align-items-center gap-3`;
+            const status = document.createElement("div");
+            status.className = "text-muted";
+            const nav = document.createElement("nav");
+            nav.setAttribute("aria-label", label);
+            const pagination = document.createElement("ul");
+            pagination.className = "pagination mb-0";
+
+            nav.appendChild(pagination);
+            container.append(status, nav);
+            return { container, status, pagination };
+        }
 
         function tableRows() {
             return Array.from(tbody.rows).filter((row) => !row.hasAttribute("data-sort-ignore"));
@@ -261,7 +273,7 @@ function setupPaginatedTables(root = document) {
             render();
         }
 
-        function addPageButton(label, pageNumber, options = {}) {
+        function addPageButton(pagination, label, pageNumber, options = {}) {
             const item = document.createElement("li");
             item.className = `page-item${options.active ? " active" : ""}${options.disabled ? " disabled" : ""}`;
             const button = document.createElement("button");
@@ -277,7 +289,7 @@ function setupPaginatedTables(root = document) {
             pagination.appendChild(item);
         }
 
-        function addEllipsis() {
+        function addEllipsis(pagination) {
             const item = document.createElement("li");
             item.className = "page-item disabled";
             const marker = document.createElement("span");
@@ -297,6 +309,36 @@ function setupPaginatedTables(root = document) {
             return Array.from(pages).sort((left, right) => left - right);
         }
 
+        function renderControls(control, pageCount, startIndex, endIndex, totalRows) {
+            control.status.textContent = translateTableMessage(
+                "Showing {start}-{end} of {total} rows",
+                {
+                    start: startIndex + 1,
+                    end: endIndex,
+                    total: totalRows,
+                }
+            );
+            control.pagination.replaceChildren();
+            addPageButton(control.pagination, translateTableMessage("Previous"), state.page - 1, {
+                disabled: state.page <= 1,
+            });
+
+            let previousPage = 0;
+            visiblePageNumbers(pageCount).forEach((pageNumber) => {
+                if (previousPage && pageNumber - previousPage > 1) {
+                    addEllipsis(control.pagination);
+                }
+                addPageButton(control.pagination, String(pageNumber), pageNumber, {
+                    active: pageNumber === state.page,
+                });
+                previousPage = pageNumber;
+            });
+
+            addPageButton(control.pagination, translateTableMessage("Next"), state.page + 1, {
+                disabled: state.page >= pageCount,
+            });
+        }
+
         function render() {
             const rows = tableRows();
             const totalRows = rows.length;
@@ -309,38 +351,14 @@ function setupPaginatedTables(root = document) {
                 row.hidden = totalRows > pageSize && (index < startIndex || index >= endIndex);
             });
 
-            footer.hidden = totalRows <= pageSize;
-            if (footer.hidden) {
+            controls.forEach((control) => {
+                control.container.hidden = totalRows <= pageSize;
+            });
+            if (totalRows <= pageSize) {
                 return;
             }
 
-            status.textContent = translateTableMessage(
-                "Showing {start}-{end} of {total} rows",
-                {
-                    start: startIndex + 1,
-                    end: endIndex,
-                    total: totalRows,
-                }
-            );
-            pagination.replaceChildren();
-            addPageButton(translateTableMessage("Previous"), state.page - 1, {
-                disabled: state.page <= 1,
-            });
-
-            let previousPage = 0;
-            visiblePageNumbers(pageCount).forEach((pageNumber) => {
-                if (previousPage && pageNumber - previousPage > 1) {
-                    addEllipsis();
-                }
-                addPageButton(String(pageNumber), pageNumber, {
-                    active: pageNumber === state.page,
-                });
-                previousPage = pageNumber;
-            });
-
-            addPageButton(translateTableMessage("Next"), state.page + 1, {
-                disabled: state.page >= pageCount,
-            });
+            controls.forEach((control) => renderControls(control, pageCount, startIndex, endIndex, totalRows));
         }
 
         table.addEventListener("finance:table-sorted", () => {
@@ -356,3 +374,6 @@ setupPaginatedTables();
 window.setupCollapseToggleLabels = setupCollapseToggleLabels;
 window.setupAuditSectionLinks = setupAuditSectionLinks;
 window.openAuditSectionFromLocation = openAuditSectionFromLocation;
+window.setupTableRowInteractions = setupTableRowInteractions;
+window.setupSortableTables = setupSortableTables;
+window.setupPaginatedTables = setupPaginatedTables;

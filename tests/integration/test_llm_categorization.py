@@ -780,16 +780,19 @@ def test_build_llm_prompt_includes_evidence_and_compact_candidate_taxonomy():
         ],
     )
 
-    transaction = json.loads(prompt)["transactions"][0]
+    payload = json.loads(prompt)
+    transaction = payload["transactions"][0]
 
+    assert [row["name"] for row in payload["taxonomy"]["categories"]] == ["Food", "UNKNOWN", "Utilities"]
+    assert [row["name"] for row in payload["taxonomy"]["tags"]] == ["Government", "Tax"]
     assert transaction["best_matching_rule"]["rule_id"] == 7
     assert transaction["similar_transactions"]["examples"][0]["transaction_id"] == 12
     assert [row["name"] for row in transaction["candidate_taxonomy"]["categories"]] == ["Food", "UNKNOWN"]
     assert [row["name"] for row in transaction["candidate_taxonomy"]["tags"]] == ["Tax"]
 
 
-def test_classify_unknowns_with_llm_rejects_category_outside_candidate_taxonomy(db_conn, monkeypatch):
-    """Verify model categories outside compact candidates remain unknown."""
+def test_classify_unknowns_with_llm_accepts_high_confidence_full_taxonomy_fallback_for_review(db_conn, monkeypatch):
+    """Verify valid full-taxonomy fallback categories are accepted for review."""
     set_owner_setting(db_conn, "llm_confidence_threshold", "0.80")
     db_conn.commit()
     transactions = [
@@ -804,15 +807,16 @@ def test_classify_unknowns_with_llm_rejects_category_outside_candidate_taxonomy(
     ]
     captured = {}
 
-    def request_for_test(unknown_chunk, requested_rules, category_options, tag_options, *args):
+    def request_for_test(unknown_chunk, requested_rules, category_options, tag_options, category_rows, *args):
         """Return a category that exists globally but not in this compact taxonomy."""
         del requested_rules, tag_options, args
         captured["category_options"] = category_options
+        captured["candidate_categories"] = list(unknown_chunk[0]["llm_candidate_categories"])
         return [
             {
                 "request_id": unknown_chunk[0]["llm_request_id"],
-                "category_id": 999999,
-                "confidence": 0.99,
+                "category_id": taxonomy_id(category_rows, "Travel"),
+                "confidence": 0.96,
                 "needs_review": False,
                 "tag_ids": [],
             }
@@ -823,15 +827,21 @@ def test_classify_unknowns_with_llm_rejects_category_outside_candidate_taxonomy(
     llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
 
     assert "Food" in captured["category_options"]
-    assert "Travel" not in captured["category_options"]
-    assert transactions[0]["category"] == "UNKNOWN"
+    assert "Travel" in captured["category_options"]
+    assert "Travel" not in captured["candidate_categories"]
+    assert transactions[0]["category"] == "Travel"
+    assert transactions[0]["needs_review"] == 1
+    assert transactions[0]["category_rule_id"] is None
     assert transactions[0]["tags"] == []
     metadata = json.loads(transactions[0]["category_metadata"])
-    assert metadata["failure_reason"] == "invalid_category_id"
+    assert metadata["category_outside_candidate_taxonomy"] is True
+    assert metadata["full_taxonomy_fallback_used"] is True
+    assert metadata["full_taxonomy_fallback_rejected"] is False
+    assert "failure_reason" not in metadata
 
 
-def test_classify_unknowns_with_llm_rejects_tag_ids_outside_candidate_taxonomy(db_conn, monkeypatch):
-    """Verify invalid tag IDs invalidate the entire LLM categorization result."""
+def test_classify_unknowns_with_llm_rejects_low_confidence_full_taxonomy_fallback(db_conn, monkeypatch):
+    """Verify outside-candidate categories require high model confidence."""
     transactions = [
         {
             **unknown_transaction("Metro Grocery", "METRO", 12.34),
@@ -844,7 +854,87 @@ def test_classify_unknowns_with_llm_rejects_tag_ids_outside_candidate_taxonomy(d
     ]
 
     def request_for_test(unknown_chunk, *args):
-        """Return a valid category ID with a tag ID outside the candidate taxonomy."""
+        """Return a plausible full-taxonomy category below the fallback threshold."""
+        category_rows = args[3]
+        return [
+            {
+                "request_id": unknown_chunk[0]["llm_request_id"],
+                "category_id": taxonomy_id(category_rows, "Travel"),
+                "confidence": 0.94,
+                "needs_review": True,
+                "tag_ids": [],
+            }
+        ]
+
+    monkeypatch.setattr(llm, "request_llm_categories", request_for_test)
+
+    llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
+
+    assert transactions[0]["category"] == "UNKNOWN"
+    assert transactions[0]["tags"] == []
+    metadata = json.loads(transactions[0]["category_metadata"])
+    assert metadata["failure_reason"] == "full_taxonomy_fallback_confidence_below_high_threshold"
+    assert metadata["category_outside_candidate_taxonomy"] is True
+    assert metadata["full_taxonomy_fallback_used"] is False
+    assert metadata["full_taxonomy_fallback_rejected"] is True
+
+
+def test_classify_unknowns_with_llm_keeps_high_confidence_full_taxonomy_tags_for_review(db_conn, monkeypatch):
+    """Verify valid outside-candidate tags are kept only with review."""
+    transactions = [
+        {
+            **unknown_transaction("Metro Grocery", "METRO", 12.34),
+            "rule_evidence": {
+                "category": "Food",
+                "tags": ["Tax"],
+                "confidence": 0.88,
+            },
+        }
+    ]
+
+    def request_for_test(unknown_chunk, *args):
+        """Return a valid tag ID outside the compact candidate taxonomy."""
+        category_rows = args[3]
+        tag_rows = args[4]
+        return [
+            {
+                "request_id": unknown_chunk[0]["llm_request_id"],
+                "category_id": taxonomy_id(category_rows, "Food"),
+                "confidence": 0.99,
+                "needs_review": False,
+                "tag_ids": [taxonomy_id(tag_rows, "Government")],
+            }
+        ]
+
+    monkeypatch.setattr(llm, "request_llm_categories", request_for_test)
+
+    llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
+
+    assert transactions[0]["category"] == "Food"
+    assert transactions[0]["tags"] == ["Government"]
+    assert transactions[0]["needs_review"] == 1
+    assert transactions[0]["category_rule_id"] is None
+    metadata = json.loads(transactions[0]["category_metadata"])
+    assert metadata["tag_ids_outside_candidate_taxonomy"] == metadata["llm_tag_ids"]
+    assert metadata["review_required"] is True
+    assert "failure_reason" not in metadata
+
+
+def test_classify_unknowns_with_llm_drops_invalid_tag_ids_without_losing_category(db_conn, monkeypatch):
+    """Verify invalid tag IDs are dropped while the valid category is kept for review."""
+    transactions = [
+        {
+            **unknown_transaction("Metro Grocery", "METRO", 12.34),
+            "rule_evidence": {
+                "category": "Food",
+                "tags": ["Tax"],
+                "confidence": 0.88,
+            },
+        }
+    ]
+
+    def request_for_test(unknown_chunk, *args):
+        """Return a valid category ID with an invalid tag ID."""
         category_rows = args[3]
         return [
             {
@@ -860,10 +950,13 @@ def test_classify_unknowns_with_llm_rejects_tag_ids_outside_candidate_taxonomy(d
 
     llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
 
-    assert transactions[0]["category"] == "UNKNOWN"
+    assert transactions[0]["category"] == "Food"
     assert transactions[0]["tags"] == []
+    assert transactions[0]["needs_review"] == 1
+    assert transactions[0]["category_rule_id"] is None
     metadata = json.loads(transactions[0]["category_metadata"])
-    assert metadata["failure_reason"] == "invalid_tag_ids"
+    assert "failure_reason" not in metadata
+    assert metadata["dropped_invalid_tag_ids"] == [999999]
     assert metadata["llm_category_id"] is not None
     assert metadata["llm_tag_ids"] == []
 

@@ -1,5 +1,5 @@
-function readJsonScript(id, fallback) {
-    const node = document.getElementById(id);
+function readJsonScript(id, fallback, root = document) {
+    const node = root.getElementById ? root.getElementById(id) : root.querySelector(`#${id}`);
     if (!node) return fallback;
 
     try {
@@ -9,7 +9,7 @@ function readJsonScript(id, fallback) {
     }
 }
 
-const dashboardCharts = readJsonScript("dashboard-chart-data", {});
+let dashboardCharts = readJsonScript("dashboard-chart-data", {});
 const dashboardPalette = [
     "#0f766e",
     "#2563eb",
@@ -145,8 +145,8 @@ function dashboardBaseGrid(extra = {}) {
     };
 }
 
-function dashboardChartElement(id) {
-    return document.getElementById(id);
+function dashboardChartElement(id, root = document) {
+    return root.getElementById ? root.getElementById(id) : root.querySelector(`#${id}`);
 }
 
 function dashboardDataPoint(value, drilldownUrl, itemStyle = {}) {
@@ -201,8 +201,14 @@ function dashboardResizeChart(chart) {
 }
 
 function dashboardObserveChartResize(chart, element) {
-    window.addEventListener("resize", () => dashboardResizeChart(chart));
-    window.addEventListener("finance:layoutchange", () => dashboardResizeChart(chart));
+    const resizeHandler = () => {
+        if (element.isConnected) {
+            dashboardResizeChart(chart);
+        }
+    };
+    element.financeDashboardResizeHandler = resizeHandler;
+    window.addEventListener("resize", resizeHandler);
+    window.addEventListener("finance:layoutchange", resizeHandler);
 
     if (window.ResizeObserver) {
         element.financeResizeObserver = new ResizeObserver(() => dashboardResizeChart(chart));
@@ -215,6 +221,7 @@ function dashboardObserveChartResize(chart, element) {
 function dashboardCreateChart(element, option, drilldown = true) {
     if (!window.echarts || !element) return null;
 
+    dashboardDisposeChart(element);
     const chart = echarts.init(element, null, { renderer: "canvas" });
     chart.setOption(option);
     if (drilldown) {
@@ -223,6 +230,29 @@ function dashboardCreateChart(element, option, drilldown = true) {
 
     dashboardObserveChartResize(chart, element);
     return chart;
+}
+
+function dashboardDisposeChart(element) {
+    if (!element) return;
+
+    if (element.financeResizeObserver) {
+        element.financeResizeObserver.disconnect();
+        delete element.financeResizeObserver;
+    }
+
+    if (element.financeDashboardResizeHandler) {
+        window.removeEventListener("resize", element.financeDashboardResizeHandler);
+        window.removeEventListener("finance:layoutchange", element.financeDashboardResizeHandler);
+        delete element.financeDashboardResizeHandler;
+    }
+
+    window.echarts?.getInstanceByDom(element)?.dispose();
+}
+
+function disposeDashboardCharts(root = document) {
+    ["categoryChart", "spendingIncomeChart", "netChart"].forEach((id) => {
+        dashboardDisposeChart(dashboardChartElement(id, root));
+    });
 }
 
 function dashboardCategoryBarOption() {
@@ -392,21 +422,25 @@ function dashboardNetCashflowOption() {
     };
 }
 
-function renderDashboardCharts() {
-    const categoryChart = dashboardChartElement("categoryChart");
+function renderDashboardCharts(root = document) {
+    dashboardCharts = readJsonScript("dashboard-chart-data", {}, root);
+    const categoryChart = dashboardChartElement("categoryChart", root);
     if (categoryChart && dashboardCharts.categoryLabels?.length > 0) {
         dashboardCreateChart(categoryChart, dashboardCategoryBarOption());
     }
 
-    const spendingIncomeChart = dashboardChartElement("spendingIncomeChart");
+    const spendingIncomeChart = dashboardChartElement("spendingIncomeChart", root);
     if (spendingIncomeChart && dashboardCharts.spendingIncomeMonthLabels?.length > 0) {
         dashboardCreateChart(spendingIncomeChart, dashboardSpendingIncomeOption());
     }
 
-    const netChart = dashboardChartElement("netChart");
+    const netChart = dashboardChartElement("netChart", root);
     if (netChart && dashboardCharts.netMonthLabels?.length > 0) {
         dashboardCreateChart(netChart, dashboardNetCashflowOption());
     }
 }
 
 renderDashboardCharts();
+
+window.disposeDashboardCharts = disposeDashboardCharts;
+window.setupDashboardCharts = renderDashboardCharts;

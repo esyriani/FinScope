@@ -221,6 +221,8 @@ def build_recurring_activity_json(recurring_items):
             "lastSeen": item["last_seen"],
             "observedMonths": item["observed_months"],
             "status": item["status"],
+            "statusLabel": item.get("status_label", ""),
+            "statusDetail": item.get("status_detail", ""),
             "confidence": item["confidence"],
             "userStatus": item["user_status"],
             "active": item["active"],

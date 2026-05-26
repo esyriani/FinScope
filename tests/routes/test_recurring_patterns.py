@@ -1,8 +1,12 @@
 """Tests for recurring pattern routes and persistence helpers."""
 
+from datetime import date
+from pathlib import Path
+
 import pytest
 
 from finance_app.core.csrf import CSRF_HEADER_NAME, CSRF_SESSION_KEY
+from finance_app.modules.calendar.presenter import build_recurring_activity_json
 from finance_app.modules.recurring.forms import parse_expected_day, recurring_pattern_payload
 from finance_app.modules.recurring.patterns import (
     get_recurring_pattern,
@@ -16,7 +20,15 @@ from finance_app.modules.recurring.patterns import (
     recurring_pattern_key,
     upsert_recurring_pattern,
 )
+from finance_app.modules.recurring.service import (
+    build_recurring_calendar_days,
+    recurring_empty_state_message,
+    recurring_status_detail,
+)
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_name
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def set_csrf_token(client, token="test-csrf-token"):
@@ -129,6 +141,210 @@ def test_recurring_routes_reject_incomplete_payloads(client, payload):
     assert response.get_json() == {
         "ok": False,
         "message": "Recurring pattern payload is incomplete.",
+    }
+
+
+def test_recurring_page_uses_shared_status_filter_links(client):
+    """Verify recurring status filters are URL-driven instead of client-only buttons."""
+    response = client.get("/recurring?view=list&statuses=overdue")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'aria-label="Status filter"' in body
+    assert 'data-recurring-status-filter="overdue"' in body
+    assert 'data-recurring-ajax-link' in body
+    assert 'name="statuses" value="overdue"' in body
+    assert 'aria-pressed="true"' in body
+    assert 'id="recurring-status"' not in body
+    assert "data-recurring-activity-filter" not in body
+
+
+def test_recurring_page_exposes_compact_table_and_export_status_details(client):
+    """Verify recurring list and export columns expose compact status context."""
+    response = client.get("/recurring?view=list")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'data-recurring-dynamic' in body
+    assert "recurring-summary-layout" in body
+    assert "recurring-metric-carousel" in body
+    assert "Repeating merchants detected for the selected month." in body
+    assert "No recurring activity detected for this month." in body
+    assert 'data-sort-column="7" data-sort-type="number"' in body
+    assert "data-paginated-table" in body
+    assert 'data-pagination-label="Recurring activity pages"' in body
+    assert 'data-export-visible-source="#recurring-activity-table"' in body
+    assert "data-export-excel-extension=\"xlsx\"" not in body
+    assert 'colspan="8"' in body
+    assert "Status detail" in body
+    assert "Matched date" in body
+    assert "Actual amount" in body
+
+
+def test_table_export_script_prompts_for_displayed_or_entire_table():
+    """Verify shared table export asks which row scope should be downloaded."""
+    body = (
+        PROJECT_ROOT
+        / "src"
+        / "finance_app"
+        / "static"
+        / "js"
+        / "exports.js"
+    ).read_text(encoding="utf-8")
+
+    assert "chooseTableExportScope" in body
+    assert "Displayed rows" in body
+    assert "Entire table" in body
+    assert "Export rows" in body
+
+
+def test_recurring_page_explains_filtered_empty_states(client):
+    """Verify recurring empty states distinguish filtered views from no detections."""
+    response = client.get("/recurring?view=list&statuses=overdue")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "No recurring activity matches the current filters." in body
+
+
+def test_recurring_calendar_exposes_empty_state_context(client):
+    """Verify an empty recurring calendar explains why no chips are visible."""
+    response = client.get("/recurring?view=calendar")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "data-recurring-ajax-form" in body
+    assert "Matched items use the transaction date; unmatched items stay on the expected date." in body
+    assert "No recurring activity detected for this month." in body
+
+
+def test_recurring_activity_template_keeps_post_action_state_hooks():
+    """Verify recurring list rows keep the client hooks updated after actions."""
+    body = (
+        PROJECT_ROOT
+        / "src"
+        / "finance_app"
+        / "templates"
+        / "_recurring_activity.html"
+    ).read_text(encoding="utf-8")
+
+    assert "data-recurring-user-status" in body
+    assert "data-recurring-active" in body
+    assert "data-recurring-row-state" in body
+
+
+def test_recurring_calendar_template_places_amount_on_its_own_chip_line():
+    """Verify recurring calendar chips keep the amount separate from merchant text."""
+    body = (
+        PROJECT_ROOT
+        / "src"
+        / "finance_app"
+        / "templates"
+        / "_recurring_calendar.html"
+    ).read_text(encoding="utf-8")
+
+    assert "recurring-calendar-chip-amount" in body
+
+
+def test_recurring_detail_modal_exposes_decision_summary_hooks(client):
+    """Verify recurring details surface status, evidence, and recommendation hooks."""
+    response = client.get("/recurring?view=list")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "data-recurring-detail-status-pill" in body
+    assert "data-recurring-detail-status-detail" in body
+    assert "data-recurring-detail-user-status" in body
+    assert "data-recurring-detail-recommendation" in body
+    assert "Your decision" in body
+    assert "Why detected" in body
+    assert "Current-month evidence" in body
+
+
+def test_recurring_status_detail_explains_list_statuses():
+    """Verify recurring row status details explain why each row needs attention."""
+    assert recurring_status_detail(
+        {"status": "occurred", "match_details": {}},
+        date(2026, 5, 5),
+    ) == "Date and amount matched."
+    assert recurring_status_detail(
+        {"status": "overdue", "date": "2026-05-01", "match_details": {}},
+        date(2026, 5, 5),
+    ) == "4 days overdue"
+    assert recurring_status_detail(
+        {"status": "possibly_inactive", "match_details": {"missed_cycles": 2}},
+        date(2026, 5, 5),
+    ) == "Missed 2 expected cycles."
+
+
+def test_recurring_empty_state_message_mentions_filters_when_applied(app):
+    """Verify recurring empty-state text matches the active filter context."""
+    with app.app_context():
+        assert recurring_empty_state_message(False) == "No recurring activity detected for this month."
+        assert recurring_empty_state_message(True) == "No recurring activity matches the current filters."
+
+
+def test_recurring_calendar_days_prioritize_dense_day_attention_items():
+    """Verify recurring calendar days expose compact counts and priority ordering."""
+    items = [
+        recurring_calendar_item("expected", "GYM"),
+        recurring_calendar_item("overdue", "HYDRO"),
+        recurring_calendar_item("amount_changed", "RENT"),
+        recurring_calendar_item("occurred", "NETFLIX"),
+    ]
+
+    days = build_recurring_calendar_days(date(2026, 5, 1), items)
+    day = next(item for item in days if item["date"] == "2026-05-10")
+
+    assert day["item_count"] == 4
+    assert day["attention_count"] == 2
+    assert day["more_count"] == 1
+    assert [item["status"] for item in day["recurring_items"]] == [
+        "overdue",
+        "amount_changed",
+        "expected",
+    ]
+    assert day["all_recurring_items"][0]["status_detail"] == "Needs payment."
+    assert day["all_recurring_items"][0]["category"] == "Utilities"
+    assert day["all_recurring_items"][0]["user_status"] == "detected"
+    assert day["all_recurring_items"][0]["active"] == 1
+
+
+def test_recurring_activity_json_exposes_detail_modal_status_context():
+    """Verify recurring detail JSON includes status labels and explanations."""
+    item = recurring_calendar_item("overdue", "HYDRO")
+
+    payload = build_recurring_activity_json([item])[item["id"]]
+
+    assert payload["statusLabel"] == "Overdue"
+    assert payload["statusDetail"] == "Needs payment."
+    assert payload["matchDetails"] == {}
+
+
+def recurring_calendar_item(status, merchant):
+    """Build a recurring item fixture for recurring calendar day tests."""
+    return {
+        "id": f"{status}-{merchant}",
+        "pattern_key": f"{merchant}::spending",
+        "merchant_id": None,
+        "match_type": "keyword",
+        "merchant": merchant,
+        "category": "Utilities",
+        "type": "spending",
+        "frequency": "Monthly-like",
+        "amount": 42.0,
+        "date": "2026-05-10",
+        "last_seen": "2026-04-10",
+        "observed_months": 4,
+        "status": status,
+        "status_label": status.replace("_", " ").title(),
+        "status_detail": "Needs payment.",
+        "confidence": "High",
+        "user_status": "detected",
+        "active": 1,
+        "amount_change": None,
+        "match_details": {},
+        "occurrences": [],
     }
 
 
