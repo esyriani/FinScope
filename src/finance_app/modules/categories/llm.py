@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from threading import local
 
 from sqlalchemy import func, select
 
@@ -22,9 +23,11 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.decision import (
+    FinalCategoryDecision,
     HIGH_CONFIDENCE_THRESHOLD,
     MEDIUM_CONFIDENCE_THRESHOLD,
     apply_review_policy,
+    clamp_confidence,
     combine_confidence,
     evidence_decision_source,
 )
@@ -47,11 +50,27 @@ from finance_app.modules.settings.runtime import get_setting
 
 
 logger = logging.getLogger(__name__)
+_request_context = local()
 LLM_BATCH_SIZE = 20
 LLM_TIMEOUT_SECONDS = 60
 COMMON_CATEGORY_LIMIT = 6
 MAX_CANDIDATE_CATEGORIES = 10
 MAX_CANDIDATE_TAGS = 16
+
+
+def clear_llm_request_status():
+    """Clear the thread-local status for the next LLM categorization request."""
+    _request_context.status = {"status": "not_requested"}
+
+
+def last_llm_request_status():
+    """Return the last thread-local LLM request status for progress logging."""
+    return dict(getattr(_request_context, "status", {"status": "not_requested"}))
+
+
+def record_llm_request_status(status, **fields):
+    """Record thread-local LLM request status details."""
+    _request_context.status = {"status": status, **fields}
 
 
 def chunked(items, size):
@@ -173,25 +192,13 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
     llm_result_count = 0
 
     for unknown_chunk in chunked(unknown_items, LLM_BATCH_SIZE):
-        chunk_category_options = chunk_candidate_options(
-            unknown_chunk,
-            "llm_candidate_categories",
-            category_options,
-        )
-        chunk_tag_options = chunk_candidate_options(
-            unknown_chunk,
-            "llm_candidate_tags",
-            tag_options,
-        )
-        chunk_category_rows = taxonomy_rows_for_names(category_rows, chunk_category_options)
-        chunk_tag_rows = taxonomy_rows_for_names(tag_rows, chunk_tag_options)
         llm_results = request_llm_categories(
             unknown_chunk,
             rules,
-            chunk_category_options,
-            chunk_tag_options,
-            chunk_category_rows,
-            chunk_tag_rows,
+            category_options,
+            tag_options,
+            category_rows,
+            tag_rows,
             openai_model,
             verify_threshold,
         )
@@ -227,34 +234,76 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
             merchant_key = tx["merchant_key"]
             cache_key = merchant_category_cache_key(merchant_key, tx.get("amount"), tx.get("merchant_id"))
             paired_cache_keys.add(cache_key)
-            allowed_categories = tx.get("llm_candidate_categories") or category_options
-            allowed_tags = tx.get("llm_candidate_tags") or tag_options
-            allowed_category_rows = taxonomy_rows_for_names(category_rows, allowed_categories)
-            allowed_tag_rows = taxonomy_rows_for_names(tag_rows, allowed_tags)
+            candidate_categories = tx.get("llm_candidate_categories") or category_options
+            candidate_tags = tx.get("llm_candidate_tags") or tag_options
+            candidate_category_ids = taxonomy_ids_for_names(category_rows, candidate_categories)
+            candidate_tag_ids = taxonomy_ids_for_names(tag_rows, candidate_tags)
             category, category_id, category_id_is_valid = parse_llm_category_id(
                 result.get("category_id"),
-                allowed_category_rows,
+                category_rows,
                 unknown_category,
             )
             confidence = parse_confidence(result.get("confidence"))
             confidence_is_valid = 0 <= confidence <= 1
             if not confidence_is_valid:
                 confidence = 0.0
-            tags, tag_ids, tag_ids_are_valid = parse_llm_tag_ids(
+            tags, tag_ids, invalid_tag_ids, tag_ids_payload_is_valid = parse_llm_tag_ids(
                 result.get("tag_ids"),
-                allowed_tag_rows,
+                tag_rows,
+            )
+            category_outside_candidate_taxonomy = (
+                category_id_is_valid
+                and category_id is not None
+                and category_id not in set(candidate_category_ids)
+            )
+            fallback_confidence_is_high = confidence_is_valid and confidence >= HIGH_CONFIDENCE_THRESHOLD
+            category_fallback_rejected = (
+                category_outside_candidate_taxonomy
+                and category != unknown_category
+                and not fallback_confidence_is_high
+            )
+            tag_ids_outside_candidate_taxonomy = [
+                tag_id
+                for tag_id in tag_ids
+                if tag_id not in set(candidate_tag_ids)
+            ]
+            tag_drop = filtered_llm_tags_for_confidence(
+                tags,
+                tag_ids,
+                candidate_tag_ids,
+                fallback_confidence_is_high,
             )
             final_confidence = (
                 llm_final_confidence(tx, category, confidence, result)
-                if category_id_is_valid and tag_ids_are_valid and confidence_is_valid
+                if category_id_is_valid and confidence_is_valid
                 else 0.0
             )
-            decision = apply_review_policy(
-                category,
-                tags,
-                final_confidence,
-                unknown_category,
-            )
+            if category_fallback_rejected:
+                decision = rejected_llm_category_decision(category, final_confidence, unknown_category)
+            else:
+                decision = apply_review_policy(
+                    category,
+                    tag_drop["tags"],
+                    final_confidence,
+                    unknown_category,
+                )
+            if llm_result_needs_forced_review(
+                decision,
+                category_outside_candidate_taxonomy,
+                tag_ids_outside_candidate_taxonomy,
+                invalid_tag_ids,
+                tag_ids_payload_is_valid,
+                tag_drop["dropped_outside_candidate_tag_ids"],
+            ):
+                decision = FinalCategoryDecision(
+                    category=decision.category,
+                    tags=decision.tags,
+                    confidence=decision.confidence,
+                    needs_review=1,
+                    proposed_category=decision.proposed_category,
+                    proposed_confidence=decision.proposed_confidence,
+                    assigned_unknown=decision.assigned_unknown,
+                )
 
             if decision.category != unknown_category and decision.confidence >= confidence_threshold:
                 rule_id = (
@@ -278,13 +327,21 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
                     final_confidence,
                     rule_id,
                     category_id=category_id,
-                    tag_ids=tag_ids,
+                    tag_ids=tag_drop["tag_ids"],
+                    candidate_category_ids=candidate_category_ids,
+                    candidate_tag_ids=candidate_tag_ids,
+                    category_outside_candidate_taxonomy=category_outside_candidate_taxonomy,
+                    tag_ids_outside_candidate_taxonomy=tag_ids_outside_candidate_taxonomy,
+                    dropped_invalid_tag_ids=invalid_tag_ids,
+                    dropped_tag_ids_outside_candidate_taxonomy=tag_drop["dropped_outside_candidate_tag_ids"],
+                    tag_ids_payload_is_valid=tag_ids_payload_is_valid,
+                    category_fallback_rejected=category_fallback_rejected,
                     failure_reason=llm_failure_reason(
                         category,
                         unknown_category,
                         category_id_is_valid,
-                        tag_ids_are_valid,
                         confidence_is_valid,
+                        category_fallback_rejected,
                         decision,
                     ),
                 ),
@@ -339,6 +396,64 @@ def cleanup_llm_candidate_taxonomies(unknown_items):
         tx.pop("llm_candidate_tags", None)
 
 
+def rejected_llm_category_decision(category, confidence, unknown_category):
+    """Return an unknown decision while preserving the rejected LLM proposal."""
+    proposed_confidence = clamp_confidence(confidence)
+    if proposed_confidence is not None:
+        proposed_confidence = round(proposed_confidence, 4)
+    return FinalCategoryDecision(
+        category=unknown_category,
+        tags=(),
+        confidence=None,
+        needs_review=1,
+        proposed_category=category,
+        proposed_confidence=proposed_confidence,
+        assigned_unknown=True,
+    )
+
+
+def filtered_llm_tags_for_confidence(tags, tag_ids, candidate_tag_ids, fallback_confidence_is_high):
+    """Return kept tags after applying the full-taxonomy fallback confidence gate."""
+    candidate_ids = set(candidate_tag_ids)
+    kept_tags = []
+    kept_tag_ids = []
+    dropped_outside_candidate_tag_ids = []
+    for tag, tag_id in zip(tags, tag_ids):
+        if tag_id not in candidate_ids and not fallback_confidence_is_high:
+            dropped_outside_candidate_tag_ids.append(tag_id)
+            continue
+        kept_tags.append(tag)
+        kept_tag_ids.append(tag_id)
+
+    return {
+        "tags": kept_tags,
+        "tag_ids": kept_tag_ids,
+        "dropped_outside_candidate_tag_ids": dropped_outside_candidate_tag_ids,
+    }
+
+
+def llm_result_needs_forced_review(
+    decision,
+    category_outside_candidate_taxonomy,
+    tag_ids_outside_candidate_taxonomy,
+    invalid_tag_ids,
+    tag_ids_payload_is_valid,
+    dropped_tag_ids_outside_candidate_taxonomy,
+):
+    """Return whether fallback taxonomy behavior should force manual review."""
+    if decision.assigned_unknown:
+        return False
+    return any(
+        (
+            category_outside_candidate_taxonomy,
+            tag_ids_outside_candidate_taxonomy,
+            invalid_tag_ids,
+            not tag_ids_payload_is_valid,
+            dropped_tag_ids_outside_candidate_taxonomy,
+        )
+    )
+
+
 def llm_final_confidence(transaction, category, confidence, result):
     """Return LLM confidence adjusted by rule and retrieval agreement."""
     agreement_confidences = []
@@ -388,11 +503,11 @@ def parse_llm_category_id(value, allowed_category_rows, unknown_category):
 
 
 def parse_llm_tag_ids(value, allowed_tag_rows):
-    """Return tag names selected by strict LLM tag IDs and whether they are valid."""
+    """Return valid tag selections and invalid values from an LLM tag payload."""
     if value in (None, ""):
-        return [], [], False
+        return [], [], [], False
     if not isinstance(value, list):
-        return [], [], False
+        return [], [], [value], False
 
     tags_by_id = {
         str(row.get("id")): row.get("name")
@@ -401,18 +516,20 @@ def parse_llm_tag_ids(value, allowed_tag_rows):
     }
     names = []
     tag_ids = []
+    invalid_tag_ids = []
     seen = set()
     for item in value:
         key = str(item).strip()
         name = tags_by_id.get(key)
         if not name:
-            return [], [], False
+            invalid_tag_ids.append(item)
+            continue
         if key in seen:
             continue
         names.append(name)
         tag_ids.append(int(key))
         seen.add(key)
-    return names, tag_ids, True
+    return names, tag_ids, invalid_tag_ids, True
 
 
 def clamp_llm_evidence_confidence(confidence):
@@ -453,23 +570,21 @@ def llm_failure_reason(
     category,
     unknown_category,
     category_id_is_valid,
-    tag_ids_are_valid,
     confidence_is_valid,
+    category_fallback_rejected,
     decision,
 ):
     """Return a compact failure reason for conservative LLM outcomes."""
     if not category_id_is_valid:
         return "invalid_category_id"
-    if not tag_ids_are_valid:
-        return "invalid_tag_ids"
     if not confidence_is_valid:
         return "invalid_confidence"
+    if category_fallback_rejected:
+        return "full_taxonomy_fallback_confidence_below_high_threshold"
     if decision.assigned_unknown and decision.proposed_confidence is not None:
         if category == unknown_category:
             return "llm_unknown_category"
         return "confidence_below_medium_threshold"
-    if decision.needs_review:
-        return "confidence_below_high_threshold"
     return None
 
 
@@ -482,11 +597,22 @@ def llm_category_metadata(
     rule_id,
     category_id=None,
     tag_ids=None,
+    candidate_category_ids=None,
+    candidate_tag_ids=None,
+    category_outside_candidate_taxonomy=False,
+    tag_ids_outside_candidate_taxonomy=None,
+    dropped_invalid_tag_ids=None,
+    dropped_tag_ids_outside_candidate_taxonomy=None,
+    tag_ids_payload_is_valid=True,
+    category_fallback_rejected=False,
     failure_reason=None,
 ):
     """Return persisted audit metadata for an accepted LLM categorization."""
     rule_evidence = transaction.get("rule_evidence")
     historical_evidence = transaction.get("historical_evidence")
+    tag_ids_outside_candidate_taxonomy = list(tag_ids_outside_candidate_taxonomy or [])
+    dropped_invalid_tag_ids = list(dropped_invalid_tag_ids or [])
+    dropped_tag_ids_outside_candidate_taxonomy = list(dropped_tag_ids_outside_candidate_taxonomy or [])
     metadata = {
         "decision_source": evidence_decision_source(
             rule=bool(rule_evidence),
@@ -502,12 +628,29 @@ def llm_category_metadata(
         "category_rule_id": rule_id,
         "llm_category_id": category_id,
         "llm_tag_ids": list(tag_ids or []),
+        "candidate_category_ids": list(candidate_category_ids or []),
+        "candidate_tag_ids": list(candidate_tag_ids or []),
+        "category_outside_candidate_taxonomy": bool(category_outside_candidate_taxonomy),
+        "full_taxonomy_fallback_used": bool(
+            category_outside_candidate_taxonomy
+            and not category_fallback_rejected
+            and not decision.assigned_unknown
+        ),
+        "full_taxonomy_fallback_rejected": bool(category_fallback_rejected),
         "llm_confidence": llm_confidence,
         "llm_reason": str(result.get("reason") or "").strip(),
         "supported_by_similar_transactions": parse_bool(
             result.get("supported_by_similar_transactions")
         ),
     }
+    if tag_ids_outside_candidate_taxonomy:
+        metadata["tag_ids_outside_candidate_taxonomy"] = tag_ids_outside_candidate_taxonomy
+    if dropped_invalid_tag_ids:
+        metadata["dropped_invalid_tag_ids"] = dropped_invalid_tag_ids
+    if dropped_tag_ids_outside_candidate_taxonomy:
+        metadata["dropped_tag_ids_outside_candidate_taxonomy"] = dropped_tag_ids_outside_candidate_taxonomy
+    if not tag_ids_payload_is_valid:
+        metadata["tag_ids_payload_is_valid"] = False
     if failure_reason:
         metadata["failure_reason"] = failure_reason
     if rule_evidence:
@@ -732,6 +875,15 @@ def taxonomy_rows_for_names(rows, names):
     ]
 
 
+def taxonomy_ids_for_names(rows, names):
+    """Return taxonomy row IDs ordered by a compact name list."""
+    return [
+        row["id"]
+        for row in taxonomy_rows_for_names(rows, names)
+        if row.get("id") is not None
+    ]
+
+
 def request_llm_categories(
     unknown_items,
     rules,
@@ -743,14 +895,28 @@ def request_llm_categories(
     verify_threshold,
 ):
     """Request llm categories."""
+    requested_count = len(unknown_items)
+    record_llm_request_status("started", requested_count=requested_count)
     if not settings.openai_api_key:
         logger.info("OpenAI API key is not configured; keeping unknown categories unchanged.")
+        record_llm_request_status(
+            "configuration_missing",
+            requested_count=requested_count,
+            error_type="Configuration",
+            detail="OpenAI API key is not configured.",
+        )
         return []
 
     try:
         from openai import OpenAI
     except ImportError:
         logger.warning("OpenAI package is not installed; keeping unknown categories unchanged.")
+        record_llm_request_status(
+            "dependency_missing",
+            requested_count=requested_count,
+            error_type="ImportError",
+            detail="OpenAI package is not installed.",
+        )
         return []
 
     system_prompt = build_llm_system_prompt(category_rows, tag_rows, verify_threshold)
@@ -781,56 +947,63 @@ def request_llm_categories(
         payload = json.loads(content)
     except json.JSONDecodeError as exc:
         logger.warning("OpenAI categorization response was not valid JSON: %s", exc)
+        record_llm_request_status(
+            "invalid_json",
+            requested_count=requested_count,
+            error_type=type(exc).__name__,
+            detail=str(exc),
+        )
         return []
     except Exception as exc:
+        detail = sanitize_openai_error(exc)
         logger.warning(
             "OpenAI categorization request failed: %s: %s",
             type(exc).__name__,
-            sanitize_openai_error(exc),
+            detail,
+        )
+        record_llm_request_status(
+            "request_error",
+            requested_count=requested_count,
+            error_type=type(exc).__name__,
+            detail=detail,
         )
         return []
 
     results = payload.get("results")
     if not isinstance(results, list):
         logger.warning("OpenAI categorization response did not include a results list.")
+        record_llm_request_status(
+            "invalid_response",
+            requested_count=requested_count,
+            error_type="Invalid response",
+            detail="The response did not include a results list.",
+        )
         return []
+    record_llm_request_status(
+        "ok",
+        requested_count=requested_count,
+        result_count=len(results),
+    )
     return results if isinstance(results, list) else []
 
 
 def build_llm_system_prompt(category_rows=None, tag_rows=None, verify_threshold=None):
-    """Build llm system prompt."""
+    """Build LLM categorization policy instructions."""
     if verify_threshold is None:
         verify_threshold = HIGH_CONFIDENCE_THRESHOLD
-    category_rows = category_rows or []
-    tag_rows = tag_rows or []
-    allowed_categories = "\n".join(
-        taxonomy_prompt_line(row)
-        for row in category_rows
-    )
-    allowed_tags = "\n".join(
-        taxonomy_prompt_line(row)
-        for row in tag_rows
-    )
-    output_categories = ", ".join(str(row["id"]) for row in category_rows if row.get("id") is not None)
-    output_tags = ", ".join(str(row["id"]) for row in tag_rows if row.get("id") is not None)
+    del category_rows, tag_rows
 
     return f"""You are a financial transaction categorization engine.
 
-Your task is to categorize bank transactions using the transaction description, supplied rule evidence, similar historical transactions, and category/tag instructions below. You must assign exactly one category ID from the allowed category list and zero or more tag IDs from the allowed tag list.
+Your task is to categorize bank transactions using the transaction description, supplied rule evidence, similar historical transactions, and the taxonomy supplied in the user JSON. You must assign exactly one category ID from taxonomy.categories and zero or more tag IDs from taxonomy.tags.
 
 You must be consistent, conservative, and deterministic. Do not invent information. If the description is ambiguous or the category is not clear with high confidence, use "UNKNOWN".
 
 Bank statement context:
 - Checking and savings exports often use short bank descriptors, French abbreviations, and terse payment codes. Treat suffixes such as FAC, PAI, ASS, DIV, CC, PLAC, TFR, DEPOT, VIREMENT, CHQ, and VFC as bank context, not as categories by themselves.
 - Categorize by the recognizable merchant, biller, institution, or transaction purpose when it is clear despite those codes.
-- Common banking examples: utility providers such as Hydro-Quebec, Energir, internet, phone, and similar service providers are Utilities; bank fees, taxes, permits, interest, loans, and government fees are Administrative; transfers, credit card payments, deposits, reimbursements, refunds, and account movements are Transfers.
+- Common banking examples: utility providers such as Hydro-Quebec, Energir, internet, phone, and similar service providers are Utilities; bank fees, taxes, permits, interest, loans, and government fees are Administrative; transfers, credit card payments, deposits, reimbursements, refunds, and account movements are Transfers when those categories exist in taxonomy.categories.
 - Use the provided transaction_kind as a hint only. It describes the ledger direction or non-reporting role already inferred by FinScope, but the merchant and category instructions remain authoritative.
-
-Allowed categories:
-{allowed_categories}
-
-Allowed tags:
-{allowed_tags or "- No tags are configured."}
 
 Decision rules:
 1. Use the transaction description as the primary signal.
@@ -845,8 +1018,11 @@ Decision rules:
 10. Do not infer personal context unless it is directly supported by the description.
 11. For refunds, categorize according to the original merchant category when identifiable. Otherwise use "UNKNOWN".
 12. Apply tags only when the description or user context clearly supports the tag instruction.
-13. Prefer a transaction's candidate_taxonomy when it is provided. It is a compact subset of the allowed taxonomy chosen by FinScope for that transaction.
-14. Use similar_transactions as supporting evidence, but do not copy them blindly when they conflict or are weak.
+13. Treat taxonomy.categories and taxonomy.tags as the authoritative full taxonomy.
+14. Prefer a transaction's candidate_taxonomy when it fits. It is a compact subset of likely category and tag IDs chosen by FinScope for that transaction.
+15. You may choose another ID from the full taxonomy only when the candidate_taxonomy does not fit and the full taxonomy contains a clearly better match.
+16. When choosing a category or tag outside candidate_taxonomy, set "needs_review" to true and use high confidence only when the evidence is strong.
+17. Use similar_transactions as supporting evidence, but do not copy them blindly when they conflict or are weak.
 
 Confidence scoring:
 - 0.95 to 1.00: merchant/category is obvious.
@@ -871,8 +1047,8 @@ Do not include hidden reasoning or step-by-step reasoning.
 For each transaction, output:
 {{
   "request_id": string,
-  "category_id": one of {output_categories},
-  "tag_ids": array containing zero or more of {output_tags or "the configured tag IDs"},
+  "category_id": one ID from taxonomy.categories,
+  "tag_ids": array containing zero or more IDs from taxonomy.tags,
   "confidence": number between 0 and 1,
   "needs_review": boolean,
   "supported_by_similar_transactions": boolean,
@@ -881,14 +1057,14 @@ For each transaction, output:
 
 
 def taxonomy_prompt_line(row):
-    """Render prompt line."""
+    """Render a taxonomy row as a compact prompt line for compatibility callers."""
     detail = row["instruction"] or row["description"]
     label = f"ID {row.get('id')}: {row['name']}"
     return f"- {label}: {detail}" if detail else f"- {label}"
 
 
 def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, category_rows=None, tag_rows=None):
-    """Build llm prompt."""
+    """Build the LLM request payload with full taxonomy and compact candidates."""
     tag_options = tag_options or []
     category_rows = category_rows or []
     tag_rows = tag_rows or []
@@ -922,8 +1098,10 @@ def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, c
     ]
 
     payload = {
-        "allowed_categories": taxonomy_payload_rows(category_options, category_rows),
-        "allowed_tags": taxonomy_payload_rows(tag_options, tag_rows),
+        "taxonomy": {
+            "categories": taxonomy_payload_rows(category_options, category_rows),
+            "tags": taxonomy_payload_rows(tag_options, tag_rows),
+        },
         "examples": examples,
         "current_manual_rules": manual_rules,
         "rule_matching": (
@@ -942,11 +1120,11 @@ def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, c
                 "best_matching_rule": tx.get("rule_evidence"),
                 "similar_transactions": tx.get("historical_evidence"),
                 "candidate_taxonomy": {
-                    "categories": taxonomy_payload_rows(
+                    "categories": taxonomy_reference_rows(
                         tx.get("llm_candidate_categories") or category_options,
                         category_rows,
                     ),
-                    "tags": taxonomy_payload_rows(
+                    "tags": taxonomy_reference_rows(
                         tx.get("llm_candidate_tags") or tag_options,
                         tag_rows,
                     ),
@@ -962,8 +1140,8 @@ def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, c
             "results": [
                 {
                     "request_id": "same request_id as the input transaction",
-                    "category_id": "one allowed category id",
-                    "tag_ids": ["zero or more allowed tag ids"],
+                    "category_id": "one category id from taxonomy.categories",
+                    "tag_ids": ["zero or more tag ids from taxonomy.tags"],
                     "confidence": 0.0,
                     "needs_review": True,
                     "supported_by_similar_transactions": False,
@@ -973,6 +1151,21 @@ def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, c
         },
     }
     return json.dumps(payload, ensure_ascii=True, indent=2)
+
+
+def taxonomy_reference_rows(names, taxonomy_rows):
+    """Return lightweight taxonomy ID/name rows for candidate hints."""
+    rows_by_name = {row["name"]: row for row in taxonomy_rows}
+    payload = []
+    for name in names:
+        row = rows_by_name.get(name, {})
+        payload.append(
+            {
+                "id": row.get("id"),
+                "name": name,
+            }
+        )
+    return payload
 
 
 def taxonomy_payload_rows(names, taxonomy_rows):

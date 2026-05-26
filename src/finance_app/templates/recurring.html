@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Recurring") }}</h2>
-        <p class="text-muted mb-0">{{ _("Review detected bills, income, subscriptions, and other repeating transactions.") }}</p>
+        <p class="text-muted mb-0">{{ _("Review repeating merchants, confirm useful patterns, and ignore noise.") }}</p>
     </div>
 </div>
 
@@ -15,6 +15,10 @@
     <div class="card-body">
         <form method="get" class="recurring-control-row">
             <input type="hidden" name="view" value="{{ selected_recurring_view }}">
+            <input type="hidden" name="month" value="{{ selected_month }}">
+            {% for status in selected_statuses %}
+                <input type="hidden" name="statuses" value="{{ status }}">
+            {% endfor %}
 
             <div class="recurring-category-field">
                 <label class="form-label" id="recurring-categories-label">{{ _("Categories") }}</label>
@@ -88,26 +92,6 @@
                 </div>
             </div>
 
-            <div class="calendar-month-controls recurring-month-controls" aria-label="{{ _('Calendar month navigation') }}">
-                <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}"><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
-                <div class="calendar-month-field">
-                    <label class="form-label" for="recurring-month">{{ _("Month") }}</label>
-                    <input id="recurring-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month>
-                </div>
-                <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}"><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
-                <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}"><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
-            </div>
-
-            <div class="recurring-status-field">
-                <label class="form-label" for="recurring-status">{{ _("Status") }}</label>
-                <select id="recurring-status" class="form-select" name="statuses">
-                    <option value="">{{ _("All statuses") }}</option>
-                    {% for option in status_options %}
-                        <option value="{{ option.value }}" {% if option.value in selected_statuses %}selected{% endif %}>{{ _(option.label) }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
             <div class="recurring-confidence-field">
                 <label class="form-label" for="recurring-confidence">{{ _("Confidence") }}</label>
                 <select id="recurring-confidence" class="form-select" name="confidence">
@@ -126,148 +110,183 @@
     </div>
 </section>
 
-<section class="metric-grid mb-4">
-    <div class="metric-card">
-        <div class="metric-label">{{ _("Active recurring") }}</div>
-        <div class="metric-value">{{ recurring_summary.active_count }}</div>
-        <div class="metric-detail">{{ _("Excludes possibly inactive patterns.") }}</div>
+<div id="recurring-dynamic" data-recurring-dynamic>
+<section class="recurring-summary-layout mb-4" aria-label="{{ _('Recurring summary') }}">
+    <div class="recurring-primary-metrics">
+        <div class="metric-card recurring-metric-card recurring-metric-attention">
+            <div class="metric-label">{{ _("Needs attention") }}</div>
+            <div class="metric-value">{{ recurring_summary.needs_attention_count }}</div>
+            <div class="metric-detail">{{ _("Overdue, amount changes, or low-confidence detections.") }}</div>
+        </div>
+
+        <div class="metric-card recurring-metric-card">
+            <div class="metric-label">{{ _("Monthly recurring spending") }}</div>
+            <div class="metric-value">{{ recurring_summary.recurring_spending | moneyfmt }}</div>
+            <div class="metric-detail">{{ _("Expected or occurred spending.") }}</div>
+        </div>
+
+        <div class="metric-card recurring-metric-card">
+            <div class="metric-label">{{ _("Monthly recurring income") }}</div>
+            <div class="metric-value text-success">{{ recurring_summary.recurring_income | moneyfmt }}</div>
+            <div class="metric-detail">{{ _("Expected or occurred income.") }}</div>
+        </div>
     </div>
 
-    <div class="metric-card">
-        <div class="metric-label">{{ _("Expected this month") }}</div>
-        <div class="metric-value">{{ recurring_summary.expected_count }}</div>
-        <div class="metric-detail">{{ _("Upcoming recurring items.") }}</div>
-    </div>
+    <div id="recurringMetricCarousel" class="insight-carousel recurring-metric-carousel carousel slide" data-bs-interval="false" data-bs-touch="true">
+        <button class="insight-carousel-control" type="button" data-bs-target="#recurringMetricCarousel" data-bs-slide="prev" aria-label="{{ _('Previous recurring metrics') }}">
+            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+        </button>
+        <div class="carousel-inner insight-carousel-inner">
+            <div class="carousel-item active">
+                <div class="recurring-secondary-metric-grid">
+                    <div class="metric-card recurring-metric-card">
+                        <div class="metric-label">{{ _("Expected soon") }}</div>
+                        <div class="metric-value">{{ recurring_summary.expected_count }}</div>
+                        <div class="metric-detail">{{ _("Upcoming recurring items.") }}</div>
+                    </div>
 
-    <div class="metric-card">
-        <div class="metric-label">{{ _("Occurred") }}</div>
-        <div class="metric-value">{{ recurring_summary.occurred_count }}</div>
-        <div class="metric-detail">{{ _("Occurred, likely occurred, or amount changed.") }}</div>
-    </div>
-
-    <div class="metric-card">
-        <div class="metric-label">{{ _("Overdue") }}</div>
-        <div class="metric-value">{{ recurring_summary.overdue_count }}</div>
-        <div class="metric-detail">{{ _("Expected date has passed.") }}</div>
-    </div>
-
-    <div class="metric-card">
-        <div class="metric-label">{{ _("Recurring spending") }}</div>
-        <div class="metric-value">{{ recurring_summary.recurring_spending | moneyfmt }}</div>
-        <div class="metric-detail">{{ _("Expected or occurred spending.") }}</div>
-    </div>
-
-    <div class="metric-card">
-        <div class="metric-label">{{ _("Recurring income") }}</div>
-        <div class="metric-value text-success">{{ recurring_summary.recurring_income | moneyfmt }}</div>
-        <div class="metric-detail">{{ _("Expected or occurred income.") }}</div>
-    </div>
-
-    <div class="metric-card">
-        <div class="metric-label">{{ _("Amount changes") }}</div>
-        {% if recurring_summary.amount_change_count %}
-            <div class="metric-value">{{ recurring_summary.amount_change_count }}</div>
-            <div class="metric-detail">
-                {% if recurring_summary.amount_change_count == 1 %}
-                    {{ _("{count} recurring item changed amount", count=recurring_summary.amount_change_count) }}
-                {% else %}
-                    {{ _("{count} recurring items changed amount", count=recurring_summary.amount_change_count) }}
-                {% endif %}
+                    <div class="metric-card recurring-metric-card">
+                        <div class="metric-label">{{ _("Occurred") }}</div>
+                        <div class="metric-value">{{ recurring_summary.occurred_count }}</div>
+                        <div class="metric-detail">{{ _("Occurred, likely occurred, or amount changed.") }}</div>
+                    </div>
+                </div>
             </div>
-            <div class="metric-detail">
-                {{ _("Total monthly impact: {amount}", amount=recurring_summary.amount_change_total_impact | moneyfmt) }}
+            <div class="carousel-item">
+                <div class="recurring-secondary-metric-grid">
+                    <div class="metric-card recurring-metric-card">
+                        <div class="metric-label">{{ _("Overdue") }}</div>
+                        <div class="metric-value">{{ recurring_summary.overdue_count }}</div>
+                        <div class="metric-detail">{{ _("Expected date has passed.") }}</div>
+                    </div>
+
+                    <div class="metric-card recurring-metric-card">
+                        <div class="metric-label">{{ _("Possibly inactive") }}</div>
+                        <div class="metric-value">{{ recurring_summary.possibly_inactive_count }}</div>
+                        <div class="metric-detail">{{ _("Patterns that missed multiple expected cycles.") }}</div>
+                    </div>
+                </div>
             </div>
-        {% else %}
-            <div class="metric-value">0</div>
-            <div class="metric-detail">{{ _("No recurring amount changes detected for this month.") }}</div>
-        {% endif %}
+        </div>
+        <button class="insight-carousel-control" type="button" data-bs-target="#recurringMetricCarousel" data-bs-slide="next" aria-label="{{ _('Next recurring metrics') }}">
+            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+        </button>
     </div>
 </section>
 
-<section class="card mb-4" data-table-export-scope>
-    <div class="card-body p-0">
-        <div class="section-title px-4 pt-4 pb-3">
-            <div>
-                <h5 class="card-title mb-1">{{ _("Recurring activity export") }}</h5>
-                <div class="text-muted small">{{ _("Exports the currently filtered recurring rows for {month}.", month=selected_month) }}</div>
+<div class="recurring-view-tools mb-3" data-table-export-scope>
+    <div class="recurring-view-toolbar">
+        
+        <form method="get" class="calendar-month-controls recurring-period-controls" aria-label="{{ _('Calendar month navigation') }}" data-recurring-ajax-form>
+            <input type="hidden" name="view" value="{{ selected_recurring_view }}">
+            {% for category in selected_categories %}
+                <input type="hidden" name="categories" value="{{ category }}">
+            {% endfor %}
+            {% for tag in selected_tags %}
+                <input type="hidden" name="tags" value="{{ tag }}">
+            {% endfor %}
+            {% for status in selected_statuses %}
+                <input type="hidden" name="statuses" value="{{ status }}">
+            {% endfor %}
+            {% if selected_confidence %}
+                <input type="hidden" name="confidence" value="{{ selected_confidence }}">
+            {% endif %}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-recurring-ajax-link><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+            <div class="calendar-month-field">
+                <label class="form-label" for="recurring-month">{{ _("Month") }}</label>
+                <input id="recurring-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month>
             </div>
-        </div>
-        <div class="table-responsive d-none" aria-hidden="true">
-            <table
-                data-export-title="{{ _('Recurring activity') }}"
-                data-export-filename-base="recurring-activity-{{ selected_month }}"
-                data-export-excel-extension="xlsx"
+            <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-recurring-ajax-link><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-recurring-ajax-link><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
+        </form>
+        <div class="section-title mb-0" aria-label="{{ _('Recurring view') }}">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="metric-label">{{ _("View") }}</span>
+            <a
+                class="btn btn-sm text-nowrap {% if selected_recurring_view == 'list' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                href="{{ list_view_url }}"
+                aria-pressed="{{ 'true' if selected_recurring_view == 'list' else 'false' }}"
+                data-recurring-ajax-link
             >
-                <thead>
-                    <tr>
-                        <th>{{ _("Merchant") }}</th>
-                        <th>{{ _("Category") }}</th>
-                        <th>{{ _("Direction") }}</th>
-                        <th>{{ _("Frequency") }}</th>
-                        <th>{{ _("Expected date") }}</th>
-                        <th>{{ _("Last seen") }}</th>
-                        <th>{{ _("Typical amount") }}</th>
-                        <th>{{ _("Actual amount") }}</th>
-                        <th>{{ _("Status") }}</th>
-                        <th>{{ _("Confidence") }}</th>
-                        <th>{{ _("Observed months") }}</th>
-                        <th>{{ _("Amount change") }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in recurring_items %}
-                        {% set status_labels = {
-                            "occurred": "Occurred",
-                            "amount_changed": "Amount changed",
-                            "likely_occurred": "Likely occurred",
-                            "expected": "Expected",
-                            "overdue": "Overdue",
-                            "possibly_inactive": "Possibly inactive",
-                            "matched": "Likely occurred"
-                        } %}
-                        {% set actual_amount = item.match_details.matched_amount if item.match_details and item.match_details.matched_amount is not none else "" %}
-                        <tr>
-                            <td>{{ item.merchant }}</td>
-                            <td>{{ item.category }}</td>
-                            <td>{{ _("Income") if item.type == "income" else _("Spending") }}</td>
-                            <td>{{ _(item.frequency) }}</td>
-                            <td>{{ item.date }}</td>
-                            <td>{{ item.last_seen }}</td>
-                            <td>{{ "%.2f"|format(item.amount) }}</td>
-                            <td>{% if actual_amount != "" %}{{ "%.2f"|format(actual_amount) }}{% endif %}</td>
-                            <td>{{ _(status_labels.get(item.status, item.status | title)) }}</td>
-                            <td>{{ _(item.confidence) }}</td>
-                            <td>{{ item.observed_months }}</td>
-                            <td>
-                                {% if item.amount_change %}
-                                    {{ "%+.2f"|format(item.amount_change.difference) }}
-                                    {% if item.amount_change.percent is not none %}({{ "%+.1f"|format(item.amount_change.percent) }}%){% endif %}
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                {{ _("List") }}
+            </a>
+            <a
+                class="btn btn-sm text-nowrap {% if selected_recurring_view == 'calendar' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                href="{{ calendar_view_url }}"
+                aria-pressed="{{ 'true' if selected_recurring_view == 'calendar' else 'false' }}"
+                data-recurring-ajax-link
+            >
+                {{ _("Calendar") }}
+            </a>
         </div>
     </div>
-</section>
-
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3" aria-label="{{ _('Recurring view') }}">
-    <span class="metric-label">{{ _("View") }}</span>
-    <a
-        class="btn btn-sm text-nowrap {% if selected_recurring_view == 'list' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-        href="{{ list_view_url }}"
-        aria-pressed="{{ 'true' if selected_recurring_view == 'list' else 'false' }}"
-    >
-        {{ _("List") }}
-    </a>
-    <a
-        class="btn btn-sm text-nowrap {% if selected_recurring_view == 'calendar' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-        href="{{ calendar_view_url }}"
-        aria-pressed="{{ 'true' if selected_recurring_view == 'calendar' else 'false' }}"
-    >
-        {{ _("Calendar") }}
-    </a>
+    <div class="recurring-status-filter" aria-label="{{ _('Status filter') }}">
+        <span class="metric-label">{{ _("Status") }}</span>
+        {% for item in recurring_status_filter_links %}
+            <a
+                class="recurring-status-filter-link {% if item.value %}recurring-status-{{ item.value }}{% endif %} {% if item.selected %}active{% endif %}"
+                href="{{ item.url }}"
+                aria-pressed="{{ 'true' if item.selected else 'false' }}"
+                data-recurring-status-filter="{{ item.value or 'all' }}"
+                data-recurring-ajax-link
+            >
+                {{ _(item.label) }}
+            </a>
+        {% endfor %}
+    </div>
+    <div class="table-responsive d-none" aria-hidden="true">
+        <table
+            data-export-title="{{ _('Recurring activity') }}"
+            data-export-filename-base="recurring-activity-{{ selected_month }}"
+            data-export-visible-source="#recurring-activity-table"
+        >
+            <thead>
+                <tr>
+                    <th>{{ _("Status") }}</th>
+                    <th>{{ _("Status detail") }}</th>
+                    <th>{{ _("Merchant") }}</th>
+                    <th>{{ _("Category") }}</th>
+                    <th>{{ _("Direction") }}</th>
+                    <th>{{ _("Frequency") }}</th>
+                    <th>{{ _("Expected date") }}</th>
+                    <th>{{ _("Matched date") }}</th>
+                    <th>{{ _("Last seen") }}</th>
+                    <th>{{ _("Typical amount") }}</th>
+                    <th>{{ _("Actual amount") }}</th>
+                    <th>{{ _("Confidence") }}</th>
+                    <th>{{ _("Observed months") }}</th>
+                    <th>{{ _("Amount change") }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in recurring_items %}
+                    {% set actual_amount = item.match_details.matched_amount if item.match_details and item.match_details.matched_amount is not none else "" %}
+                    {% set matched_date = item.match_details.matched_date if item.match_details and item.match_details.matched_date else "" %}
+                    <tr data-export-row-id="{{ item.id }}">
+                        <td>{{ _(item.status_label) }}</td>
+                        <td>{{ item.status_detail }}</td>
+                        <td>{{ item.merchant }}</td>
+                        <td>{{ item.category }}</td>
+                        <td>{{ _("Income") if item.type == "income" else _("Spending") }}</td>
+                        <td>{{ _(item.frequency) }}</td>
+                        <td>{{ item.date }}</td>
+                        <td>{{ matched_date }}</td>
+                        <td>{{ item.last_seen }}</td>
+                        <td>{{ "%.2f"|format(item.amount) }}</td>
+                        <td>{% if actual_amount != "" %}{{ "%.2f"|format(actual_amount) }}{% endif %}</td>
+                        <td>{{ _(item.confidence) }}</td>
+                        <td>{{ item.observed_months }}</td>
+                        <td>
+                            {% if item.amount_change %}
+                                {{ "%+.2f"|format(item.amount_change.difference) }}
+                                {% if item.amount_change.percent is not none %}({{ "%+.1f"|format(item.amount_change.percent) }}%){% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 {% if selected_recurring_view == "calendar" %}
@@ -276,4 +295,5 @@
 {% include "_recurring_activity.html" %}
 {% endif %}
 {% include "_recurring_detail_modal.html" %}
+</div>
 {% endblock %}

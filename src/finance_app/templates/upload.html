@@ -216,6 +216,9 @@
                             {% if statement["llm_candidate_count"] %}
                                 <div class="small text-muted">{{ _("{count} queued for categorization", count=statement["llm_candidate_count"]) }}</div>
                             {% endif %}
+                            {% if statement["unknown_transaction_count"] %}
+                                <div class="small text-muted">{{ _("{count} unknown", count=statement["unknown_transaction_count"]) }}</div>
+                            {% endif %}
                             {% if statement["import_error"] %}
                                 <div class="small text-danger">{{ statement["import_error"] }}</div>
                             {% endif %}
@@ -245,6 +248,17 @@
                                 >
                                     <i class="bi bi-arrow-repeat" aria-hidden="true"></i>{{ _("Reprocess") }}
                                 </button>
+                                <form method="post" action="{{ url_for('upload.categorize_statement_unknowns', statement_id=statement['id']) }}" data-ajax-refresh-form>
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <button
+                                        class="btn btn-sm btn-outline-secondary"
+                                        type="submit"
+                                        {% if import_busy or not statement["unknown_transaction_count"] %}disabled{% endif %}
+                                    >
+                                        <i class="bi bi-stars" aria-hidden="true"></i>{{ _("Run AI") }}
+                                    </button>
+                                </form>
                             </div>
                         </td>
                     </tr>
@@ -338,8 +352,12 @@
                             <div class="fs-5 fw-semibold">{{ statement["ignored_count"] }}</div>
                         </div>
                         <div class="col-sm-6 col-lg-3">
-                            <div class="small text-muted">{{ _("LLM queued") }}</div>
+                            <div class="small text-muted">{{ _("AI candidates") }}</div>
                             <div class="fs-5 fw-semibold">{{ statement["llm_candidate_count"] }}</div>
+                        </div>
+                        <div class="col-sm-6 col-lg-3">
+                            <div class="small text-muted">{{ _("Current unknown transactions") }}</div>
+                            <div class="fs-5 fw-semibold">{{ statement["unknown_transaction_count"] }}</div>
                         </div>
                         {% if statement["parser_type"] == "interac_etransfer" and (statement["skipped_count"] or statement["ignored_count"]) %}
                             <div class="col-12">

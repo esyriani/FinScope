@@ -31,6 +31,7 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.core.query import parse_page, parse_sort_direction
+from finance_app.modules.rules.service import count_rule_transaction_references_by_rule_id
 
 
 RULE_APPROVAL_FILTER_APPROVED = "approved"
@@ -294,6 +295,10 @@ def decorate_rule_rows(conn, rows):
     """Attach tag and display metadata expected by the rules template."""
     tags_by_rule_id = get_rule_tags_by_rule_id(conn, [row["id"] for row in rows])
     tag_colors = get_tag_color_map(conn)
+    transaction_reference_counts = count_rule_transaction_references_by_rule_id(
+        conn,
+        [row["id"] for row in rows],
+    )
     for row in rows:
         row["tags"] = tags_by_rule_id.get(row["id"], [])
         row["tag_label"] = ", ".join(row["tags"])
@@ -313,6 +318,8 @@ def decorate_rule_rows(conn, rows):
         )
         row["approval_label"] = "Approved" if row["ai_approved"] else "Suggested"
         row["approval_badge_class"] = "text-bg-success" if row["ai_approved"] else "text-bg-warning"
+        row["transaction_reference_count"] = transaction_reference_counts.get(row["id"], 0)
+        row["can_delete_without_preview"] = row["transaction_reference_count"] == 0
 
 
 def rules_list_url(search, selected_categories, selected_source, approval, selected_tags, sort, direction, page):

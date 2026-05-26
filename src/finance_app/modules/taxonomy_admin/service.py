@@ -1,5 +1,7 @@
 """Application orchestration for the taxonomy admin feature."""
 
+import json
+
 from sqlalchemy import case, delete, func, or_, select, update
 
 from finance_app.database.engine import db_core_transaction
@@ -16,6 +18,7 @@ from finance_app.modules.categories.repository import rename_category
 from finance_app.modules.categories.taxonomy import (
     builtin_tag_order_expression,
     clean_color,
+    clean_label,
     is_builtin_tag_name,
     tag_color_for_name,
     upsert_category_metadata,
@@ -28,6 +31,9 @@ from finance_app.modules.taxonomy_admin.forms import (
 )
 
 
+TAXONOMY_YAML_SECTIONS = ("categories", "tags")
+
+
 def build_taxonomy_context():
     """Build taxonomy context."""
     with db_core_transaction() as conn:
@@ -35,6 +41,258 @@ def build_taxonomy_context():
             "categories": fetch_category_rows(conn),
             "tags": fetch_tag_rows(conn),
         }
+
+
+def export_taxonomy_yaml(conn=None):
+    """Return category and tag metadata in the FinScope taxonomy YAML format.
+
+    Args:
+        conn: Optional open SQLAlchemy Core connection. When omitted, the
+            function opens its own transaction.
+
+    Returns:
+        YAML text containing category names, descriptions, LLM instructions,
+        built-in category keys, and tag colors.
+    """
+    if conn is None:
+        with db_core_transaction() as conn:
+            return export_taxonomy_yaml(conn)
+
+    lines = ["categories:"]
+    for category in fetch_category_export_rows(conn):
+        lines.extend([
+            f"  - name: {yaml_scalar(category['name'])}",
+            f"    description: {yaml_scalar(category['description'])}",
+            f"    instruction: {yaml_scalar(category['instruction'])}",
+            f"    builtin_key: {yaml_scalar(category['builtin_key'])}",
+        ])
+
+    lines.append("tags:")
+    for tag in fetch_tag_export_rows(conn):
+        lines.extend([
+            f"  - name: {yaml_scalar(tag['name'])}",
+            f"    description: {yaml_scalar(tag['description'])}",
+            f"    instruction: {yaml_scalar(tag['instruction'])}",
+            f"    color: {yaml_scalar(tag['color'])}",
+        ])
+
+    return "\n".join(lines) + "\n"
+
+
+def import_taxonomy_yaml_text(raw_text, conn=None):
+    """Import category and tag metadata from FinScope taxonomy YAML text.
+
+    Args:
+        raw_text: Uploaded YAML text using ``categories`` and ``tags`` lists.
+        conn: Optional open SQLAlchemy Core connection. When omitted, the
+            function opens its own transaction.
+
+    Returns:
+        A mapping with imported category count, imported tag count, and skipped
+        built-in category count. Built-in categories are intentionally skipped
+        because their definitions are managed by the application seed.
+
+    Raises:
+        ValueError: If the YAML text is malformed or has no importable entries.
+    """
+    parsed = parse_taxonomy_yaml(raw_text)
+    if not parsed["categories"] and not parsed["tags"]:
+        raise ValueError("No taxonomy entries were found.")
+
+    if conn is None:
+        with db_core_transaction() as conn:
+            return import_taxonomy_yaml_text(raw_text, conn)
+
+    imported_categories = 0
+    imported_tags = 0
+    skipped_builtin_categories = 0
+
+    for category in parsed["categories"]:
+        if category["builtin_key"] or is_builtin_category_name(category["name"]):
+            skipped_builtin_categories += 1
+            continue
+        upsert_category_metadata(
+            conn,
+            category["name"],
+            category["description"],
+            category["instruction"],
+        )
+        imported_categories += 1
+
+    for tag in parsed["tags"]:
+        upsert_tag_metadata(
+            conn,
+            tag["name"],
+            tag["description"],
+            tag["instruction"],
+            tag["color"],
+        )
+        imported_tags += 1
+
+    if not imported_categories and not imported_tags and skipped_builtin_categories:
+        raise ValueError("Only built-in categories were found. Nothing was imported.")
+
+    return {
+        "categories": imported_categories,
+        "tags": imported_tags,
+        "skipped_builtin_categories": skipped_builtin_categories,
+    }
+
+
+def parse_taxonomy_yaml(raw_text):
+    """Parse FinScope taxonomy YAML into cleaned category and tag rows.
+
+    The parser intentionally supports the flat YAML list shape used by
+    ``taxonomy.yml`` and taxonomy exports, which keeps imports dependency-free
+    while still accepting quoted scalar values with escaped newlines.
+    """
+    sections = {section: [] for section in TAXONOMY_YAML_SECTIONS}
+    current_section = None
+    current_item = None
+
+    for line_number, raw_line in enumerate(str(raw_text or "").splitlines(), start=1):
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if not line.startswith(" ") and stripped.endswith(":"):
+            current_section = stripped[:-1].strip()
+            if current_section not in sections:
+                raise ValueError(f"Line {line_number}: unsupported taxonomy section.")
+            current_item = None
+            continue
+
+        if current_section is None:
+            raise ValueError(f"Line {line_number}: expected a taxonomy section.")
+
+        if stripped.startswith("- "):
+            current_item = {}
+            sections[current_section].append(current_item)
+            stripped = stripped[2:].strip()
+            if not stripped:
+                continue
+
+        if current_item is None:
+            raise ValueError(f"Line {line_number}: expected a taxonomy list item.")
+
+        key, value = parse_yaml_key_value(stripped, line_number)
+        current_item[key] = yaml_scalar_value(value, line_number)
+
+    cleaned = {
+        "categories": [clean_imported_category(item) for item in sections["categories"]],
+        "tags": [clean_imported_tag(item) for item in sections["tags"]],
+    }
+    validate_unique_taxonomy_names(cleaned["categories"], "Category")
+    validate_unique_taxonomy_names(cleaned["tags"], "Tag")
+    return cleaned
+
+
+def parse_yaml_key_value(text, line_number):
+    """Return a key and scalar text parsed from one YAML mapping line."""
+    if ":" not in text:
+        raise ValueError(f"Line {line_number}: expected a key and value.")
+    key, value = text.split(":", 1)
+    key = key.strip()
+    if not key:
+        raise ValueError(f"Line {line_number}: expected a key.")
+    return key, value.strip()
+
+
+def yaml_scalar(value):
+    """Return a quoted scalar compatible with YAML and JSON string parsers."""
+    return json.dumps(str(value or ""), ensure_ascii=False)
+
+
+def yaml_scalar_value(value, line_number):
+    """Parse a YAML scalar from the supported taxonomy import subset."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text[0] == '"':
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Line {line_number}: invalid quoted value.") from exc
+    if len(text) >= 2 and text[0] == text[-1] == "'":
+        return text[1:-1].replace("''", "'")
+    return text
+
+
+def clean_imported_category(item):
+    """Return one cleaned imported category metadata row."""
+    name = clean_label(item.get("name"))
+    if not name:
+        raise ValueError("Category name is required.")
+    return {
+        "name": name,
+        "description": str(item.get("description") or "").strip(),
+        "instruction": str(item.get("instruction") or "").strip(),
+        "builtin_key": clean_label(item.get("builtin_key")).casefold(),
+    }
+
+
+def clean_imported_tag(item):
+    """Return one cleaned imported tag metadata row."""
+    name = clean_label(item.get("name"))
+    if not name:
+        raise ValueError("Tag name is required.")
+    return {
+        "name": name,
+        "description": str(item.get("description") or "").strip(),
+        "instruction": str(item.get("instruction") or "").strip(),
+        "color": clean_color(item.get("color")) or tag_color_for_name(name),
+    }
+
+
+def validate_unique_taxonomy_names(rows, label):
+    """Raise when an imported taxonomy section repeats a name."""
+    seen = set()
+    for row in rows:
+        normalized = row["name"].casefold()
+        if normalized in seen:
+            raise ValueError(f"{label} names in the taxonomy import must be unique.")
+        seen.add(normalized)
+
+
+def fetch_category_export_rows(conn):
+    """Return categories with all persisted metadata fields for YAML export."""
+    rows = conn.execute(
+        select(
+            categories_table.c.name,
+            func.coalesce(categories_table.c.description, "").label("description"),
+            func.coalesce(categories_table.c.instruction, "").label("instruction"),
+            func.coalesce(categories_table.c.builtin_key, "").label("builtin_key"),
+        ).order_by(
+            case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
+            func.lower(categories_table.c.name),
+            categories_table.c.name,
+        )
+    ).mappings().fetchall()
+    return [dict(row) for row in rows]
+
+
+def fetch_tag_export_rows(conn):
+    """Return tags with all persisted metadata fields for YAML export."""
+    rows = conn.execute(
+        select(
+            tags_table.c.name,
+            func.coalesce(tags_table.c.description, "").label("description"),
+            func.coalesce(tags_table.c.instruction, "").label("instruction"),
+            tags_table.c.color,
+        ).order_by(
+            builtin_tag_order_expression(),
+            func.lower(tags_table.c.name),
+            tags_table.c.name,
+        )
+    ).mappings().fetchall()
+    return [
+        {
+            **dict(row),
+            "color": clean_color(row["color"]) or tag_color_for_name(row["name"]),
+        }
+        for row in rows
+    ]
 
 
 def create_category_from_form(form):

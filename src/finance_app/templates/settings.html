@@ -147,6 +147,23 @@
                     <div class="settings-subsection-help">{{ _("Thresholds and model used for automated category suggestions.") }}</div>
                     <div class="settings-grid settings-grid-mixed">
                         <div class="settings-field">
+                            <label class="form-label" for="auto_llm_categorization_enabled">{{ _("Automatic AI after import") }}</label>
+                            <div class="form-check form-switch">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    role="switch"
+                                    id="auto_llm_categorization_enabled"
+                                    name="auto_llm_categorization_enabled"
+                                    value="1"
+                                    {% if auto_llm_categorization_enabled %}checked{% endif %}
+                                >
+                                <label class="form-check-label" for="auto_llm_categorization_enabled">{{ _("Queue AI categorization after statement imports") }}</label>
+                            </div>
+                            <div class="form-text">{{ _("Turn this off before bulk imports, then run AI manually from Jobs or Uploaded statements.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
                             <label for="llm_confidence_threshold" class="form-label">{{ _("LLM confidence threshold") }}</label>
                             <input id="llm_confidence_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="llm_confidence_threshold" value="{{ llm_confidence_threshold }}">
                             <div class="form-text">{{ _("Minimum confidence required to accept a suggested category.") }}</div>

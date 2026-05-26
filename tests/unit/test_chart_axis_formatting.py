@@ -19,3 +19,12 @@ def test_dashboard_and_comparison_money_axes_use_whole_dollars():
     assert "formatComparisonAxisMoney" in comparison_js
     assert "axisLabel: dashboardAxisLabel(formatDashboardMoney)" not in dashboard_js
     assert "axisLabel: comparisonAxisLabel(formatComparisonMoney)" not in comparison_js
+
+
+def test_dashboard_quality_panel_links_are_normal_click_targets():
+    """Verify dashboard quality actions are not captured by drill-down selection."""
+    dashboard_js = (ROOT / "src" / "finance_app" / "static" / "js" / "dashboard.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert ".quality-panel a[href]" not in dashboard_js

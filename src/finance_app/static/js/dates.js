@@ -45,3 +45,5 @@ if (document.readyState === "loading") {
 } else {
     setupFlatpickrInputs();
 }
+
+window.setupFlatpickrInputs = setupFlatpickrInputs;

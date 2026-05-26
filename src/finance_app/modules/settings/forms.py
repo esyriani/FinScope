@@ -61,6 +61,9 @@ def parse_global_settings_form(form, app_settings):
             form.get("verify_threshold"),
             "Verify threshold",
         ),
+        "auto_llm_categorization_enabled": parse_checkbox(
+            form.get("auto_llm_categorization_enabled")
+        ),
         "openai_model": clean_openai_model(form.get("openai_model"))
         or app_settings.default_categorization_model,
         "recurrence_minimum_occurrences": parse_positive_int(
@@ -136,6 +139,11 @@ def parse_non_negative_float(value, label):
         raise ValueError(f"{label} must be at least 0.")
 
     return parsed
+
+
+def parse_checkbox(value):
+    """Return whether a checkbox-style form value is enabled."""
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def format_probability(value):

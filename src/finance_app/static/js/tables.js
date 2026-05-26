@@ -356,3 +356,6 @@ setupPaginatedTables();
 window.setupCollapseToggleLabels = setupCollapseToggleLabels;
 window.setupAuditSectionLinks = setupAuditSectionLinks;
 window.openAuditSectionFromLocation = openAuditSectionFromLocation;
+window.setupTableRowInteractions = setupTableRowInteractions;
+window.setupSortableTables = setupSortableTables;
+window.setupPaginatedTables = setupPaginatedTables;

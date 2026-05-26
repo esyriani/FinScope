@@ -103,10 +103,13 @@ function runAjaxRefreshInitializers(root = document) {
     setupAjaxRefreshForms(root);
     setupAjaxRefreshLinks(root);
     window.setupTooltips?.();
+    window.setupJobsAutoRefresh?.(root);
+    window.setupAiJobProgressPolling?.(root);
     window.setupTagMultiselects?.(root);
     window.setupRuleSaveModeControls?.(root);
     window.setupRuleAmountControls?.(root);
     window.setupRulePreviewForms?.(root);
+    window.setupRuleTableActions?.(root);
     window.setupReviewTransactionSelectors?.(root);
     window.setupTableRowInteractions?.(root);
     window.setupCollapseToggleLabels?.(root);

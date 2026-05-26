@@ -148,6 +148,36 @@ def reprocess_statement_import(statement_id):
     return queue_existing_statement_import(statement_id, reprocess=True)
 
 
+@upload_bp.route("/upload/<int:statement_id>/categorize-unknowns", methods=["POST"])
+@permission_required(PERMISSION_IMPORT_STATEMENTS)
+def categorize_statement_unknowns(statement_id):
+    """Queue AI categorization for one statement's current unknown rows."""
+    next_url = upload_redirect_target()
+
+    with db_core_transaction() as conn:
+        statement = statement_import_row(conn, statement_id)
+        if statement is None:
+            flash("Statement not found.")
+            return redirect(next_url)
+
+        if statement["import_status"] in ACTIVE_STATEMENT_IMPORT_STATUSES:
+            flash("Wait for the statement import to finish before running AI categorization.")
+            return redirect(next_url)
+
+        unknown_count = upload_workflow.count_statement_unknown_transactions(conn, statement_id)
+        if not unknown_count:
+            flash("No unknown transactions need AI categorization for this statement.")
+            return redirect(next_url)
+
+    job_id = upload_workflow.queue_statement_llm_categorization(statement_id)
+    flash(
+        f"AI categorization queued for {unknown_count} unknown transaction"
+        f"{'' if unknown_count == 1 else 's'}. "
+        f"Track progress on the Jobs page. Job: {job_id[:8]}"
+    )
+    return redirect(next_url)
+
+
 def queue_existing_statement_import(statement_id, reprocess=False):
     """Queue import work from stored statement text without accepting a new file."""
     next_url = upload_redirect_target()
@@ -368,5 +398,6 @@ def import_transactions(
 import_statement_transactions_job = upload_workflow.import_statement_transactions_job
 count_statement_unknown_transactions = upload_workflow.count_statement_unknown_transactions
 categorize_statement_unknown_transactions_job = upload_workflow.categorize_statement_unknown_transactions_job
+queue_statement_llm_categorization = upload_workflow.queue_statement_llm_categorization
 undo_statement_upload_job = upload_workflow.undo_statement_upload_job
 upload_result_message = upload_workflow.upload_result_message

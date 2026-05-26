@@ -34,15 +34,65 @@
 {% endif %}
 {% endmacro %}
 
+{% macro translated_job_message(message, params) %}
+{{ _(message, current=params.get("current", ""), total=params.get("total", ""), updated=params.get("updated", ""), start=params.get("start", ""), end=params.get("end", ""), processed=params.get("processed", ""), batch_updated=params.get("batch_updated", ""), unknown=params.get("unknown", ""), reasons=params.get("reasons", ""), error_type=params.get("error_type", ""), detail=params.get("detail", ""), result=params.get("result", ""), summary=params.get("summary", "")) }}
+{% endmacro %}
+
+{% macro progress_summary(job) %}
+{% if job.progress_message %}
+    {{ translated_job_message(job.progress_message, job.progress_params or {}) }}
+{% else %}
+    {{ _("Waiting for progress update.") }}
+{% endif %}
+{% endmacro %}
+
+{% macro progress_log_message(entry) %}
+{{ translated_job_message(entry.message, entry.params or {}) }}
+{% endmacro %}
+
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Background jobs") }}</h2>
         <p class="text-muted mb-0">{{ _("Long-running imports and categorization jobs run here while the app stays usable.") }}</p>
     </div>
-    <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>{{ _("Refresh") }}</a>
+    <div class="d-flex flex-wrap gap-2">
+        <form
+            method="post"
+            action="{{ url_for('jobs.categorize_all_unknowns') }}"
+            data-ajax-refresh-form
+            data-ajax-refresh-target='[data-ajax-refresh-target="jobs-actions"]'
+        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="btn btn-outline-primary" type="submit">
+                <i class="bi bi-stars" aria-hidden="true"></i>{{ _("Run AI on unknowns") }}
+            </button>
+        </form>
+        <form
+            method="post"
+            action="{{ url_for('jobs.cancel_queued_ai_jobs') }}"
+            data-ajax-refresh-form
+            data-ajax-refresh-target='[data-ajax-refresh-target="jobs-actions"]'
+        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="btn btn-outline-secondary" type="submit">
+                <i class="bi bi-x-octagon" aria-hidden="true"></i>{{ _("Clear queued AI") }}
+            </button>
+        </form>
+        <a
+            class="btn btn-outline-secondary"
+            href="{{ request.full_path if request.query_string else url_for('jobs.jobs') }}"
+            data-jobs-refresh-button
+            data-jobs-refresh-target='[data-ajax-refresh-target="jobs-actions"]'
+            data-jobs-refresh-interval="10"
+        >
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i><span data-jobs-refresh-label>{{ _("Refresh ({seconds})", seconds=10) }}</span>
+        </a>
+    </div>
 </div>
 
-<div data-ajax-refresh-target="jobs-actions">
+<div data-ajax-refresh-target="jobs-actions" data-jobs-auto-refresh data-jobs-auto-refresh-interval="10">
 {% with messages = get_flashed_messages() %}
     {% if messages %}
         {% for message in messages %}
@@ -81,16 +131,44 @@
                     </thead>
                     <tbody>
                         {% for job in jobs %}
+                            {% set show_ai_progress = job.queue == "ai" and (job.status == "running" or job.progress_log) %}
+                            {% set progress_expanded = job.status == "running" %}
+                            {% set progress_percent = job.progress_percent if job.progress_percent is not none else 0 %}
                             <tr>
-                                <td>{{ job.label }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {% if show_ai_progress %}
+                                            <button
+                                                class="btn btn-sm btn-outline-secondary btn-icon-only"
+                                                type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#job-progress-{{ job.id }}"
+                                                aria-expanded="{{ 'true' if progress_expanded else 'false' }}"
+                                                aria-controls="job-progress-{{ job.id }}"
+                                                aria-label="{{ _('Expand progress') }}"
+                                                title="{{ _('Expand progress') }}"
+                                                data-bs-tooltip
+                                            >
+                                                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                                            </button>
+                                        {% endif %}
+                                        <span>{{ job.label }}</span>
+                                    </div>
+                                </td>
                                 <td>
                                     <span class="badge text-bg-{% if job.status == 'completed' %}success{% elif job.status == 'failed' %}danger{% elif job.status == 'running' %}warning{% else %}secondary{% endif %}">
                                         {{ job.status }}
                                     </span>
+                                    {% if job.queue == "ai" %}
+                                        <div class="small text-muted">{{ _("AI queue") }}</div>
+                                    {% endif %}
+                                    {% if job.cancel_requested and job.status == "running" %}
+                                        <div class="small text-muted">{{ _("Stopping after current batch") }}</div>
+                                    {% endif %}
                                 </td>
-                                <td>{{ job.created_at }}</td>
-                                <td>{{ job.started_at or "" }}</td>
-                                <td>{{ job.finished_at or "" }}</td>
+                                <td>{{ job.created_at | datetimefmt }}</td>
+                                <td>{{ job.started_at | datetimefmt if job.started_at else "" }}</td>
+                                <td>{{ job.finished_at | datetimefmt if job.finished_at else "" }}</td>
                                 <td>
                                     {% if job.error %}
                                         <span class="text-danger">{{ job.error }}</span>
@@ -102,37 +180,110 @@
                                     {% endif %}
                                     {% if job.undo_status == "undone" %}
                                         <div class="text-muted small">
-                                            Undone {{ job.undone_at }}{% if job.undo_result %}: {{ job.undo_result }}{% endif %}
+                                            {{ _("Undone") }} {{ job.undone_at | datetimefmt }}{% if job.undo_result %}: {{ job.undo_result }}{% endif %}
                                         </div>
                                     {% endif %}
                                 </td>
                                 <td class="text-end">
-                                    {% set undo_title = _("Undo job") %}
-                                    {% if job.undo_status == "undone" %}
-                                        {% set undo_title = _("Already undone") %}
-                                    {% elif job.status in ["queued", "running"] %}
-                                        {% set undo_title = _("Available after the job finishes") %}
-                                    {% elif job.undo_status == "unavailable" %}
-                                        {% set undo_title = _("Nothing to undo") %}
-                                    {% endif %}
-
-                                    <button
-                                        class="btn btn-sm btn-outline-danger btn-icon-only"
-                                        type="button"
-                                        {% if job.can_undo %}
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#undo-job-{{ job.id }}"
-                                        {% else %}
-                                            disabled
+                                    <div class="d-inline-flex gap-2">
+                                        {% if job.can_cancel %}
+                                            <form method="post" action="{{ url_for('jobs.cancel_job', job_id=job.id) }}" data-ajax-refresh-form>
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="next" value="{{ request.full_path }}">
+                                                <button
+                                                    class="btn btn-sm btn-outline-warning btn-icon-only"
+                                                    type="submit"
+                                                    aria-label="{{ _('Cancel job {label}', label=job.label) }}"
+                                                    title="{{ _('Cancel job') }}"
+                                                    data-bs-tooltip
+                                                >
+                                                    <i class="bi bi-stop-circle" aria-hidden="true"></i>
+                                                </button>
+                                            </form>
                                         {% endif %}
-                                        aria-label="{{ _('Undo job {label}', label=job.label) }}"
-                                        title="{{ undo_title }}"
-                                        data-bs-tooltip
-                                    >
-                                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
-                                    </button>
+
+                                        {% set undo_title = _("Undo job") %}
+                                        {% if job.undo_status == "undone" %}
+                                            {% set undo_title = _("Already undone") %}
+                                        {% elif job.status in ["queued", "running"] %}
+                                            {% set undo_title = _("Available after the job finishes") %}
+                                        {% elif job.undo_status == "unavailable" %}
+                                            {% set undo_title = _("Nothing to undo") %}
+                                        {% endif %}
+
+                                        <button
+                                            class="btn btn-sm btn-outline-danger btn-icon-only"
+                                            type="button"
+                                            {% if job.can_undo %}
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#undo-job-{{ job.id }}"
+                                            {% else %}
+                                                disabled
+                                            {% endif %}
+                                            aria-label="{{ _('Undo job {label}', label=job.label) }}"
+                                            title="{{ undo_title }}"
+                                            data-bs-tooltip
+                                        >
+                                            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
+                            {% if show_ai_progress %}
+                            <tr class="collapse {% if progress_expanded %}show{% endif %}" id="job-progress-{{ job.id }}">
+                                <td colspan="7" class="bg-body-tertiary">
+                                    <div
+                                        class="p-3"
+                                        data-ai-job-progress
+                                        data-job-id="{{ job.id }}"
+                                        data-job-status="{{ job.status }}"
+                                        data-job-status-url="{{ url_for('jobs.job_status', job_id=job.id) }}"
+                                    >
+                                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                            <div class="fw-semibold">{{ _("Progress") }}</div>
+                                            <div class="small text-muted" data-ai-job-progress-percent>
+                                                {{ _("{percent}% complete", percent=progress_percent) }}
+                                            </div>
+                                        </div>
+                                        <div
+                                            class="progress"
+                                            role="progressbar"
+                                            aria-label="{{ _('AI job progress') }}"
+                                            aria-valuemin="0"
+                                            aria-valuemax="100"
+                                            aria-valuenow="{{ progress_percent }}"
+                                        >
+                                            <div class="progress-bar" data-ai-job-progress-bar style="width: {{ progress_percent }}%"></div>
+                                        </div>
+                                        <div class="small text-muted mt-2" data-ai-job-progress-summary>
+                                            {{ progress_summary(job) }}
+                                        </div>
+                                        <div class="mt-3">
+                                            <div class="fw-semibold small mb-2">{{ _("Log") }}</div>
+                                            <div class="small border rounded p-2 bg-body overflow-auto" style="max-height: 12rem;" data-ai-job-progress-log>
+                                                {% if job.progress_log %}
+                                                    {% for entry in job.progress_log %}
+                                                        <div class="d-flex align-items-start gap-2 py-1" data-ai-job-progress-log-entry>
+                                                            <span class="text-muted flex-shrink-0">{{ entry.timestamp | datetimefmt }}</span>
+                                                            {% if entry.level == "error" %}
+                                                                <i class="bi bi-x-circle-fill text-danger flex-shrink-0" aria-hidden="true"></i>
+                                                            {% elif entry.level == "warning" %}
+                                                                <i class="bi bi-exclamation-triangle-fill text-warning flex-shrink-0" aria-hidden="true"></i>
+                                                            {% else %}
+                                                                <i class="bi bi-info-circle text-muted flex-shrink-0" aria-hidden="true"></i>
+                                                            {% endif %}
+                                                            <span>{{ progress_log_message(entry) }}</span>
+                                                        </div>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <div class="text-muted" data-ai-job-progress-log-empty>{{ _("No log entries yet.") }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>

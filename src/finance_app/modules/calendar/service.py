@@ -3,13 +3,14 @@
 from calendar import monthrange
 from datetime import date
 
+from finance_app.core.config import settings
 from finance_app.core.i18n import format_month_year, weekday_abbreviation_labels
 from finance_app.modules.categories.service import get_category_options
 from finance_app.modules.categories.taxonomy import get_tag_option_rows
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.recurring.patterns import get_recurring_pattern_metadata
-from finance_app.modules.settings.runtime import get_unknown_category
+from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 from .urls import calendar_url, transactions_url
 from .parsing import clean_categories, clean_tags, default_month, parse_heatmap_metric, parse_month, shift_month
 from .queries import build_category_filter, fetch_month_transactions, fetch_recurring_source_rows, get_recurrence_detection_settings
@@ -83,6 +84,7 @@ def build_recurring_activity_context(selected_month=None, selected_categories=No
         tag_options = get_tag_option_rows(conn)
         category_filter = build_category_filter(selected_categories, selected_tags, unknown_category)
         recurrence_settings = get_recurrence_detection_settings(conn)
+        table_page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
         recurring_pattern_metadata = get_recurring_pattern_metadata(conn)
         month_rows = fetch_month_transactions(conn, month_start, month_end, unknown_category, category_filter)
         recurring_rows = fetch_recurring_source_rows(conn, unknown_category, category_filter)
@@ -103,6 +105,7 @@ def build_recurring_activity_context(selected_month=None, selected_categories=No
         "tag_options": tag_options,
         "transactions": transactions,
         "recurring_items": recurring_items,
+        "table_page_size": table_page_size,
         "summary": build_calendar_summary(transactions, recurring_items),
         "recurring_activity_json": build_recurring_activity_json(recurring_items),
     }

@@ -181,6 +181,13 @@ High-confidence matches require strong agreement across similar transactions bef
 
 Automatic and manual category writes persist compact JSON evidence in `transactions.category_metadata`. The metadata uses a controlled audit `decision_source`: `rule`, `similar_transactions`, `llm`, `llm_with_similar_transactions`, `combined`, `manual`, or `unknown`.
 
-LLM categorization is optional and requires `OPENAI_API_KEY`
+LLM categorization is optional and requires `OPENAI_API_KEY`.
 The LLM receives unresolved transactions, rule evidence, historical evidence, a compact candidate taxonomy, and candidate tags/categories.
 The prompt contract requires category IDs and tag IDs from the candidate taxonomy. Returned results are validated conservatively: invalid JSON, invalid category IDs, invalid tag IDs, invalid confidence values, low-confidence results, or inconsistent evidence remain categorized as `Unknown` or are marked for review according to the shared confidence policy.
+
+LLM categorization is operationally separate from statement import. Imports apply
+rules and historical evidence first, then optionally queue AI categorization for
+remaining unknown rows. Owners can pause automatic AI queueing from Settings and
+rerun AI manually from Jobs or from an uploaded statement. Reruns only target
+active transactions that are still null or `UNKNOWN`, so existing manual,
+rule-based, historical, transfer, and accepted AI categories are not overwritten.

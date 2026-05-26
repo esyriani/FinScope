@@ -217,7 +217,7 @@ def test_import_statement_job_queues_llm_categorization_for_unknowns(app, db_con
         """,
         (statement_id,),
     ).fetchall()
-    assert "Queued LLM categorization for 1 unknown transaction." in message
+    assert "Queued AI categorization for 1 unknown transaction." in message
     assert [tuple(row) for row in rows] == [("UNKNOWN SHOP", "UNKNOWN", 1)]
     statement = db_conn.execute(
         """
@@ -231,12 +231,44 @@ def test_import_statement_job_queues_llm_categorization_for_unknowns(app, db_con
     assert tuple(statement) == ("completed", 1, 0, 0, 1, None)
     assert submitted_jobs == [
         {
-            "label": f"LLM categorize statement {statement_id}",
+            "label": f"AI categorize statement {statement_id}",
             "func": upload_workflow.categorize_statement_unknown_transactions_job,
             "args": (statement_id,),
-            "kwargs": {},
+            "kwargs": {"queue": "ai"},
         }
     ]
+
+
+def test_import_statement_job_respects_disabled_automatic_ai(app, db_conn, monkeypatch):
+    """Verify unknown rows stay rerunnable when automatic AI queueing is off."""
+    account_id, statement_id = create_account_statement(db_conn, "manual-ai.csv")
+    submitted_jobs = []
+    db_conn.execute(
+        """
+        UPDATE user_settings
+        SET value = '0'
+        WHERE key = 'auto_llm_categorization_enabled'
+          AND user_id = (SELECT id FROM users WHERE username = 'owner')
+        """
+    )
+    db_conn.commit()
+
+    monkeypatch.setattr(
+        upload_workflow,
+        "submit_background_job",
+        lambda *args, **kwargs: submitted_jobs.append((args, kwargs)),
+    )
+
+    message = upload_workflow.import_statement_transactions_job(
+        statement_id,
+        account_id,
+        "credit_card",
+        "csv",
+        "Date,Description,Amount\n2026-01-02,UNKNOWN SHOP,12.34\n",
+    )
+
+    assert submitted_jobs == []
+    assert "1 unknown transaction can be categorized with AI from Uploaded statements." in message
 
 
 def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app, db_conn, monkeypatch):
@@ -410,6 +442,144 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
     assert metadata["failure_reason"] == "llm_no_results"
 
 
+def test_categorize_unknown_transactions_job_logs_real_batch_progress(app, db_conn, monkeypatch):
+    """Verify AI jobs publish batch, issue, unresolved, and completion log entries."""
+    del app
+    account_id, statement_id = create_account_statement(db_conn, "llm-progress.csv")
+    db_conn.executemany(
+        """
+        INSERT INTO transactions (
+            statement_id,
+            account_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            fingerprint
+        )
+        VALUES (?, ?, ?, ?, ?, 'UNKNOWN', 1, ?)
+        """,
+        [
+            (statement_id, account_id, "2026-01-02", "UNKNOWN GOOD", 12.34, "llm-progress-good"),
+            (statement_id, account_id, "2026-01-03", "UNKNOWN UNRESOLVED", 23.45, "llm-progress-unresolved"),
+            (statement_id, account_id, "2026-01-04", "UNKNOWN TIMEOUT", 34.56, "llm-progress-timeout"),
+        ],
+    )
+    db_conn.commit()
+    progress_updates = []
+    log_entries = []
+    batches = []
+
+    def capture_progress(**kwargs):
+        """Capture progress updates without requiring a running background thread."""
+        progress_updates.append(kwargs)
+
+    def capture_log(message, params=None, level="info"):
+        """Capture workflow log entries emitted by the AI categorization loop."""
+        log_entries.append({"message": message, "params": dict(params or {}), "level": level})
+
+    def categorize_for_test(transactions, conn=None, use_llm=True):
+        """Return one successful category and two unresolved AI outcomes."""
+        del conn
+        assert use_llm is True
+        batches.append([tx["description"] for tx in transactions])
+        if len(batches) == 1:
+            upload_workflow.llm_module.record_llm_request_status(
+                "ok",
+                requested_count=len(transactions),
+                returned_count=len(transactions),
+            )
+            transactions[0].update(
+                {
+                    "category": "Food",
+                    "needs_review": 0,
+                    "category_source": "ai",
+                    "category_confidence": 0.94,
+                    "category_rule_id": None,
+                    "categorized_at": "2026-05-09T00:00:00Z",
+                    "reviewed_at": None,
+                    "tags": [],
+                }
+            )
+            transactions[1].update(
+                {
+                    "category": "UNKNOWN",
+                    "needs_review": 1,
+                    "category_source": "unknown",
+                    "category_confidence": None,
+                    "category_rule_id": None,
+                    "categorized_at": None,
+                    "reviewed_at": None,
+                    "tags": [],
+                    "category_metadata": {"failure_reason": "llm_no_results"},
+                }
+            )
+            return transactions
+
+        upload_workflow.llm_module.record_llm_request_status(
+            "request_error",
+            error_type="TimeoutError",
+            detail="request timed out",
+            requested_count=len(transactions),
+        )
+        transactions[0].update(
+            {
+                "category": "UNKNOWN",
+                "needs_review": 1,
+                "category_source": "unknown",
+                "category_confidence": None,
+                "category_rule_id": None,
+                "categorized_at": None,
+                "reviewed_at": None,
+                "tags": [],
+                "category_metadata": {"failure_reason": "request_error"},
+            }
+        )
+        return transactions
+
+    monkeypatch.setattr(upload_workflow.llm_module, "LLM_BATCH_SIZE", 2)
+    monkeypatch.setattr(upload_workflow, "categorize_transactions", categorize_for_test)
+    monkeypatch.setattr(upload_workflow, "update_background_job_progress", capture_progress)
+    monkeypatch.setattr(upload_workflow, "append_background_job_log", capture_log)
+
+    message = upload_workflow.categorize_statement_unknown_transactions_job(statement_id)
+
+    messages = [entry["message"] for entry in log_entries]
+    assert batches == [
+        ["UNKNOWN GOOD", "UNKNOWN UNRESOLVED"],
+        ["UNKNOWN TIMEOUT"],
+    ]
+    assert message == "1 automatically categorized: 1 AI."
+    assert "Starting AI categorization for {total} unknown transactions." in messages
+    assert "Starting batch {start}-{end} of {total}." in messages
+    assert "AI request issue in batch {start}-{end}: {error_type}: {detail}" in messages
+    assert "Batch {start}-{end} kept {unknown} transaction unknown for review." in messages
+    assert "Finished batch {start}-{end}: {processed} processed; {updated} categorized total." in messages
+    assert "AI categorization completed: {summary}" in messages
+    request_issue = next(
+        entry
+        for entry in log_entries
+        if entry["message"] == "AI request issue in batch {start}-{end}: {error_type}: {detail}"
+    )
+    assert request_issue["level"] == "warning"
+    assert request_issue["params"]["start"] == 3
+    assert request_issue["params"]["end"] == 3
+    assert request_issue["params"]["error_type"] == "TimeoutError"
+    unresolved = [
+        entry
+        for entry in log_entries
+        if entry["message"] == "Batch {start}-{end} kept {unknown} transaction unknown for review."
+    ]
+    assert [entry["params"]["reasons"] for entry in unresolved] == [
+        "llm_no_results: 1",
+        "request_error: 1",
+    ]
+    assert progress_updates[-1]["current"] == 3
+    assert progress_updates[-1]["total"] == 3
+    assert progress_updates[-1]["params"]["updated"] == 1
+
+
 def test_categorize_statement_unknown_transactions_job_reports_no_work(app, db_conn, monkeypatch):
     """Verify that the LLM job exits cleanly when there are no unknown rows."""
     _, statement_id = create_account_statement(db_conn, "none.csv")
@@ -422,8 +592,47 @@ def test_categorize_statement_unknown_transactions_job_reports_no_work(app, db_c
 
     message = upload_workflow.categorize_statement_unknown_transactions_job(statement_id)
 
-    assert message == "No unknown transactions needed LLM categorization."
+    assert message == "No unknown transactions needed AI categorization."
     assert calls == []
+
+
+def test_categorize_statement_unknowns_route_queues_statement_ai(client, db_conn, monkeypatch):
+    """Verify Uploaded statements can queue AI reruns for remaining unknown rows."""
+    _, statement_id = create_account_statement(db_conn, "manual-statement-ai.csv")
+    db_conn.execute(
+        """
+        INSERT INTO transactions (
+            statement_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            fingerprint
+        )
+        VALUES (?, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'manual-statement-ai')
+        """,
+        (statement_id,),
+    )
+    db_conn.commit()
+    submitted = []
+
+    def queue_for_test(queued_statement_id):
+        """Capture the statement-level AI queue request."""
+        submitted.append(queued_statement_id)
+        return "statementaijob123"
+
+    monkeypatch.setattr(upload_workflow, "queue_statement_llm_categorization", queue_for_test)
+
+    response = client.post(
+        f"/upload/{statement_id}/categorize-unknowns",
+        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/upload"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert submitted == [statement_id]
+    assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
 
 
 def test_automatic_categorization_message_reports_source_breakdown():

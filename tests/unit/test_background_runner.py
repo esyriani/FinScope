@@ -22,10 +22,13 @@ class CapturingExecutor:
 def isolated_background_runner(monkeypatch):
     """Reset global background runner state for each test."""
     executor = CapturingExecutor()
+    ai_executor = CapturingExecutor()
+    executor.ai_executor = ai_executor
     with runner._lock:
         runner._jobs.clear()
         runner._job_sequence = 0
     monkeypatch.setattr(runner, "_executor", executor)
+    monkeypatch.setattr(runner, "_ai_executor", ai_executor)
     yield executor
     with runner._lock:
         runner._jobs.clear()
@@ -40,15 +43,60 @@ def test_submit_background_job_records_queued_job_and_submission(isolated_backgr
     assert job["id"] == job_id
     assert job["label"] == "Sample job"
     assert job["status"] == "queued"
+    assert job["queue"] == "main"
+    assert job["cancel_requested"] is False
     assert job["started_at"] is None
     assert job["finished_at"] is None
     assert job["can_undo"] is False
+    assert job["can_cancel"] is True
     assert len(isolated_background_runner.submissions) == 1
 
     submitted_func, submitted_args, submitted_kwargs = isolated_background_runner.submissions[0]
     assert submitted_func is runner.run_job
     assert submitted_args[0] == job_id
     assert submitted_kwargs == {}
+
+
+def test_submit_background_job_routes_ai_jobs_to_ai_executor(isolated_background_runner):
+    """Verify AI jobs use the dedicated AI executor."""
+    job_id = runner.submit_background_job(
+        "AI job",
+        lambda: "done",
+        queue=runner.AI_JOB_QUEUE,
+    )
+
+    job = runner.get_background_job(job_id)
+    assert job["queue"] == "ai"
+    assert len(isolated_background_runner.submissions) == 0
+    assert len(isolated_background_runner.ai_executor.submissions) == 1
+
+
+def test_cancel_background_job_marks_queued_job_cancelled():
+    """Verify queued jobs can be cancelled before they start."""
+    job_id = runner.submit_background_job("Queued job", lambda: "done")
+
+    job = runner.cancel_background_job(job_id)
+
+    assert job["status"] == "cancelled"
+    assert job["cancel_requested"] is True
+    assert job["can_cancel"] is False
+    assert job["can_undo"] is False
+
+
+def test_raise_if_cancel_requested_uses_current_running_job_context():
+    """Verify running jobs can stop cooperatively after cancellation."""
+    job_id = runner.submit_background_job("Cancellable job", lambda: "placeholder")
+
+    def work():
+        """Request cancellation while work is active, then honor it."""
+        runner.cancel_background_job(job_id)
+        runner.raise_if_cancel_requested("Stopped.")
+
+    runner.run_job(job_id, work, (), {})
+
+    job = runner.get_background_job(job_id)
+    assert job["status"] == "cancelled"
+    assert job["result"] == "Stopped."
 
 
 def test_run_job_transitions_through_running_to_completed():
@@ -70,6 +118,55 @@ def test_run_job_transitions_through_running_to_completed():
     assert job["error"] is None
     assert job["started_at"] is not None
     assert job["finished_at"] is not None
+
+
+def test_running_job_can_publish_progress():
+    """Verify running jobs expose bounded progress metadata."""
+    job_id = runner.submit_background_job("Progress job", lambda: "placeholder")
+
+    def work():
+        """Publish progress while the job is active."""
+        runner.update_background_job_progress(
+            current=3,
+            total=10,
+            message="Processed {current} of {total}; {updated} categorized.",
+            params={"current": 3, "total": 10, "updated": 2},
+        )
+        return "done"
+
+    runner.run_job(job_id, work, (), {})
+
+    job = runner.get_background_job(job_id)
+    assert job["progress_current"] == 3
+    assert job["progress_total"] == 10
+    assert job["progress_percent"] == 30
+    assert job["progress_message"] == "Processed {current} of {total}; {updated} categorized."
+    assert job["progress_params"] == {"current": 3, "total": 10, "updated": 2}
+    assert job["progress_log"] == []
+
+
+def test_running_job_can_append_progress_log():
+    """Verify running jobs expose timestamped progress log entries."""
+    job_id = runner.submit_background_job("Logged job", lambda: "placeholder")
+
+    def work():
+        """Publish log entries while the job is active."""
+        runner.append_background_job_log(
+            "Starting batch {start}-{end} of {total}.",
+            params={"start": 1, "end": 20, "total": 45},
+        )
+        runner.append_background_job_log("Batch failed.", level="unknown")
+        return "done"
+
+    runner.run_job(job_id, work, (), {})
+
+    job = runner.get_background_job(job_id)
+    assert len(job["progress_log"]) == 2
+    assert job["progress_log"][0]["level"] == "info"
+    assert job["progress_log"][0]["message"] == "Starting batch {start}-{end} of {total}."
+    assert job["progress_log"][0]["params"] == {"start": 1, "end": 20, "total": 45}
+    assert job["progress_log"][0]["timestamp"]
+    assert job["progress_log"][1]["level"] == "info"
 
 
 def test_run_job_records_failed_state_and_error_text():

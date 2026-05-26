@@ -55,6 +55,7 @@ from finance_app.modules.rules.import_export import (
     RULE_IMPORT_MODE_OVERRIDE,
     preview_rules_import,
 )
+from finance_app.modules.rules.service import count_rule_transaction_references_by_rule_id
 
 
 SEVERITY_LABELS = {
@@ -147,6 +148,14 @@ def build_rule_audit_context(conn, args=None, transaction_limit=None):
         for finding in shadowed_rules
     ]
     stale_rows = [present_stale_rule(finding) for finding in stale_rules]
+    transaction_reference_counts = count_rule_transaction_references_by_rule_id(
+        conn,
+        [rule["id"] for rule in audit_data.rules],
+    )
+    attach_rule_action_flags(
+        [row["rule"] for row in shadowed_rows] + [row["rule"] for row in stale_rows],
+        transaction_reference_counts,
+    )
     specificity_warning_rows = [
         present_specificity_warning(warning)
         for warning in specificity_warnings
@@ -339,9 +348,13 @@ def build_rule_detail_context(conn, rule_id, transaction_limit=None):
     total_matches = len(matches)
     total_wins = len(wins)
     total_losses = len(losses)
+    transaction_reference_counts = count_rule_transaction_references_by_rule_id(conn, [rule_id])
 
     return {
-        "rule": present_rule(rule),
+        "rule": attach_rule_action_flags(
+            [present_rule(rule)],
+            transaction_reference_counts,
+        )[0],
         "metrics": {
             "total_matches": total_matches,
             "total_wins": total_wins,
@@ -1524,12 +1537,21 @@ def present_rule(rule):
         "source_badge_class": rule_source_badge_class(rule.get("source")),
         "approval_label": rule_approval_label(rule),
         "approval_badge_class": rule_approval_badge_class(rule),
-        "status_label": "Active",
-        "status_badge_class": "text-bg-success",
+        "status_label": rule_status_label(rule),
+        "status_badge_class": rule_status_badge_class(rule),
         "specificity": specificity,
         "specificity_label": specificity_label(specificity),
         "specificity_factors": specificity_factors(specificity),
     }
+
+
+def attach_rule_action_flags(presented_rules, transaction_reference_counts):
+    """Attach direct-action safety metadata to presented rule mappings."""
+    for rule in presented_rules:
+        reference_count = transaction_reference_counts.get(rule.get("id"), 0)
+        rule["transaction_reference_count"] = reference_count
+        rule["can_delete_without_preview"] = reference_count == 0
+    return presented_rules
 
 
 def import_mode_label(mode):
@@ -1670,6 +1692,20 @@ def rule_source_badge_class(source):
         CATEGORY_RULE_SOURCE_MANUAL: "text-bg-primary",
         CATEGORY_RULE_SOURCE_AUTOMATIC: "text-bg-info",
     }.get(source, "text-bg-secondary")
+
+
+def rule_status_label(rule):
+    """Return the user-facing audit status for a rule."""
+    if rule.get("source") != CATEGORY_RULE_SOURCE_AUTOMATIC:
+        return "Manual"
+    return "Approved" if rule.get("ai_approved") else "Suggested"
+
+
+def rule_status_badge_class(rule):
+    """Return the Bootstrap badge class for a rule audit status."""
+    if rule.get("source") != CATEGORY_RULE_SOURCE_AUTOMATIC:
+        return "text-bg-primary"
+    return "text-bg-success" if rule.get("ai_approved") else "text-bg-warning"
 
 
 def rule_approval_label(rule):

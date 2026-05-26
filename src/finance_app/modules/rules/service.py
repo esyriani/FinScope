@@ -1,10 +1,14 @@
 """Application orchestration for the rules feature."""
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, union_all, update
 
 from finance_app.core.constants import CATEGORY_RULE_SOURCE_AUTOMATIC, CATEGORY_RULE_SOURCE_MANUAL
 from finance_app.core.money import money_to_float
-from finance_app.database.tables import category_rules as category_rules_table
+from finance_app.database.tables import (
+    category_rules as category_rules_table,
+    transaction_tags as transaction_tags_table,
+    transactions as transactions_table,
+)
 from finance_app.modules.categories.service import (
     get_category_options,
     normalize_category,
@@ -179,6 +183,48 @@ def fetch_rule_approval(conn, rule_id):
             category_rules_table.c.ai_approved,
         ).where(category_rules_table.c.id == rule_id)
     ).mappings().fetchone()
+
+
+def count_rule_transaction_references(conn, rule_id):
+    """Return distinct transactions currently linked to one rule.
+
+    Counts category assignments and rule-applied tags. The caller owns the
+    database transaction. Missing rules naturally return zero because only
+    transaction-side references are considered.
+    """
+    return count_rule_transaction_references_by_rule_id(conn, [rule_id]).get(rule_id, 0)
+
+
+def count_rule_transaction_references_by_rule_id(conn, rule_ids):
+    """Return transaction reference counts keyed by category rule id.
+
+    A rule is considered applied when an existing transaction stores the rule
+    as its category source or when a transaction tag row still references the
+    rule. Counts are distinct per transaction so a tagged category assignment
+    is counted once.
+    """
+    rule_ids = [int(rule_id) for rule_id in rule_ids if rule_id is not None]
+    if not rule_ids:
+        return {}
+
+    category_refs = select(
+        transactions_table.c.category_rule_id.label("rule_id"),
+        transactions_table.c.id.label("transaction_id"),
+    ).where(transactions_table.c.category_rule_id.in_(rule_ids))
+    tag_refs = select(
+        transaction_tags_table.c.rule_id.label("rule_id"),
+        transaction_tags_table.c.transaction_id.label("transaction_id"),
+    ).where(transaction_tags_table.c.rule_id.in_(rule_ids))
+    refs = union_all(category_refs, tag_refs).subquery()
+    rows = conn.execute(
+        select(
+            refs.c.rule_id,
+            func.count(func.distinct(refs.c.transaction_id)).label("count"),
+        )
+        .where(refs.c.rule_id.is_not(None))
+        .group_by(refs.c.rule_id)
+    ).mappings().fetchall()
+    return {int(row["rule_id"]): int(row["count"]) for row in rows}
 
 
 def get_rule_for_apply(conn, rule_id):

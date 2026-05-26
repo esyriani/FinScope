@@ -120,19 +120,145 @@ function cellExportText(cell) {
     return normalizeExportText(clone.textContent);
 }
 
-function tableMatrix(table) {
-    return Array.from(table.querySelectorAll("tr"))
-        .map((row) => Array.from(row.cells).map(cellExportText))
-        .filter((row) => row.some((value) => value !== ""));
-}
-
 function csvEscape(value) {
     const text = String(value ?? "");
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function exportTableCsv(table, filenameBase) {
-    const csv = tableMatrix(table)
+function isExportHeaderRow(row) {
+    return Boolean(row.closest("thead, tfoot"));
+}
+
+function rowExportId(row) {
+    return row.dataset.exportRowId || row.dataset.recurringId || "";
+}
+
+function isDisplayedExportRow(row) {
+    if (row.hidden || row.closest("[hidden]")) return false;
+
+    const rowStyle = window.getComputedStyle(row);
+    if (rowStyle.display === "none" || rowStyle.visibility === "hidden") return false;
+
+    return true;
+}
+
+function visibleExportSourceIds(table) {
+    const sourceSelector = table.dataset.exportVisibleSource;
+    if (!sourceSelector) return null;
+
+    const source = document.querySelector(sourceSelector);
+    if (!source) return null;
+
+    const ids = Array.from(source.querySelectorAll("tbody tr"))
+        .filter(isDisplayedExportRow)
+        .map(rowExportId)
+        .filter(Boolean);
+
+    return new Set(ids);
+}
+
+function tableRowsForExport(table, scope) {
+    const rows = Array.from(table.querySelectorAll("tr"));
+    if (scope !== "displayed") return rows;
+
+    const visibleSourceIds = visibleExportSourceIds(table);
+    return rows.filter((row) => {
+        if (isExportHeaderRow(row)) return true;
+        if (visibleSourceIds) return visibleSourceIds.has(rowExportId(row));
+        return isDisplayedExportRow(row);
+    });
+}
+
+function tableMatrix(table, scope = "all") {
+    return tableRowsForExport(table, scope)
+        .map((row) => Array.from(row.cells).map(cellExportText))
+        .filter((row) => row.some((value) => value !== ""));
+}
+
+function ensureTableExportChoiceModal() {
+    const existing = document.getElementById("table-export-choice-modal");
+    if (existing) return existing;
+
+    const modal = document.createElement("div");
+    modal.className = "modal fade";
+    modal.id = "table-export-choice-modal";
+    modal.tabIndex = -1;
+    modal.setAttribute("aria-labelledby", "table-export-choice-title");
+    modal.setAttribute("aria-hidden", "true");
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="table-export-choice-title">${financeTranslate("Export rows")}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${financeTranslate("Close")}"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">${financeTranslate("Choose which rows to export from this table.")}</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i>${financeTranslate("Cancel")}
+                    </button>
+                    <button class="btn btn-outline-primary" type="button" data-export-choice="all">
+                        <i class="bi bi-table" aria-hidden="true"></i>${financeTranslate("Entire table")}
+                    </button>
+                    <button class="btn btn-primary" type="button" data-export-choice="displayed">
+                        <i class="bi bi-eye" aria-hidden="true"></i>${financeTranslate("Displayed rows")}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function chooseTableExportScope() {
+    const modalElement = ensureTableExportChoiceModal();
+    if (!window.bootstrap?.Modal) {
+        return Promise.resolve(
+            window.confirm(financeTranslate("Export displayed rows only? Choose Cancel to export the entire table."))
+                ? "displayed"
+                : "all"
+        );
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    return new Promise((resolve) => {
+        let resolved = false;
+
+        function finish(value) {
+            if (resolved) return;
+            resolved = true;
+            modalElement.querySelectorAll("[data-export-choice]").forEach((button) => {
+                button.removeEventListener("click", onChoiceClick);
+            });
+            modalElement.removeEventListener("hidden.bs.modal", onHidden);
+            modal.hide();
+            resolve(value);
+        }
+
+        function onChoiceClick(event) {
+            finish(event.currentTarget.dataset.exportChoice || "");
+        }
+
+        function onHidden() {
+            finish("");
+        }
+
+        modalElement.querySelectorAll("[data-export-choice]").forEach((button) => {
+            button.addEventListener("click", onChoiceClick);
+        });
+        modalElement.addEventListener("hidden.bs.modal", onHidden, { once: true });
+        modal.show();
+    });
+}
+
+async function exportTableCsv(table, filenameBase) {
+    const scope = await chooseTableExportScope();
+    if (!scope) return;
+
+    const csv = tableMatrix(table, scope)
         .map((row) => row.map(csvEscape).join(","))
         .join("\r\n");
 
@@ -155,8 +281,11 @@ function excelSheetName(value) {
     return cleaned.slice(0, 31) || "Export";
 }
 
-function exportTableExcel(table, filenameBase, sheetName) {
-    const rows = tableMatrix(table)
+async function exportTableExcel(table, filenameBase, sheetName) {
+    const scope = await chooseTableExportScope();
+    if (!scope) return;
+
+    const rows = tableMatrix(table, scope)
         .map((row) => {
             const cells = row
                 .map((value) => `<Cell><Data ss:Type="String">${xmlEscape(value)}</Data></Cell>`)
@@ -307,3 +436,6 @@ function setupChartExports() {
 
 setupTableExports();
 setupChartExports();
+
+window.setupTableExports = setupTableExports;
+window.setupChartExports = setupChartExports;

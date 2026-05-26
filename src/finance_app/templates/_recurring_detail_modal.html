@@ -13,6 +13,24 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
             </div>
             <div class="modal-body">
+                <div class="recurring-detail-summary mb-4" data-recurring-detail-summary>
+                    <div>
+                        <div class="metric-label">{{ _("Status") }}</div>
+                        <div class="recurring-detail-status-line">
+                            <span class="recurring-status-pill" data-recurring-detail-status-pill></span>
+                            <span class="recurring-detail-status-detail" data-recurring-detail-status-detail></span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="metric-label">{{ _("Your decision") }}</div>
+                        <div class="recurring-detail-summary-text" data-recurring-detail-user-status></div>
+                    </div>
+                    <div>
+                        <div class="metric-label">{{ _("Recommended action") }}</div>
+                        <div class="recurring-detail-summary-text" data-recurring-detail-recommendation></div>
+                    </div>
+                </div>
+
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
                         <div class="metric-label">{{ _("Direction") }}</div>
@@ -39,17 +57,21 @@
                         <div class="fw-semibold" data-recurring-detail-observed></div>
                     </div>
                     <div class="col-md-4">
-                        <div class="metric-label">{{ _("Status") }}</div>
-                        <div class="fw-semibold" data-recurring-detail-status></div>
-                    </div>
-                    <div class="col-md-4">
                         <div class="metric-label">{{ _("Confidence") }}</div>
                         <div data-recurring-detail-confidence></div>
                     </div>
                 </div>
 
-                <div class="text-muted small mb-3" data-recurring-detail-explanation></div>
-                <div class="text-muted small mb-4" data-recurring-detail-match></div>
+                <div class="recurring-detail-evidence-grid mb-4">
+                    <div class="recurring-detail-evidence-item">
+                        <div class="metric-label">{{ _("Why detected") }}</div>
+                        <div class="recurring-detail-evidence-text" data-recurring-detail-explanation></div>
+                    </div>
+                    <div class="recurring-detail-evidence-item">
+                        <div class="metric-label">{{ _("Current-month evidence") }}</div>
+                        <div class="recurring-detail-evidence-text" data-recurring-detail-match></div>
+                    </div>
+                </div>
                 <div class="card mb-4 d-none" data-recurring-detail-amount-change>
                     <div class="card-body">
                         <div class="section-title mb-3">
@@ -88,7 +110,7 @@
                         <div class="section-title mb-3">
                             <div>
                                 <h6 class="card-title mb-1">{{ _("Edit recurring pattern") }}</h6>
-                                <div class="text-muted small">{{ _("Saved changes override this detected recurring pattern.") }}</div>
+                                <div class="text-muted small">{{ _("Saved edits override the detected frequency, date, amount, and tolerances for this pattern.") }}</div>
                             </div>
                         </div>
                         <form class="row g-3" data-recurring-edit-form>
@@ -128,7 +150,7 @@
                             </div>
                             <div class="col-12">
                                 <button class="btn btn-sm btn-primary" type="button" data-recurring-save-edit-action>{{ _("Save changes") }}</button>
-                                <span class="text-muted small ms-2">{{ _("Saved changes apply to this recurring pattern.") }}</span>
+                                <span class="text-muted small ms-2">{{ _("Saving marks this pattern as edited.") }}</span>
                             </div>
                         </form>
                     </div>

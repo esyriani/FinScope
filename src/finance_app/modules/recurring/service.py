@@ -1,7 +1,7 @@
 """Application orchestration for the recurring feature."""
 
 from calendar import Calendar
-from datetime import date
+from datetime import date, datetime
 from urllib.parse import urlencode
 
 from flask import url_for
@@ -20,6 +20,16 @@ from finance_app.modules.calendar.service import (
 
 
 RECURRING_VIEWS = {"list", "calendar"}
+RECURRING_CALENDAR_VISIBLE_COUNT = 3
+RECURRING_STATUS_PRIORITY = {
+    "overdue": 0,
+    "amount_changed": 1,
+    "expected": 2,
+    "likely_occurred": 3,
+    "matched": 3,
+    "occurred": 4,
+    "possibly_inactive": 5,
+}
 STATUS_OPTIONS = [
     {"value": "occurred", "label": "Occurred"},
     {"value": "amount_changed", "label": "Amount changed"},
@@ -39,6 +49,12 @@ def build_recurring_page_context(args):
     selected_recurring_view = parse_recurring_view(args.get("view"))
     selected_statuses = clean_statuses(args.getlist("statuses"))
     selected_confidence = parse_confidence(args.get("confidence"))
+    has_applied_filters = bool(
+        selected_categories
+        or selected_tags
+        or selected_statuses
+        or selected_confidence
+    )
     recurring_context = build_recurring_activity_context(
         selected_month,
         selected_categories,
@@ -48,6 +64,11 @@ def build_recurring_page_context(args):
         recurring_context["recurring_items"],
         selected_statuses,
         selected_confidence,
+    )
+    recurring_items = decorate_recurring_items_for_table(
+        recurring_items,
+        recurring_context["month_start"],
+        recurring_context["month_end"],
     )
 
     return {
@@ -102,9 +123,22 @@ def build_recurring_page_context(args):
             selected_statuses,
             selected_confidence,
         ),
-        "clear_filters_url": recurring_clear_url(selected_recurring_view),
+        "recurring_status_filter_links": build_recurring_status_filter_links(
+            recurring_context["month_start"],
+            selected_categories,
+            selected_tags,
+            selected_recurring_view,
+            selected_statuses,
+            selected_confidence,
+        ),
+        "clear_filters_url": recurring_clear_url(
+            selected_recurring_view,
+            recurring_context["month_start"],
+        ),
         "recurring_summary": build_recurring_summary(recurring_items),
         "recurring_items": recurring_items,
+        "table_page_size": recurring_context["table_page_size"],
+        "recurring_empty_state_message": recurring_empty_state_message(has_applied_filters),
         "recurring_activity_json": build_recurring_activity_json(recurring_items),
         "recurring_calendar_days": build_recurring_calendar_days(
             recurring_context["month_start"],
@@ -137,6 +171,13 @@ def parse_confidence(value):
     return value if value in CONFIDENCE_OPTIONS else ""
 
 
+def recurring_empty_state_message(has_applied_filters):
+    """Return the recurring empty-state message for the active filter context."""
+    if has_applied_filters:
+        return gettext("No recurring activity matches the current filters.")
+    return gettext("No recurring activity detected for this month.")
+
+
 def filter_recurring_items(recurring_items, selected_statuses, selected_confidence):
     """Filter recurring items."""
     filtered = recurring_items
@@ -148,13 +189,86 @@ def filter_recurring_items(recurring_items, selected_statuses, selected_confiden
     return filtered
 
 
+def decorate_recurring_items_for_table(recurring_items, month_start, month_end):
+    """Return recurring items with compact table display metadata attached."""
+    evaluation_date = recurring_evaluation_date(month_start, month_end)
+    return [
+        {
+            **item,
+            "status_label": recurring_status_label(item["status"]),
+            "status_detail": recurring_status_detail(item, evaluation_date),
+        }
+        for item in recurring_items
+    ]
+
+
+def recurring_evaluation_date(month_start, month_end):
+    """Return the date used to explain expected or overdue recurring rows."""
+    today = date.today()
+    if today < month_start:
+        return month_start
+    if today > month_end:
+        return month_end
+    return today
+
+
+def recurring_status_detail(item, evaluation_date):
+    """Return a short user-facing explanation for a recurring row status."""
+    status = item["status"]
+    details = item.get("match_details") or {}
+    if status == "occurred":
+        return gettext("Date and amount matched.")
+    if status == "amount_changed":
+        return gettext("Date matched; amount changed.")
+    if status in {"likely_occurred", "matched"}:
+        return gettext("Merchant appeared outside date tolerance.")
+    if status == "expected":
+        return gettext("No matching transaction yet.")
+    if status == "overdue":
+        expected_date = parse_recurring_date(item.get("date"))
+        days = max(0, (evaluation_date - expected_date).days) if expected_date else 0
+        return gettext("1 day overdue") if days == 1 else gettext("{count} days overdue", count=days)
+    if status == "possibly_inactive":
+        missed_cycles = details.get("missed_cycles")
+        if missed_cycles == 1:
+            return gettext("Missed 1 expected cycle.")
+        if missed_cycles:
+            return gettext("Missed {count} expected cycles.", count=missed_cycles)
+        return gettext("Missed multiple expected cycles.")
+    return ""
+
+
+def parse_recurring_date(value):
+    """Return a parsed ISO date for recurring display helpers."""
+    try:
+        return datetime.strptime(str(value or ""), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
 def build_recurring_summary(recurring_items):
     """Build recurring summary."""
     amount_changed_items = [item for item in recurring_items if item.get("amount_change")]
+    low_confidence_detected_items = [
+        item
+        for item in recurring_items
+        if (
+            item["confidence"] == "Low"
+            and item.get("user_status") == "detected"
+            and item["status"] != "possibly_inactive"
+        )
+    ]
     active_statuses = {"occurred", "amount_changed", "likely_occurred", "expected", "overdue", "matched"}
     expected_statuses = {"expected"}
     occurred_statuses = {"occurred", "amount_changed", "likely_occurred", "matched"}
+    needs_attention_items = {
+        item["id"]
+        for item in recurring_items
+        if item["status"] in {"overdue", "amount_changed"}
+    }
+    needs_attention_items.update(item["id"] for item in low_confidence_detected_items)
     return {
+        "needs_attention_count": len(needs_attention_items),
         "active_count": len([
             item
             for item in recurring_items
@@ -163,6 +277,8 @@ def build_recurring_summary(recurring_items):
         "expected_count": len([item for item in recurring_items if item["status"] in expected_statuses]),
         "occurred_count": len([item for item in recurring_items if item["status"] in occurred_statuses]),
         "overdue_count": len([item for item in recurring_items if item["status"] == "overdue"]),
+        "possibly_inactive_count": len([item for item in recurring_items if item["status"] == "possibly_inactive"]),
+        "low_confidence_detected_count": len(low_confidence_detected_items),
         "recurring_spending": round(sum(
             item["amount"]
             for item in recurring_items
@@ -225,9 +341,54 @@ def recurring_filter_url(
     return f"{url_for('recurring.recurring')}?{urlencode(params, doseq=True)}"
 
 
-def recurring_clear_url(view):
-    """Build clear URL."""
-    return f"{url_for('recurring.recurring')}?{urlencode({'view': view})}"
+def recurring_clear_url(view, month_start=None):
+    """Build a recurring filter-clear URL while preserving the viewed period."""
+    params = {"view": view}
+    if month_start:
+        params["month"] = month_start.isoformat()[:7]
+    return f"{url_for('recurring.recurring')}?{urlencode(params)}"
+
+
+def build_recurring_status_filter_links(
+    month_start,
+    selected_categories,
+    selected_tags,
+    view,
+    selected_statuses,
+    selected_confidence,
+):
+    """Build status filter links that keep recurring summaries and views aligned."""
+    return [
+        {
+            "value": "",
+            "label": "All",
+            "url": recurring_filter_url(
+                month_start,
+                selected_categories,
+                selected_tags,
+                view,
+                selected_statuses=[],
+                selected_confidence=selected_confidence,
+            ),
+            "selected": not selected_statuses,
+        },
+        *[
+            {
+                "value": option["value"],
+                "label": option["label"],
+                "url": recurring_filter_url(
+                    month_start,
+                    selected_categories,
+                    selected_tags,
+                    view,
+                    selected_statuses=[option["value"]],
+                    selected_confidence=selected_confidence,
+                ),
+                "selected": selected_statuses == [option["value"]],
+            }
+            for option in STATUS_OPTIONS
+        ],
+    ]
 
 
 def build_recurring_calendar_days(month_start, recurring_items):
@@ -242,15 +403,17 @@ def build_recurring_calendar_days(month_start, recurring_items):
         day_key = day.isoformat()
         day_items = sorted(
             items_by_date.get(day_key, []),
-            key=lambda chip: (chip["status_label"], chip["merchant"]),
+            key=recurring_calendar_sort_key,
         )
-        visible_items = day_items[:3]
+        visible_items = day_items[:RECURRING_CALENDAR_VISIBLE_COUNT]
         days.append(
             {
                 "date": day_key,
                 "day_number": day.day,
                 "in_month": day.month == month_start.month,
                 "is_today": day_key == date.today().isoformat(),
+                "item_count": len(day_items),
+                "attention_count": sum(1 for chip in day_items if chip["needs_attention"]),
                 "recurring_items": visible_items,
                 "all_recurring_items": day_items,
                 "more_count": max(0, len(day_items) - len(visible_items)),
@@ -274,12 +437,37 @@ def recurring_calendar_chip(item):
     return {
         "id": item["id"],
         "status": item["status"],
-        "status_label": recurring_status_label(item["status"]),
+        "status_label": item.get("status_label") or recurring_status_label(item["status"]),
+        "status_detail": item.get("status_detail", ""),
         "merchant": item["merchant"],
+        "category": item["category"],
+        "frequency": item["frequency"],
+        "user_status": item["user_status"],
+        "active": item["active"],
         "amount_label": recurring_signed_amount_label(item),
         "amount_class": "text-success" if item["type"] == "income" else "text-danger",
+        "needs_attention": recurring_calendar_needs_attention(item),
         "aria_label": recurring_calendar_chip_label(item),
     }
+
+
+def recurring_calendar_sort_key(chip):
+    """Return a priority key for recurring calendar chips."""
+    return (
+        RECURRING_STATUS_PRIORITY.get(chip["status"], 99),
+        str(chip["merchant"]).lower(),
+    )
+
+
+def recurring_calendar_needs_attention(item):
+    """Return whether a recurring item should be called out in calendar summaries."""
+    if item["status"] in {"overdue", "amount_changed"}:
+        return True
+    return (
+        item.get("confidence") == "Low"
+        and item.get("user_status") == "detected"
+        and item["status"] != "possibly_inactive"
+    )
 
 
 def recurring_signed_amount_label(item):
