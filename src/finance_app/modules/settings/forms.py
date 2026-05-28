@@ -57,12 +57,19 @@ def parse_global_settings_form(form, app_settings):
             form.get("llm_confidence_threshold"),
             "LLM confidence threshold",
         ),
+        "llm_review_threshold": parse_probability(
+            form.get("llm_review_threshold"),
+            "LLM review threshold",
+        ),
         "verify_threshold": parse_probability(
             form.get("verify_threshold"),
             "Verify threshold",
         ),
         "auto_llm_categorization_enabled": parse_checkbox(
             form.get("auto_llm_categorization_enabled")
+        ),
+        "transaction_ai_rerun_enabled": parse_checkbox(
+            form.get("transaction_ai_rerun_enabled")
         ),
         "openai_model": clean_openai_model(form.get("openai_model"))
         or app_settings.default_categorization_model,

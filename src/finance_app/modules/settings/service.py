@@ -46,11 +46,13 @@ GLOBAL_STRING_SETTING_KEYS = (
 
 BOOLEAN_SETTING_KEYS = (
     "auto_llm_categorization_enabled",
+    "transaction_ai_rerun_enabled",
 )
 
 
 PROBABILITY_SETTING_KEYS = (
     "llm_confidence_threshold",
+    "llm_review_threshold",
     "verify_threshold",
     "recurrence_amount_tolerance_percent",
 )
@@ -87,9 +89,19 @@ def build_settings_context():
             "llm_confidence_threshold",
             format_probability(app_settings.default_llm_confidence_threshold),
         ),
+        "llm_review_threshold": current.get(
+            "llm_review_threshold",
+            format_probability(app_settings.default_llm_review_threshold),
+        ),
         "verify_threshold": current.get("verify_threshold", format_probability(app_settings.default_verify_threshold)),
         "auto_llm_categorization_enabled": str(
             current.get("auto_llm_categorization_enabled", "1")
+        ).strip().lower() not in {"0", "false", "no", "off"},
+        "transaction_ai_rerun_enabled": str(
+            current.get(
+                "transaction_ai_rerun_enabled",
+                "1" if app_settings.default_transaction_ai_rerun_enabled else "0",
+            )
         ).strip().lower() not in {"0", "false", "no", "off"},
         "openai_model": current.get("openai_model", app_settings.default_categorization_model),
         "recurrence_minimum_occurrences": current.get(

@@ -13,30 +13,13 @@ def file_storage(payload=b"content", filename="statement.csv"):
     return FileStorage(stream=io.BytesIO(payload), filename=filename)
 
 
-def test_read_statement_text_extracts_pdf_text(app, monkeypatch):
-    """Verify PDF uploads return extracted text when available."""
-    uploaded_file = file_storage(b"%PDF-1.4", "statement.pdf")
-    monkeypatch.setattr(
-        upload_controller,
-        "extract_pdf_text",
-        lambda file: "Extracted statement text",
-    )
-
-    with app.test_request_context("/upload"):
-        assert upload_controller.read_statement_text(uploaded_file, "pdf") == "Extracted statement text"
-        assert get_flashed_messages() == []
-
-
-def test_read_statement_text_rejects_image_based_pdf(app, monkeypatch):
-    """Verify PDFs with no extractable text return a user-facing message."""
+def test_read_statement_text_rejects_pdf_files(app):
+    """Verify PDF uploads are rejected because statements are CSV-only."""
     uploaded_file = file_storage(b"%PDF-1.4", "scanned.pdf")
-    monkeypatch.setattr(upload_controller, "extract_pdf_text", lambda file: " \n\t")
 
     with app.test_request_context("/upload"):
         assert upload_controller.read_statement_text(uploaded_file, "pdf") is None
-        assert get_flashed_messages() == [
-            "Could not extract text from this PDF. It may be scanned or image-based."
-        ]
+        assert get_flashed_messages() == ["Unsupported file type."]
 
 
 def test_read_statement_text_rejects_unsupported_file_types(app):

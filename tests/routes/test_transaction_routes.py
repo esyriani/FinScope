@@ -267,3 +267,62 @@ def test_update_transaction_ignored_route_reports_missing_transaction(client):
 
     assert response.status_code == 200
     assert b"Transaction not found." in response.data
+
+
+def test_run_transaction_ai_route_shows_result_modal(client, db_conn, monkeypatch):
+    """Verify the one-off AI route redirects back with diagnostic modal content."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    tx_id = insert_transaction(db_conn, fingerprint="route-run-ai")
+
+    def run_ai_for_test(transaction_id):
+        """Return deterministic modal content without calling OpenAI."""
+        assert transaction_id == tx_id
+        return {
+            "ok": True,
+            "applied": True,
+            "message": "AI categorization completed.",
+            "transaction_id": tx_id,
+            "description": "TVA SPORTS DIRECT",
+            "account_name": "TD Visa",
+            "tx_date": "2026-05-04",
+            "amount": 20.68,
+            "transaction_kind_label": "Expense",
+            "previous_category": "UNKNOWN",
+            "previous_tag_pills": [],
+            "category": "Entertainment",
+            "tag_pills": [{"name": "Service", "color": "#64748b"}],
+            "needs_review": False,
+            "review_required": False,
+            "category_source_label": "AI",
+            "category_source_badge_class": "text-bg-info",
+            "category_confidence_label": "96%",
+            "model": "gpt-test",
+            "request_status": {"status": "ok", "requested_count": 1, "result_count": 1},
+            "request_status_label": "ok",
+            "llm_confidence": 0.96,
+            "final_confidence": 0.96,
+            "supported_by_similar_transactions": False,
+            "llm_reason": "TVA Sports is a streaming sports service.",
+            "rule_evidence": {},
+            "retrieval_evidence": {},
+            "metadata_pretty": '{"final_category":"Entertainment"}',
+        }
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "run_transaction_ai_categorization",
+        run_ai_for_test,
+    )
+
+    response = client.post(
+        f"/transactions/{tx_id}/run-ai",
+        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"AI categorization result" in response.data
+    assert b"TVA SPORTS DIRECT" in response.data
+    assert b"Entertainment" in response.data
+    assert b"TVA Sports is a streaming sports service." in response.data

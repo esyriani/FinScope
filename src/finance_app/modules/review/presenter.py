@@ -6,6 +6,7 @@ from finance_app.modules.categories.sources import (
     category_source_badge_class,
     category_source_label,
 )
+from finance_app.modules.categories.taxonomy import get_transaction_tags_by_id
 from finance_app.modules.merchants.normalization import canonicalize_merchant_key
 from finance_app.modules.review.queries import review_candidate_rows
 from finance_app.modules.review.urls import build_review_url
@@ -14,8 +15,10 @@ from finance_app.modules.review.urls import build_review_url
 def review_groups(conn, unknown_category, merchant_candidate=""):
     """Render groups."""
     groups_by_key = {}
+    rows = review_candidate_rows(conn, unknown_category, merchant_candidate)
+    transaction_tags = get_transaction_tags_by_id(conn, [row["id"] for row in rows])
 
-    for row in review_candidate_rows(conn, unknown_category, merchant_candidate):
+    for row in rows:
         key = review_merchant_key(row["description"], conn=conn)
         if not key:
             continue
@@ -38,7 +41,7 @@ def review_groups(conn, unknown_category, merchant_candidate=""):
                 "transactions": [],
             },
         )
-        row_dict = review_transaction_row(row)
+        row_dict = review_transaction_row(row, transaction_tags.get(row["id"], []))
         group["count"] += 1
         group["review_count"] += 1 if row["needs_review"] else 0
         group["unknown_count"] += 1 if is_unknown_category(row["category"], unknown_category) else 0
@@ -59,6 +62,8 @@ def review_groups(conn, unknown_category, merchant_candidate=""):
 
     groups = []
     for group in groups_by_key.values():
+        group["selected_category"] = selected_review_category(group["categories"], unknown_category)
+        group["selected_tags"] = selected_review_tags(group["transactions"])
         group["categories"] = sorted(group["categories"], key=str.casefold)
         group["category_sources"] = sorted(group["category_sources"], key=str.casefold)
         group["category_source_badges"] = [
@@ -80,6 +85,38 @@ def review_groups(conn, unknown_category, merchant_candidate=""):
         reverse=True,
     )
     return groups
+
+
+def selected_review_category(categories, unknown_category):
+    """Return the category that should prefill the review modal."""
+    known_categories = {
+        category
+        for category in categories
+        if not is_unknown_category(category, unknown_category)
+    }
+    if len(known_categories) == 1:
+        return next(iter(known_categories))
+    return unknown_category
+
+
+def selected_review_tags(transactions):
+    """Return tags that should prefill the review modal.
+
+    A grouped review action applies the selected tags to every transaction in
+    the group, so only tags shared by all transactions are preselected.
+    """
+    if not transactions:
+        return []
+
+    common_tags = set(transactions[0].get("tags", []))
+    for tx in transactions[1:]:
+        common_tags &= set(tx.get("tags", []))
+
+    return [
+        tag
+        for tag in transactions[0].get("tags", [])
+        if tag in common_tags
+    ]
 
 
 def review_display_rows(groups, ungrouped_keys, unknown_category):
@@ -132,7 +169,7 @@ def sortable_text(value):
     return str(value or "").casefold()
 
 
-def review_transaction_row(row):
+def review_transaction_row(row, tags=None):
     """Return a review transaction row with category source display fields."""
     row_dict = dict(row)
     row_dict["amount"] = money_to_float(row["amount"])
@@ -141,6 +178,7 @@ def review_transaction_row(row):
             "category_source_label": category_source_label(row["category_source"]),
             "category_source_badge_class": category_source_badge_class(row["category_source"]),
             "category_confidence_label": category_confidence_label(row["category_confidence"]),
+            "tags": list(tags or []),
         }
     )
     return row_dict
@@ -189,6 +227,8 @@ def review_transaction_display_row(group, tx, unknown_category):
                 "class": tx["category_source_badge_class"],
             }
         ],
+        "selected_category": category,
+        "selected_tags": list(tx.get("tags", [])),
         "examples": [tx],
         "transactions": [tx],
         "is_ungrouped": True,

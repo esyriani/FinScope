@@ -6,12 +6,13 @@ import io
 import re
 from datetime import datetime
 
-from pypdf import PdfReader
-
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     AMOUNT_COLUMNS,
     CREDIT_COLUMNS,
+    DATE_ORDER_AUTO,
+    DATE_ORDER_DAY_FIRST,
+    DATE_ORDER_MONTH_FIRST,
     DATE_COLUMNS,
     DATE_FORMATS,
     DEBIT_COLUMNS,
@@ -55,22 +56,6 @@ def get_file_extension(filename):
     return filename.rsplit(".", 1)[1].lower()
 
 
-def extract_pdf_text(file_storage):
-    """Extract pdf text."""
-    file_storage.stream.seek(0)
-
-    reader = PdfReader(file_storage.stream)
-    pages_text = []
-
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            pages_text.append(text)
-
-    file_storage.stream.seek(0)
-    return "\n".join(pages_text)
-
-
 def normalize_date_text(value):
     """Normalize date text."""
     text = strip_accents(value).replace(",", " ")
@@ -83,8 +68,18 @@ def normalize_date_text(value):
     return " ".join(tokens)
 
 
-def parse_date(value):
-    """Parse date."""
+SLASH_DATE_RE = re.compile(r"^\s*(\d{1,2})/(\d{1,2})/(\d{2,4})\s*$")
+MONTH_FIRST_DATE_FORMATS = ("%m/%d/%Y", "%m/%d/%y")
+DAY_FIRST_DATE_FORMATS = ("%d/%m/%Y", "%d/%m/%y")
+SUPPORTED_DATE_ORDERS = {
+    DATE_ORDER_AUTO,
+    DATE_ORDER_MONTH_FIRST,
+    DATE_ORDER_DAY_FIRST,
+}
+
+
+def parse_date(value, date_formats=None):
+    """Parse a statement date value to the application's ISO date format."""
     raw_value = str(value).strip()
 
     if not raw_value:
@@ -94,15 +89,116 @@ def parse_date(value):
         raw_value,
         normalize_date_text(raw_value),
     ]
+    formats = date_formats or DATE_FORMATS
 
     for candidate in candidates:
-        for fmt in DATE_FORMATS:
+        for fmt in formats:
             try:
                 return datetime.strptime(candidate, fmt).date().isoformat()
             except ValueError:
                 continue
 
     return None
+
+
+def normalize_date_order(value):
+    """Return a supported statement date-order override."""
+    normalized = str(value or DATE_ORDER_AUTO).strip().lower()
+    if normalized in SUPPORTED_DATE_ORDERS:
+        return normalized
+    return DATE_ORDER_AUTO
+
+
+def preferred_date_formats_for_values(values, date_order=DATE_ORDER_AUTO):
+    """Return date formats ordered by the selected or inferred slash-date pattern."""
+    analysis = analyze_slash_date_order(values, date_order=date_order)
+    return date_formats_for_order(analysis["effective_order"])
+
+
+def date_formats_for_order(date_order):
+    """Return parser formats with the requested slash-date order first."""
+    normalized = normalize_date_order(date_order)
+    if normalized == DATE_ORDER_MONTH_FIRST:
+        preferred_formats = MONTH_FIRST_DATE_FORMATS
+    elif normalized == DATE_ORDER_DAY_FIRST:
+        preferred_formats = DAY_FIRST_DATE_FORMATS
+    else:
+        return DATE_FORMATS
+
+    return preferred_formats + tuple(
+        fmt for fmt in DATE_FORMATS
+        if fmt not in preferred_formats
+    )
+
+
+def infer_slash_date_order(values):
+    """Infer whether slash dates in one statement are month-first or day-first."""
+    return analyze_slash_date_order(values)["inferred_order"]
+
+
+def analyze_slash_date_order(values, date_order=DATE_ORDER_AUTO):
+    """Return slash-date order evidence and the effective order for parsing."""
+    selected_order = normalize_date_order(date_order)
+    month_first_count, day_first_count, ambiguous_count, slash_count = slash_date_order_counts(values)
+    inferred_order = None
+    if month_first_count and not day_first_count:
+        inferred_order = DATE_ORDER_MONTH_FIRST
+    elif day_first_count and not month_first_count:
+        inferred_order = DATE_ORDER_DAY_FIRST
+
+    if selected_order != DATE_ORDER_AUTO:
+        effective_order = selected_order
+        source = "selected"
+    elif inferred_order:
+        effective_order = inferred_order
+        source = "detected"
+    else:
+        effective_order = DATE_ORDER_AUTO
+        source = "auto"
+
+    requires_choice = (
+        selected_order == DATE_ORDER_AUTO
+        and slash_count > 0
+        and inferred_order is None
+        and (ambiguous_count > 0 or (month_first_count and day_first_count))
+    )
+
+    return {
+        "effective_order": effective_order,
+        "inferred_order": inferred_order,
+        "source": source,
+        "requires_choice": requires_choice,
+        "has_slash_dates": slash_count > 0,
+        "ambiguous_count": ambiguous_count,
+        "month_first_evidence_count": month_first_count,
+        "day_first_evidence_count": day_first_count,
+        "slash_date_count": slash_count,
+    }
+
+
+def slash_date_order_counts(values):
+    """Return evidence counts for month-first, day-first, and ambiguous slash dates."""
+    month_first_count = 0
+    day_first_count = 0
+    ambiguous_count = 0
+    slash_count = 0
+
+    for value in values:
+        match = SLASH_DATE_RE.match(str(value or ""))
+        if not match:
+            continue
+
+        slash_count += 1
+        first = int(match.group(1))
+        second = int(match.group(2))
+        if first > 12 and second <= 12:
+            day_first_count += 1
+        elif second > 12 and first <= 12:
+            month_first_count += 1
+        elif first <= 12 and second <= 12:
+            ambiguous_count += 1
+
+    return month_first_count, day_first_count, ambiguous_count, slash_count
 
 
 def parse_money(value):
@@ -242,9 +338,17 @@ def normalize_signed_amount(raw_amount, statement_type):
     return raw_amount
 
 
-def build_transaction(raw_date, description, statement_type, raw_debit=None, raw_credit=None, raw_amount=None):
+def build_transaction(
+    raw_date,
+    description,
+    statement_type,
+    raw_debit=None,
+    raw_credit=None,
+    raw_amount=None,
+    date_formats=None,
+):
     """Build transaction."""
-    tx_date = parse_date(raw_date)
+    tx_date = parse_date(raw_date, date_formats=date_formats)
     description = str(description or "").strip()
 
     if not tx_date or not description:
@@ -282,6 +386,7 @@ def build_interac_transfer(
     method=None,
     status=None,
     require_deposited_status=True,
+    date_formats=None,
 ):
     """Build an Interac e-Transfer history row.
 
@@ -289,7 +394,7 @@ def build_interac_transfer(
     rows. Sent transfers are spending outflows; received transfers are credits.
     Cancelled or otherwise incomplete rows are ignored.
     """
-    tx_date = parse_date(raw_date)
+    tx_date = parse_date(raw_date, date_formats=date_formats)
     description = str(counterparty or "").strip()
     amount = parse_money(raw_amount)
     normalized_status = str(status or "").strip().lower()
@@ -324,7 +429,11 @@ def normalize_interac_direction(direction):
     return INTERAC_DIRECTION_AUTO
 
 
-def parse_interac_transactions(raw_text, interac_direction=INTERAC_DIRECTION_AUTO):
+def parse_interac_transactions(
+    raw_text,
+    interac_direction=INTERAC_DIRECTION_AUTO,
+    date_order=DATE_ORDER_AUTO,
+):
     """Parse Interac e-Transfer sent or received history CSV rows."""
     interac_direction = normalize_interac_direction(interac_direction)
     rows = csv_rows(raw_text)
@@ -376,11 +485,18 @@ def parse_interac_transactions(raw_text, interac_direction=INTERAC_DIRECTION_AUT
             "ignored_rows": max(0, len(rows) - 1),
         }
 
-    transactions = []
-    ignored_rows = 0
+    records = []
     for row in rows[1:]:
         padded_row = row + [""] * max(0, len(header) - len(row))
-        record = dict(zip(header, padded_row))
+        records.append(dict(zip(header, padded_row)))
+
+    date_formats = preferred_date_formats_for_values(
+        (record.get(date_col) for record in records),
+        date_order=date_order,
+    )
+    transactions = []
+    ignored_rows = 0
+    for record in records:
         tx = build_interac_transfer(
             record.get(date_col),
             record.get(counterparty_col),
@@ -389,6 +505,7 @@ def parse_interac_transactions(raw_text, interac_direction=INTERAC_DIRECTION_AUT
             method=record.get(method_col) if method_col else None,
             status=record.get(status_col) if status_col else None,
             require_deposited_status=require_deposited_status,
+            date_formats=date_formats,
         )
         if tx:
             transactions.append(tx)
@@ -405,10 +522,15 @@ def parse_csv_transactions(
     raw_text,
     statement_type=STATEMENT_TYPE_PARSER_CREDIT_CARD,
     interac_direction=INTERAC_DIRECTION_AUTO,
+    date_order=DATE_ORDER_AUTO,
 ):
     """Parse csv transactions."""
     if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
-        return parse_interac_transactions(raw_text, interac_direction=interac_direction)
+        return parse_interac_transactions(
+            raw_text,
+            interac_direction=interac_direction,
+            date_order=date_order,
+        )
 
     rows = csv_rows(raw_text)
     header_index, header = detect_csv_header(rows)
@@ -429,10 +551,16 @@ def parse_csv_transactions(
         credit_col = find_column(header_map, CREDIT_COLUMNS)
         amount_col = find_column(header_map, AMOUNT_COLUMNS)
 
+        records = []
         for row in rows[header_index + 1:]:
             padded_row = row + [""] * max(0, len(header) - len(row))
-            record = dict(zip(header, padded_row))
+            records.append(dict(zip(header, padded_row)))
 
+        date_formats = preferred_date_formats_for_values(
+            (record.get(date_col) for record in records),
+            date_order=date_order,
+        )
+        for record in records:
             tx = build_transaction(
                 record.get(date_col),
                 record.get(description_col),
@@ -440,6 +568,7 @@ def parse_csv_transactions(
                 raw_debit=record.get(debit_col) if debit_col else None,
                 raw_credit=record.get(credit_col) if credit_col else None,
                 raw_amount=record.get(amount_col) if amount_col else None,
+                date_formats=date_formats,
             )
 
             if tx:
@@ -448,6 +577,10 @@ def parse_csv_transactions(
                 ignored_rows += 1
     else:
         # Fall back to a compact date/description/amount shape for simple CSVs.
+        date_formats = preferred_date_formats_for_values(
+            (row[0] for row in rows if len(row) >= 3),
+            date_order=date_order,
+        )
         for row in rows:
             if len(row) < 3:
                 ignored_rows += 1
@@ -460,6 +593,7 @@ def parse_csv_transactions(
                 raw_debit=row[2] if len(row) > 3 else None,
                 raw_credit=row[3] if len(row) > 3 else None,
                 raw_amount=row[2] if len(row) == 3 else None,
+                date_formats=date_formats,
             )
 
             if tx:

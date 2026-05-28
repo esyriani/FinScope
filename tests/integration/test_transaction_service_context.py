@@ -11,7 +11,9 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
-from finance_app.modules.categories.taxonomy import set_transaction_tags
+from finance_app.modules.categories.taxonomy import get_transaction_tag_names, set_transaction_tags
+from finance_app.modules.merchants.repository import get_or_create_merchant_for_description
+from finance_app.modules.transactions import service as transactions_service
 from finance_app.modules.transactions.service import build_transactions_context
 
 
@@ -102,6 +104,7 @@ def test_transactions_context_paginates_and_sorts(db_conn):
     assert descriptions(second_page) == ["Metro Grocery", "Cafe Bistro"]
     assert second_page["page_start"] == 3
     assert second_page["page_end"] == 4
+    assert first_page["run_transaction_ai_enabled"] is True
 
 
 def test_transactions_context_ignored_filters(db_conn):
@@ -327,3 +330,107 @@ def test_transactions_context_custom_dates_are_inclusive(db_conn):
 
     assert context["total_count"] == 2
     assert descriptions(context) == ["Start boundary", "End boundary"]
+
+
+def test_transactions_context_reads_single_transaction_ai_setting(db_conn):
+    """Verify transaction context exposes the diagnostic AI button setting."""
+    seed_transactions(db_conn)
+    db_conn.execute(
+        update(user_settings_table)
+        .where(user_settings_table.c["key"] == "transaction_ai_rerun_enabled")
+        .values(value="0")
+    )
+    db_conn.commit()
+
+    context = build_transactions_context(MultiDict([("period", "all")]))
+
+    assert context["run_transaction_ai_enabled"] is False
+
+
+def test_run_transaction_ai_categorization_updates_only_selected_row(db_conn, monkeypatch):
+    """Verify a one-off AI run applies to one row without creating an automatic rule."""
+    account_id = db_conn.execute(
+        insert(accounts_table).values(name="AI checking")
+    ).inserted_primary_key[0]
+    merchant_id = get_or_create_merchant_for_description(db_conn, "TVA SPORTS DIRECT")["id"]
+    ids = []
+    for fingerprint in ("ai-single-target", "ai-single-other"):
+        ids.append(
+            db_conn.execute(
+                insert(transactions_table).values(
+                    account_id=account_id,
+                    merchant_id=merchant_id,
+                    tx_date="2026-05-04",
+                    description="TVA SPORTS DIRECT",
+                    amount=20.68,
+                    category="UNKNOWN",
+                    category_id=resolve_category_id(db_conn, "UNKNOWN"),
+                    needs_review=1,
+                    category_source="unknown",
+                    fingerprint=fingerprint,
+                )
+            ).inserted_primary_key[0]
+        )
+    db_conn.commit()
+    captured = {}
+
+    def classify_for_test(conn, transactions, rules, unknown_category, save_automatic_rules=True):
+        """Return a deterministic one-row LLM decision."""
+        del rules, unknown_category
+        captured["save_automatic_rules"] = save_automatic_rules
+        transactions_service.llm_module.record_llm_request_status("ok", requested_count=1, result_count=1)
+        transactions[0].update(
+            {
+                "category": "Entertainment",
+                "category_id": resolve_category_id(conn, "Entertainment"),
+                "tags": ["Service"],
+                "needs_review": 0,
+                "category_source": "ai",
+                "category_confidence": 0.96,
+                "category_rule_id": None,
+                "category_metadata": {
+                    "decision_source": "llm",
+                    "final_category": "Entertainment",
+                    "final_tags": ["Service"],
+                    "final_confidence": 0.96,
+                    "llm_confidence": 0.96,
+                    "llm_reason": "TVA Sports is a streaming sports service.",
+                    "review_required": False,
+                },
+                "categorized_at": "2026-05-04T12:00:00Z",
+                "reviewed_at": None,
+            }
+        )
+
+    monkeypatch.setattr(transactions_service, "classify_unknowns_with_llm", classify_for_test)
+
+    result = transactions_service.run_transaction_ai_categorization(ids[0])
+
+    target = db_conn.execute(
+        select(
+            transactions_table.c.category,
+            transactions_table.c.category_source,
+            transactions_table.c.category_confidence,
+            transactions_table.c.category_rule_id,
+            transactions_table.c.needs_review,
+        ).where(transactions_table.c.id == ids[0])
+    ).mappings().fetchone()
+    other = db_conn.execute(
+        select(transactions_table.c.category).where(transactions_table.c.id == ids[1])
+    ).scalar_one()
+    rule_count = db_conn.execute("SELECT COUNT(*) AS count FROM category_rules").fetchone()["count"]
+
+    assert captured["save_automatic_rules"] is False
+    assert result["ok"] is True
+    assert result["applied"] is True
+    assert result["category"] == "Entertainment"
+    assert result["tags"] == ["Service"]
+    assert result["llm_reason"] == "TVA Sports is a streaming sports service."
+    assert target["category"] == "Entertainment"
+    assert target["category_source"] == "ai"
+    assert target["category_confidence"] == 0.96
+    assert target["category_rule_id"] is None
+    assert target["needs_review"] == 0
+    assert get_transaction_tag_names(db_conn, ids[0]) == ["Service"]
+    assert other == "UNKNOWN"
+    assert rule_count == 0

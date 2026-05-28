@@ -37,7 +37,7 @@
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Upload statements") }}</h2>
-        <p class="text-muted mb-0">{{ _("Upload CSV or text-based PDF statements. The original file is not stored.") }}</p>
+        <p class="text-muted mb-0">{{ _("Upload CSV statements. The original file is not stored.") }}</p>
     </div>
     <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i>{{ _("Jobs") }}</a>
 </div>
@@ -55,8 +55,15 @@
 
 <div class="card mb-4">
     <div class="card-body">
-        <form method="post" enctype="multipart/form-data" class="row g-3 align-items-start" data-upload-form>
+        <form
+            method="post"
+            enctype="multipart/form-data"
+            class="row g-3 align-items-start"
+            data-upload-form
+            data-preview-url="{{ url_for('upload.preview_statement_upload') }}"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="date_order" value="auto" data-upload-date-order>
             <div class="col-lg-4 col-md-6">
                 <label for="account_name" class="form-label">{{ _("Account") }}</label>
                 <input
@@ -151,16 +158,83 @@
                     type="file"
                     id="statement"
                     name="statement"
-                    accept=".csv,.pdf"
+                    accept=".csv"
                 >
             </div>
             <div class="col-lg-3 col-md-5">
                 <label class="form-label">&nbsp;</label>
-                <button type="submit" class="btn btn-primary w-100">
+                <button type="submit" class="btn btn-primary w-100" data-upload-submit>
                     <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>{{ _("Upload") }}
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<div class="modal fade" id="upload-preview-modal" tabindex="-1" aria-labelledby="upload-preview-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="upload-preview-modal-title">{{ _("Confirm statement import") }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger d-none" role="alert" data-upload-preview-error></div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="small text-muted">{{ _("Rows to import") }}</div>
+                        <div class="fs-5 fw-semibold" data-upload-preview-count>0</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="small text-muted">{{ _("Ignored rows") }}</div>
+                        <div class="fs-5 fw-semibold" data-upload-preview-ignored>0</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="small text-muted">{{ _("Date range") }}</div>
+                        <div class="fs-6 fw-semibold" data-upload-preview-date-range>{{ _("n/a") }}</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="small text-muted">{{ _("Date format") }}</div>
+                        <div class="fs-6 fw-semibold" data-upload-preview-date-format>{{ _("Auto-detect") }}</div>
+                    </div>
+                </div>
+
+                <div class="border rounded p-3 mb-3 d-none" data-upload-preview-date-choice>
+                    <div class="fw-semibold mb-2">{{ _("Statement date format") }}</div>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="upload_preview_date_order" id="upload-preview-date-month-first" value="month_first" data-upload-preview-date-option>
+                            <label class="form-check-label" for="upload-preview-date-month-first">{{ _(date_orders.get("month_first", "MM/DD/YYYY")) }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="upload_preview_date_order" id="upload-preview-date-day-first" value="day_first" data-upload-preview-date-option>
+                            <label class="form-check-label" for="upload-preview-date-day-first">{{ _(date_orders.get("day_first", "DD/MM/YYYY")) }}</label>
+                        </div>
+                    </div>
+                    <div class="form-text" data-upload-preview-date-message></div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>{{ _("Raw date") }}</th>
+                                <th>{{ _("Parsed date") }}</th>
+                                <th>{{ _("Description") }}</th>
+                                <th class="text-end">{{ _("Amount") }}</th>
+                            </tr>
+                        </thead>
+                        <tbody data-upload-preview-rows></tbody>
+                    </table>
+                </div>
+                <p class="text-muted mb-0 d-none" data-upload-preview-empty>{{ _("No preview rows available.") }}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
+                <button type="button" class="btn btn-primary" data-upload-preview-confirm><i class="bi bi-check-circle" aria-hidden="true"></i>{{ _("Confirm import") }}</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -320,6 +394,7 @@
                             {% if statement["interac_direction"] %}
                                 <div class="small text-muted">{{ _("Interac direction") }}: {{ _(interac_directions.get(statement["interac_direction"], statement["interac_direction"])) }}</div>
                             {% endif %}
+                            <div class="small text-muted">{{ _("Date format") }}: {{ _(statement["date_order_label"]) }}</div>
                         </div>
                         <div class="col-lg-4 col-md-6">
                             <div class="small text-muted">{{ _("Uploaded at") }}</div>

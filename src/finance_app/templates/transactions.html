@@ -18,6 +18,8 @@
 {% set selected_review = selected_review | default("") %}
 {% set selected_category_source = selected_category_source | default("") %}
 {% set selected_ignored = selected_ignored | default(ignored_filter_options[0][0]) %}
+{% set run_transaction_ai_enabled = run_transaction_ai_enabled | default(false) %}
+{% set transaction_ai_result = transaction_ai_result | default(none) %}
 {% set can_edit_transactions = current_user_can('edit_transactions') %}
 
 {% macro transaction_pagination(label) %}
@@ -337,34 +339,45 @@
                         </td>
                         <td>
                             {% if can_edit_transactions %}
-                            <form method="post" action="/transactions/{{ tx['id'] }}/ignored" class="d-flex gap-2 align-items-center" data-row-action data-ajax-refresh-form>
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="next" value="{{ request.full_path }}">
-                                {% if tx["ignored"] %}
-                                    <input type="hidden" name="ignored" value="0">
-                                    <span class="badge text-bg-secondary">{{ _("Ignored") }}</span>
-                                    <button
-                                        class="btn btn-sm btn-outline-secondary btn-icon-only"
-                                        type="submit"
-                                        aria-label="{{ _('Restore') }}"
-                                        title="{{ _('Restore') }}"
-                                        data-bs-tooltip
-                                    >
-                                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                            <div class="d-flex flex-wrap gap-2 align-items-center justify-content-end">
+                                {% if run_transaction_ai_enabled %}
+                                <form method="post" action="{{ url_for('transactions.run_transaction_ai', transaction_id=tx['id']) }}" data-row-action>
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <button class="btn btn-sm btn-outline-primary" type="submit">
+                                        <i class="bi bi-stars" aria-hidden="true"></i>{{ _("Run AI") }}
                                     </button>
-                                {% else %}
-                                    <input type="hidden" name="ignored" value="1">
-                                    <button
-                                        class="btn btn-sm btn-outline-secondary btn-icon-only"
-                                        type="submit"
-                                        aria-label="{{ _('Ignore') }}"
-                                        title="{{ _('Ignore') }}"
-                                        data-bs-tooltip
-                                    >
-                                        <i class="bi bi-ban" aria-hidden="true"></i>
-                                    </button>
+                                </form>
                                 {% endif %}
-                            </form>
+                                <form method="post" action="/transactions/{{ tx['id'] }}/ignored" class="d-flex gap-2 align-items-center" data-row-action data-ajax-refresh-form>
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    {% if tx["ignored"] %}
+                                        <input type="hidden" name="ignored" value="0">
+                                        <span class="badge text-bg-secondary">{{ _("Ignored") }}</span>
+                                        <button
+                                            class="btn btn-sm btn-outline-secondary btn-icon-only"
+                                            type="submit"
+                                            aria-label="{{ _('Restore') }}"
+                                            title="{{ _('Restore') }}"
+                                            data-bs-tooltip
+                                        >
+                                            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                                        </button>
+                                    {% else %}
+                                        <input type="hidden" name="ignored" value="1">
+                                        <button
+                                            class="btn btn-sm btn-outline-secondary btn-icon-only"
+                                            type="submit"
+                                            aria-label="{{ _('Ignore') }}"
+                                            title="{{ _('Ignore') }}"
+                                            data-bs-tooltip
+                                        >
+                                            <i class="bi bi-ban" aria-hidden="true"></i>
+                                        </button>
+                                    {% endif %}
+                                </form>
+                            </div>
                             {% else %}
                                 {% if tx["ignored"] %}
                                     <span class="badge text-bg-secondary">{{ _("Ignored") }}</span>
@@ -477,6 +490,209 @@
 {% else %}
 <div class="empty-state">
     {{ _("No transactions found.") }}
+</div>
+{% endif %}
+
+{% if transaction_ai_result %}
+{% set ai = transaction_ai_result %}
+<div class="modal fade" id="transaction-ai-result-modal" tabindex="-1" aria-labelledby="transaction-ai-result-modal-title" aria-hidden="true" data-auto-show-modal>
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-fit-content">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="transaction-ai-result-modal-title">{{ _("AI categorization result") }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body transaction-rule-modal">
+                <div class="alert {% if ai.ok %}alert-success{% else %}alert-warning{% endif %}" role="alert">
+                    {{ _(ai.message) }}
+                </div>
+
+                {% if ai.description %}
+                <dl class="rule-summary">
+                    <div>
+                        <dt>{{ _("Description") }}</dt>
+                        <dd>{{ ai.description }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Account") }}</dt>
+                        <dd>{{ ai.account_name or _("Personal") }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Date") }}</dt>
+                        <dd>{{ ai.tx_date | datefmt }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Amount") }}</dt>
+                        <dd>{{ ai.amount | moneyfmt }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Kind") }}</dt>
+                        <dd>{{ _(ai.transaction_kind_label) }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Applied to transaction") }}</dt>
+                        <dd>
+                            {% if ai.applied %}
+                                <span class="badge text-bg-success">{{ _("Applied") }}</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">{{ _("Not applied") }}</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Previous category") }}</dt>
+                        <dd>{{ ai.previous_category or "&mdash;" | safe }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Previous tags") }}</dt>
+                        <dd>
+                            {% if ai.previous_tag_pills %}
+                                <span class="tag-pill-list">
+                                    {% for tag in ai.previous_tag_pills %}
+                                        <span class="tag-pill" style="--tag-color: {{ tag.color }};">{{ tag.name }}</span>
+                                    {% endfor %}
+                                </span>
+                            {% else %}
+                                {{ _("No tags") }}
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("AI category") }}</dt>
+                        <dd>
+                            {{ ai.category or "&mdash;" | safe }}
+                            {% if ai.category_source_label %}
+                                <span class="badge {{ ai.category_source_badge_class }}">{{ _(ai.category_source_label) }}</span>
+                            {% endif %}
+                            {% if ai.category_confidence_label %}
+                                <span class="badge text-bg-secondary">{{ ai.category_confidence_label }}</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("AI tags") }}</dt>
+                        <dd>
+                            {% if ai.tag_pills %}
+                                <span class="tag-pill-list">
+                                    {% for tag in ai.tag_pills %}
+                                        <span class="tag-pill" style="--tag-color: {{ tag.color }};">{{ tag.name }}</span>
+                                    {% endfor %}
+                                </span>
+                            {% else %}
+                                {{ _("No tags") }}
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Review required") }}</dt>
+                        <dd>{{ _("Yes") if ai.review_required or ai.needs_review else _("No") }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Model") }}</dt>
+                        <dd>{{ ai.model or "&mdash;" | safe }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Request status") }}</dt>
+                        <dd><code>{{ ai.request_status_label }}</code></dd>
+                    </div>
+                    {% if ai.request_status and ai.request_status.result_count is defined %}
+                    <div>
+                        <dt>{{ _("Results returned") }}</dt>
+                        <dd>{{ ai.request_status.result_count }} / {{ ai.request_status.requested_count }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if ai.llm_confidence is not none %}
+                    <div>
+                        <dt>{{ _("LLM confidence") }}</dt>
+                        <dd>{{ "%.0f%%"|format(ai.llm_confidence * 100) }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if ai.final_confidence is not none %}
+                    <div>
+                        <dt>{{ _("Final confidence") }}</dt>
+                        <dd>{{ "%.0f%%"|format(ai.final_confidence * 100) }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if ai.supported_by_similar_transactions is not none %}
+                    <div>
+                        <dt>{{ _("Supported by similar transactions") }}</dt>
+                        <dd>{{ _("Yes") if ai.supported_by_similar_transactions else _("No") }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if ai.failure_reason %}
+                    <div>
+                        <dt>{{ _("Failure reason") }}</dt>
+                        <dd><code>{{ ai.failure_reason }}</code></dd>
+                    </div>
+                    {% endif %}
+                    {% if ai.request_detail %}
+                    <div>
+                        <dt>{{ _("Request detail") }}</dt>
+                        <dd>{{ ai.request_detail }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+
+                {% if ai.llm_reason %}
+                <section class="mb-3">
+                    <h6>{{ _("Explanation") }}</h6>
+                    <p class="mb-0">{{ ai.llm_reason }}</p>
+                </section>
+                {% endif %}
+
+                <section class="mb-3">
+                    <h6>{{ _("Evidence") }}</h6>
+                    <dl class="rule-summary">
+                        <div>
+                            <dt>{{ _("Best matching rule") }}</dt>
+                            <dd>
+                                {% if ai.rule_evidence %}
+                                    {{ ai.rule_evidence.keyword or _("No matching rule") }}
+                                    {% if ai.rule_evidence.category %} -> {{ ai.rule_evidence.category }}{% endif %}
+                                    {% if ai.rule_evidence.confidence is defined and ai.rule_evidence.confidence is not none %}
+                                        <span class="badge text-bg-secondary">{{ "%.0f%%"|format(ai.rule_evidence.confidence * 100) }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    {{ _("No matching rule") }}
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Similar transactions") }}</dt>
+                            <dd>
+                                {% if ai.retrieval_evidence and ai.retrieval_evidence.examples %}
+                                    <ul class="mb-0 ps-3">
+                                        {% for example in ai.retrieval_evidence.examples %}
+                                            <li>
+                                                {{ example.description }}
+                                                {% if example.category %} - {{ example.category }}{% endif %}
+                                                {% if example.score is defined and example.score is not none %} ({{ "%.0f%%"|format(example.score * 100) }}){% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    {{ _("No similar transactions") }}
+                                {% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+                </section>
+
+                {% if ai.metadata_pretty %}
+                <details>
+                    <summary>{{ _("Raw metadata") }}</summary>
+                    <pre class="mt-2 mb-0"><code>{{ ai.metadata_pretty }}</code></pre>
+                </details>
+                {% endif %}
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Close") }}
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endif %}
 </div>

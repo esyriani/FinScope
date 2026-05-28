@@ -39,12 +39,22 @@ from finance_app.modules.categories.rules_matching import (
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
 
-def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
-    """Classify unknowns with LLM."""
+def classify_unknowns_with_llm(conn, transactions, rules, unknown_category, save_automatic_rules=True):
+    """Classify unknowns with LLM.
+
+    ``save_automatic_rules`` controls whether no-review AI decisions should
+    also create future matching rules.
+    """
     original = _llm.request_llm_categories
     _llm.request_llm_categories = request_llm_categories
     try:
-        return _llm.classify_unknowns_with_llm(conn, transactions, rules, unknown_category)
+        return _llm.classify_unknowns_with_llm(
+            conn,
+            transactions,
+            rules,
+            unknown_category,
+            save_automatic_rules=save_automatic_rules,
+        )
     finally:
         _llm.request_llm_categories = original
 

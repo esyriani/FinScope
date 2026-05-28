@@ -326,8 +326,8 @@
                     </div>
                     {% endif %}
 
-                    {{ rule_category_control("review-rule-" ~ review_group_index, category_options, unknown_category, category_descriptions=category_descriptions) }}
-                    {{ rule_tag_control("review-rule-" ~ review_group_index, tag_options) }}
+                    {{ rule_category_control("review-rule-" ~ review_group_index, category_options, group.selected_category, category_descriptions=category_descriptions) }}
+                    {{ rule_tag_control("review-rule-" ~ review_group_index, tag_options, group.selected_tags) }}
                     {{ rule_save_mode_control(
                         "review-rule-" ~ review_group_index,
                         "create_rule",

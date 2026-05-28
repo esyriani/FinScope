@@ -41,7 +41,7 @@ categories:
 
   - name: Entertainment
     description: Entertainment, hobbies, outings, sports, events, shows, movies, museums, games, streaming, and other discretionary leisure activities.
-    instruction: Use for entertainment and leisure activities that are not primarily travel, food, education, or shopping. Use for events, shows, concerts, movies, sports activities, hobbies, games, streaming entertainment, and family outings. Add "Subscription" when the transaction is for ongoing paid access to entertainment or a membership.
+    instruction: Use for entertainment and leisure activities that are not primarily travel, food, education, or shopping. Use for events, shows, concerts, movies, sports activities, hobbies, games, streaming entertainment, and family outings. Add "Service" when the transaction is for ongoing paid access to an entertainment platform, media service, or membership.
 
   - name: Work
     description: Professional, academic, research, conference, office, and employment-related expenses.

@@ -42,6 +42,7 @@ EXPECTED_TABLE_COLUMNS = {
         "checksum",
         "extension",
         "interac_direction",
+        "date_order",
         "raw_text",
         "import_status",
         "import_error",

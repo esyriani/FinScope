@@ -11,7 +11,7 @@ FinScope is a single-tenant Flask application with owner-managed user access, sh
 > Project owner: Eugene Syriani  
 > Current deployment target: local desktop  
 > License: [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`)  
-> Last modification: 2026-05-22
+> Last modification: 2026-05-27
 
 ![FinScope splash screen](docs/img/splash.png)
 
@@ -45,7 +45,6 @@ $env:FINANCE_PORT = "5001"
 ## Main features
 
 - Import CSV statements into SQLite or MySQL storage.
-- Capture PDF statement text for review.
 - Deduplicate transactions with account-aware fingerprints.
 - Categorize transactions with rules, historical matches, manual edits, optional LLM assistance, and persisted decision evidence.
 - Control AI categorization separately from imports, including manual reruns for remaining unknown transactions.
@@ -82,7 +81,6 @@ $env:FINANCE_PORT = "5001"
   <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bootstrap/bootstrap-original.svg" width="18" /> Bootstrap 5.3.3</li>
   <li><img src="https://cdn.simpleicons.org/apacheecharts/AA344D" width="18" /> ECharts 5.6.0</li>
   <li><img src="https://cdn.simpleicons.org/pytest/0A9EDC" width="18" /> pytest 9.0.3</li>
-  <li><img src="https://upload.wikimedia.org/wikipedia/commons/6/60/Adobe_Acrobat_Reader_icon_(2020).svg" width="18" /> pypdf 6.10.2</li>
   <li><img src="https://upload.wikimedia.org/wikipedia/commons/6/66/OpenAI_logo_2025_%28symbol%29.svg" width="18" /> OpenAI SDK 2.33.0 <em>(optional)</em></li>
 </ul>
 
@@ -150,9 +148,13 @@ Common settings:
 | `server.host` | `FINANCE_HOST` | Flask bind host. |
 | `server.port` | `FINANCE_PORT` | Flask port. |
 | `server.debug` | `FINANCE_DEBUG` | Debug mode. Keep false outside development. |
-| `uploads.allowed_extensions` | `FINANCE_ALLOWED_EXTENSIONS` | Supported statement upload extensions. |
+| `uploads.allowed_extensions` | `FINANCE_ALLOWED_EXTENSIONS` | Supported statement upload extensions. CSV is the only supported statement format for now. |
 | `api_keys.openai_api_key` | `OPENAI_API_KEY` | Enables optional LLM categorization. |
 | `setting_defaults.categorization_model` | `FINANCE_DEFAULT_CATEGORIZATION_MODEL` | Default LLM model name. |
+| `setting_defaults.llm_confidence_threshold` | `FINANCE_DEFAULT_LLM_CONFIDENCE_THRESHOLD` | Minimum LLM confidence for automatic rule creation from a no-review result. |
+| `setting_defaults.llm_review_threshold` | `FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD` | Minimum LLM confidence for keeping a best-fit category as a review item instead of UNKNOWN. |
+| `setting_defaults.verify_threshold` | `FINANCE_DEFAULT_VERIFY_THRESHOLD` | Minimum confidence for an LLM category to clear review automatically. |
+| `setting_defaults.transaction_ai_rerun_enabled` | `FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED` | Default visibility for the one-transaction Run AI diagnostic action. |
 | `setting_defaults.rule_audit_transaction_limit` | `FINANCE_DEFAULT_RULE_AUDIT_TRANSACTION_LIMIT` | Maximum newest historical transactions analyzed by Rule audit before the limited-audit notice appears. |
 
 FinScope loads `src/finance_app/config.example.ini`, overlays `src/finance_app/config.ini` when present, then applies environment variable overrides.
@@ -218,8 +220,8 @@ Statement import type and account reporting role are intentionally separate. The
 4. Review the account reporting role. FinScope suggests a role from the statement import type; usually keep the suggestion unless the account should behave differently in reports.
 5. For Interac e-Transfer history, import the matching checking statements first. Interac history is enrichment-only: it matches generic checking rows such as `Envoi - VFC` or `Recept - VFC` and replaces them with the real counterparty. Rows are ignored until the matching checking transaction exists. Leave Interac direction on Auto-detect unless the file uses generic columns and all amounts are positive. In that case, choose Sent or Received so FinScope can sign the amounts before matching existing checking rows.
 6. For credit cards, optionally enter the checking or savings account that pays the card.
-7. Upload a CSV or PDF.
-8. Use Transactions, Review, and Jobs to inspect the result.
+7. Choose a CSV and review the preview modal. If slash dates are ambiguous, choose `MM/DD/YYYY` or `DD/MM/YYYY` before confirming.
+8. Confirm the import, then use Transactions, Review, and Jobs to inspect the result.
 9. If import processing fails, use Upload > Uploaded statements to retry from stored statement text.
 10. If parser behavior or statement settings changed, use Reprocess to clear that statement's imported transactions and import them again.
 11. If AI categorization is paused or was interrupted, use Jobs > Run AI on unknowns or Upload > Uploaded statements > Run AI to rerun categorization for remaining unknown transactions.
@@ -264,6 +266,8 @@ Rule sources are persisted as `manual` or `automatic`. The UI labels these as Ma
 AI categorization runs in a separate background queue so OpenAI timeouts do not block statement imports, rule jobs, or review jobs. Owners can turn off automatic AI categorization after imports from Settings > Categorization. Unknown transactions remain available for manual reruns from Jobs or from an individual uploaded statement.
 
 Use Jobs to run AI on all active unknown transactions, cancel a queued or running AI job, or clear queued AI jobs. Running AI jobs stop cooperatively after the current batch. Manual reruns only target active transactions whose category is still unknown, so they do not overwrite manually reviewed or already categorized rows.
+
+For development diagnostics, Settings > Categorization can show a Run AI action on transaction rows. This synchronous action reruns the LLM for one transaction, applies only that row, and shows the model confidence, evidence, and metadata without creating a reusable rule. Its default visibility is controlled by `setting_defaults.transaction_ai_rerun_enabled`.
 
 ### Manage taxonomy
 
@@ -355,7 +359,6 @@ Unless a file states otherwise, source files in this repository are distributed 
 
 - Single-tenant app. FinScope supports multiple authenticated users for one shared finance dataset, not multi-tenant hosting.
 - Background job state is in memory and is lost on process restart.
-- PDF text is captured, but automatic PDF transaction parsing is not enabled.
 - No bank synchronization.
 - No built-in encryption at rest.
 - SQLite is appropriate for local use, not high-concurrency workloads. Use MySQL when the deployment needs stronger server-side concurrency and backup tooling.
@@ -365,7 +368,6 @@ Unless a file states otherwise, source files in this repository are distributed 
 - More detailed audit reporting for owner-managed user activity.
 - Encrypted database or encrypted backups.
 - More statement parsers.
-- PDF transaction extraction.
 - Support more LLM providers using https://openrouter.ai/
 
 ## Contributing

@@ -33,8 +33,10 @@ def settings_form_data(conn, **overrides):
         "rule_preview_limit": "9",
         "rule_audit_transaction_limit": "13",
         "llm_confidence_threshold": "0.75",
+        "llm_review_threshold": "0.65",
         "verify_threshold": "0.90",
         "auto_llm_categorization_enabled": "1",
+        "transaction_ai_rerun_enabled": "1",
         "openai_model": "gpt-4o-mini",
         "recurrence_minimum_occurrences": "4",
         "recurrence_date_tolerance_days": "6",
@@ -117,8 +119,10 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert owner_settings["rule_preview_limit"] == "9"
     assert owner_settings["rule_audit_transaction_limit"] == "13"
     assert settings["llm_confidence_threshold"] == "0.75"
+    assert settings["llm_review_threshold"] == "0.65"
     assert settings["verify_threshold"] == "0.90"
     assert settings["auto_llm_categorization_enabled"] == "1"
+    assert settings["transaction_ai_rerun_enabled"] == "1"
     assert settings["openai_model"] == "gpt-4o-mini"
     assert settings["recurrence_minimum_occurrences"] == "4"
     assert settings["recurrence_date_tolerance_days"] == "6"
@@ -188,6 +192,21 @@ def test_settings_post_can_disable_automatic_ai_queueing(client, db_conn):
 
     assert response.status_code == 200
     assert get_all_settings(db_conn)["auto_llm_categorization_enabled"] == "0"
+
+
+def test_settings_post_can_disable_single_transaction_ai_button(client, db_conn):
+    """Verify the owner can hide the diagnostic transaction AI action."""
+    form = settings_form_data(db_conn)
+    form.pop("transaction_ai_rerun_enabled")
+
+    response = client.post(
+        "/settings",
+        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert get_all_settings(db_conn)["transaction_ai_rerun_enabled"] == "0"
 
 
 def test_settings_post_saves_ui_language_and_renders_french(client, db_conn):

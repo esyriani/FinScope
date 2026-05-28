@@ -1,6 +1,6 @@
 """Flask routes for the transactions feature."""
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from finance_app.modules.categories.taxonomy import (
     get_tag_options,
@@ -19,7 +19,7 @@ from finance_app.modules.transactions.repository import (
     set_transaction_ignored,
 )
 from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword, parse_amount_bounds
-from finance_app.modules.transactions.service import build_transactions_context
+from finance_app.modules.transactions import service as transactions_service
 from finance_app.modules.transactions.urls import transactions_redirect_target, transactions_redirect_with_ignored
 
 transactions_bp = Blueprint("transactions", __name__)
@@ -28,7 +28,9 @@ transactions_bp = Blueprint("transactions", __name__)
 @transactions_bp.route("/transactions")
 def transactions():
     """Render the transactions page."""
-    return render_template("transactions.html", **build_transactions_context(request.args))
+    context = transactions_service.build_transactions_context(request.args)
+    context["transaction_ai_result"] = session.pop("transaction_ai_result", None)
+    return render_template("transactions.html", **context)
 
 
 @transactions_bp.route("/transactions/<int:transaction_id>/category", methods=["POST"])
@@ -127,4 +129,15 @@ def update_transaction_ignored(transaction_id):
     else:
         flash("Transaction not found.")
     return redirect(transactions_redirect_with_ignored(next_url, "all"))
+
+
+@transactions_bp.route("/transactions/<int:transaction_id>/run-ai", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
+def run_transaction_ai(transaction_id):
+    """Run synchronous AI categorization for one transaction and show diagnostics."""
+    next_url = transactions_redirect_target()
+    result = transactions_service.run_transaction_ai_categorization(transaction_id)
+    session["transaction_ai_result"] = result
+    flash(result.get("message") or "AI categorization completed.")
+    return redirect(next_url or url_for("transactions.transactions"))
 

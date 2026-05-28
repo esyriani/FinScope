@@ -1,6 +1,9 @@
 """Route tests for the review feature."""
 
+import re
+
 from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.review import controller as review_controller
 from finance_app.modules.review.service import apply_review_group_job, undo_review_group_job
 
@@ -12,7 +15,15 @@ def set_csrf_token(client, token="test-csrf-token"):
     return token
 
 
-def insert_review_transaction(conn, description="Metro Grocery #1", fingerprint="review-route"):
+def insert_review_transaction(
+    conn,
+    description="Metro Grocery #1",
+    fingerprint="review-route",
+    category="UNKNOWN",
+    source="unknown",
+    confidence=None,
+    tags=None,
+):
     """Insert a transaction that can be reviewed."""
     tx_id = conn.execute(
         """
@@ -21,13 +32,17 @@ def insert_review_transaction(conn, description="Metro Grocery #1", fingerprint=
             description,
             amount,
             category,
+            category_source,
+            category_confidence,
             needs_review,
             fingerprint
         )
-        VALUES ('2026-01-02', ?, 12.34, 'UNKNOWN', 1, ?)
+        VALUES ('2026-01-02', ?, 12.34, ?, ?, ?, 1, ?)
         """,
-        (description, fingerprint),
+        (description, category, source, confidence, fingerprint),
     ).lastrowid
+    if tags:
+        set_transaction_tags(conn, tx_id, tags, source=source)
     conn.commit()
     return tx_id
 
@@ -180,6 +195,35 @@ def test_review_page_renders_group_transaction_selector(client, db_conn):
     assert b"data-category-description-select" in response.data
     assert b"Food and drink, including groceries" in response.data
     assert b"Marks transactions that may be useful for tax preparation" in response.data
+
+
+def test_review_page_prefills_consistent_group_assignment(client, db_conn):
+    """Verify review group modal defaults to the existing suggested assignment."""
+    insert_review_transaction(
+        db_conn,
+        "Costco Wholesale W527 Montreal",
+        "review-route-prefill-1",
+        category="Food",
+        source="rule",
+        confidence=0.8988,
+        tags=["Grocery"],
+    )
+    insert_review_transaction(
+        db_conn,
+        "Costco Wholesale W527 Montreal",
+        "review-route-prefill-2",
+        category="Food",
+        source="rule",
+        confidence=0.8988,
+        tags=["Grocery"],
+    )
+
+    response = client.get("/review")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert re.search(r'<option\s+value="Food"[^>]*selected', body, re.DOTALL)
+    assert re.search(r'<input[^>]*name="tags"[^>]*value="Grocery"[^>]*checked', body, re.DOTALL)
 
 
 def test_review_page_filters_by_merchant_search(client, db_conn):
