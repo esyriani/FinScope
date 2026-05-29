@@ -2,18 +2,27 @@
 
 import json
 
+from finance_app.background.runner import (
+    AI_JOB_QUEUE,
+    append_background_job_log,
+    is_job_cancel_requested,
+    raise_if_cancel_requested,
+    submit_background_job,
+    update_background_job_progress,
+)
 from finance_app.core.config import settings
-from finance_app.core.constants import TRANSACTION_KINDS, UNKNOWN_CATEGORY
+from finance_app.core.constants import CATEGORY_RULE_SOURCE_MANUAL, TRANSACTION_KINDS, UNKNOWN_CATEGORY
 from finance_app.core.periods import DATE_PERIOD_OPTIONS, PERIOD_CUSTOM
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.categorization import categorize_transactions
 from finance_app.modules.categories.repository import get_category_rules
-from finance_app.modules.categories.service import classify_unknowns_with_llm, get_category_options
+from finance_app.modules.categories.service import classify_unknowns_with_llm, get_category_options, save_category_rule
 from finance_app.modules.categories.sources import (
     category_confidence_label,
     category_source_badge_class,
     category_source_label,
+    utc_timestamp,
 )
 from finance_app.modules.categories.taxonomy import (
     get_category_description_map,
@@ -34,11 +43,27 @@ from finance_app.modules.transactions.filters import (
     transaction_sort,
 )
 from finance_app.modules.transactions.presenter import build_transaction_rows
-from finance_app.modules.transactions.queries import count_transactions, fetch_distinct_categories, fetch_transactions
-from finance_app.modules.transactions.repository import apply_ai_category_update, get_transaction_for_ai_categorization
+from finance_app.modules.transactions.queries import (
+    count_transactions,
+    fetch_distinct_categories,
+    fetch_transaction_ids,
+    fetch_transactions,
+)
+from finance_app.modules.transactions.repository import (
+    apply_ai_category_update,
+    get_transaction_for_ai_categorization,
+    get_transactions_for_recategorization,
+    mark_transactions_verified,
+    normalized_transaction_ids,
+    set_transactions_ignored,
+    update_recategorized_transaction,
+)
+from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword
 from finance_app.modules.transactions.urls import transactions_sort_url, transactions_url
 
 RUN_TRANSACTION_AI_SETTING_KEY = "transaction_ai_rerun_enabled"
+APPLY_AI_SUGGESTION_ACTION = "apply"
+APPLY_AI_SUGGESTION_WITH_RULE_ACTION = "apply_and_create_rule"
 
 
 def build_transactions_context(args):
@@ -63,6 +88,12 @@ def build_transactions_context(args):
             page_size,
             offset,
         )
+        all_transaction_ids = fetch_transaction_ids(
+            conn,
+            filter_criteria,
+            sort_expression,
+            filters["direction"],
+        )
         tag_map = get_transaction_tags_by_id(conn, [row["id"] for row in fetched_rows])
         rows = build_transaction_rows(fetched_rows, tag_map, get_tag_color_map(conn), conn)
         categories = fetch_distinct_categories(conn)
@@ -77,6 +108,7 @@ def build_transactions_context(args):
 
     return {
         "transactions": rows,
+        "all_transaction_ids": all_transaction_ids,
         "categories": categories,
         "search": filters["search"],
         "selected_category": filters["category"],
@@ -108,13 +140,197 @@ def build_transactions_context(args):
     }
 
 
-def run_transaction_ai_categorization(transaction_id):
+def approve_selected_transactions(transaction_ids):
+    """Approve selected transactions and return the number of changed rows."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return 0
+
+    with db_core_transaction() as conn:
+        return mark_transactions_verified(conn, ids)
+
+
+def ignore_selected_transactions(transaction_ids):
+    """Ignore selected transactions and return the number of changed rows."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return 0
+
+    with db_core_transaction() as conn:
+        return set_transactions_ignored(conn, ids, 1)
+
+
+def queue_selected_transaction_recategorization(transaction_ids):
+    """Queue complete categorization for selected transactions.
+
+    Args:
+        transaction_ids: User-selected transaction IDs. Invalid or duplicate
+            IDs are ignored before queueing.
+
+    Returns:
+        A dictionary containing the normalized selected count and optional
+        background job ID. No job is queued when the selection is empty.
+    """
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return {"selected_count": 0, "job_id": None}
+
+    job_id = submit_background_job(
+        f"Recategorize {len(ids)} selected transactions",
+        recategorize_selected_transactions_job,
+        ids,
+        queue=AI_JOB_QUEUE,
+    )
+    return {"selected_count": len(ids), "job_id": job_id}
+
+
+def recategorize_selected_transactions_job(transaction_ids):
+    """Run the full categorization workflow for selected transaction IDs."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        update_selected_recategorization_progress(
+            0,
+            0,
+            0,
+            log_message="No selected transactions to recategorize.",
+        )
+        return "No selected transactions to recategorize."
+
+    processed_count = 0
+    updated_count = 0
+    with db_core_transaction() as conn:
+        rows = get_transactions_for_recategorization(conn, ids)
+
+    total = len(rows)
+    if not total:
+        update_selected_recategorization_progress(
+            0,
+            0,
+            0,
+            log_message="No selected transactions found.",
+        )
+        return "No selected transactions found."
+
+    update_selected_recategorization_progress(
+        0,
+        total,
+        0,
+        log_message="Starting selected transaction recategorization for {total} transactions.",
+        log_params={"total": total},
+    )
+
+    for index in range(0, total, llm_module.LLM_BATCH_SIZE):
+        if is_job_cancel_requested():
+            append_selected_recategorization_log(
+                "Cancellation requested; stopping before the next batch.",
+                level="warning",
+            )
+        raise_if_cancel_requested("Selected transaction recategorization cancelled after the current batch.")
+
+        batch = rows[index:index + llm_module.LLM_BATCH_SIZE]
+        batch_start = processed_count + 1
+        batch_end = processed_count + len(batch)
+        append_selected_recategorization_log(
+            "Starting selected recategorization batch {start}-{end} of {total}.",
+            params={
+                "start": batch_start,
+                "end": batch_end,
+                "total": total,
+            },
+        )
+        update_selected_recategorization_progress(
+            processed_count,
+            total,
+            updated_count,
+            message="Recategorizing {start}-{end} of {total}; {updated} updated so far.",
+            params={
+                "start": batch_start,
+                "end": batch_end,
+                "total": total,
+                "updated": updated_count,
+            },
+        )
+
+        batch_updated = recategorize_selected_transaction_rows(batch)
+        processed_count += len(batch)
+        updated_count += batch_updated
+        append_selected_recategorization_log(
+            "Finished selected recategorization batch {start}-{end}: {processed} processed; {updated} updated total.",
+            params={
+                "start": batch_start,
+                "end": batch_end,
+                "processed": len(batch),
+                "updated": updated_count,
+                "batch_updated": batch_updated,
+            },
+        )
+        update_selected_recategorization_progress(processed_count, total, updated_count)
+
+    summary = f"{updated_count} selected transaction{'s' if updated_count != 1 else ''} recategorized."
+    append_selected_recategorization_log(
+        "Selected transaction recategorization completed: {summary}",
+        params={"summary": summary},
+    )
+    return summary
+
+
+def recategorize_selected_transaction_rows(rows):
+    """Categorize and persist one batch of selected transaction rows."""
+    with db_core_transaction() as conn:
+        unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
+        categorized = categorize_transactions([dict(row) for row in rows], conn=conn, use_llm=True)
+        updated_count = 0
+        for transaction in categorized:
+            if update_recategorized_transaction(conn, transaction, unknown_category):
+                updated_count += 1
+    return updated_count
+
+
+def update_selected_recategorization_progress(
+    current,
+    total,
+    updated,
+    message=None,
+    params=None,
+    log_message=None,
+    log_params=None,
+    log_level="info",
+):
+    """Publish progress for the selected-transaction recategorization job."""
+    default_message = "Recategorized {current} of {total}; {updated} updated."
+    progress_params = {
+        "current": current,
+        "total": total,
+        "updated": updated,
+    }
+    if params:
+        progress_params.update(params)
+    update_background_job_progress(
+        current=current,
+        total=total,
+        message=message or default_message,
+        params=progress_params,
+    )
+    if log_message:
+        append_selected_recategorization_log(
+            log_message,
+            params={**progress_params, **(log_params or {})},
+            level=log_level,
+        )
+
+
+def append_selected_recategorization_log(message, params=None, level="info"):
+    """Append a selected-recategorization log entry to the current job."""
+    append_background_job_log(message, params=params, level=level)
+
+
+def suggest_transaction_ai_category(transaction_id):
     """Run LLM categorization synchronously for one transaction.
 
-    The action is meant for development diagnostics, so it applies the returned
-    category to only the selected row and suppresses automatic rule creation.
-    If the LLM request cannot run, the current transaction state is left intact
-    and the returned result explains why.
+    The action is suggestion-first: it suppresses automatic rule creation and
+    does not mutate the selected row. The returned result contains the display
+    model and a signed-session persistence payload used only if the user
+    explicitly applies the suggestion from the modal dialog.
     """
     with db_core_transaction() as conn:
         if not get_bool_setting(
@@ -145,10 +361,7 @@ def run_transaction_ai_categorization(transaction_id):
             save_automatic_rules=False,
         )
         request_status = llm_module.last_llm_request_status()
-        applied = False
         request_ok = request_status.get("status") == "ok"
-        if request_ok:
-            applied = apply_ai_category_update(conn, transaction_id, llm_transaction, unknown_category)
 
         return build_transaction_ai_result(
             row,
@@ -156,10 +369,102 @@ def run_transaction_ai_categorization(transaction_id):
             llm_transaction,
             request_status,
             tag_colors,
-            applied=applied,
             request_ok=request_ok,
+            unknown_category=unknown_category,
             model_name=get_setting(conn, "openai_model") or settings.default_categorization_model,
         )
+
+
+def run_transaction_ai_categorization(transaction_id):
+    """Return a one-transaction AI suggestion for backward-compatible callers."""
+    return suggest_transaction_ai_category(transaction_id)
+
+
+def apply_transaction_ai_suggestion(
+    transaction_id,
+    suggestion,
+    action=APPLY_AI_SUGGESTION_ACTION,
+    rule_keyword="",
+    amount_min=None,
+    amount_max=None,
+):
+    """Apply a pending single-transaction AI suggestion.
+
+    Args:
+        transaction_id: Transaction primary key targeted by the action.
+        suggestion: Signed-session suggestion payload produced by
+            `suggest_transaction_ai_category`.
+        action: Whether to apply only the transaction or also create a rule.
+        rule_keyword: Optional user-edited rule keyword for rule creation.
+        amount_min: Optional lower rule amount bound.
+        amount_max: Optional upper rule amount bound.
+
+    Returns:
+        A dictionary with `updated`, optional `saved_rule_id`, and a user-facing
+        message. No mutation occurs when the suggestion is missing, stale, or
+        does not contain an applicable category.
+    """
+    if not suggestion or int(suggestion.get("transaction_id") or 0) != int(transaction_id):
+        return {
+            "updated": False,
+            "message": "AI suggestion expired. Use Suggest category again.",
+        }
+    if not suggestion.get("can_apply") or not suggestion.get("persistence"):
+        return {"updated": False, "message": "AI suggestion cannot be applied."}
+
+    with db_core_transaction() as conn:
+        if not get_bool_setting(
+            conn,
+            RUN_TRANSACTION_AI_SETTING_KEY,
+            settings.default_transaction_ai_rerun_enabled,
+        ):
+            return disabled_ai_apply_result()
+
+        row = get_transaction_for_ai_categorization(conn, transaction_id)
+        if row is None:
+            return missing_transaction_apply_result(transaction_id)
+
+        unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
+        payload = accepted_ai_suggestion_payload(suggestion["persistence"])
+        keyword = ""
+        should_create_rule = action == APPLY_AI_SUGGESTION_WITH_RULE_ACTION
+        if should_create_rule:
+            keyword = normalize_rule_keyword(rule_keyword, row["description"])
+            if not keyword:
+                return {
+                    "updated": False,
+                    "message": "Rule keyword is required when saving a rule.",
+                }
+
+        updated = apply_ai_category_update(conn, transaction_id, payload, unknown_category)
+        saved_rule_id = None
+        if updated and should_create_rule:
+            saved_rule_id = save_category_rule(
+                conn,
+                keyword,
+                payload["category"],
+                source=CATEGORY_RULE_SOURCE_MANUAL,
+                amount_min=amount_min,
+                amount_max=amount_max,
+                tags=payload.get("tags") or [],
+                merchant_id=row.get("merchant_id"),
+            )
+
+        if not updated:
+            return {"updated": False, "message": "Transaction not found."}
+
+        if should_create_rule:
+            return {
+                "updated": True,
+                "saved_rule_id": saved_rule_id,
+                "message": "AI suggestion applied. Rule saved.",
+                "rule_label": f"{keyword}{amount_bounds_label(amount_min, amount_max)}",
+            }
+        return {
+            "updated": True,
+            "saved_rule_id": None,
+            "message": "AI suggestion applied to this transaction.",
+        }
 
 
 def prepare_single_transaction_llm_payload(evidence_transaction, original_row, unknown_category):
@@ -185,28 +490,28 @@ def build_transaction_ai_result(
     llm_transaction,
     request_status,
     tag_colors,
-    applied,
     request_ok,
+    unknown_category,
     model_name,
 ):
     """Build a JSON-serializable modal view model for a one-off AI run."""
     metadata = parse_ai_metadata(llm_transaction.get("category_metadata"))
     tags = list(llm_transaction.get("tags") or [])
     original_tag_list = list(original_tags or [])
-    message = (
-        "AI categorization completed."
-        if request_ok and applied
-        else ai_request_failure_message(request_status)
-    )
+    category = llm_transaction.get("category")
+    can_apply = bool(request_ok and category and category != unknown_category)
+    message = ai_suggestion_message(request_status, can_apply)
+    amount = original_row.get("amount")
     return {
-        "ok": bool(request_ok and applied),
-        "applied": bool(applied),
+        "ok": bool(request_ok),
+        "applied": False,
+        "can_apply": can_apply,
         "message": message,
         "transaction_id": original_row["id"],
         "description": original_row["description"],
         "account_name": original_row.get("account_name"),
         "tx_date": stringify_date(original_row.get("tx_date")),
-        "amount": original_row.get("amount"),
+        "amount": amount,
         "transaction_kind": original_row.get("transaction_kind"),
         "transaction_kind_label": TRANSACTION_KINDS.get(
             original_row.get("transaction_kind"),
@@ -215,7 +520,7 @@ def build_transaction_ai_result(
         "previous_category": original_row.get("category"),
         "previous_tags": original_tag_list,
         "previous_tag_pills": tag_pills(original_tag_list, tag_colors),
-        "category": llm_transaction.get("category"),
+        "category": category,
         "tags": tags,
         "tag_pills": tag_pills(tags, tag_colors),
         "needs_review": bool(llm_transaction.get("needs_review")),
@@ -238,7 +543,58 @@ def build_transaction_ai_result(
         "supported_by_similar_transactions": metadata.get("supported_by_similar_transactions"),
         "rule_evidence": metadata.get("rule") or llm_transaction.get("rule_evidence") or {},
         "retrieval_evidence": metadata.get("retrieval") or llm_transaction.get("historical_evidence") or {},
+        "rule_keyword": llm_transaction_rule_keyword(original_row),
+        "rule_exact_amount": f"{amount:.2f}" if amount is not None else "",
+        "persistence": ai_suggestion_persistence(llm_transaction, metadata),
     }
+
+
+def ai_suggestion_persistence(llm_transaction, metadata):
+    """Return the AI suggestion fields needed for a later explicit apply."""
+    return {
+        "category": llm_transaction.get("category"),
+        "tags": list(llm_transaction.get("tags") or []),
+        "needs_review": 1 if llm_transaction.get("needs_review") else 0,
+        "category_source": llm_transaction.get("category_source"),
+        "category_confidence": llm_transaction.get("category_confidence"),
+        "category_rule_id": llm_transaction.get("category_rule_id"),
+        "category_metadata": metadata,
+        "categorized_at": llm_transaction.get("categorized_at"),
+        "reviewed_at": llm_transaction.get("reviewed_at"),
+        "amount": llm_transaction.get("amount"),
+        "transaction_kind": llm_transaction.get("transaction_kind"),
+    }
+
+
+def accepted_ai_suggestion_payload(payload):
+    """Return a persistence payload representing a user-accepted AI suggestion."""
+    accepted = dict(payload)
+    accepted_at = utc_timestamp()
+    metadata = parse_ai_metadata(accepted.get("category_metadata"))
+    metadata.update(
+        {
+            "accepted_by_user": True,
+            "accepted_source": "single_transaction_ai_suggestion",
+            "review_required_before_acceptance": bool(accepted.get("needs_review")),
+        }
+    )
+    accepted["category_metadata"] = metadata
+    accepted["needs_review"] = 0
+    accepted["categorized_at"] = accepted.get("categorized_at") or accepted_at
+    accepted["reviewed_at"] = accepted_at
+    return accepted
+
+
+def llm_transaction_rule_keyword(original_row):
+    """Return the default rule keyword shown with an AI suggestion."""
+    return normalize_rule_keyword("", original_row.get("description", ""))
+
+
+def ai_suggestion_message(request_status, can_apply):
+    """Return a user-facing message for a one-transaction AI suggestion."""
+    if request_status.get("status") == "ok":
+        return "AI suggestion ready." if can_apply else "AI suggestion cannot be applied."
+    return ai_request_failure_message(request_status)
 
 
 def disabled_ai_result():
@@ -259,6 +615,23 @@ def missing_transaction_ai_result(transaction_id):
         "transaction_id": transaction_id,
         "message": "Transaction not found.",
         "request_status_label": "not_found",
+    }
+
+
+def disabled_ai_apply_result():
+    """Return the apply result shown when single-transaction AI is disabled."""
+    return {
+        "updated": False,
+        "message": "Single-transaction AI is disabled in settings.",
+    }
+
+
+def missing_transaction_apply_result(transaction_id):
+    """Return the apply result shown when the selected transaction no longer exists."""
+    return {
+        "updated": False,
+        "transaction_id": transaction_id,
+        "message": "Transaction not found.",
     }
 
 

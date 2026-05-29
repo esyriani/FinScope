@@ -53,6 +53,95 @@ function setupTableRowInteractions(root = document) {
     });
 }
 
+function setupTransactionBatchActions(root = document) {
+    root.querySelectorAll("[data-transaction-batch-table]").forEach((table) => {
+        if (table.dataset.transactionBatchReady === "true") {
+            return;
+        }
+
+        table.dataset.transactionBatchReady = "true";
+        const container = table.closest(".card") || root;
+        const bar = container.querySelector("[data-transaction-batch-bar]");
+        const form = container.querySelector("[data-transaction-batch-form]");
+        const countLabel = container.querySelector("[data-transaction-batch-count-label]");
+        const inputContainer = container.querySelector("[data-transaction-batch-inputs]");
+        const selectAll = table.querySelector("[data-transaction-select-all]");
+        const rowCheckboxes = Array.from(table.querySelectorAll("[data-transaction-row-checkbox]"));
+        const allIds = transactionBatchIds(table, rowCheckboxes);
+        const selectedIds = new Set();
+
+        if (!bar || !form || !inputContainer || !selectAll || rowCheckboxes.length === 0) {
+            return;
+        }
+
+        function syncHiddenInputs() {
+            inputContainer.replaceChildren(
+                ...Array.from(selectedIds).map((transactionId) => {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = "transaction_ids";
+                    input.value = transactionId;
+                    return input;
+                })
+            );
+        }
+
+        function syncSelectionState() {
+            const selectedCount = selectedIds.size;
+            rowCheckboxes.forEach((checkbox) => {
+                checkbox.checked = selectedIds.has(String(checkbox.value));
+            });
+
+            selectAll.checked = allIds.length > 0 && selectedCount === allIds.length;
+            selectAll.indeterminate = selectedCount > 0 && selectedCount < allIds.length;
+            bar.hidden = selectedCount === 0;
+
+            if (countLabel) {
+                countLabel.textContent = financeTranslate(
+                    "{count} selected",
+                    { count: selectedCount }
+                );
+            }
+            syncHiddenInputs();
+        }
+
+        selectAll.addEventListener("change", () => {
+            selectedIds.clear();
+            if (selectAll.checked) {
+                allIds.forEach((transactionId) => selectedIds.add(transactionId));
+            }
+            syncSelectionState();
+        });
+
+        rowCheckboxes.forEach((checkbox) => {
+            checkbox.addEventListener("change", () => {
+                if (checkbox.checked) {
+                    selectedIds.add(String(checkbox.value));
+                } else {
+                    selectedIds.delete(String(checkbox.value));
+                }
+                syncSelectionState();
+            });
+        });
+
+        form.addEventListener("submit", syncHiddenInputs);
+        syncSelectionState();
+    });
+}
+
+function transactionBatchIds(table, rowCheckboxes) {
+    try {
+        const parsed = JSON.parse(table.dataset.allTransactionIds || "[]");
+        if (Array.isArray(parsed)) {
+            return parsed.map((transactionId) => String(transactionId));
+        }
+    } catch (_error) {
+        // Fall back to visible row checkboxes when the server-provided list is unavailable.
+    }
+
+    return rowCheckboxes.map((checkbox) => String(checkbox.value));
+}
+
 function setupCollapseToggleLabels(root = document) {
     root.querySelectorAll("[data-collapse-label-toggle]").forEach((button) => {
         if (button.dataset.collapseLabelReady === "true") {
@@ -134,6 +223,7 @@ function openAuditSectionFromLocation(root = document) {
 
 setupDashboardDrilldownInteractions();
 setupTableRowInteractions();
+setupTransactionBatchActions();
 setupCollapseToggleLabels();
 setupAuditSectionLinks();
 openAuditSectionFromLocation();
@@ -375,5 +465,6 @@ window.setupCollapseToggleLabels = setupCollapseToggleLabels;
 window.setupAuditSectionLinks = setupAuditSectionLinks;
 window.openAuditSectionFromLocation = openAuditSectionFromLocation;
 window.setupTableRowInteractions = setupTableRowInteractions;
+window.setupTransactionBatchActions = setupTransactionBatchActions;
 window.setupSortableTables = setupSortableTables;
 window.setupPaginatedTables = setupPaginatedTables;

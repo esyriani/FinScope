@@ -115,6 +115,7 @@ function runAjaxRefreshInitializers(root = document) {
     window.setupRuleTableActions?.(root);
     window.setupReviewTransactionSelectors?.(root);
     window.setupTableRowInteractions?.(root);
+    window.setupTransactionBatchActions?.(root);
     window.setupCollapseToggleLabels?.(root);
     window.setupAuditSectionLinks?.(root);
     window.openAuditSectionFromLocation?.(root);

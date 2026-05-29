@@ -192,6 +192,21 @@ def mark_transaction_verified(conn, transaction_id, reviewed_at=None):
     return cursor.rowcount > 0
 
 
+def mark_transactions_verified(conn, transaction_ids, reviewed_at=None):
+    """Mark selected transactions verified and return the updated row count."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return 0
+
+    reviewed_at = reviewed_at or utc_timestamp()
+    cursor = conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id.in_(ids))
+        .values(needs_review=0, reviewed_at=reviewed_at)
+    )
+    return cursor.rowcount
+
+
 def set_transaction_ignored(conn, transaction_id, ignored):
     """Set transaction ignored."""
     ignored = 1 if ignored else 0
@@ -204,6 +219,24 @@ def set_transaction_ignored(conn, transaction_id, ignored):
         .values(**values)
     )
     return cursor.rowcount > 0
+
+
+def set_transactions_ignored(conn, transaction_ids, ignored):
+    """Set the ignored flag for selected transactions and return updated count."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return 0
+
+    ignored = 1 if ignored else 0
+    values = {"ignored": ignored}
+    if ignored:
+        values["needs_review"] = 0
+    cursor = conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id.in_(ids))
+        .values(**values)
+    )
+    return cursor.rowcount
 
 
 def apply_ai_category_update(conn, transaction_id, transaction, unknown_category):
@@ -246,6 +279,98 @@ def apply_ai_category_update(conn, transaction_id, transaction, unknown_category
         rule_id=rule_id,
     )
     return True
+
+
+def get_transactions_for_recategorization(conn, transaction_ids):
+    """Return selected transaction rows needed by the categorization workflow."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return []
+
+    row_order = case(
+        *(
+            (transactions_table.c.id == transaction_id, index)
+            for index, transaction_id in enumerate(ids)
+        ),
+        else_=len(ids),
+    )
+    rows = conn.execute(
+        select(
+            transactions_table.c.id,
+            transactions_table.c.account_id,
+            transactions_table.c.tx_date,
+            transactions_table.c.merchant_id,
+            transactions_table.c.description,
+            transactions_table.c.amount,
+            transactions_table.c.category,
+            transactions_table.c.transaction_kind,
+        )
+        .where(transactions_table.c.id.in_(ids))
+        .order_by(row_order)
+    ).mappings().fetchall()
+
+    return [
+        {
+            **dict(row),
+            "amount": money_to_float(row["amount"]),
+        }
+        for row in rows
+    ]
+
+
+def update_recategorized_transaction(conn, transaction, unknown_category):
+    """Persist one complete workflow categorization result to its transaction."""
+    transaction_id = transaction["id"]
+    category = transaction.get("category") or unknown_category
+    source = transaction.get("category_source") or CATEGORY_SOURCE_UNKNOWN
+    rule_id = transaction.get("category_rule_id")
+    cursor = conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id == transaction_id)
+        .values(
+            category=category,
+            category_id=resolve_category_id(conn, category),
+            needs_review=1 if transaction.get("needs_review") else 0,
+            category_source=source,
+            category_confidence=transaction.get("category_confidence"),
+            category_rule_id=rule_id,
+            category_metadata=category_metadata_json(transaction.get("category_metadata")),
+            categorized_at=transaction.get("categorized_at"),
+            reviewed_at=transaction.get("reviewed_at"),
+            transaction_kind=ai_transaction_kind(
+                category,
+                transaction.get("amount"),
+                transaction.get("transaction_kind"),
+            ),
+        )
+    )
+    if cursor.rowcount <= 0:
+        return False
+
+    set_transaction_tags(
+        conn,
+        transaction_id,
+        transaction.get("tags") or [],
+        source=source,
+        rule_id=rule_id,
+    )
+    return True
+
+
+def normalized_transaction_ids(transaction_ids):
+    """Return de-duplicated positive transaction IDs preserving input order."""
+    ids = []
+    seen = set()
+    for value in transaction_ids or ():
+        try:
+            transaction_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if transaction_id <= 0 or transaction_id in seen:
+            continue
+        seen.add(transaction_id)
+        ids.append(transaction_id)
+    return ids
 
 
 def ai_transaction_kind(category, amount, current_kind=None):

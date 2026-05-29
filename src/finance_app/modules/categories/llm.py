@@ -183,7 +183,7 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category, save
 
     When ``save_automatic_rules`` is false, accepted high-confidence results
     are applied to the provided transaction payloads without creating reusable
-    automatic rules. This supports one-off diagnostic reruns from transaction
+    automatic rules. This supports one-off suggestion previews from transaction
     detail screens.
     """
     unknown_by_key = {}

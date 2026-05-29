@@ -32,7 +32,7 @@ function renderTags(multiselect) {
                 e.stopPropagation();
                 input.checked = false;
                 renderTags(multiselect);
-                updateSelectAllState(multiselect);
+                updateBulkOptionStates(multiselect);
                 updateMenuPosition();
             });
             
@@ -44,7 +44,11 @@ function renderTags(multiselect) {
 }
 
 function optionInputs(multiselect) {
-    return Array.from(multiselect.querySelectorAll("input[type='checkbox']:not([data-tag-multiselect-select-all])"));
+    return Array.from(
+        multiselect.querySelectorAll(
+            "input[type='checkbox']:not([data-tag-multiselect-select-all]):not([data-tag-multiselect-preset])"
+        )
+    );
 }
 
 function enabledOptionInputs(multiselect) {
@@ -55,6 +59,25 @@ function selectAllInput(multiselect) {
     return multiselect.querySelector("[data-tag-multiselect-select-all]");
 }
 
+function presetInput(multiselect) {
+    return multiselect.querySelector("[data-tag-multiselect-preset]");
+}
+
+function presetExcludedValues(multiselect) {
+    const rawValue = multiselect.dataset.selectPresetExcludeValues || "[]";
+
+    try {
+        const parsedValues = JSON.parse(rawValue);
+        if (Array.isArray(parsedValues)) {
+            return new Set(parsedValues.map((value) => String(value)));
+        }
+    } catch (error) {
+        return new Set();
+    }
+
+    return new Set();
+}
+
 function ensureSelectAllOption(multiselect) {
     const labelText = multiselect.dataset.selectAllLabel;
     const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
@@ -63,7 +86,7 @@ function ensureSelectAllOption(multiselect) {
     }
 
     const label = document.createElement("label");
-    label.className = "tag-multiselect-option tag-multiselect-option-all";
+    label.className = "tag-multiselect-option tag-multiselect-option-bulk tag-multiselect-option-all";
 
     const input = document.createElement("input");
     input.className = "form-check-input";
@@ -75,6 +98,43 @@ function ensureSelectAllOption(multiselect) {
 
     label.append(input, text);
     menu.prepend(label);
+}
+
+function ensurePresetOption(multiselect) {
+    const labelText = multiselect.dataset.selectPresetLabel;
+    const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
+    if (!labelText || !menu || presetInput(multiselect)) {
+        return;
+    }
+
+    const label = document.createElement("label");
+    label.className = "tag-multiselect-option tag-multiselect-option-bulk tag-multiselect-option-preset";
+
+    const input = document.createElement("input");
+    input.className = "form-check-input";
+    input.type = "checkbox";
+    input.setAttribute("data-tag-multiselect-preset", "");
+
+    const text = document.createElement("span");
+    text.textContent = labelText;
+
+    label.append(input, text);
+
+    const selectAllLabel = selectAllInput(multiselect)?.closest(".tag-multiselect-option");
+    if (selectAllLabel && selectAllLabel.nextSibling) {
+        menu.insertBefore(label, selectAllLabel.nextSibling);
+    } else if (selectAllLabel) {
+        menu.append(label);
+    } else {
+        menu.prepend(label);
+    }
+}
+
+function updateBulkOptionBorders(multiselect) {
+    const bulkOptions = Array.from(multiselect.querySelectorAll(".tag-multiselect-option-bulk"));
+    bulkOptions.forEach((option) => option.classList.remove("tag-multiselect-option-bulk-end"));
+    const lastBulkOption = bulkOptions[bulkOptions.length - 1];
+    lastBulkOption?.classList.add("tag-multiselect-option-bulk-end");
 }
 
 function updateSelectAllState(multiselect) {
@@ -90,12 +150,50 @@ function updateSelectAllState(multiselect) {
     input.indeterminate = checkedCount > 0 && checkedCount < options.length;
 }
 
+function updatePresetState(multiselect) {
+    const input = presetInput(multiselect);
+    if (!input) {
+        return;
+    }
+
+    const excludedValues = presetExcludedValues(multiselect);
+    const options = enabledOptionInputs(multiselect);
+    const presetOptions = options.filter((option) => !excludedValues.has(option.value));
+    const excludedOptions = options.filter((option) => excludedValues.has(option.value));
+    const presetCheckedCount = presetOptions.filter((option) => option.checked).length;
+    const hasExcludedChecked = excludedOptions.some((option) => option.checked);
+
+    input.disabled = presetOptions.length === 0;
+    input.checked = presetOptions.length > 0
+        && presetCheckedCount === presetOptions.length
+        && !hasExcludedChecked;
+    input.indeterminate = (
+        presetCheckedCount > 0
+        && (presetCheckedCount < presetOptions.length || hasExcludedChecked)
+    );
+}
+
+function updateBulkOptionStates(multiselect) {
+    updateSelectAllState(multiselect);
+    updatePresetState(multiselect);
+}
+
 function setAllOptions(multiselect, checked) {
     enabledOptionInputs(multiselect).forEach((input) => {
         input.checked = checked;
     });
     renderTags(multiselect);
-    updateSelectAllState(multiselect);
+    updateBulkOptionStates(multiselect);
+    updateMenuPosition();
+}
+
+function setPresetOptions(multiselect, checked) {
+    const excludedValues = presetExcludedValues(multiselect);
+    enabledOptionInputs(multiselect).forEach((input) => {
+        input.checked = checked && !excludedValues.has(input.value);
+    });
+    renderTags(multiselect);
+    updateBulkOptionStates(multiselect);
     updateMenuPosition();
 }
 
@@ -151,9 +249,11 @@ function setupTagMultiselects(root = document) {
 
     multiselects.forEach((multiselect) => {
         ensureSelectAllOption(multiselect);
+        ensurePresetOption(multiselect);
+        updateBulkOptionBorders(multiselect);
         if (multiselect.dataset.tagMultiselectReady === "true") {
             renderTags(multiselect);
-            updateSelectAllState(multiselect);
+            updateBulkOptionStates(multiselect);
             return;
         }
 
@@ -161,9 +261,10 @@ function setupTagMultiselects(root = document) {
         const toggle = multiselect.querySelector("[data-tag-multiselect-toggle]");
         const inputs = optionInputs(multiselect);
         const selectAll = selectAllInput(multiselect);
+        const preset = presetInput(multiselect);
 
         renderTags(multiselect);
-        updateSelectAllState(multiselect);
+        updateBulkOptionStates(multiselect);
 
         if (toggle) {
             toggle.addEventListener("click", (e) => {
@@ -208,13 +309,17 @@ function setupTagMultiselects(root = document) {
         inputs.forEach((input) => {
             input.addEventListener("change", () => {
                 renderTags(multiselect);
-                updateSelectAllState(multiselect);
+                updateBulkOptionStates(multiselect);
                 updateMenuPosition();
             });
         });
 
         selectAll?.addEventListener("change", () => {
             setAllOptions(multiselect, selectAll.checked);
+        });
+
+        preset?.addEventListener("change", () => {
+            setPresetOptions(multiselect, preset.checked);
         });
     });
 }

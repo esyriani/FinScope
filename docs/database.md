@@ -1,6 +1,6 @@
 # Database
 
-FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the default local backend at `runtime/finance.db`; MySQL is selected by setting a `mysql+pymysql://` SQLAlchemy URL. Runtime schema creation is managed by SQLAlchemy Core metadata in `src/finance_app/database/tables.py`.
+FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the default local backend at `runtime/finescope.db`; MySQL is selected by setting a `mysql+pymysql://` SQLAlchemy URL. Runtime schema creation is managed by SQLAlchemy Core metadata in `src/finance_app/database/tables.py`.
 
 The database layer maintains the Core engine/connection lifecycle in `src/finance_app/database/engine.py`. Startup creates the configured clean schema from Core metadata and seeds runtime defaults through Core for SQLite and MySQL URLs. `src/finance_app/database/tables.py` is the runtime initialization path and the schema source of truth.
 
@@ -16,7 +16,7 @@ Persisted enum-like text values, such as import statuses, parser types, category
 
 | Backend | Minimum version | URL form | Notes |
 | --- | --- | --- | --- |
-| SQLite | 3.31+ | `sqlite:///D:/path/to/finance.db` | Default local backend. The current development environment uses SQLite 3.45.1. |
+| SQLite | 3.31+ | `sqlite:///D:/path/to/finescope.db` | Default local backend. The current development environment uses SQLite 3.45.1. |
 | MySQL | 8.0.16+ | `mysql+pymysql://user:password@host:3306/finscope` | Fully supported through SQLAlchemy Core and PyMySQL 1.1.3. Compatible MariaDB servers use the same URL form. |
 
 The schema uses generated columns, foreign keys, check constraints, unique constraints, numeric money fields, and timestamp helpers that are kept portable between SQLite and MySQL. MySQL deployments should use an InnoDB-capable server with `utf8mb4` character support; FinScope creates new MySQL databases with `utf8mb4_unicode_ci` when the configured account can create databases.
@@ -42,15 +42,15 @@ Use the default SQLite database by leaving `database.url` blank:
 ```ini
 [database]
 url =
-path = ../../runtime/finance.db
+path = ../../runtime/finescope.db
 ```
 
 Use an explicit SQLite database by setting a SQLite SQLAlchemy URL:
 
 ```ini
 [database]
-url = sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finance.db
-path = ../../runtime/finance.db
+url = sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finescope.db
+path = ../../runtime/finescope.db
 ```
 
 Use MySQL by setting a MySQL SQLAlchemy URL:
@@ -58,7 +58,7 @@ Use MySQL by setting a MySQL SQLAlchemy URL:
 ```ini
 [database]
 url = mysql+pymysql://user:password@127.0.0.1:3306/finscope
-path = ../../runtime/finance.db
+path = ../../runtime/finescope.db
 ```
 
 When `database.url` points to MySQL, `database.path` is not active. FinScope creates the configured MySQL database when the account has server-level `CREATE DATABASE` permission; otherwise create the empty database first, then FinScope initializes tables and seed rows inside it.
@@ -260,10 +260,10 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 The default database path is configured in `src/finance_app/config.example.ini`:
 
 ```text
-../../runtime/finance.db
+../../runtime/finescope.db
 ```
 
-From `src/finance_app`, this resolves to the repository-level `runtime/finance.db`.
+From `src/finance_app`, this resolves to the repository-level `runtime/finescope.db`.
 
 
 ## Updating the schema documentation
@@ -271,7 +271,7 @@ From `src/finance_app`, this resolves to the repository-level `runtime/finance.d
 When tables, columns, indexes, or relationships change:
 
 1. Apply the application schema changes in `src/finance_app/database/tables.py`.
-2. Rebuild or initialize a representative `finance.db`.
+2. Rebuild or initialize a representative `finescope.db`.
 3. Regenerate `docs/db-schema.html` and `docs/diagrams/db-schema.dbs` from the SQLAlchemy Core metadata.
 4. Update [architecture.md](architecture.md) or this page if the conceptual data model changed.
 

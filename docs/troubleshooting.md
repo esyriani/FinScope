@@ -9,7 +9,7 @@ $env:FINANCE_DATABASE_URL
 $env:FINANCE_DB_PATH
 ```
 
-If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is `runtime/finance.db`.
+If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is `runtime/finescope.db`.
 
 ## LLM categorization does not run
 
@@ -28,6 +28,12 @@ Interac e-Transfer history is enrichment-only. Rows are ignored when there is no
 Credit card statements should use a credit card account role. If the card is paid from a checking or savings account, set the paid-from account during upload. FinScope then keeps card purchases as expenses and marks matched account-payment rows as payments/transfers so they do not inflate spending or income totals.
 
 If a credit card payment still appears as spending, check that the credit card account has the correct paid-from account and reprocess the credit card statement. Matching uses amount, nearby date, and a description that points to the linked credit card account.
+
+## Uploaded CSV dates look wrong
+
+Slash dates such as `05/12/2026` are ambiguous. During upload, use the preview modal to confirm whether ambiguous slash dates are month-first (`MM/DD/YYYY`) or day-first (`DD/MM/YYYY`) before importing. FinScope stores transaction dates as `YYYY-MM-DD` after parsing.
+
+Quoted ISO dates such as `"2026-04-29"` do not need a date-order selection.
 
 ## Duplicate upload blocks retry
 

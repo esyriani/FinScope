@@ -20,6 +20,7 @@
 {% set selected_ignored = selected_ignored | default(ignored_filter_options[0][0]) %}
 {% set run_transaction_ai_enabled = run_transaction_ai_enabled | default(false) %}
 {% set transaction_ai_result = transaction_ai_result | default(none) %}
+{% set all_transaction_ids = all_transaction_ids | default([]) %}
 {% set can_edit_transactions = current_user_can('edit_transactions') %}
 
 {% macro transaction_pagination(label) %}
@@ -118,7 +119,14 @@
 
             <div class="col-md-6">
                 <label class="form-label" id="transaction-categories-label">{{ _("Category") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}" data-select-all-label="{{ _('Select all categories') }}">
+                <div
+                    class="tag-multiselect"
+                    data-tag-multiselect
+                    data-placeholder="{{ _('All categories') }}"
+                    data-select-all-label="{{ _('Select all categories') }}"
+                    data-select-preset-label="{{ _('Select analysis categories') }}"
+                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
+                >
                     <div
                         class="tag-multiselect-control"
                         role="button"
@@ -189,7 +197,7 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label" for="review">{{ _("Review") }}</label>
+                <label class="form-label" for="review">{{ _("Status") }}</label>
                 <select id="review" class="form-select" name="review">
                     {% for review_value, review_text in review_filter_options %}
                         <option value="{{ review_value }}" {% if selected_review == review_value %}selected{% endif %}>{{ _(review_text) }}</option>
@@ -207,7 +215,7 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label" for="category_source">{{ _("Category source") }}</label>
+                <label class="form-label" for="category_source">{{ _("Categorization method") }}</label>
                 <select id="category_source" class="form-select" name="category_source">
                     {% for source_value, source_text in category_source_filter_options %}
                         <option value="{{ source_value }}" {% if selected_category_source == source_value %}selected{% endif %}>{{ _(source_text) }}</option>
@@ -234,12 +242,51 @@
             {{ transaction_pagination(_("Transaction pages")) }}
         </div>
     </div>
+    {% if can_edit_transactions %}
+    <div class="transaction-batch-bar border-bottom" data-transaction-batch-bar hidden>
+        <form
+            method="post"
+            action="{{ url_for('transactions.batch_transactions') }}"
+            class="d-flex flex-wrap align-items-center justify-content-between gap-2"
+            data-transaction-batch-form
+            data-ajax-refresh-form
+        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <div class="fw-semibold" data-transaction-batch-count-label data-count-template="{{ _('{count} selected') }}">
+                {{ _("{count} selected", count=0) }}
+            </div>
+            <div data-transaction-batch-inputs></div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-secondary" type="submit" name="batch_action" value="approve">
+                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve selected") }}
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" type="submit" name="batch_action" value="ignore">
+                    <i class="bi bi-ban" aria-hidden="true"></i>{{ _("Ignore selected") }}
+                </button>
+                <button class="btn btn-sm btn-primary" type="submit" name="batch_action" value="recategorize">
+                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>{{ _("Recategorize selected") }}
+                </button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
 
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle">
+            <table class="table table-hover align-middle transactions-table" data-transaction-batch-table data-all-transaction-ids="{{ all_transaction_ids | tojson }}">
                 <thead>
                     <tr>
+                        {% if can_edit_transactions %}
+                        <th class="transaction-select-column">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                data-transaction-select-all
+                                aria-label="{{ _('Select all transactions') }}"
+                            >
+                        </th>
+                        {% endif %}
                         <th>
                             <a class="sort-link" href="{{ sort_url('date') }}">
                                 <span>{{ _("Date") }}</span>{% if sort == "date" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
@@ -260,7 +307,6 @@
                                 <span>{{ _("Amount") }}</span>{% if sort == "amount" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
                             </a>
                         </th>
-                        <th>{{ _("Kind") }}</th>
                         <th>
                             <a class="sort-link" href="{{ sort_url('category') }}">
                                 <span>{{ _("Category") }}</span>{% if sort == "category" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
@@ -269,20 +315,27 @@
                         <th>{{ _("Tags") }}</th>
                         <th>
                             <a class="sort-link" href="{{ sort_url('review') }}">
-                                <span>{{ _("Verify") }}</span>{% if sort == "review" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+                                <span>{{ _("Status") }}</span>{% if sort == "review" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
                             </a>
                         </th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('ignored') }}">
-                                <span>{{ _("Ignore") }}</span>{% if sort == "ignored" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
+                        <th class="text-end">{{ _("Actions") }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for tx in transactions %}
                     <tr {% if tx["ignored"] %}class="table-secondary"{% endif %}{% if can_edit_transactions %} data-row-edit-target="#categorize-transaction-{{ tx['id'] }}"{% endif %}>
-                        <td>{{ tx["tx_date"] | datefmt }}</td>
+                        {% if can_edit_transactions %}
+                        <td class="transaction-select-column" data-row-action>
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                value="{{ tx['id'] }}"
+                                data-transaction-row-checkbox
+                                aria-label="{{ _('Select transaction') }}"
+                            >
+                        </td>
+                        {% endif %}
+                        <td class="transaction-date text-nowrap">{{ tx["tx_date"] }}</td>
                         <td>{{ tx["account_name"] or _("Personal") }}</td>
                         <td>{{ tx["description"] }}</td>
                         <td class="text-end">
@@ -292,14 +345,12 @@
                                 <span>{{ tx["amount"] | moneyfmt }}</span>
                             {% endif %}
                         </td>
-                        <td><span class="badge text-bg-secondary">{{ _(tx["transaction_kind_label"]) }}</span></td>
                         <td>
-                            <div>{{ tx["category"] }}</div>
-                            <div class="d-flex flex-wrap gap-1 mt-1">
-                                <span class="badge {{ tx['category_source_badge_class'] }}">{{ _(tx["category_source_label"]) }}</span>
-                                {% if tx["category_confidence_label"] %}
-                                    <span class="badge text-bg-secondary">{{ tx["category_confidence_label"] }}</span>
-                                {% endif %}
+                            <div class="transaction-category-line">
+                                <span class="transaction-category-name">{{ tx["category"] }}</span>
+                                <span class="transaction-category-meta text-muted">
+                                    &middot; {{ _(tx["category_source_label"]) }}{% if tx["category_confidence_label"] %} {{ tx["category_confidence_label"] }}{% endif %}
+                                </span>
                             </div>
                         </td>
                         <td>
@@ -314,76 +365,83 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if can_edit_transactions %}
-                            <form method="post" action="/transactions/{{ tx['id'] }}/verify" class="d-flex gap-2 align-items-center" data-row-action data-ajax-refresh-form>
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="next" value="{{ request.full_path }}">
-                                {% if tx["needs_review"] %}
-                                    <span class="badge text-bg-warning">{{ _("Needs review") }}</span>
-                                    <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}</button>
-                                {% elif tx["reviewed_at"] %}
-                                    <span class="badge text-bg-success">{{ _("Verified") }}</span>
-                                {% else %}
-                                    <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}</button>
-                                {% endif %}
-                            </form>
+                            {% if tx["ignored"] %}
+                                <span class="badge text-bg-secondary transaction-status-badge">{{ _("Ignored") }}</span>
+                            {% elif tx["needs_review"] %}
+                                <span class="badge text-bg-warning transaction-status-badge">{{ _("Needs review") }}</span>
+                            {% elif tx["reviewed_at"] %}
+                                <span class="badge text-bg-success transaction-status-badge">{{ _("Approved") }}</span>
                             {% else %}
-                                {% if tx["needs_review"] %}
-                                    <span class="badge text-bg-warning">{{ _("Needs review") }}</span>
-                                {% elif tx["reviewed_at"] %}
-                                    <span class="badge text-bg-success">{{ _("Verified") }}</span>
-                                {% else %}
-                                    <span class="badge text-bg-secondary">{{ _("Unverified") }}</span>
-                                {% endif %}
+                                <span class="badge text-bg-secondary transaction-status-badge">{{ _("Unverified") }}</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="text-end">
                             {% if can_edit_transactions %}
-                            <div class="d-flex flex-wrap gap-2 align-items-center justify-content-end">
-                                {% if run_transaction_ai_enabled %}
-                                <form method="post" action="{{ url_for('transactions.run_transaction_ai', transaction_id=tx['id']) }}" data-row-action>
+                            <div class="transaction-row-actions d-flex align-items-center justify-content-end gap-1" data-row-action>
+                                <form method="post" action="/transactions/{{ tx['id'] }}/verify" data-ajax-refresh-form>
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="next" value="{{ request.full_path }}">
-                                    <button class="btn btn-sm btn-outline-primary" type="submit">
-                                        <i class="bi bi-stars" aria-hidden="true"></i>{{ _("Run AI") }}
-                                    </button>
-                                </form>
-                                {% endif %}
-                                <form method="post" action="/transactions/{{ tx['id'] }}/ignored" class="d-flex gap-2 align-items-center" data-row-action data-ajax-refresh-form>
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="next" value="{{ request.full_path }}">
-                                    {% if tx["ignored"] %}
-                                        <input type="hidden" name="ignored" value="0">
-                                        <span class="badge text-bg-secondary">{{ _("Ignored") }}</span>
-                                        <button
-                                            class="btn btn-sm btn-outline-secondary btn-icon-only"
-                                            type="submit"
-                                            aria-label="{{ _('Restore') }}"
-                                            title="{{ _('Restore') }}"
-                                            data-bs-tooltip
-                                        >
-                                            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
-                                        </button>
-                                    {% else %}
-                                        <input type="hidden" name="ignored" value="1">
-                                        <button
-                                            class="btn btn-sm btn-outline-secondary btn-icon-only"
-                                            type="submit"
-                                            aria-label="{{ _('Ignore') }}"
-                                            title="{{ _('Ignore') }}"
-                                            data-bs-tooltip
-                                        >
-                                            <i class="bi bi-ban" aria-hidden="true"></i>
-                                        </button>
+                                    {% if not tx["reviewed_at"] %}
+                                        <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}</button>
                                     {% endif %}
                                 </form>
+
+                                <div class="dropdown transaction-action-menu">
+                                    <button
+                                        class="btn btn-sm btn-outline-secondary btn-icon-only"
+                                        type="button"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false"
+                                        aria-label="{{ _('More actions') }}"
+                                        title="{{ _('More actions') }}"
+                                        data-bs-tooltip
+                                    >
+                                        <i class="bi bi-three-dots" aria-hidden="true"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        {% if run_transaction_ai_enabled %}
+                                        <li>
+                                            <form method="post" action="{{ url_for('transactions.suggest_transaction_category', transaction_id=tx['id']) }}">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="next" value="{{ request.full_path }}">
+                                                <button class="dropdown-item" type="submit">
+                                                    <i class="bi bi-stars" aria-hidden="true"></i>{{ _("Suggest category") }}
+                                                </button>
+                                            </form>
+                                        </li>
+                                        {% endif %}
+                                        <li>
+                                            <button
+                                                class="dropdown-item"
+                                                type="button"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#categorize-transaction-{{ tx['id'] }}"
+                                            >
+                                                <i class="bi bi-pencil-square" aria-hidden="true"></i>{{ _("Edit category") }}
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <form method="post" action="/transactions/{{ tx['id'] }}/ignored" data-ajax-refresh-form>
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="next" value="{{ request.full_path }}">
+                                                {% if tx["ignored"] %}
+                                                    <input type="hidden" name="ignored" value="0">
+                                                    <button class="dropdown-item" type="submit">
+                                                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Restore transaction") }}
+                                                    </button>
+                                                {% else %}
+                                                    <input type="hidden" name="ignored" value="1">
+                                                    <button class="dropdown-item" type="submit">
+                                                        <i class="bi bi-ban" aria-hidden="true"></i>{{ _("Ignore transaction") }}
+                                                    </button>
+                                                {% endif %}
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                             {% else %}
-                                {% if tx["ignored"] %}
-                                    <span class="badge text-bg-secondary">{{ _("Ignored") }}</span>
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
+                                <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -495,15 +553,19 @@
 
 {% if transaction_ai_result %}
 {% set ai = transaction_ai_result %}
+{% set ai_transaction_id = ai.transaction_id | default(0) %}
 <div class="modal fade" id="transaction-ai-result-modal" tabindex="-1" aria-labelledby="transaction-ai-result-modal-title" aria-hidden="true" data-auto-show-modal>
     <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-fit-content">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="transaction-ai-result-modal-title">{{ _("AI categorization result") }}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
-            </div>
-            <div class="modal-body transaction-rule-modal">
-                <div class="alert {% if ai.ok %}alert-success{% else %}alert-warning{% endif %}" role="alert">
+            <form method="post" action="{{ url_for('transactions.apply_transaction_ai_suggestion', transaction_id=ai_transaction_id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="transaction-ai-result-modal-title">{{ _("AI category suggestion") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body transaction-rule-modal">
+                <div class="alert {% if ai.can_apply %}alert-success{% else %}alert-warning{% endif %}" role="alert">
                     {{ _(ai.message) }}
                 </div>
 
@@ -530,16 +592,6 @@
                         <dd>{{ _(ai.transaction_kind_label) }}</dd>
                     </div>
                     <div>
-                        <dt>{{ _("Applied to transaction") }}</dt>
-                        <dd>
-                            {% if ai.applied %}
-                                <span class="badge text-bg-success">{{ _("Applied") }}</span>
-                            {% else %}
-                                <span class="badge text-bg-secondary">{{ _("Not applied") }}</span>
-                            {% endif %}
-                        </dd>
-                    </div>
-                    <div>
                         <dt>{{ _("Previous category") }}</dt>
                         <dd>{{ ai.previous_category or "&mdash;" | safe }}</dd>
                     </div>
@@ -558,7 +610,7 @@
                         </dd>
                     </div>
                     <div>
-                        <dt>{{ _("AI category") }}</dt>
+                        <dt>{{ _("Suggested category") }}</dt>
                         <dd>
                             {{ ai.category or "&mdash;" | safe }}
                             {% if ai.category_source_label %}
@@ -570,7 +622,7 @@
                         </dd>
                     </div>
                     <div>
-                        <dt>{{ _("AI tags") }}</dt>
+                        <dt>{{ _("Suggested tags") }}</dt>
                         <dd>
                             {% if ai.tag_pills %}
                                 <span class="tag-pill-list">
@@ -684,13 +736,30 @@
                     <pre class="mt-2 mb-0"><code>{{ ai.metadata_pretty }}</code></pre>
                 </details>
                 {% endif %}
+
+                {% if ai.can_apply %}
+                <section class="mt-4">
+                    <h6>{{ _("Rule creation") }}</h6>
+                    {{ rule_keyword_control("ai-suggestion", ai.rule_keyword) }}
+                    {{ amount_rule_control("ai-suggestion", exact_value=ai.rule_exact_amount) }}
+                </section>
                 {% endif %}
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Close") }}
-                </button>
-            </div>
+                {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Close") }}
+                    </button>
+                    {% if ai.can_apply %}
+                    <button type="submit" class="btn btn-outline-primary" name="suggestion_action" value="apply">
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Apply to transaction") }}
+                    </button>
+                    <button type="submit" class="btn btn-primary" name="suggestion_action" value="apply_and_create_rule">
+                        <i class="bi bi-tags" aria-hidden="true"></i>{{ _("Apply and create rule") }}
+                    </button>
+                    {% endif %}
+                </div>
+            </form>
         </div>
     </div>
 </div>

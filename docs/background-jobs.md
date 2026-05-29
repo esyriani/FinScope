@@ -48,6 +48,13 @@ rows are left unchanged.
 AI categorization commits after each batch. If the process is interrupted,
 rerun AI categorization and the job resumes from the remaining unknown rows.
 
+The transaction-table Suggest category action is an exception to the queue model.
+It runs synchronously for one selected transaction, shows the model result and
+metadata in a modal dialog, and waits for the user to explicitly apply the
+suggestion. The modal can apply only the selected row, or apply the row and save
+a reusable rule. Owners can show or hide that action from Settings; its default
+visibility is controlled by `setting_defaults.transaction_ai_rerun_enabled`.
+
 ## Undo behavior
 
 Some jobs register undo handlers. Undo is available only when the job completed successfully and the handler still has enough metadata to reverse the operation.

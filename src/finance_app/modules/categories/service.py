@@ -17,6 +17,7 @@ from finance_app.modules.categories.llm import (
 from finance_app.modules.categories.repository import (
     clean_category_name,
     create_category,
+    get_builtin_category_names,
     fetch_category_names,
     get_category_options,
     get_category_rules,
@@ -68,6 +69,7 @@ __all__ = [
     "clean_category_name",
     "create_category",
     "fetch_category_names",
+    "get_builtin_category_names",
     "get_category_options",
     "get_category_rules",
     "match_category_rule",

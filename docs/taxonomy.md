@@ -182,8 +182,15 @@ High-confidence matches require strong agreement across similar transactions bef
 Automatic and manual category writes persist compact JSON evidence in `transactions.category_metadata`. The metadata uses a controlled audit `decision_source`: `rule`, `similar_transactions`, `llm`, `llm_with_similar_transactions`, `combined`, `manual`, or `unknown`.
 
 LLM categorization is optional and requires `OPENAI_API_KEY`.
-The LLM receives unresolved transactions, rule evidence, historical evidence, a compact candidate taxonomy, and candidate tags/categories.
-The prompt contract requires category IDs and tag IDs from the candidate taxonomy. Returned results are validated conservatively: invalid JSON, invalid category IDs, invalid tag IDs, invalid confidence values, low-confidence results, or inconsistent evidence remain categorized as `Unknown` or are marked for review according to the shared confidence policy.
+The LLM receives unresolved transactions, rule evidence, historical evidence, account context, the full taxonomy, and transaction-local candidate taxonomy hints. Candidate categories and tags are hints, not a gate: the model may choose any active category or tag ID from the full taxonomy when the transaction evidence supports it.
+
+Returned results are validated conservatively. Invalid JSON, invalid category IDs, invalid tag IDs, invalid confidence values, or inconsistent evidence remain categorized as `Unknown` or are marked for review according to the shared confidence policy.
+
+AI uses three configurable thresholds with separate responsibilities:
+
+1. `llm_review_threshold` keeps a best-fit LLM category as a review-required suggestion instead of falling back to `UNKNOWN`.
+2. `verify_threshold` controls when an LLM category can clear review automatically.
+3. `llm_confidence_threshold` controls when a no-review AI result can create a reusable automatic rule.
 
 LLM categorization is operationally separate from statement import. Imports apply
 rules and historical evidence first, then optionally queue AI categorization for
@@ -191,3 +198,5 @@ remaining unknown rows. Owners can pause automatic AI queueing from Settings and
 rerun AI manually from Jobs or from an uploaded statement. Reruns only target
 active transactions that are still null or `UNKNOWN`, so existing manual,
 rule-based, historical, transfer, and accepted AI categories are not overwritten.
+
+For focused review, the transaction table can show a synchronous Suggest category action for one row. This previews LLM categorization for the selected transaction only, displays model confidence, evidence, metadata, and failure reasons, and then lets the user explicitly apply the suggestion to the row or apply it and create a reusable rule.

@@ -195,7 +195,7 @@ def test_settings_post_can_disable_automatic_ai_queueing(client, db_conn):
 
 
 def test_settings_post_can_disable_single_transaction_ai_button(client, db_conn):
-    """Verify the owner can hide the diagnostic transaction AI action."""
+    """Verify the owner can hide the transaction AI suggestion action."""
     form = settings_form_data(db_conn)
     form.pop("transaction_ai_rerun_enabled")
 

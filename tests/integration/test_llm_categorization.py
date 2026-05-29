@@ -1117,7 +1117,7 @@ def test_classify_unknowns_with_llm_keeps_full_taxonomy_tags(db_conn, monkeypatc
     ]
 
     def request_for_test(unknown_chunk, *args):
-        """Return a valid tag ID outside the compact candidate taxonomy."""
+        """Return a valid tag ID outside the transaction-local candidate hints."""
         category_rows = args[3]
         tag_rows = args[4]
         return [

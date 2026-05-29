@@ -123,9 +123,12 @@
     background: var(--app-surface-soft);
 }
 
-.tag-multiselect-option-all {
-    border-bottom: 1px solid var(--app-border);
+.tag-multiselect-option-bulk {
     font-weight: 600;
+}
+
+.tag-multiselect-option-bulk-end {
+    border-bottom: 1px solid var(--app-border);
     margin-bottom: 0.3rem;
     padding-bottom: 0.6rem;
 }

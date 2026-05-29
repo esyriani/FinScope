@@ -178,7 +178,7 @@ def test_owner_editor_and_viewer_authorization(client, app, core_conn, db_conn):
     transactions_html = viewer_client.get("/transactions").get_data(as_text=True)
     recurring_html = viewer_client.get("/recurring").get_data(as_text=True)
     home_html = viewer_client.get("/").get_data(as_text=True)
-    assert "Approve" not in transactions_html
+    assert f"/transactions/{tx_id}/verify" not in transactions_html
     assert "/ignored" not in transactions_html
     assert "data-row-edit-target" not in transactions_html
     assert "Categorize transaction" not in transactions_html

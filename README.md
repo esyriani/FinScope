@@ -11,7 +11,7 @@ FinScope is a single-tenant Flask application with owner-managed user access, sh
 > Project owner: Eugene Syriani  
 > Current deployment target: local desktop  
 > License: [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`)  
-> Last modification: 2026-05-27
+> Last modification: 2026-05-28
 
 ![FinScope splash screen](docs/img/splash.png)
 
@@ -154,7 +154,7 @@ Common settings:
 | `setting_defaults.llm_confidence_threshold` | `FINANCE_DEFAULT_LLM_CONFIDENCE_THRESHOLD` | Minimum LLM confidence for automatic rule creation from a no-review result. |
 | `setting_defaults.llm_review_threshold` | `FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD` | Minimum LLM confidence for keeping a best-fit category as a review item instead of UNKNOWN. |
 | `setting_defaults.verify_threshold` | `FINANCE_DEFAULT_VERIFY_THRESHOLD` | Minimum confidence for an LLM category to clear review automatically. |
-| `setting_defaults.transaction_ai_rerun_enabled` | `FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED` | Default visibility for the one-transaction Run AI diagnostic action. |
+| `setting_defaults.transaction_ai_rerun_enabled` | `FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED` | Default visibility for the one-transaction Suggest category action. |
 | `setting_defaults.rule_audit_transaction_limit` | `FINANCE_DEFAULT_RULE_AUDIT_TRANSACTION_LIMIT` | Maximum newest historical transactions analyzed by Rule audit before the limited-audit notice appears. |
 
 FinScope loads `src/finance_app/config.example.ini`, overlays `src/finance_app/config.ini` when present, then applies environment variable overrides.
@@ -166,7 +166,7 @@ Choose the active database with the SQLAlchemy URL in `database.url`:
 ```ini
 [database]
 url =
-path = ../../runtime/finance.db
+path = ../../runtime/finescope.db
 ```
 
 Selection priority:
@@ -181,13 +181,13 @@ The database path used for the generated SQLite URL is chosen in this order:
 2. `database.path` in `src/finance_app/config.ini`, when present.
 3. `database.path` in `src/finance_app/config.example.ini`.
 
-Leave `database.url` blank for the default SQLite database. Set it to a SQLAlchemy URL such as `sqlite:///D:/path/to/finance.db` or `mysql+pymysql://user:password@127.0.0.1:3306/finscope` to select that database. When a non-SQLite URL is active, `database.path` is not the active database; it is only used as the fallback path if the URL is later removed.
+Leave `database.url` blank for the default SQLite database. Set it to a SQLAlchemy URL such as `sqlite:///D:/path/to/finescope.db` or `mysql+pymysql://user:password@127.0.0.1:3306/finscope` to select that database. When a non-SQLite URL is active, `database.path` is not the active database; it is only used as the fallback path if the URL is later removed.
 
 Supported database backends:
 
 | Backend | SQLAlchemy URL | Notes |
 | --- | --- | --- |
-| SQLite 3.31+ | `sqlite:///D:/path/to/finance.db` | Default local backend. The current development environment uses SQLite 3.45.1. |
+| SQLite 3.31+ | `sqlite:///D:/path/to/finescope.db` | Default local backend. The current development environment uses SQLite 3.45.1. |
 | MySQL 8.0.16+ | `mysql+pymysql://user:password@host:3306/finscope` | Fully supported through SQLAlchemy Core and PyMySQL 1.1.3. Compatible MariaDB servers use the same URL form. |
 
 Interface language is a user-bound runtime setting stored in `user_settings` and managed from Settings. English source strings are the canonical message ids; French translations live in `src/finance_app/translations/fr.json`.
@@ -200,7 +200,7 @@ From the repository root:
 .\.venv\Scripts\python.exe -B src\finance_app\app.py
 ```
 
-`src/finance_app/app.py` initializes a clean SQLAlchemy Core schema before starting Flask. By default, FinScope uses `runtime/finance.db`.
+`src/finance_app/app.py` initializes a clean SQLAlchemy Core schema before starting Flask. By default, FinScope uses `runtime/finescope.db`.
 
 Imported transactions normally keep their original statement descriptions for auditability. Ledger uploads create transaction rows; enrichment uploads, such as Interac e-Transfer history, update matched rows without adding duplicate ledger activity. Merchant grouping is persisted separately through `merchants` and `merchant_aliases`, which gives recurring activity, merchant filters, categorization rules, and analytics a stable merchant identity. Rules and recurring patterns can still remain keyword-fuzzy when no merchant ID is stored.
 
@@ -267,7 +267,9 @@ AI categorization runs in a separate background queue so OpenAI timeouts do not 
 
 Use Jobs to run AI on all active unknown transactions, cancel a queued or running AI job, or clear queued AI jobs. Running AI jobs stop cooperatively after the current batch. Manual reruns only target active transactions whose category is still unknown, so they do not overwrite manually reviewed or already categorized rows.
 
-For development diagnostics, Settings > Categorization can show a Run AI action on transaction rows. This synchronous action reruns the LLM for one transaction, applies only that row, and shows the model confidence, evidence, and metadata without creating a reusable rule. Its default visibility is controlled by `setting_defaults.transaction_ai_rerun_enabled`.
+AI uses three thresholds. `llm_review_threshold` keeps a best-fit category as review-required instead of `UNKNOWN`; `verify_threshold` clears review automatically only for high-confidence results; `llm_confidence_threshold` controls when no-review AI results may create reusable automatic rules.
+
+For focused review, Settings > Categorization can show a Suggest category action on transaction rows. This synchronous action previews an LLM suggestion for one transaction, shows confidence, evidence, and metadata, then lets the user explicitly apply it to the row or apply it and create a reusable rule. Its default visibility is controlled by `setting_defaults.transaction_ai_rerun_enabled`.
 
 ### Manage taxonomy
 
@@ -344,7 +346,7 @@ Operational recommendations:
 - Keep `FINANCE_SECRET_KEY` private.
 - Change the bootstrap owner password after setup if it was created in a shared environment.
 - Keep `OPENAI_API_KEY` out of source control.
-- Store `runtime/finance.db`, MySQL credentials, and database backups in protected locations.
+- Store `runtime/finescope.db`, MySQL credentials, and database backups in protected locations.
 - Back up the active database regularly.
 - Do not run with debug mode enabled on a shared network.
 - Review data-sharing implications before enabling LLM categorization.

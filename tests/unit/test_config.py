@@ -65,7 +65,7 @@ def test_statement_upload_extensions_default_to_csv_only(monkeypatch, tmp_path):
 
 
 def test_setting_defaults_include_llm_review_and_single_transaction_ai(monkeypatch, tmp_path):
-    """Verify LLM review and diagnostic AI defaults are configurable."""
+    """Verify LLM review and single-transaction AI defaults are configurable."""
     monkeypatch.setenv("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", "0.62")
     monkeypatch.setenv("FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED", "false")
 
