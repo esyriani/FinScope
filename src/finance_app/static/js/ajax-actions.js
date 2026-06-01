@@ -104,7 +104,8 @@ function runAjaxRefreshInitializers(root = document) {
     setupAjaxRefreshLinks(root);
     window.setupDashboardPage?.(root);
     window.setupDashboardCharts?.(root);
-    window.setupTooltips?.();
+    window.setupTooltips?.(root);
+    window.setupAutoShowModals?.(root);
     window.setupJobsAutoRefresh?.(root);
     window.setupAiJobProgressPolling?.(root);
     window.setupTagMultiselects?.(root);
@@ -114,12 +115,14 @@ function runAjaxRefreshInitializers(root = document) {
     window.setupRuleTableActions?.(root);
     window.setupReviewTransactionSelectors?.(root);
     window.setupTableRowInteractions?.(root);
+    window.setupTransactionBatchActions?.(root);
     window.setupCollapseToggleLabels?.(root);
     window.setupAuditSectionLinks?.(root);
     window.openAuditSectionFromLocation?.(root);
     window.setupSortableTables?.(root);
     window.setupPaginatedTables?.(root);
     window.setupUploadAccountBehavior?.();
+    window.setupUploadPreview?.(root);
 }
 
 function replaceAjaxRefreshTargets(selector, html, responseUrl) {

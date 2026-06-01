@@ -1,6 +1,6 @@
 """Flask routes for the upload feature."""
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from sqlalchemy import delete, insert, select
 
 from finance_app.background.runner import submit_background_job
@@ -9,6 +9,7 @@ from finance_app.core.config import settings
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
     ACTIVE_STATEMENT_IMPORT_STATUSES,
+    DATE_ORDER_AUTO,
     INTERAC_DIRECTION_AUTO,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
 )
@@ -24,13 +25,13 @@ from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.settings.runtime import get_statement_type_by_id
 from finance_app.modules.statements.importer import (
     allowed_statement_file,
-    extract_pdf_text,
     file_checksum,
     get_file_extension,
+    normalize_date_order,
     normalize_interac_direction,
 )
 from finance_app.modules.upload import workflow as upload_workflow
-from finance_app.modules.upload.service import build_upload_context
+from finance_app.modules.upload.service import build_statement_preview, build_upload_context
 
 
 upload_bp = Blueprint("upload", __name__)
@@ -52,6 +53,7 @@ def handle_statement_upload():
     account_name = request.form.get("account_name", "Personal").strip() or "Personal"
     paid_from_account_name = request.form.get("paid_from_account_name", "").strip()
     statement_type_id = request.form.get("statement_type_id", "").strip()
+    date_order = normalize_date_order(request.form.get("date_order"))
 
     with db_core_transaction() as conn:
         statement_type = get_statement_type_by_id(conn, statement_type_id)
@@ -91,6 +93,16 @@ def handle_statement_upload():
         if raw_text is None:
             return redirect(url_for("upload.upload"))
 
+        preview = build_statement_preview(
+            raw_text,
+            statement_type["parser_type"],
+            interac_direction=interac_direction,
+            date_order=date_order,
+        )
+        if preview["date_format"]["requires_choice"]:
+            flash("Choose a statement date format before uploading.")
+            return redirect(url_for("upload.upload"))
+
         # The statement import type controls parsing/import mode. The account
         # reporting role is stored separately so reports can classify card payments
         # and transfers without changing how the statement file is parsed.
@@ -112,6 +124,7 @@ def handle_statement_upload():
             checksum,
             extension,
             interac_direction,
+            date_order,
             raw_text,
         )
         upload_workflow.reset_statement_import_state(conn, statement_id)
@@ -125,6 +138,7 @@ def handle_statement_upload():
         raw_text,
         uploaded_file.filename,
         interac_direction=interac_direction,
+        date_order=date_order,
     )
 
     flash(
@@ -132,6 +146,66 @@ def handle_statement_upload():
         f"Track progress on the Jobs page. Job: {job_id[:8]}"
     )
     return redirect(url_for("upload.upload"))
+
+
+@upload_bp.route("/upload/preview", methods=["POST"])
+@permission_required(PERMISSION_IMPORT_STATEMENTS)
+def preview_statement_upload():
+    """Return a read-only parsed CSV preview for a submitted statement upload.
+
+    The request must include the same multipart fields as the final upload. The
+    response is JSON and does not create statements, transactions, accounts, or
+    background jobs.
+    """
+    uploaded_file = request.files.get("statement")
+    statement_type_id = request.form.get("statement_type_id", "").strip()
+    date_order = normalize_date_order(request.form.get("date_order"))
+
+    with db_core_transaction() as conn:
+        statement_type = get_statement_type_by_id(conn, statement_type_id)
+
+        if statement_type is None:
+            return preview_error("Please choose a valid statement type.")
+
+        interac_direction = INTERAC_DIRECTION_AUTO
+        if statement_type["parser_type"] == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
+            interac_direction = normalize_interac_direction(request.form.get("interac_direction"))
+
+        if uploaded_file is None or uploaded_file.filename == "":
+            return preview_error("Please choose a statement file.")
+
+        if not allowed_statement_file(uploaded_file.filename):
+            allowed = ", ".join(sorted(settings.allowed_statement_extensions)).upper()
+            return preview_error(f"Only {allowed} files are supported.")
+
+        checksum = file_checksum(uploaded_file)
+        existing = statement_by_checksum(conn, checksum)
+        if existing:
+            return preview_error(
+                "This statement was already uploaded as "
+                f"{existing['filename']} on {existing['uploaded_at']} "
+                f"({existing['import_status']}). "
+                "Use Retry import or Reprocess from Uploaded statements."
+            )
+
+        extension = get_file_extension(uploaded_file.filename)
+        if extension != "csv":
+            return preview_error("Unsupported file type.")
+
+        raw_text = decode_csv_statement_text(uploaded_file)
+        preview = build_statement_preview(
+            raw_text,
+            statement_type["parser_type"],
+            interac_direction=interac_direction,
+            date_order=date_order,
+        )
+
+    return jsonify({"ok": True, "preview": preview})
+
+
+def preview_error(message, status_code=400):
+    """Return a JSON error response for the upload preview endpoint."""
+    return jsonify({"ok": False, "message": message}), status_code
 
 
 @upload_bp.route("/upload/<int:statement_id>/retry", methods=["POST"])
@@ -213,6 +287,7 @@ def queue_existing_statement_import(statement_id, reprocess=False):
         statement["filename"],
         label_prefix="Reprocess" if reprocess else "Retry import",
         interac_direction=statement["interac_direction"],
+        date_order=statement["date_order"],
     )
     flash(
         f"{'Reprocess' if reprocess else 'Retry'} queued. "
@@ -232,6 +307,7 @@ def statement_import_row(conn, statement_id):
             statements_table.c.raw_text,
             statements_table.c.import_status,
             statements_table.c.interac_direction,
+            statements_table.c.date_order,
             statement_types_table.c.parser_type,
             statement_types_table.c.import_mode,
         )
@@ -265,9 +341,11 @@ def create_uploaded_statement(
     checksum,
     extension,
     interac_direction,
+    date_order,
     raw_text,
 ):
     """Insert an uploaded statement row and return its ID."""
+    date_order = normalize_date_order(date_order)
     result = conn.execute(
         insert(statements_table).values(
             account_id=account_id,
@@ -276,6 +354,7 @@ def create_uploaded_statement(
             checksum=checksum,
             extension=extension,
             interac_direction=interac_direction,
+            date_order=date_order,
             raw_text=raw_text,
         )
     )
@@ -312,9 +391,11 @@ def submit_statement_import_job(
     filename,
     label_prefix="Import",
     interac_direction=INTERAC_DIRECTION_AUTO,
+    date_order=DATE_ORDER_AUTO,
 ):
     """Submit statement import work with upload undo metadata."""
     interac_direction = normalize_interac_direction(interac_direction)
+    date_order = normalize_date_order(date_order)
     undo_state = {}
     return submit_background_job(
         f"{label_prefix} {filename}",
@@ -326,6 +407,7 @@ def submit_statement_import_job(
         raw_text,
         import_mode=import_mode,
         interac_direction=interac_direction,
+        date_order=date_order,
         undo_state=undo_state,
         undo_handler=undo_statement_upload_job,
         undo_args=(statement_id, undo_state),
@@ -342,24 +424,20 @@ def upload_redirect_target():
 
 
 def read_statement_text(uploaded_file, extension):
-    """Handle the read statement text route."""
-    if extension == "pdf":
-        pdf_text = extract_pdf_text(uploaded_file)
-
-        if not pdf_text.strip():
-            flash("Could not extract text from this PDF. It may be scanned or image-based.")
-            return None
-
-        return pdf_text
-
+    """Return decoded statement text for supported CSV uploads."""
     if extension == "csv":
-        uploaded_file.stream.seek(0)
-        raw_bytes = uploaded_file.stream.read()
-        uploaded_file.stream.seek(0)
-        return raw_bytes.decode("utf-8-sig", errors="replace")
+        return decode_csv_statement_text(uploaded_file)
 
     flash("Unsupported file type.")
     return None
+
+
+def decode_csv_statement_text(uploaded_file):
+    """Decode an uploaded CSV stream and restore the stream position."""
+    uploaded_file.stream.seek(0)
+    raw_bytes = uploaded_file.stream.read()
+    uploaded_file.stream.seek(0)
+    return raw_bytes.decode("utf-8-sig", errors="replace")
 
 
 def import_transactions(
@@ -372,6 +450,7 @@ def import_transactions(
     undo_state=None,
     import_mode=None,
     interac_direction="auto",
+    date_order=DATE_ORDER_AUTO,
 ):
     """Import transactions."""
     original_categorize_transactions = upload_workflow.categorize_transactions
@@ -389,6 +468,7 @@ def import_transactions(
             undo_state=undo_state,
             import_mode=import_mode,
             interac_direction=interac_direction,
+            date_order=date_order,
         )
     finally:
         upload_workflow.categorize_transactions = original_categorize_transactions

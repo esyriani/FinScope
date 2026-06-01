@@ -267,3 +267,231 @@ def test_update_transaction_ignored_route_reports_missing_transaction(client):
 
     assert response.status_code == 200
     assert b"Transaction not found." in response.data
+
+
+def test_batch_transactions_route_approves_only_selected_ids(client, db_conn):
+    """Verify batch approval mutates only explicitly selected transactions."""
+    first_id = insert_transaction(db_conn, fingerprint="route-batch-approve-1")
+    second_id = insert_transaction(db_conn, fingerprint="route-batch-approve-2")
+    other_id = insert_transaction(db_conn, fingerprint="route-batch-approve-other")
+
+    response = client.post(
+        "/transactions/batch",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "transaction_ids": [str(first_id), str(second_id), str(second_id), "bad"],
+            "batch_action": "approve",
+        },
+        follow_redirects=True,
+    )
+
+    first = transaction_state(db_conn, first_id)
+    second = transaction_state(db_conn, second_id)
+    other = transaction_state(db_conn, other_id)
+    assert response.status_code == 200
+    assert b"Approved selected transactions." in response.data
+    assert first["needs_review"] == 0
+    assert first["reviewed_at"] is not None
+    assert second["needs_review"] == 0
+    assert second["reviewed_at"] is not None
+    assert other["needs_review"] == 1
+    assert other["reviewed_at"] is None
+
+
+def test_batch_transactions_route_ignores_only_selected_ids(client, db_conn):
+    """Verify batch ignore mutates only explicitly selected transactions."""
+    ignored_id = insert_transaction(db_conn, fingerprint="route-batch-ignore")
+    other_id = insert_transaction(db_conn, fingerprint="route-batch-ignore-other")
+
+    response = client.post(
+        "/transactions/batch",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "transaction_ids": [str(ignored_id)],
+            "batch_action": "ignore",
+        },
+        follow_redirects=True,
+    )
+
+    ignored = transaction_state(db_conn, ignored_id)
+    other = transaction_state(db_conn, other_id)
+    assert response.status_code == 200
+    assert b"Ignored selected transaction." in response.data
+    assert ignored["ignored"] == 1
+    assert ignored["needs_review"] == 0
+    assert other["ignored"] == 0
+    assert other["needs_review"] == 1
+
+
+def test_batch_transactions_route_queues_selected_recategorization(client, monkeypatch):
+    """Verify batch recategorization queues a job for the selected IDs only."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    captured = {}
+
+    def queue_for_test(transaction_ids):
+        """Capture the transaction IDs submitted to the queue helper."""
+        captured["transaction_ids"] = list(transaction_ids)
+        return {"selected_count": 2, "job_id": "abcdef123456"}
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "queue_selected_transaction_recategorization",
+        queue_for_test,
+    )
+
+    response = client.post(
+        "/transactions/batch",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "transaction_ids": ["11", "22"],
+            "batch_action": "recategorize",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert captured["transaction_ids"] == ["11", "22"]
+    assert b"Recategorization queued for 2 selected transactions. Job: abcdef12" in response.data
+
+
+def test_batch_transactions_route_requires_selection(client):
+    """Verify batch actions reject empty selections before mutating anything."""
+    response = client.post(
+        "/transactions/batch",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "batch_action": "approve",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Select at least one transaction." in response.data
+
+
+def test_suggest_transaction_category_route_shows_result_modal(client, db_conn, monkeypatch):
+    """Verify the one-off AI route redirects back with suggestion modal content."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    tx_id = insert_transaction(db_conn, fingerprint="route-suggest-ai")
+
+    def suggest_ai_for_test(transaction_id):
+        """Return deterministic modal content without calling OpenAI."""
+        assert transaction_id == tx_id
+        return {
+            "ok": True,
+            "applied": False,
+            "can_apply": True,
+            "message": "AI suggestion ready.",
+            "transaction_id": tx_id,
+            "description": "TVA SPORTS DIRECT",
+            "account_name": "TD Visa",
+            "tx_date": "2026-05-04",
+            "amount": 20.68,
+            "transaction_kind_label": "Expense",
+            "previous_category": "UNKNOWN",
+            "previous_tag_pills": [],
+            "category": "Entertainment",
+            "tags": ["Service"],
+            "tag_pills": [{"name": "Service", "color": "#64748b"}],
+            "needs_review": False,
+            "review_required": False,
+            "category_source_label": "AI",
+            "category_source_badge_class": "text-bg-info",
+            "category_confidence_label": "96%",
+            "model": "gpt-test",
+            "request_status": {"status": "ok", "requested_count": 1, "result_count": 1},
+            "request_status_label": "ok",
+            "llm_confidence": 0.96,
+            "final_confidence": 0.96,
+            "supported_by_similar_transactions": False,
+            "llm_reason": "TVA Sports is a streaming sports service.",
+            "rule_evidence": {},
+            "retrieval_evidence": {},
+            "metadata_pretty": '{"final_category":"Entertainment"}',
+            "rule_keyword": "TVA SPORTS DIRECT",
+            "rule_exact_amount": "20.68",
+            "persistence": {"category": "Entertainment"},
+        }
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "suggest_transaction_ai_category",
+        suggest_ai_for_test,
+    )
+
+    response = client.post(
+        f"/transactions/{tx_id}/suggest-category",
+        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"AI category suggestion" in response.data
+    assert b"TVA SPORTS DIRECT" in response.data
+    assert b"Entertainment" in response.data
+    assert b"TVA Sports is a streaming sports service." in response.data
+    assert b"Apply to transaction" in response.data
+    assert b"Apply and create rule" in response.data
+
+
+def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client, db_conn, monkeypatch):
+    """Verify the AI suggestion apply route delegates to the transaction service."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    tx_id = insert_transaction(db_conn, fingerprint="route-apply-ai-suggestion")
+    pending_suggestion = {
+        "transaction_id": tx_id,
+        "can_apply": True,
+        "persistence": {"category": "Entertainment"},
+    }
+    captured = {}
+
+    with client.session_transaction() as session:
+        session["transaction_ai_suggestion"] = pending_suggestion
+
+    def apply_for_test(transaction_id, suggestion, action, rule_keyword="", amount_min=None, amount_max=None):
+        """Capture the submitted explicit apply action."""
+        captured.update(
+            {
+                "transaction_id": transaction_id,
+                "suggestion": suggestion,
+                "action": action,
+                "rule_keyword": rule_keyword,
+                "amount_min": amount_min,
+                "amount_max": amount_max,
+            }
+        )
+        return {"updated": True, "message": "AI suggestion applied. Rule saved."}
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "apply_transaction_ai_suggestion",
+        apply_for_test,
+    )
+
+    response = client.post(
+        f"/transactions/{tx_id}/ai-suggestion",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "suggestion_action": "apply_and_create_rule",
+            "keyword": "TVA SPORTS DIRECT",
+            "amount_min": "",
+            "amount_max": "",
+        },
+        follow_redirects=True,
+    )
+
+    with client.session_transaction() as session:
+        stored_suggestion = session.get("transaction_ai_suggestion")
+
+    assert response.status_code == 200
+    assert b"AI suggestion applied. Rule saved." in response.data
+    assert captured["transaction_id"] == tx_id
+    assert captured["suggestion"] == pending_suggestion
+    assert captured["action"] == "apply_and_create_rule"
+    assert captured["rule_keyword"] == "TVA SPORTS DIRECT"
+    assert captured["amount_min"] is None
+    assert captured["amount_max"] is None
+    assert stored_suggestion is None

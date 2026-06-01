@@ -110,7 +110,7 @@ def test_import_transactions_counts_ignored_csv_rows(app, monkeypatch):
     monkeypatch.setattr(
         upload_workflow,
         "parse_csv_transactions",
-        lambda raw_text, statement_type: {
+        lambda raw_text, statement_type, **kwargs: {
             "transactions": [
                 {
                     "tx_date": "2026-01-02",
@@ -169,7 +169,7 @@ def test_import_transactions_counts_sqlite_integrity_duplicate_skips(app, monkey
     monkeypatch.setattr(
         upload_workflow,
         "parse_csv_transactions",
-        lambda raw_text, statement_type: {"transactions": [{"placeholder": True}], "ignored_rows": 0},
+        lambda raw_text, statement_type, **kwargs: {"transactions": [{"placeholder": True}], "ignored_rows": 0},
     )
     monkeypatch.setattr(
         upload_workflow,
@@ -217,7 +217,7 @@ def test_import_transactions_wraps_insert_time_duplicates_in_savepoints(app, mon
     monkeypatch.setattr(
         upload_workflow,
         "parse_csv_transactions",
-        lambda raw_text, statement_type: {"transactions": [{"placeholder": True}], "ignored_rows": 0},
+        lambda raw_text, statement_type, **kwargs: {"transactions": [{"placeholder": True}], "ignored_rows": 0},
     )
     monkeypatch.setattr(
         upload_workflow,
@@ -277,7 +277,7 @@ def test_upload_import_and_llm_update_rows_follow_category_rename(app, monkeypat
     monkeypatch.setattr(
         upload_workflow,
         "parse_csv_transactions",
-        lambda raw_text, statement_type: {
+        lambda raw_text, statement_type, **kwargs: {
             "transactions": [
                 {
                     "tx_date": "2026-01-02",
@@ -361,18 +361,18 @@ def test_import_transactions_returns_zero_counts_for_non_csv(app, monkeypatch):
     monkeypatch.setattr(
         upload_workflow,
         "parse_csv_transactions",
-        lambda *args, **kwargs: pytest.fail("PDF imports must not invoke the CSV parser"),
+        lambda *args, **kwargs: pytest.fail("Non-CSV imports must not invoke the CSV parser"),
     )
 
     with db_core_transaction() as conn:
-        account_id, statement_id = create_core_statement(conn, "statement.pdf")
+        account_id, statement_id = create_core_statement(conn, "statement.txt")
         assert upload_workflow.import_transactions(
             conn,
             statement_id,
             account_id,
             "credit_card",
-            "pdf",
-            "raw pdf text",
+            "txt",
+            "raw text",
         ) == (0, 0, 0)
 
 
@@ -382,7 +382,7 @@ def test_import_statement_job_records_failed_statement_status(db_conn, monkeypat
     monkeypatch.setattr(
         upload_workflow,
         "parse_csv_transactions",
-        lambda raw_text, statement_type: (_ for _ in ()).throw(RuntimeError("parser broke")),
+        lambda raw_text, statement_type, **kwargs: (_ for _ in ()).throw(RuntimeError("parser broke")),
     )
 
     with pytest.raises(RuntimeError, match="parser broke"):

@@ -50,4 +50,266 @@ function setupUploadAccountBehavior() {
     updateFromStatementType();
 }
 
+function setupUploadPreview(root = document) {
+    const form = root.querySelector?.("[data-upload-form]") || document.querySelector("[data-upload-form]");
+    if (!form || form.dataset.uploadPreviewReady === "true") {
+        return;
+    }
+
+    const previewUrl = form.dataset.previewUrl;
+    const modalElement = document.getElementById("upload-preview-modal");
+    const dateOrderInput = form.querySelector("[data-upload-date-order]");
+    const submitButton = form.querySelector("[data-upload-submit]");
+
+    if (!previewUrl || !modalElement || !dateOrderInput) {
+        return;
+    }
+
+    form.dataset.uploadPreviewReady = "true";
+
+    const modal = window.bootstrap?.Modal
+        ? window.bootstrap.Modal.getOrCreateInstance(modalElement)
+        : null;
+    const errorAlert = modalElement.querySelector("[data-upload-preview-error]");
+    const countNode = modalElement.querySelector("[data-upload-preview-count]");
+    const ignoredNode = modalElement.querySelector("[data-upload-preview-ignored]");
+    const dateRangeNode = modalElement.querySelector("[data-upload-preview-date-range]");
+    const dateFormatNode = modalElement.querySelector("[data-upload-preview-date-format]");
+    const rowsNode = modalElement.querySelector("[data-upload-preview-rows]");
+    const emptyNode = modalElement.querySelector("[data-upload-preview-empty]");
+    const dateChoiceNode = modalElement.querySelector("[data-upload-preview-date-choice]");
+    const dateMessageNode = modalElement.querySelector("[data-upload-preview-date-message]");
+    const confirmButton = modalElement.querySelector("[data-upload-preview-confirm]");
+    const dateOptions = Array.from(modalElement.querySelectorAll("[data-upload-preview-date-option]"));
+
+    let currentPreview = null;
+    let selectedDateOrder = "";
+
+    const translate = (message, variables) => (
+        window.financeTranslate ? window.financeTranslate(message, variables) : message
+    );
+
+    const showError = (message) => {
+        if (!errorAlert) {
+            return;
+        }
+        errorAlert.textContent = translate(message || "Preview could not be loaded.");
+        errorAlert.classList.remove("d-none");
+    };
+
+    const clearError = () => {
+        errorAlert?.classList.add("d-none");
+        if (errorAlert) {
+            errorAlert.textContent = "";
+        }
+    };
+
+    const optionLabel = (value) => {
+        const option = (currentPreview?.date_format?.options || []).find((item) => item.value === value);
+        return translate(option?.label || (value === "month_first" ? "MM/DD/YYYY" : "DD/MM/YYYY"));
+    };
+
+    const formatDateRange = (dateRange) => {
+        const earliest = dateRange?.earliest || "";
+        const latest = dateRange?.latest || "";
+        if (!earliest && !latest) {
+            return translate("n/a");
+        }
+        if (earliest === latest || !latest) {
+            return earliest;
+        }
+        if (!earliest) {
+            return latest;
+        }
+        return `${earliest} - ${latest}`;
+    };
+
+    const rowDateForOrder = (row, dateOrder) => {
+        if (!dateOrder && currentPreview?.date_format?.requires_choice) {
+            return translate("Choose date format");
+        }
+        if (dateOrder === "month_first" && row.month_first_date) {
+            return row.month_first_date;
+        }
+        if (dateOrder === "day_first" && row.day_first_date) {
+            return row.day_first_date;
+        }
+        return row.parsed_date || "";
+    };
+
+    const updateDateDependentPreview = () => {
+        const dateOrder = selectedDateOrder || currentPreview?.date_format?.effective_order || "";
+        if (dateFormatNode) {
+            dateFormatNode.textContent = dateOrder ? optionLabel(dateOrder) : translate("Auto-detect");
+        }
+        if (dateRangeNode) {
+            const range = currentPreview?.date_ranges?.[dateOrder] || currentPreview?.date_range;
+            dateRangeNode.textContent = currentPreview?.date_format?.requires_choice && !dateOrder
+                ? translate("Choose date format")
+                : formatDateRange(range);
+        }
+
+        modalElement.querySelectorAll("[data-upload-preview-parsed-date]").forEach((cell) => {
+            const row = {
+                parsed_date: cell.dataset.autoDate || "",
+                month_first_date: cell.dataset.monthFirstDate || "",
+                day_first_date: cell.dataset.dayFirstDate || "",
+            };
+            cell.textContent = rowDateForOrder(row, dateOrder);
+        });
+
+        if (confirmButton) {
+            confirmButton.disabled = Boolean(currentPreview?.date_format?.requires_choice && !dateOrder);
+        }
+    };
+
+    const renderRows = (rows) => {
+        if (!rowsNode || !emptyNode) {
+            return;
+        }
+
+        if (!rows.length) {
+            rowsNode.innerHTML = "";
+            emptyNode.classList.remove("d-none");
+            return;
+        }
+
+        emptyNode.classList.add("d-none");
+        rowsNode.innerHTML = rows.map((row) => `
+            <tr>
+                <td>${escapeHtml(row.raw_date)}</td>
+                <td
+                    data-upload-preview-parsed-date
+                    data-auto-date="${escapeHtml(row.parsed_date)}"
+                    data-month-first-date="${escapeHtml(row.month_first_date)}"
+                    data-day-first-date="${escapeHtml(row.day_first_date)}"
+                >${escapeHtml(rowDateForOrder(row, selectedDateOrder || currentPreview?.date_format?.effective_order || ""))}</td>
+                <td>${escapeHtml(row.description)}</td>
+                <td class="text-end">${escapeHtml(row.amount)}</td>
+            </tr>
+        `).join("");
+    };
+
+    const updateDateChoice = () => {
+        const dateFormat = currentPreview?.date_format || {};
+        const showChoice = Boolean(dateFormat.has_slash_dates);
+        dateChoiceNode?.classList.toggle("d-none", !showChoice);
+
+        selectedDateOrder = dateFormat.effective_order || "";
+        dateOptions.forEach((option) => {
+            option.checked = option.value === selectedDateOrder;
+        });
+
+        if (dateMessageNode) {
+            if (dateFormat.requires_choice) {
+                dateMessageNode.textContent = translate("Choose the date format before importing.");
+            } else if (dateFormat.source === "detected") {
+                dateMessageNode.textContent = translate("Date format detected from unambiguous rows.");
+            } else if (dateFormat.source === "selected") {
+                dateMessageNode.textContent = translate("Date format selected for this import.");
+            } else {
+                dateMessageNode.textContent = translate("No slash-date choice is needed for this file.");
+            }
+        }
+
+        if (!showChoice) {
+            selectedDateOrder = "";
+            dateOrderInput.value = "auto";
+        }
+        updateDateDependentPreview();
+    };
+
+    const renderPreview = (preview) => {
+        currentPreview = preview;
+        clearError();
+        if (countNode) {
+            countNode.textContent = String(preview.transaction_count ?? 0);
+        }
+        if (ignoredNode) {
+            ignoredNode.textContent = String(preview.ignored_rows ?? 0);
+        }
+        renderRows(preview.preview_rows || []);
+        updateDateChoice();
+    };
+
+    const submitConfirmedUpload = () => {
+        const dateFormat = currentPreview?.date_format || {};
+        const dateOrder = selectedDateOrder || dateFormat.effective_order || "";
+        dateOrderInput.value = dateOrder || "auto";
+        form.dataset.uploadPreviewConfirmed = "true";
+        modal?.hide();
+        if (form.requestSubmit) {
+            form.requestSubmit();
+        } else {
+            form.submit();
+        }
+    };
+
+    dateOptions.forEach((option) => {
+        option.addEventListener("change", () => {
+            selectedDateOrder = option.checked ? option.value : selectedDateOrder;
+            dateOrderInput.value = selectedDateOrder || "auto";
+            updateDateDependentPreview();
+        });
+    });
+
+    confirmButton?.addEventListener("click", submitConfirmedUpload);
+
+    form.addEventListener("submit", async (event) => {
+        if (form.dataset.uploadPreviewConfirmed === "true") {
+            form.dataset.uploadPreviewConfirmed = "false";
+            return;
+        }
+        if (!form.reportValidity()) {
+            return;
+        }
+
+        event.preventDefault();
+        dateOrderInput.value = "auto";
+        clearError();
+        if (confirmButton) {
+            confirmButton.disabled = true;
+        }
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.setAttribute("aria-busy", "true");
+        }
+
+        try {
+            const formData = new FormData(form);
+            const response = await fetch(previewUrl, {
+                method: "POST",
+                headers: {
+                    "X-CSRF-Token": getCsrfToken(),
+                    "X-Requested-With": "fetch",
+                },
+                body: formData,
+                credentials: "same-origin",
+            });
+            const data = await response.json();
+            if (!response.ok || data.ok === false) {
+                throw new Error(data.message || translate("Preview could not be loaded."));
+            }
+            renderPreview(data.preview || {});
+        } catch (error) {
+            currentPreview = null;
+            renderRows([]);
+            showError(error?.message || "Preview could not be loaded.");
+            if (confirmButton) {
+                confirmButton.disabled = true;
+            }
+        } finally {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.removeAttribute("aria-busy");
+            }
+            modal?.show();
+        }
+    });
+}
+
 setupUploadAccountBehavior();
+setupUploadPreview();
+
+window.setupUploadAccountBehavior = setupUploadAccountBehavior;
+window.setupUploadPreview = setupUploadPreview;

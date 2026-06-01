@@ -1,6 +1,5 @@
 Flask
 Flask-Login
-pypdf
 openai
 pytest
 pytest-cov

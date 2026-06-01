@@ -146,7 +146,25 @@ function setupTooltips(root = document) {
     setupBootstrapTooltips(root);
 }
 
+function setupAutoShowModals(root = document) {
+    if (!window.bootstrap?.Modal) {
+        return;
+    }
+
+    root.querySelectorAll(".modal[data-auto-show-modal]").forEach((modal) => {
+        if (modal.dataset.autoShowModalReady === "true") {
+            return;
+        }
+        modal.dataset.autoShowModalReady = "true";
+        window.bootstrap.Modal.getOrCreateInstance(modal).show();
+    });
+}
+
 setupTooltips();
+setupAutoShowModals();
+
+window.setupTooltips = setupTooltips;
+window.setupAutoShowModals = setupAutoShowModals;
 
 function escapeHtml(value) {
     return String(value ?? "")

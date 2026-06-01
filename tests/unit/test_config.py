@@ -56,6 +56,25 @@ def test_create_database_engine_uses_sqlalchemy_url():
     assert engine.url.drivername == "sqlite"
 
 
+def test_statement_upload_extensions_default_to_csv_only(monkeypatch, tmp_path):
+    """Verify statement uploads default to CSV-only support."""
+    monkeypatch.delenv("FINANCE_ALLOWED_EXTENSIONS", raising=False)
+    settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    assert settings.allowed_statement_extensions == {"csv"}
+
+
+def test_setting_defaults_include_llm_review_and_single_transaction_ai(monkeypatch, tmp_path):
+    """Verify LLM review and single-transaction AI defaults are configurable."""
+    monkeypatch.setenv("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", "0.62")
+    monkeypatch.setenv("FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED", "false")
+
+    settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    assert settings.default_llm_review_threshold == 0.62
+    assert settings.default_transaction_ai_rerun_enabled is False
+
+
 def test_database_dialect_reads_sqlalchemy_driver_prefix():
     """Read the database dialect from the configured SQLAlchemy URL."""
     assert config_module.database_dialect("mysql+pymysql://user:password@localhost/finscope") == "mysql"

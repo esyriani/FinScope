@@ -4,6 +4,7 @@ from sqlalchemy import insert
 
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.repository import resolve_category_id
+from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.review.presenter import (
     active_ungroup_keys,
     attach_review_row_urls,
@@ -82,6 +83,47 @@ def test_review_groups_aggregate_by_normalized_merchant(db_conn):
         "Metro Grocery #222",
         "Metro Grocery #111",
     ]
+    assert metro["selected_category"] == "UNKNOWN"
+    assert metro["selected_tags"] == []
+
+
+def test_review_groups_prefill_consistent_category_and_common_tags(db_conn):
+    """Verify group review modals use existing consistent assignments."""
+    rows = [
+        ("2026-01-01", "Costco Wholesale W527 Montreal", 277.72, "review-presenter-costco-1", ["Grocery", "Tax"]),
+        ("2026-01-02", "Costco Wholesale W527 Montreal", 9.19, "review-presenter-costco-2", ["Grocery"]),
+    ]
+    for tx_date, description, amount, fingerprint, tags in rows:
+        result = db_conn.execute(
+            insert(transactions_table).values(
+                tx_date=tx_date,
+                description=description,
+                amount=amount,
+                category="Food",
+                category_id=resolve_category_id(db_conn, "Food"),
+                category_source="rule",
+                category_confidence=0.8988,
+                needs_review=1,
+                ignored=0,
+                fingerprint=fingerprint,
+            )
+        )
+        set_transaction_tags(db_conn, result.inserted_primary_key[0], tags, source="rule")
+    db_conn.commit()
+
+    groups = review_groups(db_conn, "UNKNOWN")
+    costco = next(group for group in groups if group["merchant_key"] == "COSTCO WHOLESALE W527 MONTREAL")
+
+    assert costco["categories"] == ["Food"]
+    assert costco["selected_category"] == "Food"
+    assert costco["selected_tags"] == ["Grocery"]
+    assert costco["transactions"][0]["tags"] == ["Grocery"]
+    assert costco["transactions"][1]["tags"] == ["Grocery", "Tax"]
+
+    rows = review_display_rows(groups, ["COSTCO WHOLESALE W527 MONTREAL"], "UNKNOWN")
+
+    assert [row["selected_category"] for row in rows] == ["Food", "Food"]
+    assert [row["selected_tags"] for row in rows] == [["Grocery"], ["Grocery", "Tax"]]
 
 
 def test_review_display_rows_ungroup_and_attach_urls(app, db_conn):

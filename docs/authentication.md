@@ -60,7 +60,7 @@ General settings are editable by every authenticated user:
 
 Advanced settings are owner-only but still saved on the owner's user account:
 
-- LLM model and categorization thresholds.
+- LLM model, categorization thresholds, automatic AI queueing, and single-transaction AI suggestions.
 - Recurrence detection defaults.
 - Statement import type configuration.
 

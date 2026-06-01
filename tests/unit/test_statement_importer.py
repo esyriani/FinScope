@@ -95,6 +95,84 @@ def test_parse_csv_transactions_uses_compact_fallback_without_header():
     assert result["transactions"][0]["amount"] == 8.50
 
 
+def test_parse_csv_transactions_infers_month_first_slash_dates_without_header():
+    """Verify compact CSV date parsing keeps month-first order for the statement."""
+    raw_text = "\n".join(
+        [
+            "05/18/2026,DISNEY PLUS,9.19,,4463.99",
+            "05/06/2026,HANGTAG PARKING,2.25,,4449.80",
+        ]
+    )
+
+    result = parse_csv_transactions(raw_text, statement_type="bank_account")
+
+    assert result["ignored_rows"] == 0
+    assert [
+        (tx["tx_date"], tx["description"], tx["amount"])
+        for tx in result["transactions"]
+    ] == [
+        ("2026-05-18", "DISNEY PLUS", 9.19),
+        ("2026-05-06", "HANGTAG PARKING", 2.25),
+    ]
+
+
+def test_parse_csv_transactions_keeps_day_first_slash_dates_when_inferred():
+    """Verify unambiguous day-first rows guide ambiguous rows in the same CSV."""
+    raw_text = "\n".join(
+        [
+            "18/05/2026,DISNEY PLUS,9.19,,4463.99",
+            "07/05/2026,HANGTAG PARKING,2.25,,4449.80",
+        ]
+    )
+
+    result = parse_csv_transactions(raw_text, statement_type="bank_account")
+
+    assert [tx["tx_date"] for tx in result["transactions"]] == [
+        "2026-05-18",
+        "2026-05-07",
+    ]
+
+
+def test_parse_csv_transactions_respects_date_order_override():
+    """Verify confirmed slash-date order overrides ambiguous CSV parsing."""
+    raw_text = "05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64"
+
+    month_first = parse_csv_transactions(
+        raw_text,
+        statement_type="bank_account",
+        date_order="month_first",
+    )
+    day_first = parse_csv_transactions(
+        raw_text,
+        statement_type="bank_account",
+        date_order="day_first",
+    )
+
+    assert month_first["transactions"][0]["tx_date"] == "2026-05-12"
+    assert day_first["transactions"][0]["tx_date"] == "2026-12-05"
+
+
+def test_parse_csv_transactions_parses_quoted_iso_debit_credit_without_header():
+    """Verify quoted ISO compact bank rows import with debit and credit signs."""
+    raw_text = "\n".join(
+        [
+            '"2026-04-29","PMT PRET  *326060301","2400",,"7355"',
+            '"2026-04-30","UDEM            PAIE",,"3505.37","10860.37"',
+        ]
+    )
+
+    result = parse_csv_transactions(raw_text, statement_type="bank_account")
+
+    assert result["ignored_rows"] == 0
+    assert [
+        (tx["tx_date"], tx["description"], tx["amount"])
+        for tx in result["transactions"]
+    ] == [
+        ("2026-04-29", "PMT PRET  *326060301", 2400.00),
+        ("2026-04-30", "UDEM            PAIE", -3505.37),
+    ]
+
+
 def test_parse_csv_transactions_counts_malformed_rows_without_losing_valid_rows():
     """Verify mixed real-world CSV problems are skipped row by row."""
     raw_text = "\n".join(

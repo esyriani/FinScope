@@ -20,6 +20,7 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.database.upsert import insert_or_select_unique_row
+from finance_app.modules.categories.builtins import builtin_category_names as fallback_builtin_category_names
 from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,
     seed_category_taxonomy,
@@ -197,6 +198,49 @@ def fetch_category_names(conn):
     rows = conn.execute(
         select(categories_table.c.name).order_by(
             case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
+            func.lower(categories_table.c.name),
+            categories_table.c.name,
+        )
+    ).mappings().fetchall()
+    return [row["name"] for row in rows]
+
+
+def get_builtin_category_names(conn=None):
+    """Return persisted category names managed by FinScope.
+
+    Args:
+        conn: Optional active database connection. When omitted, this helper
+            opens its own transaction.
+
+    Returns:
+        A list of category names whose taxonomy rows have a ``builtin_key``.
+        If the taxonomy table is not available yet, the static built-in
+        definitions are returned as a fallback.
+    """
+    if conn is None:
+        try:
+            with db_core_transaction() as conn:
+                return get_builtin_category_names(conn)
+        except Exception:
+            return list(fallback_builtin_category_names())
+
+    try:
+        categories = fetch_builtin_category_names(conn)
+        if not categories:
+            seed_category_taxonomy(conn)
+            categories = fetch_builtin_category_names(conn)
+    except Exception:
+        return list(fallback_builtin_category_names())
+
+    return categories or list(fallback_builtin_category_names())
+
+
+def fetch_builtin_category_names(conn):
+    """Fetch category names whose rows are marked with a built-in key."""
+    rows = conn.execute(
+        select(categories_table.c.name)
+        .where(categories_table.c.builtin_key.is_not(None))
+        .order_by(
             func.lower(categories_table.c.name),
             categories_table.c.name,
         )

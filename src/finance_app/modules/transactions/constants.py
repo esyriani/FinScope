@@ -18,8 +18,8 @@ CATEGORY_STATUS_FILTERS = (
 
 CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED = "manual_reviewed"
 CATEGORY_SOURCE_FILTER_OPTIONS = (
-    ("", "All sources"),
-    (CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED, "Manual reviewed"),
+    ("", "All methods"),
+    (CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED, "Manual"),
     (CATEGORY_SOURCE_RULE, "Rule"),
     (CATEGORY_SOURCE_HISTORY, "Similarity"),
     (CATEGORY_SOURCE_AI, "AI"),
@@ -52,7 +52,7 @@ REVIEW_FILTER_OPTIONS = (
     ("", "All"),
     (REVIEW_FILTER_NEEDS_REVIEW, "Needs review"),
     (REVIEW_FILTER_READY_TO_APPROVE, "Ready to approve"),
-    (REVIEW_FILTER_VERIFIED, "Verified"),
+    (REVIEW_FILTER_VERIFIED, "Approved"),
 )
 
 IGNORED_FILTER_ACTIVE = "active"

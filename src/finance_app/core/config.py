@@ -37,7 +37,9 @@ class AppSettings:
     default_rule_preview_limit: int
     default_rule_audit_transaction_limit: int
     default_llm_confidence_threshold: float
+    default_llm_review_threshold: float
     default_verify_threshold: float
+    default_transaction_ai_rerun_enabled: bool
     default_categorization_model: str
 
     @property
@@ -67,7 +69,7 @@ def load_settings(config_path=CONFIG_PATH):
         extension.strip().lower().lstrip(".")
         for extension in env(
             "FINANCE_ALLOWED_EXTENSIONS",
-            parser.get("uploads", "allowed_extensions", fallback="csv,pdf"),
+            parser.get("uploads", "allowed_extensions", fallback="csv"),
         ).split(",")
         if extension.strip()
     }
@@ -118,9 +120,19 @@ def load_settings(config_path=CONFIG_PATH):
             env("FINANCE_DEFAULT_LLM_CONFIDENCE_THRESHOLD", parser.get("setting_defaults", "llm_confidence_threshold", fallback="0.85")),
             0.85,
         ),
+        default_llm_review_threshold=parse_probability(
+            env("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", parser.get("setting_defaults", "llm_review_threshold", fallback="0.60")),
+            0.60,
+        ),
         default_verify_threshold=parse_probability(
             env("FINANCE_DEFAULT_VERIFY_THRESHOLD", parser.get("setting_defaults", "verify_threshold", fallback="0.95")),
             0.95,
+        ),
+        default_transaction_ai_rerun_enabled=parse_bool(
+            env(
+                "FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED",
+                parser.get("setting_defaults", "transaction_ai_rerun_enabled", fallback="true"),
+            )
         ),
         default_categorization_model=env(
             "FINANCE_DEFAULT_CATEGORIZATION_MODEL",

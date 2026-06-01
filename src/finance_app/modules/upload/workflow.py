@@ -19,6 +19,7 @@ from finance_app.core.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
     ACCOUNT_TYPE_SAVINGS,
     INTERAC_DIRECTION_AUTO,
+    DATE_ORDER_AUTO,
     STATEMENT_IMPORT_MODE_ENRICHMENT,
     STATEMENT_IMPORT_MODE_LEDGER,
     STATEMENT_IMPORT_STATUS_COMPLETED,
@@ -103,6 +104,7 @@ def import_transactions(
     undo_state=None,
     import_mode=None,
     interac_direction=INTERAC_DIRECTION_AUTO,
+    date_order=DATE_ORDER_AUTO,
 ):
     """Import transactions."""
     inserted_count = 0
@@ -120,9 +122,14 @@ def import_transactions(
             raw_text,
             statement_type,
             interac_direction=interac_direction,
+            date_order=date_order,
         )
     else:
-        parse_result = parse_csv_transactions(raw_text, statement_type)
+        parse_result = parse_csv_transactions(
+            raw_text,
+            statement_type,
+            date_order=date_order,
+        )
     ignored_count = parse_result["ignored_rows"]
     if import_mode == STATEMENT_IMPORT_MODE_ENRICHMENT:
         if statement_type != STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
@@ -731,6 +738,7 @@ def import_statement_transactions_job(
     undo_state=None,
     import_mode=None,
     interac_direction=INTERAC_DIRECTION_AUTO,
+    date_order=DATE_ORDER_AUTO,
 ):
     """Import statement transactions job."""
     import_mode = import_mode or default_import_mode(statement_type)
@@ -759,6 +767,7 @@ def import_statement_transactions_job(
                 undo_state=undo_state,
                 import_mode=import_mode,
                 interac_direction=interac_direction,
+                date_order=date_order,
             )
             if (
                 extension == "csv"
@@ -1432,9 +1441,6 @@ def upload_result_message(
 
     if ignored_count:
         message += f"Ignored {ignored_count} non-transaction rows. "
-
-    if extension == "pdf":
-        message += "PDF text was captured for review; automatic PDF transaction parsing is not enabled yet. "
 
     if llm_candidate_count:
         if llm_job_queued:

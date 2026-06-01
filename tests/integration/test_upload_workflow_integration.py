@@ -108,6 +108,7 @@ def test_upload_route_submits_background_import_job(client, db_conn, monkeypatch
             statements.id,
             statements.raw_text,
             statements.extension,
+            statements.date_order,
             statements.import_status,
             accounts.id AS account_id,
             accounts.name AS account_name,
@@ -124,6 +125,7 @@ def test_upload_route_submits_background_import_job(client, db_conn, monkeypatch
     assert statement is not None
     assert statement["raw_text"] == raw_csv.decode("utf-8")
     assert statement["extension"] == "csv"
+    assert statement["date_order"] == "auto"
     assert statement["import_status"] == "queued"
     assert statement["account_name"] == "Personal"
     assert statement["parser_type"] == "bank_account"
@@ -142,6 +144,177 @@ def test_upload_route_submits_background_import_job(client, db_conn, monkeypatch
     assert submitted["undo_args"][0] == statement["id"]
     assert submitted["undo_args"][1] is submitted["kwargs"]["undo_state"]
     assert submitted["kwargs"]["interac_direction"] == "auto"
+    assert submitted["kwargs"]["date_order"] == "auto"
+
+
+def test_upload_preview_detects_month_first_slash_dates(client, db_conn):
+    """Verify the preview parses unambiguous month-first CSV dates correctly."""
+    raw_csv = (
+        b"05/18/2026,DISNEY PLUS,9.19,,4463.99\n"
+        b"05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64\n"
+    )
+
+    response = client.post(
+        "/upload/preview",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": "Personal",
+            "statement_type_id": str(first_statement_type_id(db_conn)),
+            "statement": (io.BytesIO(raw_csv), "preview-month-first.csv"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data["ok"] is True
+    assert data["preview"]["date_format"]["effective_order"] == "month_first"
+    assert data["preview"]["date_format"]["requires_choice"] is False
+    assert data["preview"]["preview_rows"][1]["raw_date"] == "05/12/2026"
+    assert data["preview"]["preview_rows"][1]["parsed_date"] == "2026-05-12"
+    assert data["preview"]["date_range"] == {
+        "earliest": "2026-05-12",
+        "latest": "2026-05-18",
+    }
+
+
+def test_upload_preview_requires_choice_for_ambiguous_slash_dates(client, db_conn):
+    """Verify ambiguous slash-only statements ask for an explicit date order."""
+    raw_csv = b"05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64\n"
+
+    response = client.post(
+        "/upload/preview",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": "Personal",
+            "statement_type_id": str(first_statement_type_id(db_conn)),
+            "statement": (io.BytesIO(raw_csv), "preview-ambiguous.csv"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    preview = response.get_json()["preview"]
+    assert response.status_code == 200
+    assert preview["date_format"]["effective_order"] == ""
+    assert preview["date_format"]["requires_choice"] is True
+    assert preview["preview_rows"][0]["month_first_date"] == "2026-05-12"
+    assert preview["preview_rows"][0]["day_first_date"] == "2026-12-05"
+    assert preview["date_range"] == {"earliest": "", "latest": ""}
+    assert preview["date_ranges"]["month_first"] == {
+        "earliest": "2026-05-12",
+        "latest": "2026-05-12",
+    }
+    assert preview["date_ranges"]["day_first"] == {
+        "earliest": "2026-12-05",
+        "latest": "2026-12-05",
+    }
+
+
+def test_upload_route_requires_date_order_for_ambiguous_slash_dates(client, db_conn, monkeypatch):
+    """Verify final uploads cannot bypass date-order confirmation."""
+    monkeypatch.setattr(
+        upload_controller,
+        "submit_background_job",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Ambiguous upload should not queue")),
+    )
+
+    response = client.post(
+        "/upload",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": "Personal",
+            "statement_type_id": str(first_statement_type_id(db_conn)),
+            "statement": (
+                io.BytesIO(b"05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64\n"),
+                "ambiguous.csv",
+            ),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    statement_count = db_conn.execute(
+        """
+        SELECT COUNT(*) AS count
+        FROM statements
+        WHERE filename = 'ambiguous.csv'
+        """
+    ).fetchone()["count"]
+    assert response.status_code == 200
+    assert b"Choose a statement date format before uploading." in response.data
+    assert statement_count == 0
+
+
+def test_upload_route_stores_date_order_override(client, db_conn, monkeypatch):
+    """Verify confirmed date-order choices are persisted and passed to import jobs."""
+    submitted_jobs = []
+
+    def capture_job(label, func, *args, undo_handler=None, undo_args=None, undo_kwargs=None, **kwargs):
+        """Capture the submitted background job payload."""
+        submitted_jobs.append({"label": label, "func": func, "args": args, "kwargs": kwargs})
+        return "dateorderjob123"
+
+    monkeypatch.setattr(upload_controller, "submit_background_job", capture_job)
+
+    response = client.post(
+        "/upload",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": "Personal",
+            "statement_type_id": str(first_statement_type_id(db_conn)),
+            "date_order": "month_first",
+            "statement": (
+                io.BytesIO(b"05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64\n"),
+                "date-order.csv",
+            ),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    statement = db_conn.execute(
+        """
+        SELECT date_order
+        FROM statements
+        WHERE filename = 'date-order.csv'
+        """
+    ).fetchone()
+    assert response.status_code == 200
+    assert statement["date_order"] == "month_first"
+    assert submitted_jobs[0]["kwargs"]["date_order"] == "month_first"
+
+
+def test_upload_route_rejects_pdf_files(client, db_conn, monkeypatch):
+    """Verify statement uploads reject PDF files before creating a statement."""
+    monkeypatch.setattr(
+        upload_controller,
+        "submit_background_job",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("PDF should not queue")),
+    )
+
+    response = client.post(
+        "/upload",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": "Personal",
+            "statement_type_id": str(first_statement_type_id(db_conn)),
+            "statement": (io.BytesIO(b"%PDF-1.4"), "statement.pdf"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    statement_count = db_conn.execute(
+        """
+        SELECT COUNT(*) AS count
+        FROM statements
+        WHERE filename = 'statement.pdf'
+        """
+    ).fetchone()["count"]
+
+    assert response.status_code == 200
+    assert b"Only CSV files are supported." in response.data
+    assert statement_count == 0
 
 
 def test_upload_route_stores_interac_direction_override(client, db_conn, monkeypatch):
@@ -715,6 +888,7 @@ def test_retry_statement_import_route_queues_existing_statement(client, db_conn,
     assert submitted_jobs[0]["undo_args"][0] == statement_id
     assert submitted_jobs[0]["undo_args"][1] is submitted_jobs[0]["kwargs"]["undo_state"]
     assert submitted_jobs[0]["kwargs"]["interac_direction"] == "auto"
+    assert submitted_jobs[0]["kwargs"]["date_order"] == "auto"
 
 
 def test_reprocess_statement_import_route_removes_statement_transactions(client, db_conn, monkeypatch):
@@ -795,6 +969,7 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
         "Date,Description,Amount\n2026-01-02,REPROCESS SHOP,12.34\n",
     )
     assert submitted_jobs[0][5]["interac_direction"] == "auto"
+    assert submitted_jobs[0][5]["date_order"] == "auto"
 
 
 def test_undo_statement_upload_job_removes_statement_transactions_and_tags(app, db_conn):

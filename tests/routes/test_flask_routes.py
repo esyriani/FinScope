@@ -345,12 +345,28 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, db
     db_conn.commit()
 
     response = client.get("/transactions?period=all")
+    body = response.get_data(as_text=True)
+    compact_body = " ".join(body.split())
 
     assert response.status_code == 200
-    assert b"Category source" in response.data
-    assert b"All sources" in response.data
-    assert b">AI</span>" in response.data
-    assert b"91%" in response.data
+    assert b"Categorization method" in response.data
+    assert b"All methods" in response.data
+    assert "&middot; AI 91%" in compact_body
+    assert "<th>Kind</th>" not in body
+    assert "<span>Verify</span>" not in body
+    assert '<th class="text-end">Actions</th>' in body
+    assert 'data-transaction-batch-bar' in body
+    assert 'data-transaction-select-all' in body
+    assert 'data-transaction-row-checkbox' in body
+    assert 'data-all-transaction-ids="[' in body
+    assert "Approve selected" in body
+    assert "Ignore selected" in body
+    assert "Recategorize selected" in body
+    assert 'class="transaction-date text-nowrap"' in body
+    assert "transaction-action-menu" in body
+    assert "Edit category" in body
+    assert "Ignore transaction" in body
+    assert "View evidence" not in body
     assert b"data-category-description-select" in response.data
     assert b'value="transaction_only" data-rule-save-mode checked' in response.data
     assert b"data-rule-save-only" in response.data
@@ -359,7 +375,6 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, db
     assert b"data-rule-exact-amount" in response.data
     assert b"Food and drink, including groceries" in response.data
     assert b"Marks transactions that may be useful for tax preparation" in response.data
-    body = response.get_data(as_text=True)
     assert body.index("This transaction only") < body.index("Save rule")
 
 
@@ -395,6 +410,70 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, db_conn):
     assert b'"categoryLabels": []' in tag_response.data
     assert b"Hide untagged" in untagged_response.data
     assert b'"categoryLabels": ["Untagged"]' in untagged_response.data
+
+
+def test_category_filters_offer_analysis_category_preset(client, db_conn):
+    """Verify category filters can bulk-select categories used for analysis."""
+    db_conn.execute(
+        """
+        INSERT INTO categories (name, builtin_key, description, instruction)
+        VALUES ('System adjustment', 'system_adjustment', '', '')
+        """
+    )
+    db_conn.execute(
+        """
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES ('2026-01-02', 'Analysis category store', 12.34, 'Food', 'rule', 'route-analysis-category-filter')
+        """
+    )
+    db_conn.commit()
+
+    expected_counts = {
+        "/dashboard?period=all": 1,
+        "/comparison": 2,
+        "/calendar": 1,
+        "/recurring": 1,
+        "/rules": 1,
+        "/transactions": 1,
+    }
+
+    for path, expected_count in expected_counts.items():
+        response = client.get(path)
+        body = response.get_data(as_text=True)
+
+        assert response.status_code == 200
+        assert body.count('data-select-preset-label="Select analysis categories"') == expected_count
+        preset_values = re.findall(r"data-select-preset-exclude-values='([^']+)'", body)
+        assert len(preset_values) == expected_count
+        assert all("System adjustment" in value for value in preset_values)
+        assert "Transfers" in body
+        assert "UNKNOWN" in body
+
+
+def test_comparison_route_renders_complete_unknown_warning(client, db_conn, monkeypatch):
+    """Verify comparison warning placeholders render with category and share values."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    db_conn.executemany(
+        """
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (?, ?, ?, ?, 'rule', ?)
+        """,
+        [
+            ("2026-04-02", "Unknown Prior", 40.00, "UNKNOWN", "route-comparison-unknown-prior"),
+            ("2026-04-03", "Prior Grocery", 60.00, "Food", "route-comparison-food-prior"),
+            ("2026-05-02", "Unknown Current", 70.00, "UNKNOWN", "route-comparison-unknown-current"),
+            ("2026-05-03", "Current Grocery", 30.00, "Food", "route-comparison-food-current"),
+        ],
+    )
+    db_conn.commit()
+
+    response = client.get("/comparison?years=2026&period_comparison=month_previous")
+    visible_body = strip_script_blocks(response.get_data(as_text=True))
+
+    assert response.status_code == 200
+    assert "UNKNOWN accounts for 55.0%" in visible_body
+    assert "UNKNOWN accounts for 70.0%" in visible_body
+    assert "because accounts for %" not in visible_body
 
 
 def test_financial_reporting_pages_render_french_copy(client, db_conn):
@@ -467,6 +546,7 @@ def test_financial_reporting_pages_render_french_copy(client, db_conn):
     assert "Vue actuelle : Depuis le début de l&#39;année." in visible_dashboard
     assert "Dépenses par catégorie" in visible_dashboard
     assert "Analyse des marchands" in visible_dashboard
+    assert "Sélectionner les catégories d’analyse" in visible_dashboard
     assert "year to date" not in visible_dashboard
     assert "Merchant analytics" not in visible_dashboard
 

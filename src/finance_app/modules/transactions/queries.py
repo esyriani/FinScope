@@ -61,6 +61,19 @@ def fetch_transactions(conn, filters, sort_expression, direction, page_size, off
     ).mappings().fetchall()
 
 
+def fetch_transaction_ids(conn, filters, sort_expression, direction):
+    """Fetch IDs for all transactions matching the current list filters."""
+    sort_order = sort_expression.desc() if direction == "desc" else sort_expression.asc()
+    return [
+        row["id"]
+        for row in conn.execute(
+            transaction_list_select()
+            .where(*filters)
+            .order_by(sort_order, transactions_table.c.id.desc())
+        ).mappings()
+    ]
+
+
 def fetch_distinct_categories(conn):
     """Fetch distinct categories."""
     return conn.execute(

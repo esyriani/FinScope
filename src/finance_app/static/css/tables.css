@@ -82,6 +82,10 @@
     min-width: 44rem;
 }
 
+.table-responsive > .transactions-table {
+    min-width: 64rem;
+}
+
 .taxonomy-table-responsive {
     overflow-x: visible;
 }
@@ -204,6 +208,66 @@
 
 .table tbody tr[data-row-href] {
     cursor: pointer;
+}
+
+.transactions-table > :not(caption) > * > * {
+    padding-bottom: 0.45rem;
+    padding-top: 0.45rem;
+}
+
+.transactions-table .transaction-date {
+    font-variant-numeric: tabular-nums;
+    width: 7.25rem;
+}
+
+.transactions-table .transaction-select-column {
+    text-align: center;
+    width: 2.75rem;
+}
+
+.transaction-batch-bar {
+    background: var(--app-surface-soft);
+    padding: 0.75rem 1rem;
+}
+
+.transaction-category-line {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    line-height: 1.25;
+}
+
+.transaction-category-name {
+    font-weight: 600;
+}
+
+.transaction-category-meta {
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+
+.transaction-status-badge {
+    white-space: nowrap;
+}
+
+.transaction-row-actions {
+    min-width: 8.5rem;
+}
+
+.transaction-row-actions form,
+.transaction-action-menu form {
+    margin: 0;
+}
+
+.transaction-action-menu .dropdown-menu {
+    min-width: 12rem;
+}
+
+.transaction-action-menu .dropdown-item {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
 }
 
 .dashboard-drilldown-selected {

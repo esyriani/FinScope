@@ -6,6 +6,8 @@ import sys
 from types import SimpleNamespace
 
 from finance_app.modules.categories import llm
+from finance_app.modules.categories.repository import get_category_options
+from finance_app.modules.categories.taxonomy import get_category_rows, get_tag_options, get_tag_rows
 
 """
 These tests are designed to verify the internal logic of the LLM categorization adapter, not the behavior of a specific model. They use deterministic mocked responses to ensure consistent test results and avoid external dependencies. If these tests are failing, focus on the adapter's handling of LLM results, integration with rules and retrieval, and metadata recording rather than the content of the mocked LLM responses.
@@ -42,6 +44,14 @@ def set_owner_setting(conn, key, value):
         """,
         {"key": key, "value": value},
     )
+
+
+def compact_candidates_for_test(conn, unknown_items, category_options, tag_options, unknown_category, *args):
+    """Attach narrow candidate taxonomies for fallback-policy tests."""
+    del conn, category_options, tag_options, args
+    for tx in unknown_items:
+        tx["llm_candidate_categories"] = ["Food", unknown_category]
+        tx["llm_candidate_tags"] = ["Tax"]
 
 
 def result_payload(category_rows, tag_rows, request_id, category, confidence, tags=None, **extra):
@@ -186,7 +196,7 @@ def test_classify_unknowns_with_llm_applies_thresholds_and_filters_invalid_value
     assert transactions[3]["category"] == "UNKNOWN"
     assert transactions[3]["tags"] == []
     metadata = json.loads(transactions[3]["category_metadata"])
-    assert metadata["failure_reason"] == "confidence_below_medium_threshold"
+    assert metadata["failure_reason"] == "confidence_below_review_threshold"
     assert transactions[4]["category"] == "UNKNOWN"
     assert transactions[4]["tags"] == []
     metadata = json.loads(transactions[4]["category_metadata"])
@@ -199,6 +209,118 @@ def test_classify_unknowns_with_llm_applies_thresholds_and_filters_invalid_value
         """
     ).fetchall()
     assert [tuple(rule) for rule in rules] == [("METRO", "Food", 0.0, None, "automatic")]
+
+
+def test_classify_unknowns_with_llm_can_skip_automatic_rule_creation(db_conn, monkeypatch):
+    """Verify one-off LLM runs can apply a category without saving a future rule."""
+    transactions = [
+        unknown_transaction("Metro Grocery 1", "METRO", 12.34),
+    ]
+
+    def request_for_test(unknown_chunk, *args):
+        """Return a no-review result that would normally create an automatic rule."""
+        category_rows = args[3]
+        tag_rows = args[4]
+        return [
+            result_payload(
+                category_rows,
+                tag_rows,
+                unknown_chunk[0]["llm_request_id"],
+                "Food",
+                0.95,
+                tags=["Tax"],
+                needs_review=False,
+            )
+        ]
+
+    monkeypatch.setattr(llm, "request_llm_categories", request_for_test)
+
+    llm.classify_unknowns_with_llm(
+        db_conn,
+        transactions,
+        [],
+        "UNKNOWN",
+        save_automatic_rules=False,
+    )
+
+    rule_count = db_conn.execute("SELECT COUNT(*) AS count FROM category_rules").fetchone()["count"]
+    assert transactions[0]["category"] == "Food"
+    assert transactions[0]["needs_review"] == 0
+    assert transactions[0]["category_rule_id"] is None
+    assert rule_count == 0
+
+
+def test_classify_unknowns_with_llm_keeps_review_worthy_best_fit(db_conn, monkeypatch):
+    """Verify lower-confidence LLM category suggestions are kept for review."""
+    transactions = [
+        unknown_transaction("Sports streaming package", "SPORTS STREAMING", 20.68),
+    ]
+
+    def request_for_test(unknown_chunk, *args):
+        """Return a best-fit entertainment result below the medium threshold."""
+        category_rows = args[3]
+        tag_rows = args[4]
+        return [
+            result_payload(
+                category_rows,
+                tag_rows,
+                unknown_chunk[0]["llm_request_id"],
+                "Entertainment",
+                0.60,
+                tags=["Service"],
+                needs_review=True,
+            )
+        ]
+
+    monkeypatch.setattr(llm, "request_llm_categories", request_for_test)
+
+    llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
+
+    assert transactions[0]["category"] == "Entertainment"
+    assert transactions[0]["needs_review"] == 1
+    assert transactions[0]["category_confidence"] == 0.60
+    assert transactions[0]["category_rule_id"] is None
+    assert transactions[0]["tags"] == ["Service"]
+    metadata = json.loads(transactions[0]["category_metadata"])
+    assert metadata["final_category"] == "Entertainment"
+    assert metadata["proposed_confidence"] == 0.60
+    assert metadata["review_required"] is True
+    assert "failure_reason" not in metadata
+
+
+def test_classify_unknowns_with_llm_uses_review_threshold_setting(db_conn, monkeypatch):
+    """Verify the runtime review threshold controls best-fit LLM suggestions."""
+    set_owner_setting(db_conn, "llm_review_threshold", "0.70")
+    db_conn.commit()
+    transactions = [
+        unknown_transaction("Sports streaming package", "SPORTS STREAMING", 20.68),
+    ]
+
+    def request_for_test(unknown_chunk, *args):
+        """Return a category below the configured review floor."""
+        category_rows = args[3]
+        tag_rows = args[4]
+        return [
+            result_payload(
+                category_rows,
+                tag_rows,
+                unknown_chunk[0]["llm_request_id"],
+                "Entertainment",
+                0.69,
+                tags=["Service"],
+                needs_review=True,
+            )
+        ]
+
+    monkeypatch.setattr(llm, "request_llm_categories", request_for_test)
+
+    llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
+
+    assert transactions[0]["category"] == "UNKNOWN"
+    assert transactions[0]["tags"] == []
+    metadata = json.loads(transactions[0]["category_metadata"])
+    assert metadata["proposed_category"] == "Entertainment"
+    assert metadata["failure_reason"] == "confidence_below_review_threshold"
 
 
 def test_classify_unknowns_with_llm_deduplicates_and_skips_non_candidates(db_conn, monkeypatch):
@@ -431,6 +553,7 @@ def test_classify_unknowns_with_llm_marks_three_way_disagreement_for_review(db_c
 def test_classify_unknowns_with_llm_passes_taxonomy_rules_and_runtime_settings(db_conn, monkeypatch):
     """Verify the LLM adapter receives taxonomy metadata and central thresholds."""
     set_owner_setting(db_conn, "llm_confidence_threshold", "0.82")
+    set_owner_setting(db_conn, "llm_review_threshold", "0.64")
     set_owner_setting(db_conn, "verify_threshold", "0.74")
     set_owner_setting(db_conn, "openai_model", "gpt-unit")
     db_conn.commit()
@@ -457,6 +580,7 @@ def test_classify_unknowns_with_llm_passes_taxonomy_rules_and_runtime_settings(d
         tag_rows,
         openai_model,
         verify_threshold,
+        review_threshold,
     ):
         """Capture adapter inputs and return one accepted result."""
         captured.update(
@@ -469,6 +593,7 @@ def test_classify_unknowns_with_llm_passes_taxonomy_rules_and_runtime_settings(d
                 "tag_rows": tag_rows,
                 "openai_model": openai_model,
                 "verify_threshold": verify_threshold,
+                "review_threshold": review_threshold,
             }
         )
         return [
@@ -495,14 +620,15 @@ def test_classify_unknowns_with_llm_passes_taxonomy_rules_and_runtime_settings(d
     assert any(row["name"] == "Food" and row["instruction"] for row in captured["category_rows"])
     assert any(row["name"] == "Tax" and row["instruction"] for row in captured["tag_rows"])
     assert captured["openai_model"] == "gpt-unit"
-    assert captured["verify_threshold"] == 0.95
+    assert captured["verify_threshold"] == 0.74
+    assert captured["review_threshold"] == 0.64
     assert transactions[0]["category"] == "Food"
     assert transactions[0]["category_confidence"] == 0.91
-    assert transactions[0]["needs_review"] == 1
-    assert transactions[0]["category_rule_id"] is None
+    assert transactions[0]["needs_review"] == 0
+    assert transactions[0]["category_rule_id"] is not None
     metadata = json.loads(transactions[0]["category_metadata"])
     assert metadata["final_confidence"] == 0.91
-    assert metadata["review_required"] is True
+    assert metadata["review_required"] is False
 
 
 def test_classify_unknowns_with_llm_continues_after_empty_chunk(db_conn, monkeypatch):
@@ -685,6 +811,7 @@ def test_request_llm_categories_parses_mocked_openai_json(monkeypatch):
         [{"id": 1, "name": "Tax", "description": "tax", "instruction": "tax"}],
         "gpt-test",
         0.9,
+        0.6,
     )
 
     assert results == [
@@ -727,6 +854,9 @@ def test_build_llm_prompt_includes_transaction_kind_and_bank_context():
     assert payload["transactions"][0]["transaction_kind"] == "expense"
     assert "Bank statement context" in system_prompt
     assert "FAC" in system_prompt
+    assert "Common merchant examples" in system_prompt
+    assert "account_name" in system_prompt
+    assert "best supported category" in system_prompt
 
 
 def test_build_llm_prompt_includes_evidence_and_compact_candidate_taxonomy():
@@ -739,6 +869,9 @@ def test_build_llm_prompt_includes_evidence_and_compact_candidate_taxonomy():
                 "description": "Metro Grocery",
                 "amount": 12.34,
                 "tx_date": "2026-01-02",
+                "account_id": 4,
+                "account_name": "TD Visa",
+                "account_type": "credit",
                 "category": "UNKNOWN",
                 "transaction_kind": "expense",
                 "rule_evidence": {
@@ -787,12 +920,100 @@ def test_build_llm_prompt_includes_evidence_and_compact_candidate_taxonomy():
     assert [row["name"] for row in payload["taxonomy"]["tags"]] == ["Government", "Tax"]
     assert transaction["best_matching_rule"]["rule_id"] == 7
     assert transaction["similar_transactions"]["examples"][0]["transaction_id"] == 12
+    assert transaction["account_name"] == "TD Visa"
+    assert transaction["account_type"] == "credit"
     assert [row["name"] for row in transaction["candidate_taxonomy"]["categories"]] == ["Food", "UNKNOWN"]
+    assert transaction["candidate_taxonomy"]["categories"][0]["instruction"] == "Use for groceries."
     assert [row["name"] for row in transaction["candidate_taxonomy"]["tags"]] == ["Tax"]
+    assert transaction["candidate_taxonomy"]["tags"][0]["instruction"] == "Tax-related."
 
 
-def test_classify_unknowns_with_llm_accepts_high_confidence_full_taxonomy_fallback_for_review(db_conn, monkeypatch):
-    """Verify valid full-taxonomy fallback categories are accepted for review."""
+def test_prepare_llm_candidate_taxonomies_includes_semantic_category_matches(db_conn):
+    """Verify merchant text can pull semantically relevant taxonomy hints."""
+    category_options = get_category_options(db_conn)
+    tag_options = get_tag_options(db_conn)
+    transactions = [
+        {
+            "merchant_key": "TVA SPORTS DIRECT",
+            "description": "TVA SPORTS DIRECT",
+            "amount": 20.68,
+            "category": "UNKNOWN",
+        }
+    ]
+
+    llm.prepare_llm_candidate_taxonomies(
+        db_conn,
+        transactions,
+        category_options,
+        tag_options,
+        "UNKNOWN",
+        get_category_rows(db_conn),
+        get_tag_rows(db_conn),
+    )
+
+    categories = transactions[0]["llm_candidate_categories"]
+    assert "Entertainment" in categories
+    assert categories.index("Entertainment") < categories.index("Food")
+
+
+def test_build_llm_prompt_sends_only_relevant_manual_rules():
+    """Verify prompt manual-rule context is scoped to the current batch."""
+    prompt = llm.build_llm_prompt(
+        [
+            {
+                "llm_request_id": "0",
+                "merchant_key": "TVA SPORTS DIRECT",
+                "description": "TVA SPORTS DIRECT",
+                "amount": 20.68,
+                "tx_date": "2026-05-04",
+                "category": "UNKNOWN",
+            }
+        ],
+        [
+            {
+                "id": 1,
+                "keyword": "TVA SPORTS",
+                "category": "Entertainment",
+                "amount_min": None,
+                "amount_max": None,
+                "account_id": None,
+                "direction": "any",
+                "source": "manual",
+                "tags": ["Service"],
+            },
+            {
+                "id": 2,
+                "keyword": "METRO",
+                "category": "Food",
+                "amount_min": None,
+                "amount_max": None,
+                "account_id": None,
+                "direction": "any",
+                "source": "manual",
+                "tags": ["Grocery"],
+            },
+        ],
+        ["UNKNOWN", "Entertainment", "Food"],
+        ["Service", "Grocery"],
+        [
+            {"id": 1, "name": "UNKNOWN", "description": "", "instruction": ""},
+            {"id": 2, "name": "Entertainment", "description": "Sports and streaming.", "instruction": ""},
+            {"id": 3, "name": "Food", "description": "Food.", "instruction": ""},
+        ],
+        [
+            {"id": 1, "name": "Service", "description": "Service.", "instruction": ""},
+            {"id": 2, "name": "Grocery", "description": "Grocery.", "instruction": ""},
+        ],
+    )
+
+    payload = json.loads(prompt)
+    assert [rule["keyword"] for rule in payload["current_manual_rules"]] == ["TVA SPORTS"]
+    assert payload["current_manual_rules"][0]["category"] == "Entertainment"
+    assert payload["current_manual_rules"][0]["tags"] == ["Service"]
+
+
+def test_classify_unknowns_with_llm_accepts_full_taxonomy_category_for_review(db_conn, monkeypatch):
+    """Verify valid outside-candidate categories are accepted for review."""
     set_owner_setting(db_conn, "llm_confidence_threshold", "0.80")
     db_conn.commit()
     transactions = [
@@ -823,6 +1044,7 @@ def test_classify_unknowns_with_llm_accepts_high_confidence_full_taxonomy_fallba
         ]
 
     monkeypatch.setattr(llm, "request_llm_categories", request_for_test)
+    monkeypatch.setattr(llm, "prepare_llm_candidate_taxonomies", compact_candidates_for_test)
 
     llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
 
@@ -840,8 +1062,8 @@ def test_classify_unknowns_with_llm_accepts_high_confidence_full_taxonomy_fallba
     assert "failure_reason" not in metadata
 
 
-def test_classify_unknowns_with_llm_rejects_low_confidence_full_taxonomy_fallback(db_conn, monkeypatch):
-    """Verify outside-candidate categories require high model confidence."""
+def test_classify_unknowns_with_llm_keeps_medium_confidence_full_taxonomy_category(db_conn, monkeypatch):
+    """Verify outside-candidate categories no longer require high confidence."""
     transactions = [
         {
             **unknown_transaction("Metro Grocery", "METRO", 12.34),
@@ -854,7 +1076,7 @@ def test_classify_unknowns_with_llm_rejects_low_confidence_full_taxonomy_fallbac
     ]
 
     def request_for_test(unknown_chunk, *args):
-        """Return a plausible full-taxonomy category below the fallback threshold."""
+        """Return a plausible full-taxonomy category below the high threshold."""
         category_rows = args[3]
         return [
             {
@@ -867,20 +1089,22 @@ def test_classify_unknowns_with_llm_rejects_low_confidence_full_taxonomy_fallbac
         ]
 
     monkeypatch.setattr(llm, "request_llm_categories", request_for_test)
+    monkeypatch.setattr(llm, "prepare_llm_candidate_taxonomies", compact_candidates_for_test)
 
     llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
 
-    assert transactions[0]["category"] == "UNKNOWN"
+    assert transactions[0]["category"] == "Travel"
     assert transactions[0]["tags"] == []
+    assert transactions[0]["needs_review"] == 1
     metadata = json.loads(transactions[0]["category_metadata"])
-    assert metadata["failure_reason"] == "full_taxonomy_fallback_confidence_below_high_threshold"
     assert metadata["category_outside_candidate_taxonomy"] is True
-    assert metadata["full_taxonomy_fallback_used"] is False
-    assert metadata["full_taxonomy_fallback_rejected"] is True
+    assert metadata["full_taxonomy_fallback_used"] is True
+    assert metadata["full_taxonomy_fallback_rejected"] is False
+    assert "failure_reason" not in metadata
 
 
-def test_classify_unknowns_with_llm_keeps_high_confidence_full_taxonomy_tags_for_review(db_conn, monkeypatch):
-    """Verify valid outside-candidate tags are kept only with review."""
+def test_classify_unknowns_with_llm_keeps_full_taxonomy_tags(db_conn, monkeypatch):
+    """Verify valid outside-candidate tags are kept as LLM suggestions."""
     transactions = [
         {
             **unknown_transaction("Metro Grocery", "METRO", 12.34),
@@ -893,7 +1117,7 @@ def test_classify_unknowns_with_llm_keeps_high_confidence_full_taxonomy_tags_for
     ]
 
     def request_for_test(unknown_chunk, *args):
-        """Return a valid tag ID outside the compact candidate taxonomy."""
+        """Return a valid tag ID outside the transaction-local candidate hints."""
         category_rows = args[3]
         tag_rows = args[4]
         return [
@@ -907,16 +1131,17 @@ def test_classify_unknowns_with_llm_keeps_high_confidence_full_taxonomy_tags_for
         ]
 
     monkeypatch.setattr(llm, "request_llm_categories", request_for_test)
+    monkeypatch.setattr(llm, "prepare_llm_candidate_taxonomies", compact_candidates_for_test)
 
     llm.classify_unknowns_with_llm(db_conn, transactions, [], "UNKNOWN")
 
     assert transactions[0]["category"] == "Food"
     assert transactions[0]["tags"] == ["Government"]
-    assert transactions[0]["needs_review"] == 1
-    assert transactions[0]["category_rule_id"] is None
+    assert transactions[0]["needs_review"] == 0
+    assert transactions[0]["category_rule_id"] is not None
     metadata = json.loads(transactions[0]["category_metadata"])
     assert metadata["tag_ids_outside_candidate_taxonomy"] == metadata["llm_tag_ids"]
-    assert metadata["review_required"] is True
+    assert metadata["review_required"] is False
     assert "failure_reason" not in metadata
 
 
@@ -1033,7 +1258,7 @@ def test_request_llm_categories_handles_invalid_json(monkeypatch):
         ),
     )
 
-    assert llm.request_llm_categories([], [], [], [], [], [], "gpt-test", 0.9) == []
+    assert llm.request_llm_categories([], [], [], [], [], [], "gpt-test", 0.9, 0.6) == []
 
 
 def test_request_llm_categories_handles_api_exceptions_and_sanitizes_logs(monkeypatch, caplog):
@@ -1076,6 +1301,7 @@ def test_request_llm_categories_handles_api_exceptions_and_sanitizes_logs(monkey
             [],
             "gpt-test",
             0.9,
+            0.6,
         )
 
     assert results == []

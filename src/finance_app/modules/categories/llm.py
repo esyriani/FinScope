@@ -27,7 +27,6 @@ from finance_app.modules.categories.decision import (
     HIGH_CONFIDENCE_THRESHOLD,
     MEDIUM_CONFIDENCE_THRESHOLD,
     apply_review_policy,
-    clamp_confidence,
     combine_confidence,
     evidence_decision_source,
 )
@@ -46,7 +45,7 @@ from finance_app.modules.categories.taxonomy import (
     normalize_tag_names,
 )
 from finance_app.modules.merchants.normalization import normalize_merchant_description
-from finance_app.modules.settings.runtime import get_setting
+from finance_app.modules.settings.runtime import get_float_setting, get_setting
 
 
 logger = logging.getLogger(__name__)
@@ -54,8 +53,34 @@ _request_context = local()
 LLM_BATCH_SIZE = 20
 LLM_TIMEOUT_SECONDS = 60
 COMMON_CATEGORY_LIMIT = 6
-MAX_CANDIDATE_CATEGORIES = 10
+MAX_CANDIDATE_CATEGORIES = 20
 MAX_CANDIDATE_TAGS = 16
+MAX_PROMPT_MANUAL_RULES = 50
+MIN_SEMANTIC_TOKEN_LENGTH = 3
+SEMANTIC_STOPWORDS = frozenset(
+    {
+        "AND",
+        "THE",
+        "FOR",
+        "WITH",
+        "FROM",
+        "THIS",
+        "THAT",
+        "WHEN",
+        "USE",
+        "NOT",
+        "OTHER",
+        "ORDINARY",
+        "TRANSACTION",
+        "TRANSACTIONS",
+        "CATEGORY",
+        "CATEGORIES",
+        "DESCRIPTION",
+        "DESCRIPTIONS",
+        "PAYMENT",
+        "PURCHASE",
+    }
+)
 
 
 def clear_llm_request_status():
@@ -153,8 +178,14 @@ def automatic_rule_direction(amount):
     return CATEGORY_RULE_DIRECTION_CREDIT if amount < 0 else CATEGORY_RULE_DIRECTION_DEBIT
 
 
-def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
-    """Classify unknowns with LLM."""
+def classify_unknowns_with_llm(conn, transactions, rules, unknown_category, save_automatic_rules=True):
+    """Classify unknowns with LLM.
+
+    When ``save_automatic_rules`` is false, accepted high-confidence results
+    are applied to the provided transaction payloads without creating reusable
+    automatic rules. This supports one-off suggestion previews from transaction
+    detail screens.
+    """
     unknown_by_key = {}
     # Deduplicate by merchant and amount before calling the model; equivalent
     # unknown transactions should receive the same accepted classification.
@@ -174,8 +205,27 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
     tag_options = get_tag_options(conn)
     category_rows = get_category_rows(conn)
     tag_rows = get_tag_rows(conn)
-    confidence_threshold = MEDIUM_CONFIDENCE_THRESHOLD
-    verify_threshold = HIGH_CONFIDENCE_THRESHOLD
+    confidence_threshold = get_float_setting(
+        conn,
+        "llm_confidence_threshold",
+        settings.default_llm_confidence_threshold,
+        minimum=0,
+        maximum=1,
+    )
+    review_threshold = get_float_setting(
+        conn,
+        "llm_review_threshold",
+        settings.default_llm_review_threshold,
+        minimum=0,
+        maximum=1,
+    )
+    verify_threshold = get_float_setting(
+        conn,
+        "verify_threshold",
+        settings.default_verify_threshold,
+        minimum=0,
+        maximum=1,
+    )
     openai_model = get_setting(conn, "openai_model") or settings.default_categorization_model
     unknown_items = list(unknown_by_key.values())
     for index, tx in enumerate(unknown_items):
@@ -186,6 +236,8 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
         category_options,
         tag_options,
         unknown_category,
+        category_rows,
+        tag_rows,
     )
 
     accepted = {}
@@ -201,6 +253,7 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
             tag_rows,
             openai_model,
             verify_threshold,
+            review_threshold,
         )
         llm_result_count += len(llm_results)
 
@@ -256,37 +309,28 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
                 and category_id is not None
                 and category_id not in set(candidate_category_ids)
             )
-            fallback_confidence_is_high = confidence_is_valid and confidence >= HIGH_CONFIDENCE_THRESHOLD
-            category_fallback_rejected = (
-                category_outside_candidate_taxonomy
-                and category != unknown_category
-                and not fallback_confidence_is_high
-            )
             tag_ids_outside_candidate_taxonomy = [
                 tag_id
                 for tag_id in tag_ids
                 if tag_id not in set(candidate_tag_ids)
             ]
-            tag_drop = filtered_llm_tags_for_confidence(
+            tag_drop = filtered_llm_tags_for_validity(
                 tags,
                 tag_ids,
-                candidate_tag_ids,
-                fallback_confidence_is_high,
             )
             final_confidence = (
                 llm_final_confidence(tx, category, confidence, result)
                 if category_id_is_valid and confidence_is_valid
                 else 0.0
             )
-            if category_fallback_rejected:
-                decision = rejected_llm_category_decision(category, final_confidence, unknown_category)
-            else:
-                decision = apply_review_policy(
-                    category,
-                    tag_drop["tags"],
-                    final_confidence,
-                    unknown_category,
-                )
+            decision = apply_llm_review_policy(
+                category,
+                tag_drop["tags"],
+                final_confidence,
+                unknown_category,
+                review_threshold,
+                verify_threshold,
+            )
             if llm_result_needs_forced_review(
                 decision,
                 category_outside_candidate_taxonomy,
@@ -308,7 +352,7 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
             if decision.category != unknown_category and decision.confidence >= confidence_threshold:
                 rule_id = (
                     save_automatic_category_rule(conn, tx, decision.category, decision.tags)
-                    if not decision.needs_review
+                    if save_automatic_rules and not decision.needs_review
                     else None
                 )
             else:
@@ -335,13 +379,11 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
                     dropped_invalid_tag_ids=invalid_tag_ids,
                     dropped_tag_ids_outside_candidate_taxonomy=tag_drop["dropped_outside_candidate_tag_ids"],
                     tag_ids_payload_is_valid=tag_ids_payload_is_valid,
-                    category_fallback_rejected=category_fallback_rejected,
                     failure_reason=llm_failure_reason(
                         category,
                         unknown_category,
                         category_id_is_valid,
                         confidence_is_valid,
-                        category_fallback_rejected,
                         decision,
                     ),
                 ),
@@ -396,39 +438,16 @@ def cleanup_llm_candidate_taxonomies(unknown_items):
         tx.pop("llm_candidate_tags", None)
 
 
-def rejected_llm_category_decision(category, confidence, unknown_category):
-    """Return an unknown decision while preserving the rejected LLM proposal."""
-    proposed_confidence = clamp_confidence(confidence)
-    if proposed_confidence is not None:
-        proposed_confidence = round(proposed_confidence, 4)
-    return FinalCategoryDecision(
-        category=unknown_category,
-        tags=(),
-        confidence=None,
-        needs_review=1,
-        proposed_category=category,
-        proposed_confidence=proposed_confidence,
-        assigned_unknown=True,
-    )
+def filtered_llm_tags_for_validity(tags, tag_ids):
+    """Return valid taxonomy tags selected by the LLM.
 
-
-def filtered_llm_tags_for_confidence(tags, tag_ids, candidate_tag_ids, fallback_confidence_is_high):
-    """Return kept tags after applying the full-taxonomy fallback confidence gate."""
-    candidate_ids = set(candidate_tag_ids)
-    kept_tags = []
-    kept_tag_ids = []
-    dropped_outside_candidate_tag_ids = []
-    for tag, tag_id in zip(tags, tag_ids):
-        if tag_id not in candidate_ids and not fallback_confidence_is_high:
-            dropped_outside_candidate_tag_ids.append(tag_id)
-            continue
-        kept_tags.append(tag)
-        kept_tag_ids.append(tag_id)
-
+    Candidate tags are prompt hints, not an acceptance gate. Invalid IDs are
+    removed before this helper receives values from `parse_llm_tag_ids`.
+    """
     return {
-        "tags": kept_tags,
-        "tag_ids": kept_tag_ids,
-        "dropped_outside_candidate_tag_ids": dropped_outside_candidate_tag_ids,
+        "tags": list(tags),
+        "tag_ids": list(tag_ids),
+        "dropped_outside_candidate_tag_ids": [],
     }
 
 
@@ -440,13 +459,12 @@ def llm_result_needs_forced_review(
     tag_ids_payload_is_valid,
     dropped_tag_ids_outside_candidate_taxonomy,
 ):
-    """Return whether fallback taxonomy behavior should force manual review."""
+    """Return whether malformed LLM taxonomy output should force review."""
+    del category_outside_candidate_taxonomy, tag_ids_outside_candidate_taxonomy
     if decision.assigned_unknown:
         return False
     return any(
         (
-            category_outside_candidate_taxonomy,
-            tag_ids_outside_candidate_taxonomy,
             invalid_tag_ids,
             not tag_ids_payload_is_valid,
             dropped_tag_ids_outside_candidate_taxonomy,
@@ -485,6 +503,44 @@ def collect_evidence_agreement(evidence, category, agreement_confidences, disagr
         agreement_confidences.append(evidence_confidence)
     elif evidence_confidence >= MEDIUM_CONFIDENCE_THRESHOLD:
         disagreement_confidences.append(evidence_confidence)
+
+
+def apply_llm_review_policy(category, tags, confidence, unknown_category, review_threshold, verify_threshold):
+    """Return the final assignment and review state for an LLM proposal.
+
+    LLM output is allowed to keep lower-confidence best-fit suggestions for
+    manual review. Shared rule and historical matching stay stricter through
+    `apply_review_policy`, while the LLM path preserves useful taxonomy
+    suggestions instead of flattening them to UNKNOWN.
+    """
+    proposed_confidence = clamp_llm_evidence_confidence(confidence)
+    proposed_category = category
+    if (
+        not category
+        or category == unknown_category
+        or proposed_confidence is None
+        or proposed_confidence < review_threshold
+    ):
+        return FinalCategoryDecision(
+            category=unknown_category,
+            tags=(),
+            confidence=None,
+            needs_review=1,
+            proposed_category=proposed_category,
+            proposed_confidence=proposed_confidence,
+            assigned_unknown=True,
+        )
+
+    rounded_confidence = round(proposed_confidence, 4)
+    return FinalCategoryDecision(
+        category=category,
+        tags=tuple(tags or ()),
+        confidence=rounded_confidence,
+        needs_review=1 if rounded_confidence < verify_threshold else 0,
+        proposed_category=proposed_category,
+        proposed_confidence=rounded_confidence,
+        assigned_unknown=False,
+    )
 
 
 def parse_llm_category_id(value, allowed_category_rows, unknown_category):
@@ -571,7 +627,6 @@ def llm_failure_reason(
     unknown_category,
     category_id_is_valid,
     confidence_is_valid,
-    category_fallback_rejected,
     decision,
 ):
     """Return a compact failure reason for conservative LLM outcomes."""
@@ -579,12 +634,10 @@ def llm_failure_reason(
         return "invalid_category_id"
     if not confidence_is_valid:
         return "invalid_confidence"
-    if category_fallback_rejected:
-        return "full_taxonomy_fallback_confidence_below_high_threshold"
     if decision.assigned_unknown and decision.proposed_confidence is not None:
         if category == unknown_category:
             return "llm_unknown_category"
-        return "confidence_below_medium_threshold"
+        return "confidence_below_review_threshold"
     return None
 
 
@@ -604,7 +657,6 @@ def llm_category_metadata(
     dropped_invalid_tag_ids=None,
     dropped_tag_ids_outside_candidate_taxonomy=None,
     tag_ids_payload_is_valid=True,
-    category_fallback_rejected=False,
     failure_reason=None,
 ):
     """Return persisted audit metadata for an accepted LLM categorization."""
@@ -633,10 +685,9 @@ def llm_category_metadata(
         "category_outside_candidate_taxonomy": bool(category_outside_candidate_taxonomy),
         "full_taxonomy_fallback_used": bool(
             category_outside_candidate_taxonomy
-            and not category_fallback_rejected
             and not decision.assigned_unknown
         ),
-        "full_taxonomy_fallback_rejected": bool(category_fallback_rejected),
+        "full_taxonomy_fallback_rejected": False,
         "llm_confidence": llm_confidence,
         "llm_reason": str(result.get("reason") or "").strip(),
         "supported_by_similar_transactions": parse_bool(
@@ -666,19 +717,31 @@ def llm_category_metadata(
     return metadata
 
 
-def prepare_llm_candidate_taxonomies(conn, unknown_items, category_options, tag_options, unknown_category):
+def prepare_llm_candidate_taxonomies(
+    conn,
+    unknown_items,
+    category_options,
+    tag_options,
+    unknown_category,
+    category_rows=None,
+    tag_rows=None,
+):
     """Attach compact candidate category and tag lists to LLM transaction payloads.
 
     Candidate taxonomies are intentionally transaction-local. They prioritize
-    rule evidence, retrieved historical examples, merchant history, and common
-    local categories while preserving a full-taxonomy fallback for weak inputs.
+    rule evidence, retrieved historical examples, merchant history, semantic
+    taxonomy matches, and common local categories. They are prompt hints rather
+    than acceptance gates.
     """
+    category_rows = category_rows or []
+    tag_rows = tag_rows or []
     common_categories = common_category_names(conn, category_options, unknown_category)
     for tx in unknown_items:
         categories = []
         categories.extend(rule_evidence_categories(tx))
         categories.extend(historical_evidence_categories(tx))
         categories.extend(merchant_history_category_names(conn, tx, category_options, unknown_category))
+        categories.extend(semantic_taxonomy_names(tx, category_rows, category_options, unknown_category))
         categories.extend(common_categories)
         categories.append(unknown_category)
 
@@ -693,6 +756,7 @@ def prepare_llm_candidate_taxonomies(conn, unknown_items, category_options, tag_
             tx,
             candidate_categories,
             tag_options,
+            tag_rows,
         )
 
 
@@ -708,6 +772,60 @@ def historical_evidence_categories(transaction):
     categories = [evidence.get("category")]
     categories.extend(example.get("category") for example in evidence.get("examples") or [])
     return categories
+
+
+def semantic_taxonomy_names(transaction, taxonomy_rows, taxonomy_options, unknown_category=None):
+    """Return taxonomy names whose instructions overlap the merchant text."""
+    query_tokens = semantic_tokens(
+        " ".join(
+            str(value or "")
+            for value in (
+                transaction.get("merchant_key"),
+                transaction.get("canonical_merchant"),
+                transaction.get("description"),
+            )
+        )
+    )
+    if not query_tokens:
+        return []
+
+    option_order = {
+        name: index
+        for index, name in enumerate(taxonomy_options)
+    }
+    rows_by_name = {row["name"]: row for row in taxonomy_rows}
+    scored = []
+    for name in taxonomy_options:
+        if unknown_category is not None and name == unknown_category:
+            continue
+        row = rows_by_name.get(name, {})
+        taxonomy_tokens = semantic_tokens(
+            " ".join(
+                str(value or "")
+                for value in (
+                    name,
+                    row.get("description"),
+                    row.get("instruction"),
+                )
+            )
+        )
+        overlap = query_tokens & taxonomy_tokens
+        if overlap:
+            scored.append((len(overlap), option_order.get(name, 0), name))
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [name for _, _, name in scored]
+
+
+def semantic_tokens(value):
+    """Return meaningful normalized tokens for lightweight taxonomy matching."""
+    normalized = normalize_merchant_description(value)
+    return {
+        token
+        for token in re.findall(r"[A-Z0-9]+", normalized)
+        if len(token) >= MIN_SEMANTIC_TOKEN_LENGTH
+        and token not in SEMANTIC_STOPWORDS
+    }
 
 
 def common_category_names(conn, category_options, unknown_category):
@@ -763,12 +881,24 @@ def compact_category_candidates(categories, category_options, unknown_category):
         normalized = normalize_candidate_category(category, category_options, unknown_category)
         if not normalized or normalized in seen:
             continue
+        if normalized == unknown_category:
+            continue
         candidates.append(normalized)
         seen.add(normalized)
+
+    if len(category_options) <= MAX_CANDIDATE_CATEGORIES:
+        for category in category_options:
+            if category == unknown_category or category in seen:
+                continue
+            candidates.append(category)
+            seen.add(category)
 
     if unknown_category in category_options and unknown_category not in seen:
         candidates.append(unknown_category)
         seen.add(unknown_category)
+
+    if len(category_options) <= MAX_CANDIDATE_CATEGORIES:
+        return candidates
 
     concrete = [category for category in candidates if category != unknown_category]
     if not concrete:
@@ -791,7 +921,7 @@ def normalize_candidate_category(category, category_options, unknown_category):
     return normalized if normalized in category_options else None
 
 
-def compact_tag_candidates(conn, transaction, candidate_categories, tag_options):
+def compact_tag_candidates(conn, transaction, candidate_categories, tag_options, tag_rows=None):
     """Return compact, valid tag candidates for one LLM transaction."""
     tags = []
     evidence = transaction.get("rule_evidence") or {}
@@ -800,6 +930,7 @@ def compact_tag_candidates(conn, transaction, candidate_categories, tag_options)
     tags.extend(historical.get("tags") or [])
     for example in historical.get("examples") or []:
         tags.extend(example.get("tags") or [])
+    tags.extend(semantic_taxonomy_names(transaction, tag_rows or [], tag_options))
     tags.extend(tags_for_candidate_categories(conn, candidate_categories, tag_options))
 
     normalized = normalize_tag_names(tags, tag_options)
@@ -893,6 +1024,7 @@ def request_llm_categories(
     tag_rows,
     openai_model,
     verify_threshold,
+    review_threshold,
 ):
     """Request llm categories."""
     requested_count = len(unknown_items)
@@ -919,7 +1051,7 @@ def request_llm_categories(
         )
         return []
 
-    system_prompt = build_llm_system_prompt(category_rows, tag_rows, verify_threshold)
+    system_prompt = build_llm_system_prompt(category_rows, tag_rows, verify_threshold, review_threshold)
     prompt = build_llm_prompt(
         unknown_items,
         rules,
@@ -987,23 +1119,26 @@ def request_llm_categories(
     return results if isinstance(results, list) else []
 
 
-def build_llm_system_prompt(category_rows=None, tag_rows=None, verify_threshold=None):
+def build_llm_system_prompt(category_rows=None, tag_rows=None, verify_threshold=None, review_threshold=None):
     """Build LLM categorization policy instructions."""
     if verify_threshold is None:
         verify_threshold = HIGH_CONFIDENCE_THRESHOLD
+    if review_threshold is None:
+        review_threshold = settings.default_llm_review_threshold
     del category_rows, tag_rows
 
     return f"""You are a financial transaction categorization engine.
 
 Your task is to categorize bank transactions using the transaction description, supplied rule evidence, similar historical transactions, and the taxonomy supplied in the user JSON. You must assign exactly one category ID from taxonomy.categories and zero or more tag IDs from taxonomy.tags.
 
-You must be consistent, conservative, and deterministic. Do not invent information. If the description is ambiguous or the category is not clear with high confidence, use "UNKNOWN".
+You must be consistent, conservative, and deterministic. Do not invent private user context. Use common public merchant, biller, product, and service recognition when the descriptor clearly names a recognizable business, platform, or paid service.
 
 Bank statement context:
 - Checking and savings exports often use short bank descriptors, French abbreviations, and terse payment codes. Treat suffixes such as FAC, PAI, ASS, DIV, CC, PLAC, TFR, DEPOT, VIREMENT, CHQ, and VFC as bank context, not as categories by themselves.
 - Categorize by the recognizable merchant, biller, institution, or transaction purpose when it is clear despite those codes.
 - Common banking examples: utility providers such as Hydro-Quebec, Energir, internet, phone, and similar service providers are Utilities; bank fees, taxes, permits, interest, loans, and government fees are Administrative; transfers, credit card payments, deposits, reimbursements, refunds, and account movements are Transfers when those categories exist in taxonomy.categories.
-- Use the provided transaction_kind as a hint only. It describes the ledger direction or non-reporting role already inferred by FinScope, but the merchant and category instructions remain authoritative.
+- Common merchant examples: streaming, sports media, music, movies, games, and paid media platforms such as Netflix, Disney Plus, Spotify, YouTube Premium, DAZN, or ESPN Plus are Entertainment when that category exists. Add the Service tag when the taxonomy includes it and the transaction is for paid access to an ongoing platform or media service.
+- Use account_name, account_type, and transaction_kind as context hints only. They describe the account and ledger direction already inferred by FinScope, but the merchant and category instructions remain authoritative.
 
 Decision rules:
 1. Use the transaction description as the primary signal.
@@ -1012,23 +1147,24 @@ Decision rules:
 4. Manual rules may include signed amount_min and amount_max bounds. When present, the rule only applies if the transaction amount is inside that inclusive range. Negative amounts are credits/income/refunds.
 5. Normalize merchant names by removing transaction IDs, terminal IDs, dates, authorization codes, city names, card numbers, prefixes such as "POS PURCHASE", and repeated punctuation.
 6. Prefer the most specific supported category.
-7. If the category is plausible but not clear with high confidence, use "UNKNOWN".
+7. Choose the best supported category when the merchant identity or transaction purpose points to one taxonomy category, even when confidence is not high enough for automatic approval. Use "needs_review": true for those lower-confidence best-fit suggestions.
 8. Do not create new categories or category IDs.
 9. Do not create new tags or tag IDs.
-10. Do not infer personal context unless it is directly supported by the description.
+10. Do not infer private personal context unless it is directly supported by the description.
 11. For refunds, categorize according to the original merchant category when identifiable. Otherwise use "UNKNOWN".
 12. Apply tags only when the description or user context clearly supports the tag instruction.
 13. Treat taxonomy.categories and taxonomy.tags as the authoritative full taxonomy.
-14. Prefer a transaction's candidate_taxonomy when it fits. It is a compact subset of likely category and tag IDs chosen by FinScope for that transaction.
-15. You may choose another ID from the full taxonomy only when the candidate_taxonomy does not fit and the full taxonomy contains a clearly better match.
-16. When choosing a category or tag outside candidate_taxonomy, set "needs_review" to true and use high confidence only when the evidence is strong.
+14. Treat candidate_taxonomy as helpful hints only. It is a compact subset of likely category and tag IDs chosen by FinScope for that transaction, not a restriction.
+15. Choose any ID from the full taxonomy when it best fits the merchant or transaction purpose, even when it is outside candidate_taxonomy.
+16. When choosing a category or tag outside candidate_taxonomy, set "needs_review" to true unless the merchant/category is obvious and confidence is at least {verify_threshold:.2f}. Do not choose "UNKNOWN" merely because the best taxonomy ID is outside candidate_taxonomy.
 17. Use similar_transactions as supporting evidence, but do not copy them blindly when they conflict or are weak.
+18. Use "UNKNOWN" only when the descriptor is generic, unreadable, mainly a payment processor without a clear merchant, or cannot be reasonably mapped to any taxonomy category.
+19. Before returning "UNKNOWN", check candidate_taxonomy and the full taxonomy for a review-worthy best fit. Prefer a supported best-fit category with "needs_review": true over "UNKNOWN" when the merchant or service identity provides a plausible match.
 
 Confidence scoring:
-- 0.95 to 1.00: merchant/category is obvious.
-- 0.80 to 0.94: likely category with minor ambiguity.
-- 0.60 to 0.79: plausible but ambiguous; use "UNKNOWN".
-- below 0.60: use "UNKNOWN".
+- At or above {verify_threshold:.2f}: merchant/category is obvious enough for no-review output unless another review rule applies.
+- {review_threshold:.2f} up to below {verify_threshold:.2f}: plausible or likely best-fit category; return the best category and set "needs_review" to true.
+- below {review_threshold:.2f}: use "UNKNOWN".
 
 Review rule:
 Set "needs_review" to true when:
@@ -1090,7 +1226,7 @@ def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, c
             "account_id": rule.get("account_id"),
             "direction": rule.get("direction") or CATEGORY_RULE_DIRECTION_ANY,
         }
-        for rule in rules
+        for rule in prompt_relevant_manual_rules(rules, unknown_items)
         if (
             rule["source"] == CATEGORY_RULE_SOURCE_MANUAL
             and normalize_category(rule["category"], category_options) in category_options
@@ -1116,6 +1252,9 @@ def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, c
                 "description": tx.get("description"),
                 "amount": optional_money_to_float(tx.get("amount")),
                 "date": tx.get("tx_date"),
+                "account_id": tx.get("account_id"),
+                "account_name": tx.get("account_name"),
+                "account_type": tx.get("account_type"),
                 "transaction_kind": tx.get("transaction_kind"),
                 "best_matching_rule": tx.get("rule_evidence"),
                 "similar_transactions": tx.get("historical_evidence"),
@@ -1153,8 +1292,56 @@ def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, c
     return json.dumps(payload, ensure_ascii=True, indent=2)
 
 
+def prompt_relevant_manual_rules(rules, unknown_items):
+    """Return manual rules most relevant to the current LLM batch."""
+    scored_rules = []
+    for index, rule in enumerate(rules):
+        if rule["source"] != CATEGORY_RULE_SOURCE_MANUAL:
+            continue
+        score = manual_rule_prompt_relevance(rule, unknown_items)
+        if score:
+            scored_rules.append((score, index, rule))
+
+    scored_rules.sort(key=lambda item: (-item[0], item[1]))
+    return [
+        rule
+        for _, _, rule in scored_rules[:MAX_PROMPT_MANUAL_RULES]
+    ]
+
+
+def manual_rule_prompt_relevance(rule, unknown_items):
+    """Return a lightweight relevance score for sending a manual rule."""
+    keyword = normalize_merchant_description(rule["keyword"])
+    if not keyword:
+        return 0
+
+    keyword_tokens = semantic_tokens(keyword)
+    best_score = 0
+    for tx in unknown_items:
+        candidate = normalize_merchant_description(
+            " ".join(
+                str(value or "")
+                for value in (
+                    tx.get("merchant_key"),
+                    tx.get("canonical_merchant"),
+                    tx.get("description"),
+                )
+            )
+        )
+        if not candidate:
+            continue
+        if keyword in candidate or candidate in keyword:
+            best_score = max(best_score, 100)
+            continue
+        overlap = keyword_tokens & semantic_tokens(candidate)
+        if overlap:
+            best_score = max(best_score, len(overlap))
+
+    return best_score
+
+
 def taxonomy_reference_rows(names, taxonomy_rows):
-    """Return lightweight taxonomy ID/name rows for candidate hints."""
+    """Return compact taxonomy rows for transaction-local candidate hints."""
     rows_by_name = {row["name"]: row for row in taxonomy_rows}
     payload = []
     for name in names:
@@ -1163,6 +1350,8 @@ def taxonomy_reference_rows(names, taxonomy_rows):
             {
                 "id": row.get("id"),
                 "name": name,
+                "description": row.get("description") or "",
+                "instruction": row.get("instruction") or "",
             }
         )
     return payload

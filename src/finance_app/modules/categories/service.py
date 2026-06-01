@@ -17,6 +17,7 @@ from finance_app.modules.categories.llm import (
 from finance_app.modules.categories.repository import (
     clean_category_name,
     create_category,
+    get_builtin_category_names,
     fetch_category_names,
     get_category_options,
     get_category_rules,
@@ -39,12 +40,22 @@ from finance_app.modules.categories.rules_matching import (
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
 
-def classify_unknowns_with_llm(conn, transactions, rules, unknown_category):
-    """Classify unknowns with LLM."""
+def classify_unknowns_with_llm(conn, transactions, rules, unknown_category, save_automatic_rules=True):
+    """Classify unknowns with LLM.
+
+    ``save_automatic_rules`` controls whether no-review AI decisions should
+    also create future matching rules.
+    """
     original = _llm.request_llm_categories
     _llm.request_llm_categories = request_llm_categories
     try:
-        return _llm.classify_unknowns_with_llm(conn, transactions, rules, unknown_category)
+        return _llm.classify_unknowns_with_llm(
+            conn,
+            transactions,
+            rules,
+            unknown_category,
+            save_automatic_rules=save_automatic_rules,
+        )
     finally:
         _llm.request_llm_categories = original
 
@@ -58,6 +69,7 @@ __all__ = [
     "clean_category_name",
     "create_category",
     "fetch_category_names",
+    "get_builtin_category_names",
     "get_category_options",
     "get_category_rules",
     "match_category_rule",

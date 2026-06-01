@@ -85,7 +85,14 @@
                 data-dashboard-custom-categories
             >
                 <label class="form-label" id="dashboard-categories-label">{{ _("Categories") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}" data-select-all-label="{{ _('Select all categories') }}">
+                <div
+                    class="tag-multiselect"
+                    data-tag-multiselect
+                    data-placeholder="{{ _('All categories') }}"
+                    data-select-all-label="{{ _('Select all categories') }}"
+                    data-select-preset-label="{{ _('Select analysis categories') }}"
+                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
+                >
                     <div
                         class="tag-multiselect-control"
                         role="button"

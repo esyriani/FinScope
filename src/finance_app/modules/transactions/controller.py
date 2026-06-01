@@ -1,6 +1,6 @@
 """Flask routes for the transactions feature."""
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from finance_app.modules.categories.taxonomy import (
     get_tag_options,
@@ -19,7 +19,7 @@ from finance_app.modules.transactions.repository import (
     set_transaction_ignored,
 )
 from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword, parse_amount_bounds
-from finance_app.modules.transactions.service import build_transactions_context
+from finance_app.modules.transactions import service as transactions_service
 from finance_app.modules.transactions.urls import transactions_redirect_target, transactions_redirect_with_ignored
 
 transactions_bp = Blueprint("transactions", __name__)
@@ -28,7 +28,9 @@ transactions_bp = Blueprint("transactions", __name__)
 @transactions_bp.route("/transactions")
 def transactions():
     """Render the transactions page."""
-    return render_template("transactions.html", **build_transactions_context(request.args))
+    context = transactions_service.build_transactions_context(request.args)
+    context["transaction_ai_result"] = session.pop("transaction_ai_result", None)
+    return render_template("transactions.html", **context)
 
 
 @transactions_bp.route("/transactions/<int:transaction_id>/category", methods=["POST"])
@@ -127,4 +129,113 @@ def update_transaction_ignored(transaction_id):
     else:
         flash("Transaction not found.")
     return redirect(transactions_redirect_with_ignored(next_url, "all"))
+
+
+@transactions_bp.route("/transactions/batch", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
+def batch_transactions():
+    """Apply one batch action to explicitly selected transaction IDs."""
+    next_url = transactions_redirect_target()
+    transaction_ids = request.form.getlist("transaction_ids")
+    action = request.form.get("batch_action", "").strip()
+    redirect_url = next_url or url_for("transactions.transactions")
+
+    if not transaction_ids:
+        flash("Select at least one transaction.")
+        return redirect(redirect_url)
+
+    if action == "approve":
+        updated = transactions_service.approve_selected_transactions(transaction_ids)
+        flash(
+            "Approved selected transaction."
+            if updated == 1
+            else "Approved selected transactions."
+        )
+        return redirect(redirect_url)
+
+    if action == "ignore":
+        updated = transactions_service.ignore_selected_transactions(transaction_ids)
+        flash(
+            "Ignored selected transaction."
+            if updated == 1
+            else "Ignored selected transactions."
+        )
+        return redirect(transactions_redirect_with_ignored(redirect_url, "all"))
+
+    if action == "recategorize":
+        result = transactions_service.queue_selected_transaction_recategorization(transaction_ids)
+        job_id = result.get("job_id")
+        selected_count = result.get("selected_count") or 0
+        if job_id:
+            flash(
+                f"Recategorization queued for {selected_count} selected transaction"
+                f"{'' if selected_count == 1 else 's'}. Job: {job_id[:8]}"
+            )
+        else:
+            flash("Select at least one transaction.")
+        return redirect(redirect_url)
+
+    flash("Choose a batch action.")
+    return redirect(redirect_url)
+
+
+@transactions_bp.route("/transactions/<int:transaction_id>/run-ai", methods=["POST"])
+@transactions_bp.route("/transactions/<int:transaction_id>/suggest-category", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
+def suggest_transaction_category(transaction_id):
+    """Preview an AI category suggestion for one transaction.
+
+    The route stores the signed-session suggestion for an explicit follow-up
+    apply action. It does not mutate the selected transaction or create a rule.
+    """
+    next_url = transactions_redirect_target()
+    result = transactions_service.suggest_transaction_ai_category(transaction_id)
+    display_result = dict(result)
+    persistence = display_result.pop("persistence", None)
+    session["transaction_ai_result"] = display_result
+    if result.get("can_apply"):
+        session["transaction_ai_suggestion"] = {
+            "transaction_id": result.get("transaction_id"),
+            "can_apply": True,
+            "persistence": persistence,
+        }
+    else:
+        session.pop("transaction_ai_suggestion", None)
+    flash(result.get("message") or "AI categorization completed.")
+    return redirect(next_url or url_for("transactions.transactions"))
+
+
+@transactions_bp.route("/transactions/<int:transaction_id>/ai-suggestion", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
+def apply_transaction_ai_suggestion(transaction_id):
+    """Apply a pending AI suggestion and optionally save a category rule."""
+    next_url = transactions_redirect_target()
+    action = request.form.get(
+        "suggestion_action",
+        transactions_service.APPLY_AI_SUGGESTION_ACTION,
+    )
+    amount_min = None
+    amount_max = None
+    if action == transactions_service.APPLY_AI_SUGGESTION_WITH_RULE_ACTION:
+        try:
+            amount_min, amount_max = parse_amount_bounds(
+                request.form.get("amount_min", ""),
+                request.form.get("amount_max", ""),
+            )
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(next_url or url_for("transactions.transactions"))
+
+    result = transactions_service.apply_transaction_ai_suggestion(
+        transaction_id,
+        session.get("transaction_ai_suggestion"),
+        action=action,
+        rule_keyword=request.form.get("keyword", ""),
+        amount_min=amount_min,
+        amount_max=amount_max,
+    )
+    if result.get("updated"):
+        session.pop("transaction_ai_suggestion", None)
+    flash(result.get("message") or "AI suggestion cannot be applied.")
+    return redirect(next_url or url_for("transactions.transactions"))
 

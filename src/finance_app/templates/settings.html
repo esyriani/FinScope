@@ -164,9 +164,32 @@
                         </div>
 
                         <div class="settings-field">
+                            <label class="form-label" for="transaction_ai_rerun_enabled">{{ _("Single-transaction AI") }}</label>
+                            <div class="form-check form-switch">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    role="switch"
+                                    id="transaction_ai_rerun_enabled"
+                                    name="transaction_ai_rerun_enabled"
+                                    value="1"
+                                    {% if transaction_ai_rerun_enabled %}checked{% endif %}
+                                >
+                                <label class="form-check-label" for="transaction_ai_rerun_enabled">{{ _("Show Suggest category on transaction rows") }}</label>
+                            </div>
+                            <div class="form-text">{{ _("Use this action to preview an AI category suggestion and choose whether to apply it or save a rule.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
                             <label for="llm_confidence_threshold" class="form-label">{{ _("LLM confidence threshold") }}</label>
                             <input id="llm_confidence_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="llm_confidence_threshold" value="{{ llm_confidence_threshold }}">
-                            <div class="form-text">{{ _("Minimum confidence required to accept a suggested category.") }}</div>
+                            <div class="form-text">{{ _("Minimum confidence required before AI can create an automatic rule for a no-review result.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="llm_review_threshold" class="form-label">{{ _("LLM review threshold") }}</label>
+                            <input id="llm_review_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="llm_review_threshold" value="{{ llm_review_threshold }}">
+                            <div class="form-text">{{ _("Minimum confidence required to keep a best-fit AI category as a review item instead of UNKNOWN.") }}</div>
                         </div>
 
                         <div class="settings-field">

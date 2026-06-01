@@ -11,11 +11,12 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_REFUND,
     TRANSACTION_KIND_TRANSFER,
     TRANSFER_CATEGORY,
+    CATEGORY_SOURCE_UNKNOWN,
 )
-from finance_app.core.money import money_to_float
-from finance_app.database.tables import transactions as transactions_table
+from finance_app.core.money import money_to_float, optional_money_to_float
+from finance_app.database.tables import accounts as accounts_table, transactions as transactions_table
 from finance_app.modules.categories.repository import resolve_category_id
-from finance_app.modules.categories.sources import manual_category_assignment, utc_timestamp
+from finance_app.modules.categories.sources import category_metadata_json, manual_category_assignment, utc_timestamp
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names, set_transaction_tags
 from finance_app.modules.categories.service import save_category_rule
 
@@ -37,6 +38,47 @@ def get_transaction_for_category_update(conn, transaction_id):
             transactions_table.c.description,
             transactions_table.c.amount,
         ).where(transactions_table.c.id == transaction_id)
+    ).mappings().fetchone()
+    if row is None:
+        return None
+
+    transaction = dict(row)
+    transaction["amount"] = money_to_float(transaction["amount"])
+    return transaction
+
+
+def get_transaction_for_ai_categorization(conn, transaction_id):
+    """Return a transaction row with category fields needed for a one-off AI rerun."""
+    row = conn.execute(
+        select(
+            transactions_table.c.id,
+            transactions_table.c.statement_id,
+            transactions_table.c.account_id,
+            transactions_table.c.merchant_id,
+            transactions_table.c.tx_date,
+            transactions_table.c.description,
+            transactions_table.c.amount,
+            transactions_table.c.category,
+            transactions_table.c.category_id,
+            transactions_table.c.needs_review,
+            transactions_table.c.category_source,
+            transactions_table.c.category_confidence,
+            transactions_table.c.category_rule_id,
+            transactions_table.c.category_metadata,
+            transactions_table.c.categorized_at,
+            transactions_table.c.reviewed_at,
+            transactions_table.c.ignored,
+            transactions_table.c.transaction_kind,
+            accounts_table.c.name.label("account_name"),
+            accounts_table.c.account_type.label("account_type"),
+        )
+        .select_from(
+            transactions_table.outerjoin(
+                accounts_table,
+                accounts_table.c.id == transactions_table.c.account_id,
+            )
+        )
+        .where(transactions_table.c.id == transaction_id)
     ).mappings().fetchone()
     if row is None:
         return None
@@ -150,6 +192,21 @@ def mark_transaction_verified(conn, transaction_id, reviewed_at=None):
     return cursor.rowcount > 0
 
 
+def mark_transactions_verified(conn, transaction_ids, reviewed_at=None):
+    """Mark selected transactions verified and return the updated row count."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return 0
+
+    reviewed_at = reviewed_at or utc_timestamp()
+    cursor = conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id.in_(ids))
+        .values(needs_review=0, reviewed_at=reviewed_at)
+    )
+    return cursor.rowcount
+
+
 def set_transaction_ignored(conn, transaction_id, ignored):
     """Set transaction ignored."""
     ignored = 1 if ignored else 0
@@ -162,3 +219,167 @@ def set_transaction_ignored(conn, transaction_id, ignored):
         .values(**values)
     )
     return cursor.rowcount > 0
+
+
+def set_transactions_ignored(conn, transaction_ids, ignored):
+    """Set the ignored flag for selected transactions and return updated count."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return 0
+
+    ignored = 1 if ignored else 0
+    values = {"ignored": ignored}
+    if ignored:
+        values["needs_review"] = 0
+    cursor = conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id.in_(ids))
+        .values(**values)
+    )
+    return cursor.rowcount
+
+
+def apply_ai_category_update(conn, transaction_id, transaction, unknown_category):
+    """Persist one AI categorization result to a single transaction row.
+
+    The update intentionally does not create or modify category rules. Callers
+    pass the already-classified transaction payload produced by the LLM adapter.
+    """
+    category = transaction.get("category") or unknown_category
+    source = transaction.get("category_source") or CATEGORY_SOURCE_UNKNOWN
+    rule_id = transaction.get("category_rule_id")
+    cursor = conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id == transaction_id)
+        .values(
+            category=category,
+            category_id=resolve_category_id(conn, category),
+            needs_review=1 if transaction.get("needs_review") else 0,
+            category_source=source,
+            category_confidence=transaction.get("category_confidence"),
+            category_rule_id=rule_id,
+            category_metadata=category_metadata_json(transaction.get("category_metadata")),
+            categorized_at=transaction.get("categorized_at"),
+            reviewed_at=transaction.get("reviewed_at"),
+            transaction_kind=ai_transaction_kind(
+                category,
+                transaction.get("amount"),
+                transaction.get("transaction_kind"),
+            ),
+        )
+    )
+    if cursor.rowcount <= 0:
+        return False
+
+    set_transaction_tags(
+        conn,
+        transaction_id,
+        transaction.get("tags") or [],
+        source=source,
+        rule_id=rule_id,
+    )
+    return True
+
+
+def get_transactions_for_recategorization(conn, transaction_ids):
+    """Return selected transaction rows needed by the categorization workflow."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return []
+
+    row_order = case(
+        *(
+            (transactions_table.c.id == transaction_id, index)
+            for index, transaction_id in enumerate(ids)
+        ),
+        else_=len(ids),
+    )
+    rows = conn.execute(
+        select(
+            transactions_table.c.id,
+            transactions_table.c.account_id,
+            transactions_table.c.tx_date,
+            transactions_table.c.merchant_id,
+            transactions_table.c.description,
+            transactions_table.c.amount,
+            transactions_table.c.category,
+            transactions_table.c.transaction_kind,
+        )
+        .where(transactions_table.c.id.in_(ids))
+        .order_by(row_order)
+    ).mappings().fetchall()
+
+    return [
+        {
+            **dict(row),
+            "amount": money_to_float(row["amount"]),
+        }
+        for row in rows
+    ]
+
+
+def update_recategorized_transaction(conn, transaction, unknown_category):
+    """Persist one complete workflow categorization result to its transaction."""
+    transaction_id = transaction["id"]
+    category = transaction.get("category") or unknown_category
+    source = transaction.get("category_source") or CATEGORY_SOURCE_UNKNOWN
+    rule_id = transaction.get("category_rule_id")
+    cursor = conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id == transaction_id)
+        .values(
+            category=category,
+            category_id=resolve_category_id(conn, category),
+            needs_review=1 if transaction.get("needs_review") else 0,
+            category_source=source,
+            category_confidence=transaction.get("category_confidence"),
+            category_rule_id=rule_id,
+            category_metadata=category_metadata_json(transaction.get("category_metadata")),
+            categorized_at=transaction.get("categorized_at"),
+            reviewed_at=transaction.get("reviewed_at"),
+            transaction_kind=ai_transaction_kind(
+                category,
+                transaction.get("amount"),
+                transaction.get("transaction_kind"),
+            ),
+        )
+    )
+    if cursor.rowcount <= 0:
+        return False
+
+    set_transaction_tags(
+        conn,
+        transaction_id,
+        transaction.get("tags") or [],
+        source=source,
+        rule_id=rule_id,
+    )
+    return True
+
+
+def normalized_transaction_ids(transaction_ids):
+    """Return de-duplicated positive transaction IDs preserving input order."""
+    ids = []
+    seen = set()
+    for value in transaction_ids or ():
+        try:
+            transaction_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if transaction_id <= 0 or transaction_id in seen:
+            continue
+        seen.add(transaction_id)
+        ids.append(transaction_id)
+    return ids
+
+
+def ai_transaction_kind(category, amount, current_kind=None):
+    """Return the transaction kind implied by a one-off AI category update."""
+    if category == TRANSFER_CATEGORY:
+        return TRANSACTION_KIND_TRANSFER
+    if current_kind == TRANSACTION_KIND_REFUND:
+        return TRANSACTION_KIND_REFUND
+    amount_value = optional_money_to_float(amount)
+    if amount_value is not None and amount_value < 0:
+        return TRANSACTION_KIND_INCOME
+    return TRANSACTION_KIND_EXPENSE

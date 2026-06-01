@@ -18,6 +18,7 @@ from finance_app.database.engine import register_core_db
 from finance_app.modules import register_blueprints
 from finance_app.modules.auth import register_auth
 from finance_app.modules.auth.permissions import current_user_can
+from finance_app.modules.categories.service import get_builtin_category_names
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.settings.runtime import get_setting_with_fallback
 
@@ -27,6 +28,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Annual",
     "Amount difference: {difference}.",
     "Actual",
+    "Auto-detect",
     "Biweekly",
     "Best current-month match: {date}.",
     "Cash flow",
@@ -36,7 +38,9 @@ CLIENT_TRANSLATION_MESSAGES = (
     "CSV",
     "Cancel",
     "Checking account",
+    "Choose date format",
     "Choose how imported rows are interpreted.",
+    "Choose the date format before importing.",
     "Choose which rows to export from this table.",
     "Close",
     "Confirmed by you",
@@ -46,6 +50,8 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Credit card",
     "Date",
     "Date difference: {difference}.",
+    "Date format detected from unambiguous rows.",
+    "Date format selected for this import.",
     "days",
     "Detected because this merchant appeared in {months} distinct months with a typical amount of {amount}.",
     "Description",
@@ -70,6 +76,12 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Batch {start}-{end} failed: {error_type}: {detail}",
     "Batch {start}-{end} kept {unknown} transaction unknown for review.",
     "Batch {start}-{end} kept {unknown} transactions unknown for review.",
+    "Starting selected transaction recategorization for {total} transactions.",
+    "Starting selected recategorization batch {start}-{end} of {total}.",
+    "Recategorizing {start}-{end} of {total}; {updated} updated so far.",
+    "Recategorized {current} of {total}; {updated} updated.",
+    "Finished selected recategorization batch {start}-{end}: {processed} processed; {updated} updated total.",
+    "Selected transaction recategorization completed: {summary}",
     "Cancellation requested; stopping before the next batch.",
     "Cancellation requested; waiting for the current batch to finish.",
     "Income",
@@ -84,6 +96,8 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Monthly-like",
     "Names appear in upload and statement history.",
     "No log entries yet.",
+    "No preview rows available.",
+    "No slash-date choice is needed for this file.",
     "No unknown transactions needed AI categorization.",
     "No action needed unless the pattern changed.",
     "No active transactions match this rule.",
@@ -99,7 +113,9 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Overdue",
     "Personal",
     "Previous",
+    "Preview could not be loaded.",
     "Preview unavailable.",
+    "n/a",
     "Expected",
     "Possibly inactive",
     "Quarterly",
@@ -135,6 +151,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "{count} recurring item",
     "{count} recurring items",
     "{count} selected. The category will apply only to selected transactions.",
+    "{count} selected",
 )
 
 
@@ -184,6 +201,7 @@ def create_app():
             "_": gettext,
             "client_i18n": client_translations(ui_language, CLIENT_TRANSLATION_MESSAGES),
             "untagged_tag_filter_value": UNTAGGED_TAG_FILTER,
+            "category_filter_builtin_exclusions": get_builtin_category_names(),
             "current_user_can": current_user_can,
         }
 

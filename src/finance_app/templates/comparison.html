@@ -85,7 +85,14 @@
 
             <div class="col-md-3">
                 <label class="form-label" id="year-categories-label">{{ _("Categories") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}" data-select-all-label="{{ _('Select all categories') }}">
+                <div
+                    class="tag-multiselect"
+                    data-tag-multiselect
+                    data-placeholder="{{ _('All categories') }}"
+                    data-select-all-label="{{ _('Select all categories') }}"
+                    data-select-preset-label="{{ _('Select analysis categories') }}"
+                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
+                >
                     <div
                         class="tag-multiselect-control"
                         role="button"
@@ -202,7 +209,7 @@
                 </div>
                 {% if year_unknown_warning %}
                 <div class="alert alert-info py-2" role="alert">
-                    {{ _(year_unknown_warning.source, category=year_unknown_warning.values.category, share=year_unknown_warning.values.share) }}
+                    {{ year_unknown_warning.text }}
                 </div>
                 {% endif %}
                 <div class="table-responsive">
@@ -281,7 +288,14 @@
 
             <div class="col-md-3">
                 <label class="form-label" id="period-categories-label">{{ _("Categories") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All categories') }}" data-select-all-label="{{ _('Select all categories') }}">
+                <div
+                    class="tag-multiselect"
+                    data-tag-multiselect
+                    data-placeholder="{{ _('All categories') }}"
+                    data-select-all-label="{{ _('Select all categories') }}"
+                    data-select-preset-label="{{ _('Select analysis categories') }}"
+                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
+                >
                     <div
                         class="tag-multiselect-control"
                         role="button"
@@ -393,7 +407,7 @@
 
         {% if period_comparison.unknown_warning %}
         <div class="alert alert-info py-2" role="alert">
-            {{ _(period_comparison.unknown_warning.source, category=period_comparison.unknown_warning.values.category, share=period_comparison.unknown_warning.values.share) }}
+            {{ period_comparison.unknown_warning.text }}
         </div>
         {% endif %}
 
