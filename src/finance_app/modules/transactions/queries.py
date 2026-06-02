@@ -19,6 +19,7 @@ def transaction_list_select():
             transactions_table.c.category,
             transactions_table.c.category_source,
             transactions_table.c.category_confidence,
+            transactions_table.c.category_rule_id,
             transactions_table.c.reviewed_at,
             transactions_table.c.needs_review,
             transactions_table.c.ignored,

@@ -86,7 +86,6 @@ def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(
 
     metro_match, metro_out_of_range, payroll_income, payroll_positive, unknown = categorized
     assert metro_match["merchant_key"] == "METRO GROCERY"
-    assert metro_match["canonical_merchant"] == "METRO GROCERY"
     assert metro_match["category"] == "Food"
     assert metro_match["needs_review"] == 0
     assert metro_match["category_source"] == "rule"
@@ -117,6 +116,27 @@ def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(
     assert unknown["category_confidence"] is None
     assert unknown["categorized_at"] is None
     assert unknown["tags"] == []
+
+
+def test_manual_prefix_rule_auto_applies_location_suffix(db_conn):
+    """Verify a strong manual prefix rule applies merchant location suffixes."""
+    rule_id = insert_rule(db_conn, "COSTCO WHOLESALE", "Food", tags=["Grocery"])
+
+    categorized = categorize_transactions(
+        [{"description": "COSTCO WHOLESALE W527 MONTREAL, QC", "amount": 277.72}],
+        conn=db_conn,
+        use_llm=False,
+    )
+
+    assert categorized[0]["category"] == "Food"
+    assert categorized[0]["category_source"] == "rule"
+    assert categorized[0]["category_confidence"] >= 0.95
+    assert categorized[0]["needs_review"] == 0
+    assert categorized[0]["category_rule_id"] == rule_id
+    assert categorized[0]["tags"] == ["Grocery"]
+    metadata = json.loads(categorized[0]["category_metadata"])
+    assert metadata["rule"]["match_score"] == 0.94
+    assert metadata["review_required"] is False
 
 
 def test_categorize_transactions_invokes_llm_when_enabled(db_conn, monkeypatch):

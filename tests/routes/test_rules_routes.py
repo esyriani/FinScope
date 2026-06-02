@@ -6,6 +6,7 @@ import io
 import pytest
 
 from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from finance_app.core.filters import format_datetime
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
 from finance_app.modules.rules import controller as rules_controller
@@ -45,10 +46,10 @@ def insert_merchant(conn, name="TEST MERCHANT"):
     """Insert a merchant row for route tests."""
     merchant_id = conn.execute(
         """
-        INSERT INTO merchants (canonical_key, system_name, display_name)
-        VALUES (?, ?, ?)
+        INSERT INTO merchants (merchant_key)
+        VALUES (?)
         """,
-        (name, name, name),
+        (name,),
     ).lastrowid
     conn.commit()
     return merchant_id
@@ -171,6 +172,24 @@ def test_rules_route_renders_automatic_source_badge(client, db_conn):
     assert f'action="/rules/{rule_id}/approve"'.encode() in response.data
 
 
+def test_rules_route_formats_created_timestamp(client, db_conn):
+    """Verify that the rules table uses the shared timestamp display format."""
+    created_at = "2026-05-13T03:38:00Z"
+    rule_id = insert_rule(db_conn, keyword="TIMESTAMP RULE", category="Food")
+    db_conn.execute(
+        "UPDATE category_rules SET created_at = ? WHERE id = ?",
+        (created_at, rule_id),
+    )
+    db_conn.commit()
+
+    response = client.get("/rules")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert format_datetime(created_at) in body
+    assert created_at not in body
+
+
 def test_rules_route_links_to_rule_audit(client):
     """Verify the rules page links bulk actions through the audit page."""
     response = client.get("/rules")
@@ -199,7 +218,7 @@ def test_rules_route_uses_direct_delete_for_unapplied_rules(client, db_conn):
 
 
 def test_rules_route_keeps_delete_preview_for_applied_rules(client, db_conn):
-    """Verify applied rules keep the delete impact preview action."""
+    """Verify applied rules keep the delete preview action."""
     rule_id = insert_rule(db_conn, keyword="APPLIED STORE", category="Food")
     db_conn.execute(
         """
@@ -223,7 +242,7 @@ def test_rules_route_keeps_delete_preview_for_applied_rules(client, db_conn):
     assert response.status_code == 200
     assert 'action="/rules/audit/preview"' in delete_modal
     assert 'name="action" value="delete_rule"' in delete_modal
-    assert "Preview removal impact" in delete_modal
+    assert "Preview delete" in delete_modal
 
 
 def test_rules_audit_route_renders_summary_and_findings(client, db_conn):
@@ -473,6 +492,8 @@ def test_rules_audit_overlap_route_renders_shared_transactions(client, db_conn):
     assert f'href="/rules/audit/rule/{specific_rule_id}"'.encode() in response.data
     assert b'action="/rules/audit/preview"' in response.data
     assert b'name="action" value="apply_where_wins"' in response.data
+    assert body.count('name="action" value="delete_rule"') == 2
+    assert body.count("Preview delete") == 2
     assert f'name="rule_id" value="{broad_rule_id}"'.encode() in response.data
     assert f'name="rule_id" value="{specific_rule_id}"'.encode() in response.data
 

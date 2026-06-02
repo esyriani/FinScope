@@ -75,8 +75,8 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="next" value="{{ request.full_path }}">
             <input type="hidden" name="action" value="apply_all_rules">
-            <button class="btn btn-outline-primary" type="submit">
-                <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview apply all") }}
+            <button class="btn btn-outline-success" type="submit">
+                <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Preview apply all") }}
             </button>
         </form>
         <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#import-rules-modal">
@@ -391,7 +391,7 @@
                                 </span>
                             {% endif %}
                         </td>
-                        <td>{{ rule["created_at"] }}</td>
+                        <td>{{ rule["created_at"] | datetimefmt }}</td>
                         <td class="text-end">
                             <div class="action-cluster justify-content-end" data-row-action>
                                 <button
@@ -424,13 +424,13 @@
                                     <input type="hidden" name="action" value="apply_where_wins">
                                     <input type="hidden" name="rule_id" value="{{ rule['id'] }}">
                                     <button
-                                        class="btn btn-sm btn-outline-secondary btn-icon-only"
+                                        class="btn btn-sm btn-outline-success btn-icon-only"
                                         type="submit"
                                         aria-label="{{ _('Preview applying rule {keyword}', keyword=rule['keyword']) }}"
                                         title="{{ _('Preview apply') }}"
                                         data-bs-tooltip
                                     >
-                                        <i class="bi bi-eye" aria-hidden="true"></i>
+                                        <i class="bi bi-play-circle" aria-hidden="true"></i>
                                     </button>
                                 </form>
                                 <button
@@ -525,7 +525,7 @@
                     {% if rule["can_delete_without_preview"] %}
                         <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete rule") }}</button>
                     {% else %}
-                        <button class="btn btn-outline-danger" type="submit"><i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview removal impact") }}</button>
+                        <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview delete") }}</button>
                     {% endif %}
                 </div>
             </form>

@@ -15,13 +15,13 @@ def build_transaction_rows(rows, tag_map, tag_colors, conn):
     result = []
     for row in rows:
         normalized_merchant = normalize_merchant(row["description"], conn=conn)
+        merchant_key = normalized_merchant.merchant_key
         tags = tag_map.get(row["id"], [])
         result.append(
             {
                 **dict(row),
                 "amount": money_to_float(row["amount"]),
-                "cleaned_merchant": normalized_merchant.cleaned_key,
-                "canonical_merchant": normalized_merchant.canonical_name,
+                "merchant_key": merchant_key,
                 "transaction_kind_label": TRANSACTION_KINDS.get(row["transaction_kind"], row["transaction_kind"]),
                 "category_source_label": category_source_label(row["category_source"]),
                 "category_source_badge_class": category_source_badge_class(row["category_source"]),

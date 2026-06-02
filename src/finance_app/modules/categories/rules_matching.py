@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import InvalidOperation
 from difflib import SequenceMatcher
 
+from finance_app.core.text import strip_accents
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTION_CREDIT,
@@ -49,7 +50,8 @@ def match_category_rule(
     merchant_key,
     amount,
     rules,
-    canonical_name=None,
+    merchant_candidate=None,
+    raw_description=None,
     merchant_id=None,
     account_id=None,
     transaction_kind=None,
@@ -59,7 +61,8 @@ def match_category_rule(
         merchant_key,
         amount,
         rules,
-        canonical_name=canonical_name,
+        merchant_candidate=merchant_candidate,
+        raw_description=raw_description,
         merchant_id=merchant_id,
         account_id=account_id,
         transaction_kind=transaction_kind,
@@ -72,7 +75,8 @@ def score_category_rule_match(
     merchant_key,
     amount,
     rules,
-    canonical_name=None,
+    merchant_candidate=None,
+    raw_description=None,
     merchant_id=None,
     account_id=None,
     transaction_kind=None,
@@ -89,7 +93,8 @@ def score_category_rule_match(
             merchant_key,
             amount,
             rules,
-            canonical_name=canonical_name,
+            merchant_candidate=merchant_candidate,
+            raw_description=raw_description,
             merchant_id=merchant_id,
             account_id=account_id,
             transaction_kind=transaction_kind,
@@ -102,14 +107,19 @@ def score_category_rule_matches(
     merchant_key,
     amount,
     rules,
-    canonical_name=None,
+    merchant_candidate=None,
+    raw_description=None,
     merchant_id=None,
     account_id=None,
     transaction_kind=None,
     include_fuzzy=True,
 ):
     """Return all category rules matching a transaction with deterministic scores."""
-    candidates = merchant_match_candidates(merchant_key, canonical_name)
+    candidates = merchant_match_candidates(
+        merchant_key,
+        merchant_candidate,
+        raw_description=raw_description,
+    )
     matches = []
     for rule in rules:
         if rule["category"] == "Income" and (amount is None or amount >= 0):
@@ -137,7 +147,12 @@ def score_category_rule_matches(
             continue
 
         keyword = normalize_merchant_description(rule["keyword"])
-        text_score = best_rule_text_score(keyword, candidates, include_fuzzy=include_fuzzy)
+        text_score = best_rule_text_score(
+            keyword,
+            candidates,
+            manual_rule=rule_source(rule) == CATEGORY_RULE_SOURCE_MANUAL,
+            include_fuzzy=include_fuzzy,
+        )
         if text_score is not None:
             matches.append(
                 scored_rule_match(
@@ -171,14 +186,27 @@ def rule_match_precedence_key(match):
     )
 
 
-def merchant_match_candidates(merchant_key, canonical_name=None):
-    """Build match candidates."""
+def merchant_match_candidates(merchant_key, merchant_candidate=None, raw_description=None):
+    """Build normalized and raw-text candidates for keyword matching."""
     candidates = []
-    for value in (merchant_key, canonical_name):
+    for value in (merchant_key, merchant_candidate):
+        text = normalize_merchant_description(value)
+        if text and text not in candidates:
+            candidates.append(text)
+
+    for value in (raw_description_candidate(raw_description),):
         text = str(value or "").strip()
         if text and text not in candidates:
             candidates.append(text)
     return candidates
+
+
+def raw_description_candidate(raw_description):
+    """Return a lossless uppercase transaction-description match candidate."""
+    text = str(raw_description or "").strip()
+    if not text:
+        return ""
+    return " ".join(strip_accents(text).upper().split())
 
 
 def scored_rule_match(
@@ -207,7 +235,7 @@ def scored_rule_match(
     )
 
 
-def best_rule_text_score(keyword, candidates, include_fuzzy=True):
+def best_rule_text_score(keyword, candidates, manual_rule=False, include_fuzzy=True):
     """Return the strongest keyword score for normalized merchant candidates."""
     if not keyword:
         return None
@@ -217,6 +245,8 @@ def best_rule_text_score(keyword, candidates, include_fuzzy=True):
         if not candidate:
             continue
         if candidate == keyword:
+            score = 0.94
+        elif manual_rule and is_strong_prefix_match(keyword, candidate):
             score = 0.94
         elif keyword in candidate:
             ratio = len(keyword) / max(len(candidate), 1)
@@ -231,6 +261,28 @@ def best_rule_text_score(keyword, candidates, include_fuzzy=True):
             best_score = score if best_score is None else max(best_score, score)
 
     return best_score
+
+
+def is_strong_prefix_match(keyword, candidate):
+    """Return whether a manual keyword is a strong full-word merchant prefix."""
+    if not prefix_matches_full_word(keyword, candidate):
+        return False
+    return keyword_has_prefix_match_signal(keyword)
+
+
+def prefix_matches_full_word(keyword, candidate):
+    """Return whether the keyword starts the candidate without splitting a token."""
+    if not keyword or not candidate.startswith(keyword) or candidate == keyword:
+        return False
+
+    next_character = candidate[len(keyword)]
+    return not next_character.isalnum()
+
+
+def keyword_has_prefix_match_signal(keyword):
+    """Return whether a keyword is specific enough for prefix auto-approval."""
+    tokens = [token for token in keyword.split() if token]
+    return len(tokens) >= 2 or len("".join(tokens)) >= 12
 
 
 def rule_confidence(rule, amount, match_score, merchant_id_matched=False, account_id=None, transaction_kind=None):
@@ -259,11 +311,15 @@ def rule_confidence(rule, amount, match_score, merchant_id_matched=False, accoun
 
 def rule_source_adjustment(rule):
     """Return confidence adjustment for the rule's origin."""
-    source = rule["source"] if "source" in rule.keys() else rule.get("source")
     return {
         CATEGORY_RULE_SOURCE_MANUAL: 0.02,
         CATEGORY_RULE_SOURCE_AUTOMATIC: -0.01,
-    }.get(source, 0.0)
+    }.get(rule_source(rule), 0.0)
+
+
+def rule_source(rule):
+    """Return the source value for a category rule mapping."""
+    return rule["source"] if "source" in rule.keys() else rule.get("source")
 
 
 def amount_specificity_adjustment(rule, amount):

@@ -70,7 +70,7 @@ def test_transaction_merchant_filter_builds_sql_candidate_predicate(db_conn):
         ],
     )
     filters = parse_transaction_filters(
-        MultiDict([("period", "all"), ("merchant_key", "Amazon")]),
+        MultiDict([("period", "all"), ("merchant_key", "AMZN MKTP")]),
         db_conn,
     )
 

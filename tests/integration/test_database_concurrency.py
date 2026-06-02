@@ -8,7 +8,6 @@ from sqlalchemy import func, insert, select
 
 from finance_app.database.tables import (
     categories as categories_table,
-    merchant_aliases as merchant_aliases_table,
     merchants as merchants_table,
     tags as tags_table,
 )
@@ -27,11 +26,7 @@ def test_concurrent_merchant_get_or_create_reselects_existing_row(db_conn, monke
             injected["merchant"] = True
             conn.execute(
                 insert(merchants_table).values(
-                    canonical_key="RACE MERCHANT",
-                    system_name="RACE MERCHANT",
-                    display_name="Race Merchant",
-                    display_name_source="system",
-                    active=1,
+                    merchant_key="RACE MERCHANT",
                 )
             )
         return real_insert_or_select(conn, insert_statement, select_statement)
@@ -45,27 +40,17 @@ def test_concurrent_merchant_get_or_create_reselects_existing_row(db_conn, monke
     merchant = merchant_repository.get_or_create_merchant(
         db_conn,
         "RACE MERCHANT",
-        display_name="Race Merchant",
-        alias_key="RACE STORE",
     )
 
     merchant_count = db_conn.execute(
         select(func.count())
         .select_from(merchants_table)
-        .where(merchants_table.c.canonical_key == "RACE MERCHANT")
+        .where(merchants_table.c.merchant_key == "RACE MERCHANT")
     ).scalar_one()
-    alias_rows = db_conn.execute(
-        select(merchant_aliases_table.c.alias_key, merchant_aliases_table.c.merchant_id)
-        .where(merchant_aliases_table.c.merchant_id == merchant["id"])
-        .order_by(merchant_aliases_table.c.alias_key)
-    ).fetchall()
 
     assert injected["merchant"] is True
     assert merchant_count == 1
-    assert [(row.alias_key, row.merchant_id) for row in alias_rows] == [
-        ("RACE MERCHANT", merchant["id"]),
-        ("RACE STORE", merchant["id"]),
-    ]
+    assert merchant["merchant_key"] == "RACE MERCHANT"
 
 
 def test_concurrent_category_and_tag_metadata_create_handles_unique_conflicts(db_conn, monkeypatch):

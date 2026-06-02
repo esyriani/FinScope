@@ -71,6 +71,52 @@ def test_score_category_rule_matches_returns_all_matches_and_preserves_winner():
     assert winner.specificity == rule_specificity(winner.rule)
 
 
+def test_score_category_rule_match_checks_raw_transaction_description():
+    """Verify keyword rules can match raw descriptors before cleanup strips tokens."""
+    rules = [category_rule(1, "COSMETA", tags=["Tax"])]
+
+    winner = score_category_rule_match(
+        "SQ",
+        74.73,
+        rules,
+        merchant_candidate="SQ",
+        raw_description="SQ *COSMETA",
+    )
+
+    assert winner.rule["id"] == 1
+    assert winner.tags == ("Tax",)
+
+
+def test_manual_full_word_prefix_match_scores_like_exact_match():
+    """Verify strong manual prefix matches can auto-apply location suffixes."""
+    rules = [category_rule(1, "COSTCO WHOLESALE", tags=["Grocery"])]
+
+    winner = score_category_rule_match(
+        "COSTCO WHOLESALE W527 MONTREAL QC",
+        277.72,
+        rules,
+    )
+
+    assert winner.rule["id"] == 1
+    assert winner.match_score == 0.94
+    assert winner.confidence >= 0.95
+
+
+def test_non_prefix_contains_match_stays_below_auto_apply_confidence():
+    """Verify containment away from the merchant prefix remains review-worthy."""
+    rules = [category_rule(1, "WHOLESALE")]
+
+    winner = score_category_rule_match(
+        "COSTCO WHOLESALE W527 MONTREAL QC",
+        277.72,
+        rules,
+    )
+
+    assert winner.rule["id"] == 1
+    assert winner.match_score < 0.94
+    assert winner.confidence < 0.95
+
+
 def test_select_winning_rule_match_uses_confidence_then_match_score_then_specificity():
     """Verify winner selection follows the production precedence tuple."""
     broad = ScoredRuleMatch(

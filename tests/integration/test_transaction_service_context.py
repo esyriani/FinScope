@@ -148,8 +148,8 @@ def test_transactions_context_category_source_and_review_filters(db_conn):
     needs_review_context = build_transactions_context(
         MultiDict([("period", "all"), ("review", "needs_review")])
     )
-    ready_to_approve_context = build_transactions_context(
-        MultiDict([("period", "all"), ("review", "ready_to_approve")])
+    pending_approval_context = build_transactions_context(
+        MultiDict([("period", "all"), ("review", "pending_approval")])
     )
     verified_context = build_transactions_context(
         MultiDict([("period", "all"), ("review", "verified")])
@@ -160,7 +160,7 @@ def test_transactions_context_category_source_and_review_filters(db_conn):
     assert ai_context["review_filter_options"] == (
         ("", "All"),
         ("needs_review", "Needs review"),
-        ("ready_to_approve", "Ready to approve"),
+        ("pending_approval", "Pending approval"),
         ("verified", "Approved"),
     )
     assert ai_context["category_source_filter_options"] == (
@@ -175,8 +175,8 @@ def test_transactions_context_category_source_and_review_filters(db_conn):
     assert descriptions(manual_context) == ["Cafe Bistro"]
     assert descriptions(unknown_context) == ["Unknown Shop"]
     assert descriptions(needs_review_context) == ["Unknown Shop"]
-    assert ready_to_approve_context["selected_review"] == "ready_to_approve"
-    assert ready_to_approve_context["total_count"] == 3
+    assert pending_approval_context["selected_review"] == "pending_approval"
+    assert pending_approval_context["total_count"] == 3
     assert verified_context["selected_review"] == "verified"
     assert descriptions(verified_context) == ["Cafe Bistro"]
 
@@ -208,8 +208,7 @@ def test_transactions_context_merchant_filters_and_tag_rendering(db_conn):
 
     metro = merchant_context["transactions"][0]
     assert descriptions(merchant_context) == ["Metro Grocery"]
-    assert metro["cleaned_merchant"] == "METRO GROCERY"
-    assert metro["canonical_merchant"] == "METRO GROCERY"
+    assert metro["merchant_key"] == "METRO GROCERY"
     assert metro["tags"] == ["Tax"]
     assert metro["tag_label"] == "Tax"
     assert metro["tag_pills"][0]["name"] == "Tax"
@@ -228,10 +227,10 @@ def test_transactions_context_merchant_filters_and_tag_rendering(db_conn):
     assert all(row["tag_label"] == "" for row in untagged_context["transactions"])
 
 
-def test_transactions_context_merchant_filter_matches_default_aliases(db_conn):
-    """Verify merchant filtering preserves default alias matching semantics."""
+def test_transactions_context_merchant_filter_uses_deterministic_keys(db_conn):
+    """Verify merchant filtering does not expand through unmanaged aliases."""
     account_id = db_conn.execute(
-        insert(accounts_table).values(name="Alias checking")
+        insert(accounts_table).values(name="Merchant checking")
     ).inserted_primary_key[0]
     food_id = resolve_category_id(db_conn, "Food")
     db_conn.execute(
@@ -290,11 +289,11 @@ def test_transactions_context_merchant_filter_matches_default_aliases(db_conn):
     db_conn.commit()
 
     context = build_transactions_context(
-        MultiDict([("period", "all"), ("merchant_key", "Amazon")])
+        MultiDict([("period", "all"), ("merchant_key", "AMZN MKTP")])
     )
 
-    assert context["total_count"] == 2
-    assert descriptions(context) == ["Amazon Mktplace CA*ABCD", "AMZN MKTP CA*1234"]
+    assert context["total_count"] == 1
+    assert descriptions(context) == ["AMZN MKTP CA*1234"]
 
 
 def test_transactions_context_custom_dates_are_inclusive(db_conn):

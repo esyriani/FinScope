@@ -15,6 +15,6 @@ def test_build_merchant_aggregates_normalizes_transaction_descriptions():
 
     aggregates = build_merchant_aggregates(rows)
 
-    assert "AMAZON" in aggregates
-    assert aggregates["AMAZON"]["transaction_count"] == 1
-    assert aggregates["AMAZON"]["total"] == 12.34
+    assert "AMZN MKTP" in aggregates
+    assert aggregates["AMZN MKTP"]["transaction_count"] == 1
+    assert aggregates["AMZN MKTP"]["total"] == 12.34

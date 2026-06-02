@@ -180,7 +180,7 @@ def recurring_pattern_identity(conn, pattern_key, merchant, tx_type, merchant_id
     if merchant_row:
         return {
             "merchant_id": merchant_row["id"],
-            "merchant": merchant_row["display_name"],
+            "merchant": merchant_row["merchant_key"],
             "pattern_key": recurring_pattern_key(merchant_identity_key(merchant_row["id"]), tx_type),
         }
 

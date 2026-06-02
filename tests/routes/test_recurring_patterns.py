@@ -399,7 +399,7 @@ def test_upsert_recurring_pattern_preserves_existing_values_when_not_overridden(
         active=1,
     )
     db_conn.commit()
-    merchant_id = db_conn.execute("SELECT id FROM merchants WHERE display_name = 'GYM'").fetchone()["id"]
+    merchant_id = db_conn.execute("SELECT id FROM merchants WHERE merchant_key = 'GYM'").fetchone()["id"]
 
     upsert_recurring_pattern(
         db_conn,

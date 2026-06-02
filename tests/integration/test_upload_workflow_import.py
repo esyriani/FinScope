@@ -139,7 +139,7 @@ def test_import_transactions_counts_ignored_csv_rows(app, monkeypatch):
                 transactions_table.c.description,
                 transactions_table.c.category,
                 transactions_table.c.needs_review,
-                merchants_table.c.display_name.label("merchant_name"),
+                merchants_table.c.merchant_key.label("merchant_name"),
             )
             .join(merchants_table, merchants_table.c.id == transactions_table.c.merchant_id)
             .where(transactions_table.c.statement_id == statement_id)

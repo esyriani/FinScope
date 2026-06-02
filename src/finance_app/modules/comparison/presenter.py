@@ -153,7 +153,7 @@ def build_merchant_period_totals(rows, conn):
     """Build merchant period totals."""
     totals = {}
     for row in rows:
-        merchant = normalize_merchant(row["description"], conn=conn).canonical_name
+        merchant = normalize_merchant(row["description"], conn=conn).merchant_key
         if not merchant:
             continue
         totals[merchant] = totals.get(merchant, 0) + money_to_float(row["amount"])
@@ -166,7 +166,7 @@ def build_merchant_primary_categories(conn, *row_groups):
     category_totals = {}
     for rows in row_groups:
         for row in rows:
-            merchant = normalize_merchant(row["description"], conn=conn).canonical_name
+            merchant = normalize_merchant(row["description"], conn=conn).merchant_key
             if not merchant:
                 continue
             totals = category_totals.setdefault(merchant, {})

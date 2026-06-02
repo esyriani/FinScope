@@ -170,8 +170,8 @@ def test_upload_preview_detects_month_first_slash_dates(client, db_conn):
     assert data["ok"] is True
     assert data["preview"]["date_format"]["effective_order"] == "month_first"
     assert data["preview"]["date_format"]["requires_choice"] is False
-    assert data["preview"]["preview_rows"][1]["raw_date"] == "05/12/2026"
-    assert data["preview"]["preview_rows"][1]["parsed_date"] == "2026-05-12"
+    assert data["preview"]["preview_rows"][0]["raw_date"] == "05/12/2026"
+    assert data["preview"]["preview_rows"][0]["parsed_date"] == "2026-05-12"
     assert data["preview"]["date_range"] == {
         "earliest": "2026-05-12",
         "latest": "2026-05-18",
@@ -208,6 +208,35 @@ def test_upload_preview_requires_choice_for_ambiguous_slash_dates(client, db_con
         "earliest": "2026-12-05",
         "latest": "2026-12-05",
     }
+
+
+def test_upload_preview_prioritizes_ambiguous_date_samples(client, db_conn):
+    """Verify preview samples show ambiguous date rows when available."""
+    clear_rows = "\n".join(
+        f"12/{day}/2025,CLEAR SAMPLE {day},1.00,,"
+        for day in range(13, 25)
+    )
+    raw_csv = f"{clear_rows}\n05/12/2026,AMBIGUOUS SAMPLE,2.00,,\n".encode("utf-8")
+
+    response = client.post(
+        "/upload/preview",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": "Personal",
+            "statement_type_id": str(first_statement_type_id(db_conn)),
+            "statement": (io.BytesIO(raw_csv), "preview-ambiguous-sample.csv"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    preview = response.get_json()["preview"]
+    assert response.status_code == 200
+    assert preview["date_format"]["effective_order"] == "month_first"
+    assert preview["date_format"]["source"] == "detected"
+    assert preview["date_format"]["requires_choice"] is False
+    assert preview["preview_rows"][0]["raw_date"] == "05/12/2026"
+    assert preview["preview_rows"][0]["month_first_date"] == "2026-05-12"
+    assert preview["preview_rows"][0]["day_first_date"] == "2026-12-05"
 
 
 def test_upload_route_requires_date_order_for_ambiguous_slash_dates(client, db_conn, monkeypatch):

@@ -204,8 +204,8 @@
                         <td>{{ tx.account_name or "-" }}</td>
                         <td>
                             <div>{{ tx.description }}</div>
-                            {% if tx.canonical_merchant %}
-                                <div class="small text-muted">{{ tx.canonical_merchant }}</div>
+                            {% if tx.merchant_key %}
+                                <div class="small text-muted">{{ tx.merchant_key }}</div>
                             {% endif %}
                         </td>
                         <td class="text-end" data-sort-value="{{ tx.amount }}">{{ tx.amount | moneyfmt }}</td>

@@ -206,8 +206,6 @@ def test_merchant_bound_rule_matches_only_the_bound_merchant(db_conn):
     other_id = get_or_create_merchant(
         db_conn,
         "OTHER MERCHANT",
-        display_name="OTHER MERCHANT",
-        alias_key="OTHER MERCHANT",
     )["id"]
     matching_id = insert_transaction(
         db_conn,
@@ -308,12 +306,11 @@ def test_apply_all_rules_to_transactions_captures_undo_and_skips_noops(db_conn):
     assert get_transaction_tag_names(db_conn, metro_id) == ["Tax"]
 
 
-def test_core_apply_all_rules_uses_persisted_merchant_aliases(app, db_conn):
-    """Verify Core all-rule application reads persisted merchant aliases."""
+def test_core_apply_all_rules_uses_deterministic_merchant_keys(app, db_conn):
+    """Verify Core all-rule application matches deterministic merchant keys."""
     del app
-    get_or_create_merchant_for_description(db_conn, "AMZN Mktp CA*QI44D1DJ3")
     amazon_id = insert_transaction(db_conn, "AMZN Mktp CA*ZZ999", 20.00, "core-alias-amazon")
-    rule_id = insert_rule(db_conn, "AMAZON", "Food", tags=["Tax"])
+    rule_id = insert_rule(db_conn, "AMZN MKTP", "Food", tags=["Tax"])
 
     with db_core_transaction() as conn:
         updated_count, undo_changes = apply_all_rules_to_transactions(conn, capture_undo=True)
@@ -322,6 +319,21 @@ def test_core_apply_all_rules_uses_persisted_merchant_aliases(app, db_conn):
     assert [change["transaction_id"] for change in undo_changes] == [amazon_id]
     assert transaction_state(db_conn, amazon_id)["category_rule_id"] == rule_id
     assert get_transaction_tag_names(db_conn, amazon_id) == ["Tax"]
+
+
+def test_apply_all_rules_preserves_square_processor_merchant_token(app, db_conn):
+    """Verify Square payment descriptors keep the starred merchant for rule matching."""
+    del app
+    tx_id = insert_transaction(db_conn, "SQ *COSMETA", 74.73, "square-cosmeta")
+    rule_id = insert_rule(db_conn, "COSMETA", "Food", tags=["Tax"])
+
+    with db_core_transaction() as conn:
+        updated_count, undo_changes = apply_all_rules_to_transactions(conn, capture_undo=True)
+
+    assert updated_count == 1
+    assert [change["transaction_id"] for change in undo_changes] == [tx_id]
+    assert transaction_state(db_conn, tx_id)["category_rule_id"] == rule_id
+    assert get_transaction_tag_names(db_conn, tx_id) == ["Tax"]
 
 
 def test_apply_all_rules_job_and_undo_restore_previous_values(app, db_conn):

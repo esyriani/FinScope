@@ -80,8 +80,19 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="apply_where_wins">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
-    <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _('Preview apply where winner') }}">
-        <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview apply") }}
+    <button class="btn btn-sm btn-outline-success" type="submit" title="{{ _('Preview apply where winner') }}">
+        <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Preview apply") }}
+    </button>
+</form>
+{% endmacro %}
+
+{% macro preview_delete_button(rule) %}
+<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="delete_rule">
+    <input type="hidden" name="rule_id" value="{{ rule.id }}">
+    <button class="btn btn-sm btn-outline-danger" type="submit">
+        <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview delete") }}
     </button>
 </form>
 {% endmacro %}
@@ -169,6 +180,7 @@
                     <div class="d-flex flex-wrap justify-content-end gap-2">
                         {{ rule_detail_button(winning_rule) }}
                         {{ preview_apply_button(winning_rule) }}
+                        {{ preview_delete_button(winning_rule) }}
                     </div>
                 </div>
                 {{ rule_summary(winning_rule) }}
@@ -183,6 +195,7 @@
                     <div class="d-flex flex-wrap justify-content-end gap-2">
                         {{ rule_detail_button(losing_rule) }}
                         {{ preview_apply_button(losing_rule) }}
+                        {{ preview_delete_button(losing_rule) }}
                     </div>
                 </div>
                 {{ rule_summary(losing_rule) }}
@@ -231,7 +244,7 @@
                         <td>{{ tx.tx_date | datefmt }}</td>
                         <td>{{ tx.account_name or _("Personal") }}</td>
                         <td>
-                            <div>{{ tx.merchant_name or tx.canonical_merchant or "-" }}</div>
+                            <div>{{ tx.merchant_name or tx.merchant_key or "-" }}</div>
                             <div class="small text-muted">{{ tx.merchant_key or "-" }}</div>
                         </td>
                         <td>

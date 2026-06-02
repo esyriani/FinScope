@@ -372,7 +372,7 @@
                             {% elif tx["reviewed_at"] %}
                                 <span class="badge text-bg-success transaction-status-badge">{{ _("Approved") }}</span>
                             {% else %}
-                                <span class="badge text-bg-secondary transaction-status-badge">{{ _("Unverified") }}</span>
+                                <span class="badge text-bg-secondary transaction-status-badge">{{ _("Pending approval") }}</span>
                             {% endif %}
                         </td>
                         <td class="text-end">
@@ -475,12 +475,8 @@
                             <dd>{{ tx["description"] }}</dd>
                         </div>
                         <div>
-                            <dt>{{ _("Cleaned merchant") }}</dt>
-                            <dd>{{ (tx["cleaned_merchant"] or "&mdash;") | safe }}</dd>
-                        </div>
-                        <div>
-                            <dt>{{ _("Canonical merchant") }}</dt>
-                            <dd>{{ (tx["canonical_merchant"] or "&mdash;") | safe }}</dd>
+                            <dt>{{ _("Merchant") }}</dt>
+                            <dd>{{ (tx["merchant_key"] or "&mdash;") | safe }}</dd>
                         </div>
                         <div>
                             <dt>{{ _("Tags") }}</dt>
@@ -507,7 +503,19 @@
                         <div>
                             <dt>{{ _("Category source") }}</dt>
                             <dd>
-                                <span class="badge {{ tx['category_source_badge_class'] }}">{{ _(tx["category_source_label"]) }}</span>
+                                {% if tx["category_source"] == "rule" and tx["category_rule_id"] %}
+                                    <a
+                                        class="text-decoration-none"
+                                        href="{{ url_for('rules.audit_rule_detail', rule_id=tx['category_rule_id']) }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="{{ _('Rule detail') }}"
+                                    >
+                                        <span class="badge {{ tx['category_source_badge_class'] }}">{{ _(tx["category_source_label"]) }}</span>
+                                    </a>
+                                {% else %}
+                                    <span class="badge {{ tx['category_source_badge_class'] }}">{{ _(tx["category_source_label"]) }}</span>
+                                {% endif %}
                                 {% if tx["category_confidence_label"] %}
                                     <span class="badge text-bg-secondary">{{ tx["category_confidence_label"] }}</span>
                                 {% endif %}
@@ -530,7 +538,7 @@
                         "transaction_only"
                     ) }}
                     <div data-rule-save-only>
-                        {{ rule_keyword_control("transaction-rule-" ~ tx["id"], tx["cleaned_merchant"]) }}
+                        {{ rule_keyword_control("transaction-rule-" ~ tx["id"], tx["merchant_key"]) }}
 
                         {{ amount_rule_control("transaction-rule-" ~ tx["id"], exact_value="%.2f"|format(tx["amount"])) }}
                     </div>

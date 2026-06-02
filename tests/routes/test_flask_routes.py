@@ -328,6 +328,12 @@ def test_upload_route_renders_interac_import_guidance(client, db_conn):
 
 def test_transactions_route_renders_category_source_badges_and_filter(client, db_conn):
     """Verify transaction source provenance is visible on the transaction page."""
+    rule_id = db_conn.execute(
+        """
+        INSERT INTO category_rules (keyword, category, source)
+        VALUES ('RULE CATEGORIZED STORE', 'Food', 'manual')
+        """
+    ).lastrowid
     db_conn.execute(
         """
         INSERT INTO transactions (
@@ -342,15 +348,44 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, db
         VALUES ('2026-01-02', 'AI categorized store', 12.34, 'Food', 'ai', 0.91, 'route-ai-source')
         """
     )
+    db_conn.execute(
+        """
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            category_source,
+            category_confidence,
+            category_rule_id,
+            fingerprint
+        )
+        VALUES (
+            '2026-01-03',
+            'Rule categorized store',
+            23.45,
+            'Food',
+            'rule',
+            0.96,
+            ?,
+            'route-rule-source-link'
+        )
+        """,
+        (rule_id,),
+    )
     db_conn.commit()
 
     response = client.get("/transactions?period=all")
     body = response.get_data(as_text=True)
     compact_body = " ".join(body.split())
+    expected_rule_url = f'/rules/audit/rule/{rule_id}'
 
     assert response.status_code == 200
     assert b"Categorization method" in response.data
     assert b"All methods" in response.data
+    assert b"Pending approval" in response.data
+    assert b"Ready to approve" not in response.data
+    assert b"Unverified" not in response.data
     assert "&middot; AI 91%" in compact_body
     assert "<th>Kind</th>" not in body
     assert "<span>Verify</span>" not in body
@@ -367,6 +402,10 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, db
     assert "Edit category" in body
     assert "Ignore transaction" in body
     assert "View evidence" not in body
+    assert f'href="{expected_rule_url}"' in body
+    assert 'target="_blank"' in body
+    assert 'rel="noopener noreferrer"' in body
+    assert f'href="{expected_rule_url}"' in body.split('Category source', 1)[1]
     assert b"data-category-description-select" in response.data
     assert b'value="transaction_only" data-rule-save-mode checked' in response.data
     assert b"data-rule-save-only" in response.data
@@ -476,8 +515,9 @@ def test_comparison_route_renders_complete_unknown_warning(client, db_conn, monk
     assert "because accounts for %" not in visible_body
 
 
-def test_financial_reporting_pages_render_french_copy(client, db_conn):
+def test_financial_reporting_pages_render_french_copy(client, db_conn, monkeypatch):
     """Verify reporting pages localize visible labels and explanatory text."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
     db_conn.execute(
         """
         UPDATE user_settings

@@ -62,14 +62,14 @@ def categorize_transactions(transactions, conn=None, use_llm=True):
             merchant_key,
             tx.get("amount"),
             rules,
-            canonical_name=normalized_merchant.canonical_name,
+            merchant_candidate=merchant_key,
+            raw_description=tx.get("description"),
             merchant_id=tx.get("merchant_id"),
             account_id=tx.get("account_id"),
             transaction_kind=tx.get("transaction_kind"),
         )
         cache_key = merchant_category_cache_key(merchant_key, tx.get("amount"), tx.get("merchant_id"))
         tx["merchant_key"] = merchant_key
-        tx["canonical_merchant"] = normalized_merchant.canonical_name
 
         state = category_state_from_evidence(
             conn,

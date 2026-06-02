@@ -171,7 +171,6 @@ def candidate_pool_filter(conn, transaction):
 
     merchant_key = (
         transaction.get("merchant_key")
-        or transaction.get("canonical_merchant")
         or transaction.get("description")
     )
     description_candidates = merchant_description_candidates(conn, merchant_key)
@@ -253,8 +252,7 @@ def score_historical_candidate(conn, transaction, row, tags):
 def current_merchant_identity(transaction):
     """Return the best available normalized merchant text for a transaction."""
     return str(
-        transaction.get("canonical_merchant")
-        or transaction.get("merchant_key")
+        transaction.get("merchant_key")
         or transaction.get("description")
         or ""
     ).strip()
@@ -266,11 +264,7 @@ def merchant_similarity(transaction, row, current_merchant, candidate_merchant):
     if merchant_id is not None and row["merchant_id"] is not None and int(merchant_id) == int(row["merchant_id"]):
         return 1.0
 
-    candidate_names = [
-        candidate_merchant.canonical_name,
-        candidate_merchant.cleaned_key,
-        row["description"],
-    ]
+    candidate_names = [candidate_merchant.merchant_key, row["description"]]
     return max(text_similarity(current_merchant, candidate) for candidate in candidate_names)
 
 

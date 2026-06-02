@@ -57,8 +57,8 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="delete_rule">
             <input type="hidden" name="rule_id" value="{{ rule.id }}">
-            <button class="btn btn-outline-secondary" type="submit">
-                <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview removal impact") }}
+            <button class="btn btn-outline-danger" type="submit">
+                <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview delete") }}
             </button>
         </form>
         {% endif %}
@@ -66,16 +66,16 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="apply_where_wins">
             <input type="hidden" name="rule_id" value="{{ rule.id }}">
-            <button class="btn btn-outline-secondary" type="submit">
-                <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Preview apply where winner") }}
+            <button class="btn btn-outline-success" type="submit">
+                <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Preview apply where winner") }}
             </button>
         </form>
         <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="force_apply_rule">
             <input type="hidden" name="rule_id" value="{{ rule.id }}">
-            <button class="btn btn-outline-secondary" type="submit">
-                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>{{ _("Preview force apply") }}
+            <button class="btn btn-outline-success" type="submit">
+                <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Preview force apply") }}
             </button>
         </form>
         <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rules') }}">

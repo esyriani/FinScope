@@ -239,7 +239,7 @@ def audit_transaction_rows(conn, unknown_category, transaction_limit=None, inclu
             transactions_table.c.account_id,
             accounts_table.c.name.label("account_name"),
             transactions_table.c.merchant_id,
-            merchants_table.c.display_name.label("merchant_name"),
+            merchants_table.c.merchant_key.label("merchant_name"),
             transactions_table.c.tx_date,
             transactions_table.c.description,
             transactions_table.c.amount,
@@ -277,9 +277,9 @@ def audit_transaction_rows(conn, unknown_category, transaction_limit=None, inclu
         normalized = normalize_merchant(row["description"], conn=conn)
         row["amount"] = amount
         row["tags"] = tags_by_transaction_id.get(row["id"], [])
-        row["merchant_key"] = normalized.cleaned_key
-        row["canonical_merchant"] = normalized.canonical_name
-        row["normalized_description"] = normalized.cleaned_key
+        row["merchant_key"] = normalized.merchant_key
+        row["merchant"] = normalized.merchant_key
+        row["normalized_description"] = normalized.merchant_key
 
     return tuple(rows), limited
 
@@ -287,18 +287,17 @@ def audit_transaction_rows(conn, unknown_category, transaction_limit=None, inclu
 def get_all_rule_matches_for_transaction(transaction, rules, conn=None, include_fuzzy=False):
     """Return all matching rules and the winning rule for one transaction."""
     merchant_key = transaction.get("merchant_key")
-    canonical_merchant = transaction.get("canonical_merchant")
     if not merchant_key:
         normalized = normalize_merchant(transaction.get("description", ""), conn=conn)
-        merchant_key = normalized.cleaned_key
-        canonical_merchant = normalized.canonical_name
+        merchant_key = normalized.merchant_key
 
     matches = tuple(
         score_category_rule_matches(
             merchant_key,
             transaction.get("amount"),
             rules,
-            canonical_name=canonical_merchant,
+            merchant_candidate=merchant_key,
+            raw_description=transaction.get("description"),
             merchant_id=transaction.get("merchant_id"),
             account_id=transaction.get("account_id"),
             transaction_kind=transaction.get("transaction_kind"),

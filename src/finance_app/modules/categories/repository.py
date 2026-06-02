@@ -345,7 +345,7 @@ def get_category_rules(conn=None):
             category_rules_table.c.id,
             category_rules_table.c.account_id,
             category_rules_table.c.merchant_id,
-            merchants_table.c.display_name.label("merchant_name"),
+            merchants_table.c.merchant_key.label("merchant_name"),
             category_rules_table.c.keyword,
             category_rules_table.c.category,
             category_rules_table.c.category_id,

@@ -214,6 +214,7 @@ def build_statement_preview(
         interac_direction,
         date_formats,
         preview_limit,
+        prefer_ambiguous_dates=date_analysis["ambiguous_count"] > 0,
     )
     parse_result = parse_csv_transactions(
         raw_text,
@@ -405,17 +406,61 @@ def interac_preview_records(raw_text, interac_direction=INTERAC_DIRECTION_AUTO):
     return records
 
 
-def preview_rows_for_records(records, statement_type, interac_direction, date_formats, preview_limit):
-    """Return parsed preview rows for transaction-like records."""
+def preview_rows_for_records(
+    records,
+    statement_type,
+    interac_direction,
+    date_formats,
+    preview_limit,
+    prefer_ambiguous_dates=False,
+):
+    """Return parsed preview rows for transaction-like records.
+
+    Args:
+        records: Normalized source rows extracted from the uploaded statement.
+        statement_type: Parser type selected for the statement.
+        interac_direction: Optional Interac direction override for transfer files.
+        date_formats: Ordered parser date formats for the effective date order.
+        preview_limit: Maximum number of rows to return.
+        prefer_ambiguous_dates: When true, rows that parse differently under
+            month-first and day-first slash-date orders are shown before other
+            sample rows.
+
+    Returns:
+        A list of JSON-ready preview rows. The source statement is not mutated.
+    """
     preview_rows = []
+    fallback_rows = []
     for record in records:
         tx = preview_transaction(record, statement_type, interac_direction, date_formats)
         if tx is None:
             continue
-        preview_rows.append(preview_row_payload(record, tx))
+
+        row = preview_row_payload(record, tx)
+        if prefer_ambiguous_dates:
+            if preview_row_has_ambiguous_date(row):
+                preview_rows.append(row)
+                if len(preview_rows) >= preview_limit:
+                    break
+            elif len(fallback_rows) < preview_limit:
+                fallback_rows.append(row)
+            continue
+
+        preview_rows.append(row)
         if len(preview_rows) >= preview_limit:
             break
+
+    if prefer_ambiguous_dates and len(preview_rows) < preview_limit:
+        preview_rows.extend(fallback_rows[:preview_limit - len(preview_rows)])
+
     return preview_rows
+
+
+def preview_row_has_ambiguous_date(row):
+    """Return whether a preview row has conflicting slash-date interpretations."""
+    month_first_date = row.get("month_first_date") or ""
+    day_first_date = row.get("day_first_date") or ""
+    return bool(month_first_date and day_first_date and month_first_date != day_first_date)
 
 
 def preview_transaction(record, statement_type, interac_direction, date_formats):

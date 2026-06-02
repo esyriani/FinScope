@@ -260,7 +260,7 @@ def test_import_rules_add_persists_merchant_bound_rules(db_conn):
 
     rule = db_conn.execute(
         """
-        SELECT category_rules.keyword, category_rules.merchant_id, merchants.display_name
+        SELECT category_rules.keyword, category_rules.merchant_id, merchants.merchant_key
         FROM category_rules
         JOIN merchants ON merchants.id = category_rules.merchant_id
         WHERE category_rules.keyword = 'METRO GROCERY'
