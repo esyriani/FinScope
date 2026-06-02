@@ -959,7 +959,6 @@ def overlap_transaction_sort_options():
         "account": lambda row: sortable_text(row["transaction"].get("account_name")),
         "merchant": lambda row: sortable_text(
             row["transaction"].get("merchant_name")
-            or row["transaction"].get("canonical_merchant")
             or row["transaction"].get("merchant_key"),
         ),
         "description": lambda row: sortable_text(row["transaction"].get("description")),

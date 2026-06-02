@@ -129,7 +129,7 @@ def export_rule_rows(conn):
             category_rules_table.c.keyword,
             category_rules_table.c.direction,
             accounts_table.c.name.label("account_name"),
-            merchants_table.c.display_name.label("merchant_name"),
+            merchants_table.c.merchant_key.label("merchant_name"),
             category_rules_table.c.category,
             category_rules_table.c.amount_min,
             category_rules_table.c.amount_max,
@@ -534,7 +534,6 @@ def parse_rules_csv_row(row, line_number):
             "bound_merchant",
             "merchant_display",
             "merchant_display_name",
-            "canonical_merchant",
         )
         or ""
     ).strip()

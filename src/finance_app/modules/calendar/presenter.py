@@ -29,7 +29,6 @@ def build_calendar_transactions(rows, conn=None):
                 "merchant_id": merchant["id"],
                 "merchant_key": merchant["key"],
                 "merchant_name": merchant["name"],
-                "cleaned_merchant": merchant["cleaned_key"],
                 "amount": rounded_money_float(abs(amount)),
                 "signed_amount": rounded_money_float(amount),
                 "type": tx_type,

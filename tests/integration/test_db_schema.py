@@ -11,9 +11,6 @@ from finance_app.core.constants import (
     CATEGORY_SOURCES,
     DATE_ORDERS,
     INTERAC_DIRECTIONS,
-    MERCHANT_ALIAS_CONFIDENCES,
-    MERCHANT_ALIAS_SOURCES,
-    MERCHANT_DISPLAY_NAME_SOURCES,
     RECURRING_PATTERN_TYPES,
     RECURRING_USER_STATUSES,
     STATEMENT_IMPORT_MODES,
@@ -113,7 +110,8 @@ def test_core_schema_creates_category_tag_tables(schema_conn):
     tables = set(inspect(schema_conn).get_table_names())
 
     assert {"tags", "transaction_tags", "category_rule_tags"}.issubset(tables)
-    assert {"merchants", "merchant_aliases"}.issubset(tables)
+    assert "merchants" in tables
+    assert "merchant_aliases" not in tables
 
 
 def test_core_schema_text_constraints_match_shared_constants(schema_conn):
@@ -126,9 +124,6 @@ def test_core_schema_text_constraints_match_shared_constants(schema_conn):
         ("statements", "import_status", STATEMENT_IMPORT_STATUSES),
         ("statements", "interac_direction", INTERAC_DIRECTIONS),
         ("statements", "date_order", DATE_ORDERS),
-        ("merchants", "display_name_source", MERCHANT_DISPLAY_NAME_SOURCES),
-        ("merchant_aliases", "source", MERCHANT_ALIAS_SOURCES),
-        ("merchant_aliases", "confidence", MERCHANT_ALIAS_CONFIDENCES),
         ("transactions", "transaction_kind", TRANSACTION_KINDS),
         ("transactions", "category_source", CATEGORY_SOURCES),
         ("category_rules", "source", CATEGORY_RULE_SOURCES),
@@ -234,9 +229,7 @@ def test_category_rules_allow_merchant_bound_and_keyword_fuzzy_scopes(schema_con
     """Verify category rule uniqueness is scoped by merchant binding."""
     result = schema_conn.execute(
         insert(merchants_table).values(
-            canonical_key="METRO",
-            system_name="METRO",
-            display_name="METRO",
+            merchant_key="METRO",
         )
     )
     merchant_id = result.inserted_primary_key[0]
@@ -269,16 +262,12 @@ def test_category_rules_enforce_keyword_and_merchant_uniqueness(schema_conn):
     """Verify category rule duplicate prevention uses the same logical keys."""
     first_merchant = schema_conn.execute(
         insert(merchants_table).values(
-            canonical_key="FIRST",
-            system_name="FIRST",
-            display_name="First",
+            merchant_key="FIRST",
         )
     ).inserted_primary_key[0]
     second_merchant = schema_conn.execute(
         insert(merchants_table).values(
-            canonical_key="SECOND",
-            system_name="SECOND",
-            display_name="Second",
+            merchant_key="SECOND",
         )
     ).inserted_primary_key[0]
     schema_conn.execute(
@@ -340,9 +329,7 @@ def test_recurring_patterns_enforce_merchant_type_uniqueness(schema_conn):
     """Verify merchant-bound recurring patterns are unique across dialects."""
     merchant_id = schema_conn.execute(
         insert(merchants_table).values(
-            canonical_key="RECURRENT",
-            system_name="RECURRENT",
-            display_name="Recurring merchant",
+            merchant_key="RECURRENT",
         )
     ).inserted_primary_key[0]
     schema_conn.execute(

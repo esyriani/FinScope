@@ -477,7 +477,7 @@ def fetch_recent_rules(conn, limit=2):
             category_rules_table.c.category,
             category_rules_table.c.source,
             category_rules_table.c.created_at,
-            merchants_table.c.display_name.label("merchant_name"),
+            merchants_table.c.merchant_key.label("merchant_name"),
         )
         .select_from(
             category_rules_table.outerjoin(

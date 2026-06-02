@@ -39,12 +39,6 @@ from finance_app.core.constants import (
     DATE_ORDERS,
     INTERAC_DIRECTIONS,
     INTERAC_DIRECTION_AUTO,
-    MERCHANT_ALIAS_CONFIDENCE_HIGH,
-    MERCHANT_ALIAS_CONFIDENCES,
-    MERCHANT_ALIAS_SOURCE_SYSTEM,
-    MERCHANT_ALIAS_SOURCES,
-    MERCHANT_DISPLAY_NAME_SOURCE_SYSTEM,
-    MERCHANT_DISPLAY_NAME_SOURCES,
     RECURRING_PATTERN_TYPES,
     RECURRING_USER_STATUS_DETECTED,
     RECURRING_USER_STATUSES,
@@ -214,23 +208,11 @@ merchants = Table(
     "merchants",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("canonical_key", String(255), nullable=False),
-    Column("system_name", String(255), nullable=False),
-    Column("display_name", String(255), nullable=False),
-    Column("display_name_source", String(32), nullable=False, server_default=MERCHANT_DISPLAY_NAME_SOURCE_SYSTEM),
-    Column("active", Integer, nullable=False, server_default=text("1")),
+    Column("merchant_key", String(255), nullable=False),
     Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
     Column("updated_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
-    UniqueConstraint("canonical_key", name="uq_merchants_canonical_key"),
-    non_empty_constraint("canonical_key", "merchants_canonical_key_non_empty"),
-    non_empty_constraint("system_name", "merchants_system_name_non_empty"),
-    non_empty_constraint("display_name", "merchants_display_name_non_empty"),
-    allowed_values_constraint(
-        "display_name_source",
-        MERCHANT_DISPLAY_NAME_SOURCES,
-        "merchants_display_name_source_allowed",
-    ),
-    CheckConstraint("active IN (0, 1)", name="merchants_active_bool"),
+    UniqueConstraint("merchant_key", name="uq_merchants_merchant_key"),
+    non_empty_constraint("merchant_key", "merchants_merchant_key_non_empty"),
     **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
@@ -366,24 +348,6 @@ transactions = Table(
     **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
-merchant_aliases = Table(
-    "merchant_aliases",
-    metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("merchant_id", Integer, ForeignKey("merchants.id", ondelete="CASCADE"), nullable=False),
-    Column("alias_key", String(255), nullable=False),
-    Column("raw_example", Text),
-    Column("source", String(32), nullable=False, server_default=MERCHANT_ALIAS_SOURCE_SYSTEM),
-    Column("confidence", String(32), nullable=False, server_default=MERCHANT_ALIAS_CONFIDENCE_HIGH),
-    Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
-    Column("updated_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
-    UniqueConstraint("alias_key", name="uq_merchant_aliases_alias_key"),
-    non_empty_constraint("alias_key", "merchant_aliases_alias_key_non_empty"),
-    allowed_values_constraint("source", MERCHANT_ALIAS_SOURCES, "merchant_aliases_source_allowed"),
-    allowed_values_constraint("confidence", MERCHANT_ALIAS_CONFIDENCES, "merchant_aliases_confidence_allowed"),
-    **AUTOINCREMENT_TABLE_OPTIONS,
-)
-
 recurring_patterns = Table(
     "recurring_patterns",
     metadata,
@@ -475,8 +439,7 @@ Index("idx_category_rules_amount_bounds", category_rules.c.amount_min, category_
 Index("idx_category_rules_category_id", category_rules.c.category_id)
 Index("idx_category_rules_source_approval", category_rules.c.source, category_rules.c.ai_approved)
 
-Index("idx_merchants_display_name", merchants.c.display_name)
-Index("idx_merchant_aliases_merchant", merchant_aliases.c.merchant_id)
+Index("idx_merchants_key", merchants.c.merchant_key)
 Index("idx_statement_types_active", statement_types.c.active, statement_types.c.name)
 Index("idx_statements_account", statements.c.account_id)
 Index("idx_statements_statement_type", statements.c.statement_type_id)
@@ -498,7 +461,6 @@ SCHEMA_TABLES = (
     statements,
     categories,
     merchants,
-    merchant_aliases,
     transactions,
     category_rules,
     recurring_patterns,

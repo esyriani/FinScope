@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import InvalidOperation
 from difflib import SequenceMatcher
 
+from finance_app.core.text import strip_accents
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTION_CREDIT,
@@ -49,7 +50,8 @@ def match_category_rule(
     merchant_key,
     amount,
     rules,
-    canonical_name=None,
+    merchant_candidate=None,
+    raw_description=None,
     merchant_id=None,
     account_id=None,
     transaction_kind=None,
@@ -59,7 +61,8 @@ def match_category_rule(
         merchant_key,
         amount,
         rules,
-        canonical_name=canonical_name,
+        merchant_candidate=merchant_candidate,
+        raw_description=raw_description,
         merchant_id=merchant_id,
         account_id=account_id,
         transaction_kind=transaction_kind,
@@ -72,7 +75,8 @@ def score_category_rule_match(
     merchant_key,
     amount,
     rules,
-    canonical_name=None,
+    merchant_candidate=None,
+    raw_description=None,
     merchant_id=None,
     account_id=None,
     transaction_kind=None,
@@ -89,7 +93,8 @@ def score_category_rule_match(
             merchant_key,
             amount,
             rules,
-            canonical_name=canonical_name,
+            merchant_candidate=merchant_candidate,
+            raw_description=raw_description,
             merchant_id=merchant_id,
             account_id=account_id,
             transaction_kind=transaction_kind,
@@ -102,14 +107,19 @@ def score_category_rule_matches(
     merchant_key,
     amount,
     rules,
-    canonical_name=None,
+    merchant_candidate=None,
+    raw_description=None,
     merchant_id=None,
     account_id=None,
     transaction_kind=None,
     include_fuzzy=True,
 ):
     """Return all category rules matching a transaction with deterministic scores."""
-    candidates = merchant_match_candidates(merchant_key, canonical_name)
+    candidates = merchant_match_candidates(
+        merchant_key,
+        merchant_candidate,
+        raw_description=raw_description,
+    )
     matches = []
     for rule in rules:
         if rule["category"] == "Income" and (amount is None or amount >= 0):
@@ -171,14 +181,27 @@ def rule_match_precedence_key(match):
     )
 
 
-def merchant_match_candidates(merchant_key, canonical_name=None):
-    """Build match candidates."""
+def merchant_match_candidates(merchant_key, merchant_candidate=None, raw_description=None):
+    """Build normalized and raw-text candidates for keyword matching."""
     candidates = []
-    for value in (merchant_key, canonical_name):
+    for value in (merchant_key, merchant_candidate):
+        text = normalize_merchant_description(value)
+        if text and text not in candidates:
+            candidates.append(text)
+
+    for value in (raw_description_candidate(raw_description),):
         text = str(value or "").strip()
         if text and text not in candidates:
             candidates.append(text)
     return candidates
+
+
+def raw_description_candidate(raw_description):
+    """Return a lossless uppercase transaction-description match candidate."""
+    text = str(raw_description or "").strip()
+    if not text:
+        return ""
+    return " ".join(strip_accents(text).upper().split())
 
 
 def scored_rule_match(

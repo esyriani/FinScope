@@ -3,20 +3,12 @@
 import re
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select
-
-from finance_app.core.constants import (
-    MERCHANT_ALIAS_CONFIDENCE_HIGH,
-    MERCHANT_ALIAS_CONFIDENCE_LOW,
-    MERCHANT_ALIAS_SOURCE_ALIAS,
-    MERCHANT_ALIAS_SOURCE_FALLBACK,
-    MERCHANT_ALIAS_SOURCE_RULE,
-)
 from finance_app.core.text import strip_accents
-from finance_app.database.tables import (
-    merchant_aliases as merchant_aliases_table,
-    merchants as merchants_table,
-)
+
+MERCHANT_CLEANUP_CONFIDENCE_HIGH = "high"
+MERCHANT_CLEANUP_CONFIDENCE_LOW = "low"
+MERCHANT_CLEANUP_SOURCE_FALLBACK = "fallback"
+MERCHANT_CLEANUP_SOURCE_RULE = "rule"
 
 
 @dataclass(frozen=True)
@@ -25,39 +17,24 @@ class CleanedMerchant:
     cleaned_key: str
     location_code: str | None = None
     removed_tokens: tuple[str, ...] = ()
-    confidence: str = MERCHANT_ALIAS_CONFIDENCE_HIGH
+    confidence: str = MERCHANT_CLEANUP_CONFIDENCE_HIGH
 
 
 @dataclass(frozen=True)
 class NormalizedMerchant:
-    """Represent normalized merchant."""
+    """Represent a deterministic merchant key derived from a description."""
     raw_description: str
-    cleaned_key: str
-    canonical_name: str
+    merchant_key: str
     normalization_source: str
     confidence: str
     location_code: str | None = None
     removed_tokens: tuple[str, ...] = ()
 
+    @property
+    def cleaned_key(self):
+        """Return the deterministic merchant key for legacy callers."""
+        return self.merchant_key
 
-DEFAULT_MERCHANT_ALIASES = {
-    "AMZN MKTP": "AMAZON",
-    "AMAZON MKTPLACE": "AMAZON",
-    "PRESTO FARE": "PRESTO",
-    "WAL-MART SUPERCENTER": "WALMART",
-    "WALMART CA": "WALMART",
-    "LIBRAIRIE RENAUD BRAY": "RENAUD-BRAY",
-    "LIBRAIRE RENAUD BRAY": "RENAUD-BRAY",
-    "LA MAISON SIMONS": "LA MAISON SIMONS",
-    "THE HOME DEPOT": "THE HOME DEPOT",
-    "HOME DEPOT": "THE HOME DEPOT",
-    "CANADIAN TIRE": "CANADIAN TIRE",
-    "RECEPT VFC": "RECEIVED E-TRANSFER",
-    "ENVOI VFC": "SENT E-TRANSFER",
-    "SAAQ-PERMIS": "SAAQ",
-    "SAAQ-IMMATRI": "SAAQ",
-    "TAX SCOL MTL": "TAX SCOLAIRE MONTREAL",
-}
 
 ARTIFACT_SUFFIXES = {"FAC", "PAI", "DIV", "ASS", "REN"}
 BUSINESS_SUFFIXES = {"INC"}
@@ -74,8 +51,7 @@ def clean_merchant_description(raw_description: str) -> CleanedMerchant:
 
     text = re.sub(r"\b(RECEPT|ENVOI)\s*-\s*VFC\b", r"\1 VFC", text)
     text = re.sub(r"\b(RECEPT|ENVOI)-VFC\b", r"\1 VFC", text)
-    text = re.sub(r"\bRENAUD-BRAY\b", "RENAUD BRAY", text)
-    text = re.sub(r"\bLAMAISONSIMONS\b", "LA MAISON SIMONS", text)
+    text = preserve_starred_processor_merchant(text, removed_tokens)
 
     text = remove_pattern(text, r"/[A-Z0-9]{6,}\s*$", removed_tokens)
     text = remove_pattern(text, r"\b(?:CA|CO)\s*\*[A-Z0-9]{4,}\b", removed_tokens)
@@ -93,16 +69,13 @@ def clean_merchant_description(raw_description: str) -> CleanedMerchant:
     text = re.sub(r"[#*]+", " ", text)
     text = normalize_spaces(text)
 
-    text = re.sub(r"\bAMZN\s+MKTP\s+CA\b", "AMZN MKTP", text)
-    text = re.sub(r"\bCANADIAN\s+TIRE\s+STORE\b", "CANADIAN TIRE", text)
-
     text = remove_trailing_reference_tokens(text, removed_tokens)
     text = remove_trailing_suffixes(text, removed_tokens, ARTIFACT_SUFFIXES)
     text = remove_trailing_suffixes(text, removed_tokens, BUSINESS_SUFFIXES)
     text = remove_trailing_reference_tokens(text, removed_tokens)
 
     text = normalize_spaces(text).strip(" -*/#")
-    confidence = MERCHANT_ALIAS_CONFIDENCE_HIGH if text else MERCHANT_ALIAS_CONFIDENCE_LOW
+    confidence = MERCHANT_CLEANUP_CONFIDENCE_HIGH if text else MERCHANT_CLEANUP_CONFIDENCE_LOW
     return CleanedMerchant(
         cleaned_key=text,
         location_code=location_code,
@@ -117,39 +90,19 @@ def normalize_merchant_description(description):
 
 
 def normalize_merchant(raw_description: str, conn=None) -> NormalizedMerchant:
-    """Normalize merchant."""
+    """Return a deterministic merchant key for a raw transaction description."""
+    del conn
     raw_text = str(raw_description or "")
     cleaned = clean_merchant_description(raw_text)
-    merchant = merchant_for_cleaned_key(conn, cleaned.cleaned_key)
-
-    if merchant:
-        return NormalizedMerchant(
-            raw_description=raw_text,
-            cleaned_key=cleaned.cleaned_key,
-            canonical_name=merchant["display_name"],
-            normalization_source=merchant["source"],
-            confidence=merchant["confidence"],
-            location_code=cleaned.location_code,
-            removed_tokens=cleaned.removed_tokens,
-        )
-
-    canonical = canonical_alias_for_key(cleaned.cleaned_key)
-
-    if canonical:
-        canonical_name = canonical
-        source = MERCHANT_ALIAS_SOURCE_ALIAS
-    else:
-        canonical_name = cleaned.cleaned_key
-        source = (
-            MERCHANT_ALIAS_SOURCE_RULE
-            if cleaned.removed_tokens or cleaned.location_code
-            else MERCHANT_ALIAS_SOURCE_FALLBACK
-        )
+    source = (
+        MERCHANT_CLEANUP_SOURCE_RULE
+        if cleaned.removed_tokens or cleaned.location_code
+        else MERCHANT_CLEANUP_SOURCE_FALLBACK
+    )
 
     return NormalizedMerchant(
         raw_description=raw_text,
-        cleaned_key=cleaned.cleaned_key,
-        canonical_name=canonical_name,
+        merchant_key=cleaned.cleaned_key,
         normalization_source=source,
         confidence=cleaned.confidence,
         location_code=cleaned.location_code,
@@ -158,70 +111,9 @@ def normalize_merchant(raw_description: str, conn=None) -> NormalizedMerchant:
 
 
 def canonicalize_merchant_key(value: str, conn=None) -> str:
-    """Canonicalize merchant key."""
-    merchant = merchant_for_name(conn, value)
-    if merchant:
-        return merchant["display_name"]
-    return normalize_merchant(value, conn=conn).canonical_name
-
-
-def canonical_merchant_description(description: str, conn=None) -> str:
-    """Return the canonical merchant description."""
-    return normalize_merchant(description, conn=conn).canonical_name
-
-
-def canonical_alias_for_key(cleaned_key: str) -> str | None:
-    """Return the canonical alias for key."""
-    alias_key = clean_merchant_description(cleaned_key).cleaned_key
-    if not alias_key:
-        return None
-    return DEFAULT_MERCHANT_ALIASES.get(alias_key)
-
-
-def merchant_for_cleaned_key(conn, cleaned_key):
-    """Return persisted merchant metadata for a cleaned key when available."""
-    if conn is None:
-        return None
-
-    alias_key = str(cleaned_key or "").strip()
-    if not alias_key:
-        return None
-
-    return conn.execute(
-        select(
-            merchants_table.c.display_name,
-            merchant_aliases_table.c.source,
-            merchant_aliases_table.c.confidence,
-        )
-        .select_from(
-            merchant_aliases_table.join(
-                merchants_table,
-                merchants_table.c.id == merchant_aliases_table.c.merchant_id,
-            )
-        )
-        .where(merchant_aliases_table.c.alias_key == alias_key)
-    ).mappings().fetchone()
-
-
-def merchant_for_name(conn, merchant_name):
-    """Return persisted merchant metadata for a display name when available."""
-    if conn is None:
-        return None
-
-    text = str(merchant_name or "").strip()
-    if not text:
-        return None
-
-    normalized = text.lower()
-    return conn.execute(
-        select(merchants_table.c.display_name).where(
-            or_(
-                func.lower(merchants_table.c.display_name) == normalized,
-                func.lower(merchants_table.c.system_name) == normalized,
-                func.lower(merchants_table.c.canonical_key) == normalized,
-            )
-        )
-    ).mappings().fetchone()
+    """Return the deterministic merchant key for a filter or rule value."""
+    del conn
+    return normalize_merchant(value).merchant_key
 
 
 def extract_location_code(text, removed_tokens):
@@ -283,6 +175,30 @@ def remove_pattern(text, pattern, removed_tokens):
         return " "
 
     return re.sub(pattern, replace, text)
+
+
+def preserve_starred_processor_merchant(text, removed_tokens):
+    """Preserve merchant names from payment-processor star descriptors.
+
+    Some payment processors prefix the true merchant with a short processor
+    token, such as ``SQ *COSMETA``. The generic star-token cleanup treats
+    starred values as card/reference artifacts, so these processor-specific
+    descriptors must be normalized before that cleanup runs.
+    """
+    match = re.match(
+        r"^(SQ|SQUARE)\s*\*\s*(?P<merchant>(?=[A-Z0-9 .&'`/,-]*[A-Z])[A-Z0-9 .&'`/,-]{3,})$",
+        text,
+    )
+    if not match:
+        return text
+
+    processor = match.group(1)
+    merchant = normalize_spaces(match.group("merchant"))
+    if not merchant:
+        return text
+
+    removed_tokens.append(processor)
+    return merchant
 
 
 def normalize_spaces(value):

@@ -72,7 +72,7 @@ def test_rules_repository_import_helpers_support_core_connections(app, db_conn):
 
     persisted = db_conn.execute(
         """
-        SELECT category_rules.keyword, category_rules.category, merchants.display_name
+        SELECT category_rules.keyword, category_rules.category, merchants.merchant_key
         FROM category_rules
         JOIN merchants ON merchants.id = category_rules.merchant_id
         WHERE category_rules.keyword = 'CORE MARKET'

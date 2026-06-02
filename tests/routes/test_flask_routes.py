@@ -351,6 +351,9 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, db
     assert response.status_code == 200
     assert b"Categorization method" in response.data
     assert b"All methods" in response.data
+    assert b"Pending approval" in response.data
+    assert b"Ready to approve" not in response.data
+    assert b"Unverified" not in response.data
     assert "&middot; AI 91%" in compact_body
     assert "<th>Kind</th>" not in body
     assert "<span>Verify</span>" not in body
@@ -476,8 +479,9 @@ def test_comparison_route_renders_complete_unknown_warning(client, db_conn, monk
     assert "because accounts for %" not in visible_body
 
 
-def test_financial_reporting_pages_render_french_copy(client, db_conn):
+def test_financial_reporting_pages_render_french_copy(client, db_conn, monkeypatch):
     """Verify reporting pages localize visible labels and explanatory text."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
     db_conn.execute(
         """
         UPDATE user_settings

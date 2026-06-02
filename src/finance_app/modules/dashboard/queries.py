@@ -274,8 +274,8 @@ def fetch_merchant_transaction_rows(conn, filters, unknown_category):
         select(
             transactions_table.c.description,
             transactions_table.c.merchant_id,
-            merchants_table.c.display_name.label("merchant_name"),
-            merchants_table.c.canonical_key.label("merchant_canonical_key"),
+            merchants_table.c.merchant_key.label("merchant_name"),
+            merchants_table.c.merchant_key.label("merchant_key"),
             transactions_table.c.amount,
             func.coalesce(transactions_table.c.category, unknown_category).label("category"),
         )

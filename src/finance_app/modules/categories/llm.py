@@ -147,7 +147,6 @@ def save_automatic_category_rule(conn, transaction, category, tags):
     """Persist an accepted no-review LLM categorization as an automatic rule."""
     keyword = normalize_merchant_description(
         transaction.get("merchant_key")
-        or transaction.get("canonical_merchant")
         or transaction.get("description")
         or ""
     )
@@ -781,7 +780,6 @@ def semantic_taxonomy_names(transaction, taxonomy_rows, taxonomy_options, unknow
             str(value or "")
             for value in (
                 transaction.get("merchant_key"),
-                transaction.get("canonical_merchant"),
                 transaction.get("description"),
             )
         )
@@ -1323,7 +1321,6 @@ def manual_rule_prompt_relevance(rule, unknown_items):
                 str(value or "")
                 for value in (
                     tx.get("merchant_key"),
-                    tx.get("canonical_merchant"),
                     tx.get("description"),
                 )
             )

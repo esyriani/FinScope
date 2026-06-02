@@ -23,7 +23,7 @@ def test_parse_transaction_filters_normalizes_request_args(db_conn):
             ("category_source", "ai"),
             ("amount_type", "income"),
             ("ignored", "ignored"),
-            ("review", "ready_to_approve"),
+            ("review", "pending_approval"),
             ("period", "all"),
             ("sort", "amount"),
             ("direction", "asc"),
@@ -43,14 +43,14 @@ def test_parse_transaction_filters_normalizes_request_args(db_conn):
     assert filters["category_source"] == "ai"
     assert filters["amount_type"] == "income"
     assert filters["ignored"] == "ignored"
-    assert filters["review"] == "ready_to_approve"
+    assert filters["review"] == "pending_approval"
     assert filters["period"] == "all"
     assert filters["sort"] == "amount"
     assert filters["direction"] == "asc"
     assert filters["page"] == 2
     assert filters["date_from"] == "2026-01-01"
     assert filters["date_to"] == ""
-    assert filters["merchant_key"] == "AMAZON"
+    assert filters["merchant_key"] == "AMZN MKTP"
 
 
 def test_parse_transaction_filters_defaults_invalid_values(db_conn):
@@ -145,17 +145,17 @@ def test_build_transaction_core_filters_supports_credit_filter(db_conn):
     assert "transactions.transaction_kind IN" in sql
 
 
-def test_build_transaction_core_filters_supports_ready_to_approve_review_filter(db_conn):
-    """Verify ready-to-approve means categorized but not manually verified."""
+def test_build_transaction_core_filters_supports_pending_approval_review_filter(db_conn):
+    """Verify pending approval means categorized but not manually approved."""
     filters = parse_transaction_filters(
-        MultiDict([("review", "ready_to_approve")]),
+        MultiDict([("review", "pending_approval")]),
         db_conn,
     )
 
     core_filters = build_transaction_core_filters(filters, "UNKNOWN")
     sql = "\n".join(str(condition) for condition in core_filters.criteria())
 
-    assert filters["review"] == "ready_to_approve"
+    assert filters["review"] == "pending_approval"
     assert "transactions.needs_review" in sql
     assert "transactions.reviewed_at IS NULL" in sql
 

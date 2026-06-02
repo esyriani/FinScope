@@ -71,6 +71,22 @@ def test_score_category_rule_matches_returns_all_matches_and_preserves_winner():
     assert winner.specificity == rule_specificity(winner.rule)
 
 
+def test_score_category_rule_match_checks_raw_transaction_description():
+    """Verify keyword rules can match raw descriptors before cleanup strips tokens."""
+    rules = [category_rule(1, "COSMETA", tags=["Tax"])]
+
+    winner = score_category_rule_match(
+        "SQ",
+        74.73,
+        rules,
+        merchant_candidate="SQ",
+        raw_description="SQ *COSMETA",
+    )
+
+    assert winner.rule["id"] == 1
+    assert winner.tags == ("Tax",)
+
+
 def test_select_winning_rule_match_uses_confidence_then_match_score_then_specificity():
     """Verify winner selection follows the production precedence tuple."""
     broad = ScoredRuleMatch(

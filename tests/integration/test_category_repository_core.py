@@ -28,9 +28,7 @@ def test_category_repository_rule_helpers_support_core_connections(app, db_conn)
     del app
     merchant_id = db_conn.execute(
         insert(merchants_table).values(
-            canonical_key="CORE MARKET",
-            system_name="CORE MARKET",
-            display_name="Core Market",
+            merchant_key="CORE MARKET",
         )
     ).inserted_primary_key[0]
     db_conn.commit()
@@ -77,7 +75,7 @@ def test_category_repository_rule_helpers_support_core_connections(app, db_conn)
         assert rule["keyword"] == "CORE MARKET UPDATED"
         assert rule["category"] == "Utilities"
         assert rule["source"] == "automatic"
-        assert rule["merchant_name"] == "Core Market"
+        assert rule["merchant_name"] == "CORE MARKET"
         assert rule["tags"] == ["Government"]
 
     persisted = db_conn.execute(

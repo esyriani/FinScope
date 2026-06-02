@@ -31,6 +31,7 @@ from finance_app.modules.categories.service import (
     get_category_options,
     get_category_rules,
     match_category_rule,
+    merchant_match_candidates,
     normalize_category,
     normalize_merchant_description,
     rule_amount_matches,
@@ -124,7 +125,7 @@ def preview_rule_matches_core(conn, rule, keyword, limit):
     sample = []
 
     for row in rows:
-        if not rule_preview_matches_transaction(rule, row, keyword):
+        if not rule_preview_matches_transaction(rule, row, keyword, conn=conn):
             continue
 
         match_count += 1
@@ -146,7 +147,7 @@ def preview_rule_matches_core(conn, rule, keyword, limit):
     return match_count, sample
 
 
-def rule_preview_matches_transaction(rule, transaction, keyword):
+def rule_preview_matches_transaction(rule, transaction, keyword, conn=None):
     """Return whether a transaction matches the current preview filter."""
     if not rule_account_matches_transaction(rule, transaction):
         return False
@@ -158,8 +159,15 @@ def rule_preview_matches_transaction(rule, transaction, keyword):
         transaction_merchant_id = row_value(transaction, "merchant_id")
         if transaction_merchant_id is None or int(transaction_merchant_id) != int(rule_merchant_id):
             return False
-    elif keyword not in normalize_merchant_description(transaction["description"]):
-        return False
+    else:
+        normalized_merchant = normalize_merchant(transaction["description"], conn=conn)
+        candidates = merchant_match_candidates(
+            normalized_merchant.merchant_key,
+            normalized_merchant.merchant_key,
+            raw_description=transaction["description"],
+        )
+        if not any(keyword in candidate for candidate in candidates):
+            return False
 
     amount = money_to_float(transaction["amount"])
     if rule["category"] == "Income" and (amount is None or amount >= 0):
@@ -189,7 +197,11 @@ def rule_matches_transaction(rule, transaction, conn=None):
 
     keyword = normalize_merchant_description(rule["keyword"])
     normalized_merchant = normalize_merchant(transaction["description"], conn=conn)
-    candidates = [normalized_merchant.cleaned_key, normalized_merchant.canonical_name]
+    candidates = merchant_match_candidates(
+        normalized_merchant.merchant_key,
+        normalized_merchant.merchant_key,
+        raw_description=transaction["description"],
+    )
     return bool(keyword and any(keyword in candidate for candidate in candidates) and rule_amount_matches(rule, amount))
 
 
@@ -264,10 +276,11 @@ def apply_rule_where_it_wins_to_transactions(conn, rule):
     for row in rows:
         normalized_merchant = normalize_merchant(row["description"], conn=conn)
         winning_rule = match_category_rule(
-            normalized_merchant.cleaned_key,
+            normalized_merchant.merchant_key,
             money_to_float(row["amount"]),
             rules,
-            canonical_name=normalized_merchant.canonical_name,
+            merchant_candidate=normalized_merchant.merchant_key,
+            raw_description=row["description"],
             merchant_id=row["merchant_id"],
             account_id=row["account_id"],
             transaction_kind=row["transaction_kind"],
@@ -334,10 +347,11 @@ def apply_all_rules_to_transactions(conn, capture_undo=False):
     for row in rows:
         normalized_merchant = normalize_merchant(row["description"], conn=conn)
         rule = match_category_rule(
-            normalized_merchant.cleaned_key,
+            normalized_merchant.merchant_key,
             money_to_float(row["amount"]),
             rules,
-            canonical_name=normalized_merchant.canonical_name,
+            merchant_candidate=normalized_merchant.merchant_key,
+            raw_description=row["description"],
             merchant_id=row["merchant_id"],
             account_id=row["account_id"],
             transaction_kind=row["transaction_kind"],

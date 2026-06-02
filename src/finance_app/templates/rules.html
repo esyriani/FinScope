@@ -391,7 +391,7 @@
                                 </span>
                             {% endif %}
                         </td>
-                        <td>{{ rule["created_at"] }}</td>
+                        <td>{{ rule["created_at"] | datetimefmt }}</td>
                         <td class="text-end">
                             <div class="action-cluster justify-content-end" data-row-action>
                                 <button

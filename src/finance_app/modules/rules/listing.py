@@ -226,7 +226,7 @@ def rule_search_filter(search):
     )
     expressions = (
         category_rules_table.c.keyword,
-        func.coalesce(merchants_table.c.display_name, ""),
+        func.coalesce(merchants_table.c.merchant_key, ""),
         category_rules_table.c.category,
         category_rules_table.c.source,
         approval_text,
@@ -258,7 +258,7 @@ def rule_rows(conn, filters, sort_expression, direction, page_size, offset):
         category_rules_table.c.account_id,
         accounts_table.c.name.label("account_name"),
         category_rules_table.c.merchant_id,
-        merchants_table.c.display_name.label("merchant_name"),
+        merchants_table.c.merchant_key.label("merchant_name"),
         category_rules_table.c.keyword,
         category_rules_table.c.category,
         category_rules_table.c.amount_min,

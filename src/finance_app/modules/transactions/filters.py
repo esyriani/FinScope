@@ -42,7 +42,7 @@ from finance_app.modules.transactions.constants import (
     IGNORED_FILTER_IGNORED,
     IGNORED_FILTERS,
     REVIEW_FILTER_NEEDS_REVIEW,
-    REVIEW_FILTER_READY_TO_APPROVE,
+    REVIEW_FILTER_PENDING_APPROVAL,
     REVIEW_FILTERS,
     REVIEW_FILTER_VERIFIED,
     TRANSACTION_SORT_ACCOUNT,
@@ -172,7 +172,7 @@ def build_transaction_core_filters(filters, unknown_category, conn=None):
 
     if filters["review"] == REVIEW_FILTER_NEEDS_REVIEW:
         core_filters.add(transactions_table.c.needs_review == 1)
-    elif filters["review"] == REVIEW_FILTER_READY_TO_APPROVE:
+    elif filters["review"] == REVIEW_FILTER_PENDING_APPROVAL:
         core_filters.add(transactions_table.c.needs_review == 0)
         core_filters.add(transactions_table.c.reviewed_at.is_(None))
     elif filters["review"] == REVIEW_FILTER_VERIFIED:
@@ -280,8 +280,8 @@ def matching_transaction_ids_for_merchant_key(conn, merchant_key):
             transactions_table.c.id,
             transactions_table.c.description,
             transactions_table.c.merchant_id,
-            merchants_table.c.display_name.label("merchant_name"),
-            merchants_table.c.canonical_key.label("merchant_canonical_key"),
+            merchants_table.c.merchant_key.label("merchant_name"),
+            merchants_table.c.merchant_key.label("merchant_key"),
         )
         .select_from(
             transactions_table.outerjoin(

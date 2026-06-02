@@ -86,7 +86,6 @@ def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(
 
     metro_match, metro_out_of_range, payroll_income, payroll_positive, unknown = categorized
     assert metro_match["merchant_key"] == "METRO GROCERY"
-    assert metro_match["canonical_merchant"] == "METRO GROCERY"
     assert metro_match["category"] == "Food"
     assert metro_match["needs_review"] == 0
     assert metro_match["category_source"] == "rule"
