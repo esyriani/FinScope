@@ -97,6 +97,17 @@
 </form>
 {% endmacro %}
 
+{% macro preview_delete_button(rule) %}
+<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="delete_rule">
+    <input type="hidden" name="rule_id" value="{{ rule.id }}">
+    <button class="btn btn-sm btn-outline-danger" type="submit">
+        <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview delete") }}
+    </button>
+</form>
+{% endmacro %}
+
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Shared matching transactions") }}</h2>
