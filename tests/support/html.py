@@ -7,6 +7,7 @@ assertions so embedded catalogs or assets do not create false positives.
 
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
+import re
 
 
 INVISIBLE_TEXT_TAGS = {"script", "style"}
@@ -221,6 +222,36 @@ def assert_option(response_or_html, value=None, text=None, selected=None):
     if selected is not None:
         attrs["selected"] = selected
     assert_has_element(response_or_html, "option", attrs=attrs, text=text)
+
+
+def asset_reference_values(response_or_html):
+    """Return parsed ``src`` and ``href`` asset references from HTML."""
+    document = parse_html(response_or_html)
+    values = []
+    for element in document.elements:
+        for attr_name in ("src", "href"):
+            value = element.attrs.get(attr_name)
+            if value:
+                values.append(value)
+    return values
+
+
+def assert_asset_reference(response_or_html, pattern):
+    """Assert that a parsed asset reference matches a regular expression."""
+    assert any(re.search(pattern, value) for value in asset_reference_values(response_or_html))
+
+
+def asset_reference_index(response_or_html, pattern):
+    """Return the first parsed asset reference index matching a regex."""
+    for index, value in enumerate(asset_reference_values(response_or_html)):
+        if re.search(pattern, value):
+            return index
+    raise AssertionError(f"No asset reference matched {pattern!r}")
+
+
+def assert_no_asset_reference(response_or_html, snippet):
+    """Assert that parsed asset references do not contain a snippet."""
+    assert all(snippet not in value for value in asset_reference_values(response_or_html))
 
 
 def assert_markup(response_or_html, *snippets):

@@ -23,6 +23,7 @@ from tests.support.html import (
     assert_option,
     assert_visible_text,
 )
+from tests.support.jobs import capture_background_jobs
 from tests.support.rules import rule_by_id
 from tests.support.web import set_csrf_token
 
@@ -710,23 +711,7 @@ def test_rules_import_route_rejects_invalid_mode_missing_file_and_bad_file_type(
 
 def test_rules_import_route_previews_then_queues_background_job(client, monkeypatch):
     """Verify that valid imports require preview confirmation before queueing."""
-    submitted_jobs = []
-
-    def capture_job(label, func, *args, undo_handler=None, undo_args=None, **kwargs):
-        """Capture background import job metadata."""
-        submitted_jobs.append(
-            {
-                "label": label,
-                "func": func,
-                "args": args,
-                "undo_handler": undo_handler,
-                "undo_args": undo_args,
-                "kwargs": kwargs,
-            }
-        )
-        return "rulesjob123"
-
-    monkeypatch.setattr(rules_controller, "submit_background_job", capture_job)
+    submitted_jobs = capture_background_jobs(monkeypatch, rules_controller, job_id="rulesjob123")
 
     preview = client.post(
         "/rules/import",
@@ -751,7 +736,7 @@ def test_rules_import_route_previews_then_queues_background_job(client, monkeypa
         },
     )
     assert_has_element(preview, None, attrs={"data-sort-column": "0", "data-sort-type": "text"})
-    assert submitted_jobs == []
+    assert len(submitted_jobs) == 0
 
     response = client.post(
         "/rules/import",
@@ -768,24 +753,19 @@ def test_rules_import_route_previews_then_queues_background_job(client, monkeypa
     assert response.status_code == 200
     assert_visible_text(response, "Rules import queued in the background.")
     assert len(submitted_jobs) == 1
-    submitted = submitted_jobs[0]
-    assert submitted["label"] == "Import rules from rules.csv"
-    assert submitted["func"] is import_rules_job
-    assert submitted["args"][0] == "keyword,category\nMetro,Food\n"
-    assert submitted["args"][1] == "add"
-    assert isinstance(submitted["args"][2], dict)
-    assert submitted["undo_handler"] is undo_import_rules_job
-    assert submitted["undo_args"] == (submitted["args"][2],)
+    submitted = submitted_jobs.single()
+    assert submitted.label == "Import rules from rules.csv"
+    assert submitted.func is import_rules_job
+    assert submitted.args[0] == "keyword,category\nMetro,Food\n"
+    assert submitted.args[1] == "add"
+    assert isinstance(submitted.args[2], dict)
+    assert submitted.undo_handler is undo_import_rules_job
+    assert submitted.undo_args == (submitted.args[2],)
 
 
 def test_rules_import_route_rejects_malformed_csv_before_queueing(client, monkeypatch):
     """Verify malformed CSV payloads fail during import preview."""
-    submitted_jobs = []
-    monkeypatch.setattr(
-        rules_controller,
-        "submit_background_job",
-        lambda label, func, *args, **kwargs: submitted_jobs.append((label, func, args, kwargs)) or "badcsvjob",
-    )
+    submitted_jobs = capture_background_jobs(monkeypatch, rules_controller, job_id="badcsvjob")
 
     response = client.post(
         "/rules/import",
@@ -800,4 +780,4 @@ def test_rules_import_route_rejects_malformed_csv_before_queueing(client, monkey
 
     assert response.status_code == 200
     assert_visible_text(response, "Row 2: keyword or merchant_name is required.")
-    assert submitted_jobs == []
+    assert len(submitted_jobs) == 0

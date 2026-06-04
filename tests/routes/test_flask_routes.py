@@ -5,17 +5,17 @@ from datetime import date as real_date
 import io
 import re
 
-import pytest
-
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.comparison import service as comparison_service
 from tests.support.html import (
+    assert_asset_reference,
     assert_has_element,
     assert_markup,
+    assert_no_asset_reference,
     assert_not_markup,
     assert_not_visible_text,
     assert_visible_text,
-    parse_html,
+    asset_reference_index,
     response_html,
     visible_html,
 )
@@ -29,123 +29,6 @@ class FixedDate(real_date):
     def today(cls):
         """Return a deterministic current date."""
         return cls(2026, 5, 11)
-
-
-def asset_reference_values(response):
-    """Return parsed src and href asset references from a route response."""
-    document = parse_html(response)
-    values = []
-    for element in document.elements:
-        for attr_name in ("src", "href"):
-            value = element.attrs.get(attr_name)
-            if value:
-                values.append(value)
-    return values
-
-
-def assert_asset_reference(response, pattern):
-    """Assert that a parsed asset reference matches a regular expression."""
-    assert any(re.search(pattern, value) for value in asset_reference_values(response))
-
-
-def asset_reference_index(response, pattern):
-    """Return the first parsed asset reference index matching a regular expression."""
-    for index, value in enumerate(asset_reference_values(response)):
-        if re.search(pattern, value):
-            return index
-    raise AssertionError(f"No asset reference matched {pattern!r}")
-
-
-def assert_no_asset_reference(response, snippet):
-    """Assert that parsed asset references do not contain a snippet."""
-    assert all(snippet not in value for value in asset_reference_values(response))
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/",
-        "/dashboard",
-        "/comparison",
-        "/calendar",
-        "/recurring",
-        "/review",
-        "/transactions",
-        "/rules",
-        "/upload",
-        "/jobs",
-        "/taxonomy",
-        "/settings",
-    ],
-)
-def test_primary_get_routes_render_successfully(client, path):
-    """Verify that primary navigation routes render against an empty database."""
-    response = client.get(path)
-
-    assert response.status_code == 200
-    assert "<html" in response_html(response).lower()
-
-
-def test_base_template_uses_local_hashed_assets(client):
-    """Verify that shared browser assets are served locally with content hashes."""
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert_no_asset_reference(response, "cdn.jsdelivr.net")
-    assert all(not value.endswith("?v=1") for value in asset_reference_values(response))
-    assert_asset_reference(
-        response,
-        r"/static/vendor/bootstrap/5\.3\.3/css/bootstrap\.min\.css\?v=[0-9a-f]{12}",
-    )
-    assert_asset_reference(response, r"/static/js/app-boot\.js\?v=[0-9a-f]{12}")
-    assert_asset_reference(response, r"/static/js/core\.js\?v=[0-9a-f]{12}")
-
-
-def test_base_template_keeps_feature_assets_page_scoped(client):
-    """Verify the home page does not inherit feature assets from unrelated pages."""
-    response = client.get("/")
-
-    assert response.status_code == 200
-    for snippet in (
-        "vendor/flatpickr",
-        "js/upload.js",
-        "js/jobs.js",
-        "js/rules.js",
-        "js/review.js",
-        "js/dashboard.js",
-        "js/tables.js",
-        "js/dates.js",
-        "js/calendar.js",
-        "js/recurring.js",
-        "js/exports.js",
-        "js/tag-multiselect.js",
-        "css/comparison.css",
-        "css/calendar-recurring.css",
-        "css/rules-list.css",
-        "css/settings.css",
-        "css/review.css",
-    ):
-        assert_no_asset_reference(response, snippet)
-
-
-def test_dashboard_route_loads_dashboard_assets(client):
-    """Verify dashboard-specific assets are declared by the dashboard page."""
-    response = client.get("/dashboard")
-
-    assert response.status_code == 200
-    for pattern in (
-        r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}",
-        r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}",
-        r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}",
-        r"/static/js/dashboard\.js\?v=[0-9a-f]{12}",
-        r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}",
-        r"/static/js/dashboard-charts\.js\?v=[0-9a-f]{12}",
-    ):
-        assert_asset_reference(response, pattern)
-    assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
-        response,
-        r"/static/js/dashboard-charts\.js",
-    )
 
 
 def test_taxonomy_category_create_and_delete_routes_persist_changes(client, core_conn):

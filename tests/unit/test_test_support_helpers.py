@@ -4,6 +4,8 @@ Verifies that common test factories work with production-style SQLAlchemy Core
 connections.
 """
 
+from types import SimpleNamespace
+
 from sqlalchemy import select
 
 from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_HEADER_NAME
@@ -18,6 +20,7 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
 from tests.support.database import insert_rule, insert_transaction, set_owner_setting
+from tests.support.jobs import capture_background_jobs
 
 
 def test_shared_database_helpers_accept_core_connection(core_conn):
@@ -122,3 +125,37 @@ def test_csrf_enabled_client_builds_form_and_json_requests(csrf_client):
         "X-Test": "1",
         CSRF_HEADER_NAME: csrf_client.token,
     }
+
+
+def test_background_job_recorder_captures_submission_metadata(monkeypatch):
+    """Verify shared job recorder captures submit metadata without running work."""
+    target = SimpleNamespace(submit_background_job=lambda *args, **kwargs: "real")
+    recorder = capture_background_jobs(monkeypatch, target, job_id="captured-123")
+
+    def job_func():
+        """Placeholder job function that should not run during capture."""
+        raise AssertionError("Captured jobs must not run.")
+
+    def undo_func():
+        """Placeholder undo function stored as metadata."""
+        return None
+
+    job_id = target.submit_background_job(
+        "Example job",
+        job_func,
+        "arg",
+        undo_handler=undo_func,
+        undo_args=("undo",),
+        undo_kwargs={"force": True},
+        queue="ai",
+    )
+
+    captured = recorder.single()
+    assert job_id == "captured-123"
+    assert captured.label == "Example job"
+    assert captured.func is job_func
+    assert captured.args == ("arg",)
+    assert captured.undo_handler is undo_func
+    assert captured.undo_args == ("undo",)
+    assert captured.undo_kwargs == {"force": True}
+    assert captured.kwargs == {"queue": "ai"}

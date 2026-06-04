@@ -13,6 +13,7 @@ from tests.support.html import (
     assert_option,
     assert_visible_text,
 )
+from tests.support.jobs import capture_background_jobs
 from tests.support.web import set_csrf_token
 
 
@@ -45,32 +46,10 @@ def insert_review_transaction(
     return tx_id
 
 
-def capture_review_jobs(monkeypatch):
-    """Patch review route background submission and return captured jobs."""
-    submitted_jobs = []
-
-    def capture_job(label, func, *args, undo_handler=None, undo_args=None, **kwargs):
-        """Capture submitted review job metadata."""
-        submitted_jobs.append(
-            {
-                "label": label,
-                "func": func,
-                "args": args,
-                "undo_handler": undo_handler,
-                "undo_args": undo_args,
-                "kwargs": kwargs,
-            }
-        )
-        return "reviewjob123"
-
-    monkeypatch.setattr(review_controller, "submit_background_job", capture_job)
-    return submitted_jobs
-
-
 def test_review_apply_route_queues_group_job(client, core_conn, monkeypatch):
     """Verify review group route queues a background review job."""
     insert_review_transaction(core_conn)
-    submitted_jobs = capture_review_jobs(monkeypatch)
+    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
 
     response = client.post(
         "/review/apply",
@@ -89,10 +68,10 @@ def test_review_apply_route_queues_group_job(client, core_conn, monkeypatch):
 
     assert response.status_code == 200
     assert_visible_text(response, "Review group queued in the background.")
-    submitted = submitted_jobs[0]
-    assert submitted["label"] == "Review METRO GROCERY as Food"
-    assert submitted["func"] is apply_review_group_job
-    assert submitted["args"][1:] == (
+    submitted = submitted_jobs.single()
+    assert submitted.label == "Review METRO GROCERY as Food"
+    assert submitted.func is apply_review_group_job
+    assert submitted.args[1:] == (
         "METRO GROCERY",
         "Food",
         ["Tax"],
@@ -102,15 +81,15 @@ def test_review_apply_route_queues_group_job(client, core_conn, monkeypatch):
         20.0,
         None,
     )
-    assert isinstance(submitted["args"][0], dict)
-    assert submitted["undo_handler"] is undo_review_group_job
-    assert submitted["undo_args"] == (submitted["args"][0],)
+    assert isinstance(submitted.args[0], dict)
+    assert submitted.undo_handler is undo_review_group_job
+    assert submitted.undo_args == (submitted.args[0],)
 
 
 def test_review_apply_route_queues_single_transaction_job(client, core_conn, monkeypatch):
     """Verify review route can queue a job for one transaction in a group."""
     tx_id = insert_review_transaction(core_conn)
-    submitted_jobs = capture_review_jobs(monkeypatch)
+    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
 
     response = client.post(
         "/review/apply",
@@ -125,9 +104,9 @@ def test_review_apply_route_queues_single_transaction_job(client, core_conn, mon
 
     assert response.status_code == 200
     assert_visible_text(response, "Review transaction queued in the background.")
-    submitted = submitted_jobs[0]
-    assert submitted["label"] == f"Review transaction {tx_id} as Food"
-    assert submitted["args"][1:] == (
+    submitted = submitted_jobs.single()
+    assert submitted.label == f"Review transaction {tx_id} as Food"
+    assert submitted.args[1:] == (
         "METRO GROCERY",
         "Food",
         [],
@@ -143,7 +122,7 @@ def test_review_apply_route_queues_selected_transactions_job(client, core_conn, 
     """Verify review route can queue a job for selected transactions in a group."""
     first_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-selected-1")
     second_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-selected-2")
-    submitted_jobs = capture_review_jobs(monkeypatch)
+    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
 
     response = client.post(
         "/review/apply",
@@ -160,9 +139,9 @@ def test_review_apply_route_queues_selected_transactions_job(client, core_conn, 
 
     assert response.status_code == 200
     assert_visible_text(response, "Review transactions queued in the background.")
-    submitted = submitted_jobs[0]
-    assert submitted["label"] == "Review 2 transactions as Food"
-    assert submitted["args"][1:] == (
+    submitted = submitted_jobs.single()
+    assert submitted.label == "Review 2 transactions as Food"
+    assert submitted.args[1:] == (
         "METRO GROCERY",
         "Food",
         [],
@@ -172,7 +151,7 @@ def test_review_apply_route_queues_selected_transactions_job(client, core_conn, 
         None,
         None,
     )
-    assert submitted["kwargs"] == {"selected_transaction_ids": [first_id, second_id]}
+    assert submitted.kwargs == {"selected_transaction_ids": [first_id, second_id]}
 
 
 def test_review_page_renders_group_transaction_selector(client, core_conn):
@@ -259,7 +238,7 @@ def test_review_page_filters_by_merchant_search(client, core_conn):
 def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypatch):
     """Verify review route validation avoids queueing malformed jobs."""
     outside_group_id = insert_review_transaction(core_conn, "Other Shop", "review-route-other")
-    submitted_jobs = capture_review_jobs(monkeypatch)
+    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
     token = set_csrf_token(client)
 
     invalid_transaction = client.post(
@@ -318,4 +297,4 @@ def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypa
     assert_visible_text(unknown_category, "Choose a category before applying the review group.")
     assert_visible_text(invalid_amount, "Amount bounds must be valid numbers.")
     assert_visible_text(invalid_selection, "Review transaction not found.")
-    assert submitted_jobs == []
+    assert len(submitted_jobs) == 0

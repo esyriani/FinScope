@@ -3,14 +3,18 @@
 import pytest
 
 from tests.support.html import (
+    assert_asset_reference,
     assert_form,
     assert_has_element,
     assert_input,
     assert_link,
     assert_no_element,
+    assert_no_asset_reference,
     assert_not_visible_text,
     assert_option,
     assert_visible_text,
+    asset_reference_index,
+    asset_reference_values,
     parse_html,
 )
 
@@ -31,6 +35,18 @@ HTML = """
     <select name="approval">
       <option value="suggested" selected>Suggested</option>
     </select>
+  </body>
+</html>
+"""
+
+ASSET_HTML = """
+<html>
+  <head>
+    <link href="/static/css/app.css?v=abcdef123456" rel="stylesheet">
+    <script src="/static/js/app.js?v=abcdef123456"></script>
+  </head>
+  <body>
+    <img src="/static/img/logo.png">
   </body>
 </html>
 """
@@ -59,3 +75,15 @@ def test_element_helpers_raise_on_missing_markup():
     """Verify missing semantic markup fails with an assertion."""
     with pytest.raises(AssertionError):
         assert_has_element(HTML, "button", attrs={"type": "submit"})
+
+
+def test_asset_reference_helpers_parse_sources_and_hrefs():
+    """Verify asset helpers inspect parsed ``src`` and ``href`` values."""
+    assert asset_reference_values(ASSET_HTML) == [
+        "/static/css/app.css?v=abcdef123456",
+        "/static/js/app.js?v=abcdef123456",
+        "/static/img/logo.png",
+    ]
+    assert asset_reference_index(ASSET_HTML, r"/static/js/app\.js") == 1
+    assert_asset_reference(ASSET_HTML, r"/static/css/app\.css\?v=[0-9a-f]{12}")
+    assert_no_asset_reference(ASSET_HTML, "cdn.jsdelivr.net")

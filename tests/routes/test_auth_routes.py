@@ -15,14 +15,7 @@ from tests.support.html import (
 from tests.support.web import set_csrf_token
 
 
-EDITOR_PASSWORD = "EditorPass123!"
 VIEWER_PASSWORD = "ViewerPass123!"
-
-def login_session(client, user_id):
-    """Authenticate a test client as a persisted user."""
-    with client.session_transaction() as session:
-        session["_user_id"] = str(user_id)
-        session["_fresh"] = True
 
 
 def create_test_user(conn, username, role, password):
@@ -147,17 +140,8 @@ def test_inactive_user_cannot_login(anonymous_client, core_conn):
     assert_visible_text(response, "Invalid username or password.")
 
 
-def test_owner_editor_and_viewer_authorization(client, app, core_conn):
+def test_owner_editor_and_viewer_authorization(client, editor_client, viewer_client, core_conn):
     """Verify role-specific route permissions are enforced in the backend."""
-    editor_id = create_test_user(core_conn, "editor", USER_ROLE_EDITOR, EDITOR_PASSWORD)
-    viewer_id = create_test_user(core_conn, "viewer", USER_ROLE_VIEWER, VIEWER_PASSWORD)
-    core_conn.commit()
-
-    editor_client = app.test_client()
-    login_session(editor_client, editor_id)
-    viewer_client = app.test_client()
-    login_session(viewer_client, viewer_id)
-
     tx_id = core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
         VALUES ('2026-01-02', 'Viewer blocked store', 12.34, 'UNKNOWN', 'viewer-blocked')
@@ -193,6 +177,31 @@ def test_owner_editor_and_viewer_authorization(client, app, core_conn):
     ignored = core_conn.execute(text("SELECT ignored FROM transactions WHERE id = :p0"), {"p0": tx_id}).fetchone()._mapping["ignored"]
     assert blocked.status_code == 403
     assert ignored == 0
+
+
+def test_named_client_fixtures_exercise_authentication_guards(
+    client,
+    editor_client,
+    viewer_client,
+    stale_session_client,
+    must_change_password_client,
+    anonymous_client,
+):
+    """Verify named clients cover route-visible authentication states."""
+    assert client.get("/admin/users").status_code == 200
+    assert editor_client.get("/upload").status_code == 200
+    assert editor_client.get("/admin/users").status_code == 403
+    assert viewer_client.get("/transactions").status_code == 200
+    assert viewer_client.get("/upload").status_code == 403
+    assert stale_session_client.get("/dashboard").status_code == 200
+
+    must_change_response = must_change_password_client.get("/dashboard", follow_redirects=False)
+    anonymous_response = anonymous_client.get("/dashboard", follow_redirects=False)
+
+    assert must_change_response.status_code == 302
+    assert must_change_response.headers["Location"].endswith("/password")
+    assert anonymous_response.status_code == 302
+    assert "/login" in anonymous_response.headers["Location"]
 
 
 def test_owner_user_management_and_last_owner_guard(client, core_conn):

@@ -4,6 +4,7 @@ from sqlalchemy import text
 from finance_app.modules.rules import controller as rules_controller
 from finance_app.modules.rules.engine import apply_all_rules_job, undo_apply_all_rules_job
 from tests.support.html import assert_visible_text
+from tests.support.jobs import capture_background_jobs
 
 
 def test_apply_single_rule_route_requires_preview_confirmation(csrf_client, core_conn, data_factory):
@@ -105,8 +106,7 @@ def test_apply_single_rule_route_reports_missing_rule(csrf_client, core_conn, da
 
 def test_apply_all_rules_route_requires_preview_confirmation(csrf_client, monkeypatch):
     """Verify apply-all is blocked until preview confirmation."""
-    submitted_jobs = []
-    monkeypatch.setattr(rules_controller, "submit_background_job", lambda *args, **kwargs: submitted_jobs.append(args))
+    submitted_jobs = capture_background_jobs(monkeypatch, rules_controller)
 
     response = csrf_client.post(
         "/rules/apply-all",
@@ -115,28 +115,12 @@ def test_apply_all_rules_route_requires_preview_confirmation(csrf_client, monkey
 
     assert response.status_code == 200
     assert_visible_text(response, "Preview apply before applying all rules.")
-    assert submitted_jobs == []
+    assert len(submitted_jobs) == 0
 
 
 def test_apply_all_rules_route_queues_background_job(csrf_client, monkeypatch):
     """Verify apply-all route queues a background job with undo metadata."""
-    submitted_jobs = []
-
-    def capture_job(label, func, *args, undo_handler=None, undo_args=None, **kwargs):
-        """Capture background job metadata."""
-        submitted_jobs.append(
-            {
-                "label": label,
-                "func": func,
-                "args": args,
-                "undo_handler": undo_handler,
-                "undo_args": undo_args,
-                "kwargs": kwargs,
-            }
-        )
-        return "applyall123"
-
-    monkeypatch.setattr(rules_controller, "submit_background_job", capture_job)
+    submitted_jobs = capture_background_jobs(monkeypatch, rules_controller, job_id="applyall123")
 
     response = csrf_client.post(
         "/rules/apply-all",
@@ -149,8 +133,9 @@ def test_apply_all_rules_route_queues_background_job(csrf_client, monkeypatch):
 
     assert response.status_code == 200
     assert_visible_text(response, "Applying all rules in the background.")
-    assert submitted_jobs[0]["label"] == "Apply all category rules"
-    assert submitted_jobs[0]["func"] is apply_all_rules_job
-    assert isinstance(submitted_jobs[0]["args"][0], dict)
-    assert submitted_jobs[0]["undo_handler"] is undo_apply_all_rules_job
-    assert submitted_jobs[0]["undo_args"] == (submitted_jobs[0]["args"][0],)
+    submitted = submitted_jobs.single()
+    assert submitted.label == "Apply all category rules"
+    assert submitted.func is apply_all_rules_job
+    assert isinstance(submitted.args[0], dict)
+    assert submitted.undo_handler is undo_apply_all_rules_job
+    assert submitted.undo_args == (submitted.args[0],)
