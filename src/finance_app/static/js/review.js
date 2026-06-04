@@ -54,4 +54,6 @@ function setupReviewTransactionSelectors(root = document) {
     });
 }
 
+window.financeApp?.registerInitializer("review.transaction-selectors", setupReviewTransactionSelectors);
+
 setupReviewTransactionSelectors();

@@ -1,7 +1,7 @@
-function setupFlatpickrInputs() {
+function setupFlatpickrInputs(root = document) {
     if (!window.flatpickr) return;
 
-    document.querySelectorAll("[data-flatpickr-date]").forEach((input) => {
+    root.querySelectorAll("[data-flatpickr-date]").forEach((input) => {
         if (input.dataset.flatpickrReady === "true") return;
         input.dataset.flatpickrReady = "true";
         flatpickr(input, {
@@ -15,7 +15,7 @@ function setupFlatpickrInputs() {
         });
     });
 
-    document.querySelectorAll("[data-flatpickr-month]").forEach((input) => {
+    root.querySelectorAll("[data-flatpickr-month]").forEach((input) => {
         if (input.dataset.flatpickrReady === "true") return;
         input.dataset.flatpickrReady = "true";
         const monthPlugins = [];
@@ -40,10 +40,10 @@ function setupFlatpickrInputs() {
     });
 }
 
+window.financeApp?.registerInitializer("dates.flatpickr", setupFlatpickrInputs);
+
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", setupFlatpickrInputs);
 } else {
     setupFlatpickrInputs();
 }
-
-window.setupFlatpickrInputs = setupFlatpickrInputs;

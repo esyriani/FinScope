@@ -120,8 +120,15 @@ function cellExportText(cell) {
     return normalizeExportText(clone.textContent);
 }
 
-function csvEscape(value) {
+const CSV_FORMULA_PREFIX_RE = /^[=+\-@\t\r]/;
+
+function sanitizeCsvFormulaValue(value) {
     const text = String(value ?? "");
+    return CSV_FORMULA_PREFIX_RE.test(text) ? `'${text}` : text;
+}
+
+function csvEscape(value) {
+    const text = sanitizeCsvFormulaValue(value);
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
@@ -333,8 +340,15 @@ function insertTableExportToolbar(table, toolbar) {
     (tableResponsive || table).before(toolbar);
 }
 
-function setupTableExports() {
-    Array.from(document.querySelectorAll("table")).forEach((table, index) => {
+function exportElements(root, selector) {
+    return [
+        ...(root.matches?.(selector) ? [root] : []),
+        ...Array.from(root.querySelectorAll(selector)),
+    ];
+}
+
+function setupTableExports(root = document) {
+    exportElements(root, "table").forEach((table, index) => {
         if (table.hasAttribute("data-no-export")) return;
         if (table.dataset.exportReady === "true") return;
 
@@ -397,8 +411,8 @@ function insertChartExportToolbar(element, toolbar) {
     }
 }
 
-function setupChartExports() {
-    const chartContainers = Array.from(document.querySelectorAll("[data-chart-export]"));
+function setupChartExports(root = document) {
+    const chartContainers = exportElements(root, "[data-chart-export]");
     const chartCanvases = new Set();
 
     chartContainers.forEach((container) => {
@@ -420,7 +434,7 @@ function setupChartExports() {
         insertChartExportToolbar(container, toolbar);
     });
 
-    Array.from(document.querySelectorAll("canvas")).forEach((canvas, index) => {
+    exportElements(root, "canvas").forEach((canvas, index) => {
         if (chartCanvases.has(canvas)) return;
         if (canvas.dataset.exportReady === "true") return;
 
@@ -434,8 +448,8 @@ function setupChartExports() {
     });
 }
 
+window.financeApp?.registerInitializer("exports.tables", setupTableExports);
+window.financeApp?.registerInitializer("exports.charts", setupChartExports);
+
 setupTableExports();
 setupChartExports();
-
-window.setupTableExports = setupTableExports;
-window.setupChartExports = setupChartExports;

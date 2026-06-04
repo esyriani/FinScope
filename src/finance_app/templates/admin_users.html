@@ -1,3 +1,5 @@
+{% set page_stylesheets = ["css/settings.css", "css/tables.css"] %}
+{% set page_scripts = ["js/admin-users.js"] %}
 {% extends "base.html" %}
 
 {% block content %}
@@ -200,7 +202,7 @@
 {% endif %}
 
 {% if temporary_password_modal %}
-<div class="modal fade" id="temporaryPasswordModal" tabindex="-1" aria-labelledby="temporaryPasswordModalLabel" aria-hidden="true">
+<div class="modal fade" id="temporaryPasswordModal" tabindex="-1" aria-labelledby="temporaryPasswordModalLabel" aria-hidden="true" data-auto-show-modal>
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -226,20 +228,5 @@
         </div>
     </div>
 </div>
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const modal = document.getElementById("temporaryPasswordModal");
-        if (modal && window.bootstrap) {
-            window.bootstrap.Modal.getOrCreateInstance(modal).show();
-        }
-        const copyButton = document.querySelector("[data-copy-temporary-password]");
-        const passwordInput = document.querySelector("[data-temporary-password]");
-        if (copyButton && passwordInput && navigator.clipboard) {
-            copyButton.addEventListener("click", function() {
-                navigator.clipboard.writeText(passwordInput.value);
-            });
-        }
-    });
-</script>
 {% endif %}
 {% endblock %}

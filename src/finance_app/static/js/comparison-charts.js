@@ -1,69 +1,9 @@
-function readJsonScript(id, fallback) {
-    const node = document.getElementById(id);
-    if (!node) return fallback;
-
-    try {
-        return JSON.parse(node.textContent);
-    } catch {
-        return fallback;
-    }
-}
-
-const comparisonCharts = readJsonScript("comparison-chart-data", {});
-const comparisonPalette = ["#0f766e", "#2563eb", "#d97706", "#be123c", "#7c3aed"];
-
-function comparisonCssVar(name, fallback) {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return value || fallback;
-}
-
-const comparisonTheme = {
-    text: comparisonCssVar("--chart-text", "#334155"),
-    grid: comparisonCssVar("--chart-grid", "rgba(100, 116, 139, 0.22)"),
-    tooltipBg: comparisonCssVar("--chart-tooltip-bg", "#17201d"),
-    tooltipText: comparisonCssVar("--chart-tooltip-text", "#ffffff")
-};
-
-const comparisonMoneyFormatter = new Intl.NumberFormat(window.financeLocale || "en-CA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-});
-
-const comparisonAxisMoneyFormatter = new Intl.NumberFormat(window.financeLocale || "en-CA", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-});
-
-function formatComparisonMoney(value) {
-    return comparisonMoneyFormatter.format(Number(value) || 0).replace(/,/g, " ") + " $";
-}
-
-function formatComparisonAxisMoney(value) {
-    return comparisonAxisMoneyFormatter.format(Number(value) || 0).replace(/,/g, " ") + " $";
-}
-
-function comparisonAxisLine() {
-    return {
-        lineStyle: {
-            color: comparisonTheme.grid
-        }
-    };
-}
-
-function comparisonAxisLabel(formatter) {
-    return {
-        color: comparisonTheme.text,
-        formatter
-    };
-}
-
-function comparisonSplitLine() {
-    return {
-        lineStyle: {
-            color: comparisonTheme.grid
-        }
-    };
-}
+const comparisonChartUtils = window.financeCharts;
+const comparisonCharts = comparisonChartUtils.readJsonScript("comparison-chart-data", {});
+const comparisonPalette = comparisonChartUtils.palette.slice(0, 5);
+const comparisonTheme = comparisonChartUtils.theme();
+const formatComparisonMoney = comparisonChartUtils.formatMoney;
+const formatComparisonAxisMoney = comparisonChartUtils.formatAxisMoney;
 
 function comparisonChartOption(chartType = "line") {
     const isBarChart = chartType === "bar";
@@ -72,48 +12,32 @@ function comparisonChartOption(chartType = "line") {
         textStyle: {
             color: comparisonTheme.text
         },
-        legend: {
-            textStyle: {
-                color: comparisonTheme.text
-            }
-        },
-        tooltip: {
+        legend: comparisonChartUtils.legend(comparisonTheme),
+        tooltip: comparisonChartUtils.tooltip(comparisonTheme, {
             trigger: "axis",
-            backgroundColor: comparisonTheme.tooltipBg,
-            borderColor: comparisonTheme.grid,
-            borderWidth: 1,
-            textStyle: {
-                color: comparisonTheme.tooltipText
-            },
             formatter(items) {
                 const rows = items.map(item => (
                     `${item.marker}${item.seriesName}: ${formatComparisonMoney(item.value)}`
                 ));
                 return [items[0]?.axisValue, ...rows].join("<br>");
             }
-        },
-        grid: {
-            containLabel: true,
-            left: 16,
-            right: 24,
-            top: 32,
-            bottom: 24
-        },
+        }),
+        grid: comparisonChartUtils.baseGrid(),
         xAxis: {
             type: "category",
             boundaryGap: isBarChart,
             data: comparisonCharts.monthLabels || [],
-            axisLine: comparisonAxisLine(),
-            axisLabel: comparisonAxisLabel(),
+            axisLine: comparisonChartUtils.axisLine(comparisonTheme),
+            axisLabel: comparisonChartUtils.axisLabel(comparisonTheme),
             splitLine: {
                 show: false
             }
         },
         yAxis: {
             type: "value",
-            axisLine: comparisonAxisLine(),
-            axisLabel: comparisonAxisLabel(formatComparisonAxisMoney),
-            splitLine: comparisonSplitLine()
+            axisLine: comparisonChartUtils.axisLine(comparisonTheme),
+            axisLabel: comparisonChartUtils.axisLabel(comparisonTheme, formatComparisonAxisMoney),
+            splitLine: comparisonChartUtils.splitLine(comparisonTheme)
         },
         series: (comparisonCharts.monthlySpending || []).map((row, index) => ({
             name: String(row.year),
@@ -135,40 +59,26 @@ function comparisonChartOption(chartType = "line") {
     };
 }
 
-function comparisonResizeChart(chart) {
-    window.requestAnimationFrame(() => chart.resize());
-}
-
-function comparisonObserveChartResize(chart, element) {
-    window.addEventListener("resize", () => comparisonResizeChart(chart));
-    window.addEventListener("finance:layoutchange", () => comparisonResizeChart(chart));
-
-    if (window.ResizeObserver) {
-        element.financeResizeObserver = new ResizeObserver(() => comparisonResizeChart(chart));
-        element.financeResizeObserver.observe(element);
-    }
-
-    comparisonResizeChart(chart);
-}
-
 function renderComparisonChart() {
-    if (!window.echarts || !comparisonCharts.monthlySpending?.length) return;
+    if (!comparisonCharts.monthlySpending?.length) return;
 
-    const element = document.getElementById("comparisonChart");
+    const element = comparisonChartUtils.element("comparisonChart");
     if (!element) return;
+    if (element.dataset.comparisonChartReady === "true") return;
+    element.dataset.comparisonChartReady = "true";
 
-    const chart = echarts.init(element, null, { renderer: "canvas" });
-    chart.setOption(comparisonChartOption());
+    const chart = comparisonChartUtils.create(element, comparisonChartOption());
+    if (!chart) return;
 
     document.querySelectorAll("input[name='comparison_chart_type']").forEach((input) => {
         input.addEventListener("change", () => {
             if (!input.checked) return;
             chart.setOption(comparisonChartOption(input.value), true);
-            comparisonResizeChart(chart);
+            comparisonChartUtils.resize(chart);
         });
     });
-
-    comparisonObserveChartResize(chart, element);
 }
+
+window.financeApp?.registerInitializer("comparison.chart", renderComparisonChart);
 
 renderComparisonChart();

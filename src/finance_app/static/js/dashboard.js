@@ -129,10 +129,10 @@ function setupDashboardPage(root = document) {
     setupDashboardQualityPanel(root);
 }
 
+window.financeApp?.registerInitializer("dashboard.page", setupDashboardPage);
+
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", setupDashboardPage);
 } else {
     setupDashboardPage();
 }
-
-window.setupDashboardPage = setupDashboardPage;

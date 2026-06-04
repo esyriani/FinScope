@@ -84,4 +84,6 @@ function setupStatementTypesEditor() {
     });
 }
 
+window.financeApp?.registerInitializer("settings.statement-types-editor", setupStatementTypesEditor);
+
 setupStatementTypesEditor();

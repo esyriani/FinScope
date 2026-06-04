@@ -1,4 +1,12 @@
+{% set page_stylesheets = [
+    "css/home-dashboard.css",
+    "css/tables.css",
+    "css/rules-list.css",
+    "css/exports.css"
+] %}
+{% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
+{% from "_pagination.html" import pagination with context %}
 
 {% block content %}
 {% set transaction_table = transaction_table | default({}) %}
@@ -33,29 +41,7 @@
 {% endmacro %}
 
 {% macro detail_pagination(table, label) %}
-{% if table.total_pages > 1 %}
-<nav aria-label="{{ label }}">
-    <ul class="pagination mb-0">
-        <li class="page-item {% if table.page <= 1 %}disabled{% endif %}">
-            <a class="page-link" href="{{ table.page_url(table.page - 1) }}">{{ _("Previous") }}</a>
-        </li>
-
-        {% for page_number in range(1, table.total_pages + 1) %}
-            {% if page_number == 1 or page_number == table.total_pages or (page_number >= table.page - 2 and page_number <= table.page + 2) %}
-                <li class="page-item {% if page_number == table.page %}active{% endif %}">
-                    <a class="page-link" href="{{ table.page_url(page_number) }}">{{ page_number }}</a>
-                </li>
-            {% elif page_number == table.page - 3 or page_number == table.page + 3 %}
-                <li class="page-item disabled"><span class="page-link">...</span></li>
-            {% endif %}
-        {% endfor %}
-
-        <li class="page-item {% if table.page >= table.total_pages %}disabled{% endif %}">
-            <a class="page-link" href="{{ table.page_url(table.page + 1) }}">{{ _("Next") }}</a>
-        </li>
-    </ul>
-</nav>
-{% endif %}
+{{ pagination(table.page, table.total_pages, table.page_url, label) }}
 {% endmacro %}
 
 {% macro sort_header(table, sort_name, label, header_class="") %}

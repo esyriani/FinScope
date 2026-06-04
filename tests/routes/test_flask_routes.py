@@ -48,6 +48,14 @@ def assert_asset_reference(response, pattern):
     assert any(re.search(pattern, value) for value in asset_reference_values(response))
 
 
+def asset_reference_index(response, pattern):
+    """Return the first parsed asset reference index matching a regular expression."""
+    for index, value in enumerate(asset_reference_values(response)):
+        if re.search(pattern, value):
+            return index
+    raise AssertionError(f"No asset reference matched {pattern!r}")
+
+
 def assert_no_asset_reference(response, snippet):
     """Assert that parsed asset references do not contain a snippet."""
     assert all(snippet not in value for value in asset_reference_values(response))
@@ -89,7 +97,55 @@ def test_base_template_uses_local_hashed_assets(client):
         response,
         r"/static/vendor/bootstrap/5\.3\.3/css/bootstrap\.min\.css\?v=[0-9a-f]{12}",
     )
+    assert_asset_reference(response, r"/static/js/app-boot\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/js/core\.js\?v=[0-9a-f]{12}")
+
+
+def test_base_template_keeps_feature_assets_page_scoped(client):
+    """Verify the home page does not inherit feature assets from unrelated pages."""
+    response = client.get("/")
+
+    assert response.status_code == 200
+    for snippet in (
+        "vendor/flatpickr",
+        "js/upload.js",
+        "js/jobs.js",
+        "js/rules.js",
+        "js/review.js",
+        "js/dashboard.js",
+        "js/tables.js",
+        "js/dates.js",
+        "js/calendar.js",
+        "js/recurring.js",
+        "js/exports.js",
+        "js/tag-multiselect.js",
+        "css/comparison.css",
+        "css/calendar-recurring.css",
+        "css/rules-list.css",
+        "css/settings.css",
+        "css/review.css",
+    ):
+        assert_no_asset_reference(response, snippet)
+
+
+def test_dashboard_route_loads_dashboard_assets(client):
+    """Verify dashboard-specific assets are declared by the dashboard page."""
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    for pattern in (
+        r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}",
+        r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}",
+        r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}",
+        r"/static/js/dashboard\.js\?v=[0-9a-f]{12}",
+        r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}",
+        r"/static/js/dashboard-charts\.js\?v=[0-9a-f]{12}",
+    ):
+        assert_asset_reference(response, pattern)
+    assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
+        response,
+        r"/static/js/dashboard-charts\.js",
+    )
 
 
 def test_taxonomy_category_create_and_delete_routes_persist_changes(client, core_conn):
@@ -706,8 +762,14 @@ def test_comparison_route_renders_year_chart_type_toggle(client, core_conn):
     assert_has_element(response, "div", attrs={"role": "group", "aria-label": "Monthly spending chart type"})
     assert_no_asset_reference(response, "cdn.jsdelivr.net")
     assert_no_asset_reference(response, "js/comparison-charts.js?v=40")
+    assert_asset_reference(response, r"/static/js/comparison\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/js/comparison-charts\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}")
+    assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
+        response,
+        r"/static/js/comparison-charts\.js",
+    )
 
 
 def test_upload_route_rejects_duplicate_statement_checksum(client, core_conn, monkeypatch):

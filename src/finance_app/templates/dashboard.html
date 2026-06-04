@@ -1,3 +1,27 @@
+{% set page_vendor_stylesheets = [
+    "vendor/flatpickr/4.6.13/flatpickr.min.css",
+    "vendor/flatpickr/4.6.13/plugins/monthSelect/style.css"
+] %}
+{% set page_vendor_scripts = [
+    "vendor/flatpickr/4.6.13/flatpickr.min.js",
+    "vendor/flatpickr/4.6.13/plugins/monthSelect/index.js",
+    "vendor/echarts/5.6.0/echarts.min.js"
+] %}
+{% set page_stylesheets = [
+    "css/home-dashboard.css",
+    "css/tables.css",
+    "css/tag-multiselect.css",
+    "css/exports.css"
+] %}
+{% set page_scripts = [
+    "js/dates.js",
+    "js/tag-multiselect.js",
+    "js/dashboard.js",
+    "js/tables.js",
+    "js/chart-utils.js",
+    "js/dashboard-charts.js",
+    "js/exports.js"
+] %}
 {% extends "base.html" %}
 
 {% block content %}
@@ -510,7 +534,6 @@
     </section>
 </div>
 
-<script src="{{ static_asset('vendor/echarts/5.6.0/echarts.min.js') }}"></script>
 <script id="dashboard-chart-data" type="application/json">
 {{ {
     "categoryLabels": category_labels | default([]),
@@ -532,7 +555,6 @@
     "netMonthUrls": net_month_urls | default([]),
 } | tojson }}
 </script>
-<script src="{{ static_asset('js/dashboard-charts.js') }}"></script>
 {% else %}
 <div class="empty-state">
     {{ _("No transaction data yet. Upload a CSV statement first.") }}

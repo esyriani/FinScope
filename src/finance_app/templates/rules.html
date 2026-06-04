@@ -1,5 +1,20 @@
+{% set page_stylesheets = [
+    "css/home-dashboard.css",
+    "css/tables.css",
+    "css/rules-list.css",
+    "css/rule-forms.css",
+    "css/tag-multiselect.css",
+    "css/exports.css"
+] %}
+{% set page_scripts = [
+    "js/rules.js",
+    "js/tag-multiselect.js",
+    "js/tables.js",
+    "js/exports.js"
+] %}
 {% extends "base.html" %}
 {% from "_rule_controls.html" import amount_rule_control, rule_account_control, rule_category_control, rule_direction_control, rule_keyword_control, rule_scope_control, rule_tag_control with context %}
+{% from "_pagination.html" import pagination with context %}
 
 {% block content %}
 {% set category_options = category_options | default([]) %}
@@ -37,29 +52,7 @@
 {% endmacro %}
 
 {% macro rules_pagination(label) %}
-{% if total_pages > 1 %}
-<nav aria-label="{{ label }}">
-    <ul class="pagination mb-0">
-        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-            <a class="page-link" href="{{ page_url(page - 1) }}">{{ _("Previous") }}</a>
-        </li>
-
-        {% for page_number in range(1, total_pages + 1) %}
-            {% if page_number == 1 or page_number == total_pages or (page_number >= page - 2 and page_number <= page + 2) %}
-                <li class="page-item {% if page_number == page %}active{% endif %}">
-                    <a class="page-link" href="{{ page_url(page_number) }}">{{ page_number }}</a>
-                </li>
-            {% elif page_number == page - 3 or page_number == page + 3 %}
-                <li class="page-item disabled"><span class="page-link">...</span></li>
-            {% endif %}
-        {% endfor %}
-
-        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-            <a class="page-link" href="{{ page_url(page + 1) }}">{{ _("Next") }}</a>
-        </li>
-    </ul>
-</nav>
-{% endif %}
+{{ pagination(page, total_pages, page_url, label) }}
 {% endmacro %}
 
 <div class="page-header">
