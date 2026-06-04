@@ -146,10 +146,10 @@ def add_rule():
         with db_core_transaction() as conn:
             keyword = create_rule_from_form(conn, request.form)
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
         return redirect(next_url)
 
-    flash(f"Rule saved for: {keyword}")
+    flash(gettext("Rule saved for: {keyword}", keyword=keyword))
     return redirect(next_url)
 
 
@@ -163,7 +163,7 @@ def preview_rule():
             preview_limit = get_int_setting(conn, "rule_preview_limit", settings.default_rule_preview_limit)
             match_count, sample = preview_rule_matches(conn, rule, limit=preview_limit)
     except ValueError as exc:
-        return jsonify({"ok": False, "message": str(exc), "match_count": 0, "transactions": []}), 400
+        return jsonify({"ok": False, "message": gettext(str(exc)), "match_count": 0, "transactions": []}), 400
 
     return jsonify(
         {
@@ -204,7 +204,7 @@ def import_rules():
     mode = request.form.get("mode", RULE_IMPORT_MODE_ADD).strip()
 
     if mode not in RULE_IMPORT_MODES:
-        flash("Choose whether to add new rules or override existing rules.")
+        flash(gettext("Choose whether to add new rules or override existing rules."))
         return redirect(next_url)
 
     confirmed = request.form.get("confirm_preview") == "1"
@@ -214,18 +214,18 @@ def import_rules():
     else:
         uploaded_file = request.files.get("rules_file")
         if uploaded_file is None or uploaded_file.filename == "":
-            flash("Choose a CSV file to import.")
+            flash(gettext("Choose a CSV file to import."))
             return redirect(next_url)
 
         filename = Path(uploaded_file.filename).name
         if not filename.lower().endswith(".csv"):
-            flash("Rules import currently supports CSV files.")
+            flash(gettext("Rules import currently supports CSV files."))
             return redirect(next_url)
 
         raw_text = uploaded_file.read().decode("utf-8-sig", errors="replace")
 
     if not raw_text.strip():
-        flash("The selected rules file is empty.")
+        flash(gettext("The selected rules file is empty."))
         return redirect(next_url)
 
     if not confirmed:
@@ -239,7 +239,7 @@ def import_rules():
                     transaction_limit=rule_audit_transaction_limit(conn),
                 )
         except ValueError as exc:
-            flash(str(exc))
+            flash(gettext(str(exc)))
             return redirect(next_url)
         return render_template("rules_import_preview.html", **context)
 
@@ -253,7 +253,7 @@ def import_rules():
                 transaction_limit=rule_audit_transaction_limit(conn),
             )
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
         return redirect(next_url)
 
     undo_state = {}
@@ -294,10 +294,10 @@ def update_rule(rule_id):
         with db_core_transaction() as conn:
             update_rule_from_form(conn, rule_id, request.form)
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
         return redirect(next_url)
 
-    flash("Rule updated.")
+    flash(gettext("Rule updated."))
     return redirect(next_url)
 
 
@@ -317,11 +317,15 @@ def approve_rule(rule_id):
             keyword, changed = approve_automatic_rule(conn, rule_id)
     except ValueError as exc:
         if wants_json_response():
-            return jsonify({"ok": False, "message": str(exc)}), 400
-        flash(str(exc))
+            return jsonify({"ok": False, "message": gettext(str(exc))}), 400
+        flash(gettext(str(exc)))
         return redirect(next_url)
 
-    message = f"Rule approved: {keyword}" if changed else "Rule already approved."
+    message = (
+        gettext("Rule approved: {keyword}", keyword=keyword)
+        if changed
+        else gettext("Rule already approved.")
+    )
     if wants_json_response():
         return jsonify(
             {
@@ -331,7 +335,7 @@ def approve_rule(rule_id):
                 "keyword": keyword,
                 "changed": changed,
                 "message": message,
-                "approval_label": "Approved",
+                "approval_label": gettext("Approved"),
                 "approval_badge_class": "text-bg-success",
             }
         )
@@ -454,7 +458,7 @@ def delete_rule(rule_id):
 
         deleted = delete_rule_record(conn, rule_id)
 
-    message = "Rule deleted." if deleted else "Rule not found."
+    message = gettext("Rule deleted.") if deleted else gettext("Rule not found.")
     if wants_json_response():
         status = 200 if deleted else 404
         return jsonify(

@@ -375,11 +375,6 @@ def suggest_transaction_ai_category(transaction_id):
         )
 
 
-def run_transaction_ai_categorization(transaction_id):
-    """Return a one-transaction AI suggestion for backward-compatible callers."""
-    return suggest_transaction_ai_category(transaction_id)
-
-
 def apply_transaction_ai_suggestion(
     transaction_id,
     suggestion,

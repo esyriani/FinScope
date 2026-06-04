@@ -1,7 +1,7 @@
 """Tests for Core database schema behavior."""
 
 import pytest
-from sqlalchemy import CheckConstraint, create_engine, insert, inspect, select
+from sqlalchemy import CheckConstraint, create_engine, insert, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
 from finance_app.core.constants import (
@@ -18,8 +18,11 @@ from finance_app.core.constants import (
     STATEMENT_TYPE_PARSER_TYPES,
     TRANSACTION_KINDS,
     TRANSACTION_TAG_SOURCES,
+    USER_ROLE_EDITOR,
+    USER_ROLE_OWNER,
     USER_ROLES,
 )
+from finance_app.database import connection as connection_module
 from finance_app.database.seeds import seed_category_taxonomy_defaults
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -31,6 +34,7 @@ from finance_app.database.tables import (
     recurring_patterns as recurring_patterns_table,
     statement_types as statement_types_table,
     transactions as transactions_table,
+    users as users_table,
 )
 from finance_app.modules.categories.service import rename_category
 from finance_app.modules.settings.runtime import get_unknown_category
@@ -80,6 +84,35 @@ def category_id(conn, name):
     return found
 
 
+def create_legacy_statements_table_without_date_order(conn):
+    """Create the statements table shape used before date_order was added."""
+    conn.execute(
+        text(
+            """
+            CREATE TABLE statements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER,
+                statement_type_id INTEGER NOT NULL,
+                filename VARCHAR(512) NOT NULL,
+                checksum VARCHAR(128) NOT NULL UNIQUE,
+                extension VARCHAR(32) NOT NULL DEFAULT '',
+                interac_direction VARCHAR(32) NOT NULL DEFAULT 'auto',
+                raw_text TEXT,
+                import_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                import_error TEXT,
+                import_started_at DATETIME,
+                import_finished_at DATETIME,
+                imported_count INTEGER NOT NULL DEFAULT 0,
+                skipped_count INTEGER NOT NULL DEFAULT 0,
+                ignored_count INTEGER NOT NULL DEFAULT 0,
+                llm_candidate_count INTEGER NOT NULL DEFAULT 0,
+                uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    )
+
+
 def assert_table_uses_allowed_values(table_name, column_name, values):
     """Verify a constrained table column derives its CHECK values from constants."""
     constraints = {
@@ -103,6 +136,89 @@ def test_core_schema_has_no_retired_tables(schema_conn):
     }
 
     assert retired_tables == set()
+
+
+def test_users_enforce_case_insensitive_username_uniqueness(schema_conn):
+    """Verify the database rejects usernames that normalize to the same key."""
+    schema_conn.execute(
+        insert(users_table).values(
+            username="Owner",
+            display_name="Owner",
+            password_hash="hash",
+            role=USER_ROLE_OWNER,
+        )
+    )
+    schema_conn.commit()
+
+    with pytest.raises(IntegrityError):
+        schema_conn.execute(
+            insert(users_table).values(
+                username=" owner ",
+                display_name="Case variant",
+                password_hash="hash",
+                role=USER_ROLE_EDITOR,
+            )
+        )
+    schema_conn.rollback()
+
+
+def test_users_enforce_single_owner_role(schema_conn):
+    """Verify the database rejects multiple owner-role accounts."""
+    schema_conn.execute(
+        insert(users_table).values(
+            username="owner-one",
+            display_name="Owner One",
+            password_hash="hash",
+            role=USER_ROLE_OWNER,
+        )
+    )
+    schema_conn.commit()
+
+    with pytest.raises(IntegrityError):
+        schema_conn.execute(
+            insert(users_table).values(
+                username="owner-two",
+                display_name="Owner Two",
+                password_hash="hash",
+                role=USER_ROLE_OWNER,
+            )
+        )
+    schema_conn.rollback()
+
+    schema_conn.execute(
+        insert(users_table).values(
+            username="editor",
+            display_name="Editor",
+            password_hash="hash",
+            role=USER_ROLE_EDITOR,
+        )
+    )
+
+
+def test_init_core_db_rejects_legacy_statements_table_without_date_order():
+    """Verify startup refuses an outdated schema instead of patching it."""
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            create_legacy_statements_table_without_date_order(conn)
+
+        with pytest.raises(RuntimeError, match="statements.date_order"):
+            connection_module.init_core_db(engine)
+    finally:
+        engine.dispose()
+
+
+def test_init_core_db_rejects_retired_schema_tables():
+    """Verify startup rejects retired compatibility tables."""
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)"))
+
+        with pytest.raises(RuntimeError, match="retired tables: schema_migrations"):
+            connection_module.init_core_db(engine)
+    finally:
+        engine.dispose()
 
 
 def test_core_schema_creates_category_tag_tables(schema_conn):

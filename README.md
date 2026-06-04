@@ -1,4 +1,4 @@
-# <img src="src/finance_app/static/img/favicon.png" alt="Logo" width="75"/> FinScope
+# <img src="src/finance_app/static/img/logo.png" alt="Logo" width="75"/> FinScope
 
 FinScope is a local personal finance web application for importing statement files, categorizing transactions, reviewing unknown merchants, managing category rules, and analyzing spending over time.
 
@@ -80,7 +80,7 @@ $env:FINANCE_PORT = "5001"
   <li><img src="https://cdn.simpleicons.org/jinja/black" width="18" /> Jinja templates 3.1.6</li>
   <li><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bootstrap/bootstrap-original.svg" width="18" /> Bootstrap 5.3.3</li>
   <li><img src="https://cdn.simpleicons.org/apacheecharts/AA344D" width="18" /> ECharts 5.6.0</li>
-  <li><img src="https://cdn.simpleicons.org/pytest/0A9EDC" width="18" /> pytest 9.0.3</li>
+  <li><img src="https://cdn.simpleicons.org/pytest/0A9EDC" width="18" /> pytest 9.0.3 with pytest-xdist</li>
   <li><img src="https://upload.wikimedia.org/wikipedia/commons/6/66/OpenAI_logo_2025_%28symbol%29.svg" width="18" /> OpenAI SDK 2.33.0 <em>(optional)</em></li>
 </ul>
 
@@ -92,13 +92,13 @@ src/
     __init__.py          Flask application factory.
     app.py               Application entry point.
     core/                Configuration, constants, SQLAlchemy query helpers, CSRF, filters.
-    database/            SQLAlchemy lifecycle, metadata, and initialization seeds.
+    database/            SQLAlchemy lifecycle, metadata, schema validation, and initialization seeds.
     background/          In-memory background job runner and undo orchestration.
     modules/             Feature modules, including auth, settings, upload, rules, review, and reporting.
     templates/           Jinja templates.
     static/              CSS, JavaScript, image assets, and vendored browser libraries.
     translations/        JSON translation catalogs for user interface text.
-tests/                   Unit, integration, route, and smoke tests.
+tests/                   Unit, integration, route, smoke, and shared support helpers.
 docs/                    Deeper project documentation.
 runtime/                 Local runtime data, including the default SQLite database.
 ```
@@ -141,8 +141,10 @@ Common settings:
 
 | Setting | Environment variable | Purpose |
 | --- | --- | --- |
-| `app.secret_key` | `FINANCE_SECRET_KEY` | Flask session signing key. |
+| `app.secret_key` | `FINANCE_SECRET_KEY` | Flask session signing key. The bundled `dev-secret-key` is only accepted for debug or loopback local runs. |
 | `app.timezone` | `FINANCE_TIMEZONE` | IANA timezone used for displaying UTC timestamps, such as `America/Toronto`. |
+| `app.currency_symbol` | `FINANCE_CURRENCY_SYMBOL` | Currency symbol used by Python and template money formatting. |
+| `app.secure_cookies` | `FINANCE_SECURE_COOKIES` | Whether session and remember cookies require HTTPS. Leave blank to enable secure cookies for non-local hosts and allow plain HTTP on loopback. |
 | `database.url` | `FINANCE_DATABASE_URL` | SQLAlchemy database URL used by the runtime database layer. Leave blank to derive a SQLite URL from `database.path`. |
 | `database.path` | `FINANCE_DB_PATH` | SQLite database path. |
 | `server.host` | `FINANCE_HOST` | Flask bind host. |
@@ -200,7 +202,7 @@ From the repository root:
 .\.venv\Scripts\python.exe -B src\finance_app\app.py
 ```
 
-`src/finance_app/app.py` initializes a clean SQLAlchemy Core schema before starting Flask. By default, FinScope uses `runtime/finescope.db`.
+`src/finance_app/app.py` initializes the database before starting Flask: empty databases are created from Core metadata, existing FinScope databases are validated against the current schema, and runtime defaults are seeded. By default, FinScope uses `runtime/finescope.db`.
 
 Imported transactions normally keep their original statement descriptions for auditability. Ledger uploads create transaction rows; enrichment uploads, such as Interac e-Transfer history, update matched rows without adding duplicate ledger activity. Merchant grouping is persisted separately through `merchants` and `merchant_aliases`, which gives recurring activity, merchant filters, categorization rules, and analytics a stable merchant identity. Rules and recurring patterns can still remain keyword-fuzzy when no merchant ID is stored.
 
@@ -263,7 +265,9 @@ Rule sources are persisted as `manual` or `automatic`. The UI labels these as Ma
 
 ### Control AI categorization
 
-AI categorization runs in a separate background queue so OpenAI timeouts do not block statement imports, rule jobs, or review jobs. Owners can turn off automatic AI categorization after imports from Settings > Categorization. Unknown transactions remain available for manual reruns from Jobs or from an individual uploaded statement.
+AI categorization runs in a separate background queue so OpenAI timeouts do not block statement imports, rule jobs, or review jobs. Automatic AI categorization after imports is off by default; owners can opt in from Settings > Categorization. Unknown transactions remain available for manual reruns from Jobs or from an individual uploaded statement.
+
+External LLM prompts are privacy-minimized. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. The prompt uses normalized merchant text, coarse amount direction and magnitude, transaction kind, taxonomy data, and compact category evidence summaries. The static system-prompt policy is stored as structured JSON in `src/finance_app/modules/categories/llm_system_prompt.json` so prompt changes can be reviewed separately from request code.
 
 Use Jobs to run AI on all active unknown transactions, cancel a queued or running AI job, or clear queued AI jobs. Running AI jobs stop cooperatively after the current batch. Manual reruns only target active transactions whose category is still unknown, so they do not overwrite manually reviewed or already categorized rows.
 
@@ -290,26 +294,22 @@ For focused review, Settings > Categorization can show a Suggest category action
 
 ## Testing
 
-Run the full suite:
+Run the full suite. The default pytest configuration enforces strict markers,
+warnings as errors, parallel execution, collection from `tests/`, and no
+coverage run:
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE = "1"
 .\.venv\Scripts\python.exe -B -m pytest
 ```
 
-Run a layer:
+Run a layer during local iteration:
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m pytest -m unit
 .\.venv\Scripts\python.exe -B -m pytest -m integration
 .\.venv\Scripts\python.exe -B -m pytest -m route
 .\.venv\Scripts\python.exe -B -m pytest -m smoke
-```
-
-Run a coverage report:
-
-```powershell
-.\.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing
 ```
 
 See [testing](docs/testing.md) and [tests/README.md](tests/README.md) for marker details and suite structure.
@@ -332,14 +332,14 @@ FinScope handles financial data. Treat the local database and uploaded content a
 Current security model:
 
 - Single-tenant authenticated application: all authenticated users share the same finance database.
-- One owner account manages editor and viewer access. The owner cannot be deactivated; ownership can be handed off to another active user through a confirmation modal, after which the previous owner becomes a viewer.
+- One owner account manages editor and viewer access. The database enforces the single-owner role and case-insensitive username uniqueness. The owner cannot be deactivated; ownership can be handed off to another active user through a confirmation modal, after which the previous owner becomes a viewer.
 - Passwords are stored with Werkzeug `scrypt` hashes; plaintext passwords are never stored.
 - Login failures are tracked and temporarily locked after repeated failures.
 - SQLite and MySQL are fully supported. SQLite stores the database on local disk by default; MySQL is selected through `database.url`.
 - No encryption at rest implemented by FinScope.
 - CSRF protection is enabled for mutating Flask routes.
 - Session cookies are HttpOnly and SameSite=Lax; secure cookies are enabled when debug mode is off.
-- OpenAI integration is optional and only active when an API key is configured.
+- OpenAI integration is optional and only active when an API key is configured and an owner explicitly runs or enables AI categorization.
 
 Operational recommendations:
 
@@ -349,7 +349,7 @@ Operational recommendations:
 - Store `runtime/finescope.db`, MySQL credentials, and database backups in protected locations.
 - Back up the active database regularly.
 - Do not run with debug mode enabled on a shared network.
-- Review data-sharing implications before enabling LLM categorization.
+- Review data-sharing implications before running or enabling LLM categorization.
 
 ## License
 

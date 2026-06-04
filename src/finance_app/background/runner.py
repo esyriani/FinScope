@@ -1,7 +1,7 @@
 """In-memory background job runner and undo orchestration."""
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Lock, local
 from uuid import uuid4
 
@@ -429,4 +429,4 @@ def normalize_job_queue(queue):
 
 def utc_now():
     """Return the current UTC timestamp for job metadata."""
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")

@@ -70,13 +70,23 @@
 <a
     class="btn btn-sm btn-outline-secondary"
     href="{{ url_for('rules.audit_rule_detail', rule_id=rule.id) }}"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+    data-busy-message="{{ _('Loading rule audit details...') }}"
 >
     <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule detail") }}
 </a>
 {% endmacro %}
 
 {% macro preview_apply_button(rule) %}
-<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+<form
+    method="post"
+    action="{{ url_for('rules.audit_rule_preview') }}"
+    class="d-inline"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="apply_where_wins">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
@@ -87,7 +97,14 @@
 {% endmacro %}
 
 {% macro preview_delete_button(rule) %}
-<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+<form
+    method="post"
+    action="{{ url_for('rules.audit_rule_preview') }}"
+    class="d-inline"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="delete_rule">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
@@ -98,7 +115,14 @@
 {% endmacro %}
 
 {% macro preview_delete_button(rule) %}
-<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+<form
+    method="post"
+    action="{{ url_for('rules.audit_rule_preview') }}"
+    class="d-inline"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="delete_rule">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
@@ -114,7 +138,13 @@
         <p class="text-muted mb-0">{{ _("Every row below is matched by both rules.") }}</p>
     </div>
     <div class="home-actions">
-        <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rules') }}">
+        <a
+            class="btn btn-outline-secondary"
+            href="{{ url_for('rules.audit_rules') }}"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+            data-busy-message="{{ _('Loading rule audit...') }}"
+        >
             <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule audit") }}
         </a>
         <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}">

@@ -182,7 +182,9 @@ High-confidence matches require strong agreement across similar transactions bef
 Automatic and manual category writes persist compact JSON evidence in `transactions.category_metadata`. The metadata uses a controlled audit `decision_source`: `rule`, `similar_transactions`, `llm`, `llm_with_similar_transactions`, `combined`, `manual`, or `unknown`.
 
 LLM categorization is optional and requires `OPENAI_API_KEY`.
-The LLM receives unresolved transactions, rule evidence, historical evidence, account context, the full taxonomy, and transaction-local candidate taxonomy hints. Candidate categories and tags are hints, not a gate: the model may choose any active category or tag ID from the full taxonomy when the transaction evidence supports it.
+External prompts are privacy-minimized. The LLM receives normalized merchant text, coarse amount direction and magnitude, transaction kind, compact category evidence summaries, the full taxonomy, and transaction-local candidate taxonomy hints. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. Candidate categories and tags are hints, not a gate: the model may choose any active category or tag ID from the full taxonomy when the supplied evidence supports it.
+
+The static system-prompt policy is stored in `src/finance_app/modules/categories/llm_system_prompt.json`. Runtime code renders that structured resource with the current confidence thresholds, while transaction, taxonomy, and rule payloads are still built by the Python prompt builders.
 
 Returned results are validated conservatively. Invalid JSON, invalid category IDs, invalid tag IDs, invalid confidence values, or inconsistent evidence remain categorized as `Unknown` or are marked for review according to the shared confidence policy.
 
@@ -194,8 +196,9 @@ AI uses three configurable thresholds with separate responsibilities:
 
 LLM categorization is operationally separate from statement import. Imports apply
 rules and historical evidence first, then optionally queue AI categorization for
-remaining unknown rows. Owners can pause automatic AI queueing from Settings and
-rerun AI manually from Jobs or from an uploaded statement. Reruns only target
+remaining unknown rows when the owner has enabled automatic AI queueing from
+Settings. The default is off. Owners can rerun AI manually from Jobs or from an
+uploaded statement. Reruns only target
 active transactions that are still null or `UNKNOWN`, so existing manual,
 rule-based, historical, transfer, and accepted AI categories are not overwritten.
 

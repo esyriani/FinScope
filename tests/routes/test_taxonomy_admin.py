@@ -4,15 +4,9 @@ import io
 
 from sqlalchemy import select
 
-from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.database.tables import categories as categories_table, tags as tags_table
-
-
-def set_csrf_token(client, token="test-csrf-token"):
-    """Store a CSRF token in the test client's session."""
-    with client.session_transaction() as session:
-        session[CSRF_SESSION_KEY] = token
-    return token
+from tests.support.web import set_csrf_token
 
 
 def test_taxonomy_admin_routes_are_registered_and_rules_category_routes_are_removed(app):
@@ -60,7 +54,7 @@ def test_taxonomy_export_route_returns_yaml(client):
     assert "color:" in body
 
 
-def test_taxonomy_import_route_upserts_yaml_metadata(client, db_conn):
+def test_taxonomy_import_route_upserts_yaml_metadata(client, core_conn):
     """Verify taxonomy YAML import creates and updates category and tag metadata."""
     token = set_csrf_token(client)
     payload = b"""
@@ -84,14 +78,14 @@ tags:
         content_type="multipart/form-data",
         follow_redirects=True,
     )
-    category = db_conn.execute(
+    category = core_conn.execute(
         select(
             categories_table.c.name,
             categories_table.c.description,
             categories_table.c.instruction,
         ).where(categories_table.c.name == "Custom admin")
     ).mappings().fetchone()
-    tag = db_conn.execute(
+    tag = core_conn.execute(
         select(
             tags_table.c.name,
             tags_table.c.description,

@@ -93,9 +93,9 @@ def create_category():
     """Create category."""
     try:
         category = create_category_from_form(request.form)
-        flash(f"Category saved: {category}")
+        flash(gettext("Category saved: {category}", category=category))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("taxonomy_admin.taxonomy"))
 
 
@@ -105,9 +105,9 @@ def update_category():
     """Update category."""
     try:
         category = update_category_from_form(request.form)
-        flash(f"Category updated: {category}")
+        flash(gettext("Category updated: {category}", category=category))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("taxonomy_admin.taxonomy"))
 
 
@@ -117,9 +117,9 @@ def create_tag():
     """Create tag."""
     try:
         tag = create_tag_from_form(request.form)
-        flash(f"Tag saved: {tag}")
+        flash(gettext("Tag saved: {tag}", tag=tag))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("taxonomy_admin.taxonomy"))
 
 
@@ -129,9 +129,9 @@ def update_tag():
     """Update tag."""
     try:
         tag = update_tag_from_form(request.form)
-        flash(f"Tag updated: {tag}")
+        flash(gettext("Tag updated: {tag}", tag=tag))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("taxonomy_admin.taxonomy"))
 
 
@@ -141,9 +141,9 @@ def delete_category():
     """Delete category."""
     try:
         category = delete_category_from_form(request.form)
-        flash(f"Category deleted: {category}")
+        flash(gettext("Category deleted: {category}", category=category))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("taxonomy_admin.taxonomy"))
 
 
@@ -153,7 +153,7 @@ def delete_tag():
     """Delete tag."""
     try:
         tag = delete_tag_from_form(request.form)
-        flash(f"Tag deleted: {tag}")
+        flash(gettext("Tag deleted: {tag}", tag=tag))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("taxonomy_admin.taxonomy"))

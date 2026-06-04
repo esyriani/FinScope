@@ -95,6 +95,9 @@
 <a
     class="btn btn-sm btn-outline-secondary"
     href="{{ url_for('rules.audit_rule_overlap', rule_a_id=row.detail_url_rule_a_id, rule_b_id=row.detail_url_rule_b_id) }}"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+    data-busy-message="{{ _('Loading rule audit details...') }}"
 >
     <i class="bi bi-search" aria-hidden="true"></i>{{ _("Details") }}
 </a>
@@ -104,13 +107,23 @@
 <a
     class="btn btn-sm btn-outline-secondary"
     href="{{ url_for('rules.audit_rule_detail', rule_id=rule.id) }}"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+    data-busy-message="{{ _('Loading rule audit details...') }}"
 >
     <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _(label) }}
 </a>
 {% endmacro %}
 
 {% macro preview_apply_button(rule, label="Preview apply") %}
-<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+<form
+    method="post"
+    action="{{ url_for('rules.audit_rule_preview') }}"
+    class="d-inline"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="apply_where_wins">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
@@ -122,7 +135,13 @@
 
 {% macro preview_delete_button(rule) %}
 {% if rule.can_delete_without_preview %}
-<form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline">
+<form
+    method="post"
+    action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}"
+    class="d-inline"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="next" value="{{ request.full_path }}">
     <button class="btn btn-sm btn-outline-danger" type="submit">
@@ -130,7 +149,14 @@
     </button>
 </form>
 {% else %}
-<form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+<form
+    method="post"
+    action="{{ url_for('rules.audit_rule_preview') }}"
+    class="d-inline"
+    data-busy-overlay
+    data-busy-delay-ms="0"
+    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="delete_rule">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
@@ -184,7 +210,14 @@
         <p class="text-muted mb-0">{{ _("Inspect overlapping rules, conflicts, shadowed rules, and unused rules.") }}</p>
     </div>
     <div class="home-actions">
-        <form method="post" action="{{ url_for('rules.audit_rule_preview') }}" class="d-inline">
+        <form
+            method="post"
+            action="{{ url_for('rules.audit_rule_preview') }}"
+            class="d-inline"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+            data-busy-message="{{ _('Preparing rule audit preview...') }}"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="apply_all_rules">
             <button class="btn btn-outline-secondary" type="submit">
@@ -227,6 +260,7 @@
             class="btn btn-primary"
             href="{{ recommended_next_step.href }}"
             {% if recommended_next_step.target %}data-audit-open-section="{{ recommended_next_step.target }}"{% else %}data-ajax-refresh-link{% endif %}
+            {% if not recommended_next_step.target %}data-busy-overlay data-busy-delay-ms="0" data-busy-message="{{ _('Loading rule audit...') }}"{% endif %}
         >
             <i class="bi bi-arrow-right" aria-hidden="true"></i>{{ _("Review next") }}
         </a>
@@ -318,6 +352,9 @@
                         <tr
                             data-row-href="{{ url_for('rules.audit_rule_overlap', rule_a_id=row.detail_url_rule_a_id, rule_b_id=row.detail_url_rule_b_id) }}"
                             data-row-drilldown="dblclick"
+                            data-busy-overlay
+                            data-busy-delay-ms="0"
+                            data-busy-message="{{ _('Loading rule audit details...') }}"
                         >
                             <td>{{ rule_summary(row.rule_a) }}</td>
                             <td>{{ rule_summary(row.rule_b) }}</td>
@@ -388,6 +425,9 @@
                                 <a
                                     class="btn btn-sm btn-outline-secondary"
                                     href="{{ url_for('rules.audit_rule_overlap', rule_a_id=row.broad_rule.id, rule_b_id=row.specific_rule.id) }}"
+                                    data-busy-overlay
+                                    data-busy-delay-ms="0"
+                                    data-busy-message="{{ _('Loading rule audit details...') }}"
                                 >
                                     <i class="bi bi-search" aria-hidden="true"></i>{{ _("Details") }}
                                 </a>

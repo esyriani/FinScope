@@ -279,11 +279,12 @@ function setupRuleTableActions(root = document) {
         bootstrap.Modal.getOrCreateInstance(modalElement).hide();
     }
 
-    async function submitAction(form) {
+    async function submitAction(form, submitter = null) {
         const buttons = Array.from(form.querySelectorAll("button"));
         buttons.forEach((button) => {
             button.disabled = true;
         });
+        const busyToken = window.showBusyOverlayForElement?.(form, submitter);
 
         try {
             const response = await fetch(form.action, {
@@ -327,6 +328,7 @@ function setupRuleTableActions(root = document) {
                     button.disabled = false;
                 });
             }
+            window.hideBusyOverlay?.(busyToken);
         }
     }
 
@@ -338,7 +340,7 @@ function setupRuleTableActions(root = document) {
         form.dataset.ruleTableActionReady = "true";
         form.addEventListener("submit", (event) => {
             event.preventDefault();
-            submitAction(form);
+            submitAction(form, event.submitter);
         });
     });
 }

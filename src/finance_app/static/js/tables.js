@@ -38,6 +38,7 @@ function setupTableRowInteractions(root = document) {
 
             const rowHref = row.getAttribute("data-row-href");
             if (rowHref && row.dataset.rowDrilldown === "dblclick") {
+                window.showBusyOverlayForElement?.(row);
                 window.location.href = rowHref;
                 return;
             }

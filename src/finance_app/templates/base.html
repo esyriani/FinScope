@@ -157,6 +157,18 @@
 </div>
 <button class="sidebar-backdrop" type="button" data-sidebar-backdrop aria-label="{{ _('Toggle sidebar') }}"></button>
 {% endif %}
+<div
+    class="app-busy-overlay"
+    data-busy-overlay-root
+    hidden
+    aria-hidden="true"
+    tabindex="-1"
+>
+    <div class="app-busy-dialog" role="status" aria-live="polite" aria-atomic="true">
+        <div class="spinner-border text-primary" aria-hidden="true"></div>
+        <div class="app-busy-message" data-busy-overlay-message>{{ _("Processing...") }}</div>
+    </div>
+</div>
 
 <script src="{{ static_asset('vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ static_asset('vendor/flatpickr/4.6.13/flatpickr.min.js') }}"></script>
@@ -175,6 +187,7 @@
     'js/recurring.js',
     'js/exports.js',
     'js/tag-multiselect.js',
+    'js/busy-overlay.js',
     'js/ajax-actions.js'
 ] %}
 {% for script_file in script_files %}

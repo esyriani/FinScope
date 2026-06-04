@@ -14,6 +14,7 @@ from finance_app.core.config import settings
 
 
 CORE_DB_CONTEXT_KEY = "finance_core_db"
+CORE_DB_TRANSACTION_DEPTH_KEY = "finance_core_transaction_depth"
 
 _DATABASE_ENGINE = None
 _DATABASE_ENGINE_URL = None
@@ -175,18 +176,20 @@ def db_core_connection():
 def db_core_transaction(conn=None):
     """Yield a Core connection inside a managed transaction.
 
-    When a caller provides a connection that already has an active transaction,
-    the helper uses a savepoint and leaves the outer transaction under caller
-    control. Connections opened by this helper keep the existing top-level
-    commit-or-rollback behavior.
+    When the connection is already inside either a database transaction or an
+    outer logical db_core_transaction() block, the helper uses a savepoint and
+    leaves the outer transaction under caller control. Connections opened by
+    this helper keep the existing top-level commit-or-rollback behavior.
     """
     owns_connection = conn is None
-    external_connection = conn is not None
     if conn is None:
         conn = get_core_connection()
 
+    transaction_depth = conn.info.get(CORE_DB_TRANSACTION_DEPTH_KEY, 0)
+    use_savepoint = transaction_depth > 0 or conn.in_transaction()
+    conn.info[CORE_DB_TRANSACTION_DEPTH_KEY] = transaction_depth + 1
     try:
-        if external_connection and conn.in_transaction():
+        if use_savepoint:
             with conn.begin_nested():
                 yield conn
         else:
@@ -200,5 +203,10 @@ def db_core_transaction(conn=None):
                 if conn.in_transaction():
                     conn.commit()
     finally:
+        current_depth = conn.info.get(CORE_DB_TRANSACTION_DEPTH_KEY, 1)
+        if current_depth <= 1:
+            conn.info.pop(CORE_DB_TRANSACTION_DEPTH_KEY, None)
+        else:
+            conn.info[CORE_DB_TRANSACTION_DEPTH_KEY] = current_depth - 1
         if owns_connection and not is_request_scoped_core_connection(conn):
             conn.close()

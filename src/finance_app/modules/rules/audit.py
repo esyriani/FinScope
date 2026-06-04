@@ -26,7 +26,6 @@ from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.categories.taxonomy import get_transaction_tags_by_id
 from finance_app.modules.categories.rules_matching import (
     ScoredRuleMatch,
-    rule_match_precedence_key,
     rule_specificity,
     score_category_rule_matches,
     select_winning_rule_match,
@@ -358,14 +357,11 @@ def freeze_index(index):
 def analyze_rule_overlaps(audit_data):
     """Return all rule pairs that share at least one matching transaction."""
     overlaps = []
-    for rule_a, rule_b in combinations(audit_data.rules, 2):
-        rule_a_id = rule_a["id"]
-        rule_b_id = rule_b["id"]
-        shared_audits = shared_matching_transaction_audits(
-            audit_data,
-            rule_a_id,
-            rule_b_id,
-        )
+    for (rule_a_id, rule_b_id), shared_audits in shared_rule_pair_audits(audit_data).items():
+        rule_a = audit_data.rule_by_id.get(rule_a_id)
+        rule_b = audit_data.rule_by_id.get(rule_b_id)
+        if rule_a is None or rule_b is None:
+            continue
         if not shared_audits:
             continue
 
@@ -397,6 +393,22 @@ def analyze_rule_overlaps(audit_data):
             overlap.rule_b["keyword"],
         ),
     )
+
+
+def shared_rule_pair_audits(audit_data):
+    """Return transaction audits keyed by rule pairs that actually co-match."""
+    shared_pairs = defaultdict(list)
+    for audit in audit_data.transaction_audits:
+        matched_rule_ids = sorted(
+            {
+                rule_id_from_match(match)
+                for match in audit.matches
+                if rule_id_from_match(match) is not None
+            }
+        )
+        for rule_a_id, rule_b_id in combinations(matched_rule_ids, 2):
+            shared_pairs[(rule_a_id, rule_b_id)].append(audit)
+    return freeze_index(shared_pairs)
 
 
 def shared_matching_transaction_audits(audit_data, rule_a_id, rule_b_id):
@@ -1259,22 +1271,3 @@ def compute_rule_specificity_score(rule):
     """Return the deterministic specificity score tuple for a rule."""
     return rule_specificity(rule)
 
-
-def explain_rule_win(winning_match, losing_matches):
-    """Return a structured explanation of why a rule won over alternatives."""
-    if winning_match is None:
-        return {}
-
-    return {
-        "winning_rule_id": rule_id_from_match(winning_match),
-        "winning_precedence": rule_match_precedence_key(winning_match),
-        "losing_rules": [
-            {
-                "rule_id": rule_id_from_match(match),
-                "precedence": rule_match_precedence_key(match),
-                "same_category": match.category == winning_match.category,
-                "same_tags": match.tags == winning_match.tags,
-            }
-            for match in losing_matches
-        ],
-    }

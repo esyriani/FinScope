@@ -1,5 +1,6 @@
 """Service-level tests for calendar page context behavior."""
 
+from sqlalchemy import text
 from datetime import date as real_date
 
 from werkzeug.datastructures import MultiDict
@@ -23,12 +24,10 @@ class FixedDate(real_date):
 
 def seed_calendar_transactions(conn):
     """Seed calendar transactions, including one recurring monthly merchant."""
-    account_id = conn.execute(
-        """
+    account_id = conn.execute(text("""
         INSERT INTO accounts (name)
         VALUES ('Visa')
-        """
-    ).lastrowid
+        """)).lastrowid
     rows = [
         ("2026-02-05", "NETFLIX", 18.99, "Entertainment", 0, "expense", "calendar-netflix-feb"),
         ("2026-03-05", "NETFLIX", 18.99, "Entertainment", 0, "expense", "calendar-netflix-mar"),
@@ -39,8 +38,7 @@ def seed_calendar_transactions(conn):
         ("2026-05-05", "NETFLIX", 18.99, "Entertainment", 0, "expense", "calendar-netflix-may"),
         ("2026-05-06", "Ignored Store", 999.00, "Food", 1, "expense", "calendar-ignored"),
     ]
-    conn.executemany(
-        """
+    conn.execute(text("""
         INSERT INTO transactions (
             account_id,
             tx_date,
@@ -51,28 +49,22 @@ def seed_calendar_transactions(conn):
             transaction_kind,
             fingerprint
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
+        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"), row)) for row in [
             (account_id, tx_date, description, amount, category, ignored, transaction_kind, fingerprint)
             for tx_date, description, amount, category, ignored, transaction_kind, fingerprint in rows
-        ],
-    )
+        ]])
     for fingerprint, tags in (
         ("calendar-metro", ["Tax"]),
         ("calendar-netflix-may", ["Subscription"]),
     ):
-        transaction_id = conn.execute(
-            """
+        transaction_id = conn.execute(text("""
             SELECT id
             FROM transactions
-            WHERE fingerprint = ?
-            """,
-            (fingerprint,),
-        ).fetchone()["id"]
+            WHERE fingerprint = :p0
+            """), {"p0": fingerprint}).fetchone()._mapping["id"]
         set_transaction_tags(conn, transaction_id, tags, source="rule")
-    conn.execute(
-        """
+    conn.execute(text("""
         INSERT INTO transactions (
             account_id,
             tx_date,
@@ -82,10 +74,8 @@ def seed_calendar_transactions(conn):
             transaction_kind,
             fingerprint
         )
-        VALUES (?, '2026-05-07', 'Savings transfer', 500.00, 'Transfers', 'transfer', 'calendar-transfer')
-        """,
-        (account_id,),
-    )
+        VALUES (:p0, '2026-05-07', 'Savings transfer', 500.00, 'Transfers', 'transfer', 'calendar-transfer')
+        """), {"p0": account_id})
     conn.commit()
 
 
@@ -110,9 +100,9 @@ def test_calendar_parsing_handles_months_and_heatmap_defaults():
     assert calendar_parsing.parse_heatmap_metric("bogus") == "spending"
 
 
-def test_calendar_context_builds_totals_day_json_and_heatmap(app, db_conn, monkeypatch):
+def test_calendar_context_builds_totals_day_json_and_heatmap(app, core_conn, monkeypatch):
     """Verify calendar context totals, day payloads, and net heatmap classes."""
-    seed_calendar_transactions(db_conn)
+    seed_calendar_transactions(core_conn)
     patch_calendar_today(monkeypatch)
     args = MultiDict([("month", "2026-05"), ("heatmap", "net")])
 
@@ -145,9 +135,9 @@ def test_calendar_context_builds_totals_day_json_and_heatmap(app, db_conn, monke
     assert may_2_json["transactions"][0]["amount"] == 50.00
 
 
-def test_calendar_context_applies_category_filters(app, db_conn, monkeypatch):
+def test_calendar_context_applies_category_filters(app, core_conn, monkeypatch):
     """Verify category filters constrain calendar totals and day payloads."""
-    seed_calendar_transactions(db_conn)
+    seed_calendar_transactions(core_conn)
     patch_calendar_today(monkeypatch)
     args = MultiDict([("month", "2026-05"), ("categories", "Food")])
 
@@ -162,9 +152,9 @@ def test_calendar_context_applies_category_filters(app, db_conn, monkeypatch):
     assert calendar_day(context, "2026-05-03")["transactions"] == []
 
 
-def test_calendar_context_applies_tag_filters(app, db_conn, monkeypatch):
+def test_calendar_context_applies_tag_filters(app, core_conn, monkeypatch):
     """Verify tag filters constrain calendar totals and navigation URLs."""
-    seed_calendar_transactions(db_conn)
+    seed_calendar_transactions(core_conn)
     patch_calendar_today(monkeypatch)
     args = MultiDict([("month", "2026-05"), ("tags", "Tax")])
 
@@ -180,9 +170,9 @@ def test_calendar_context_applies_tag_filters(app, db_conn, monkeypatch):
     assert calendar_day(context, "2026-05-05")["transactions"] == []
 
 
-def test_calendar_context_applies_untagged_filter(app, db_conn, monkeypatch):
+def test_calendar_context_applies_untagged_filter(app, core_conn, monkeypatch):
     """Verify the virtual untagged tag filter finds transactions without tags."""
-    seed_calendar_transactions(db_conn)
+    seed_calendar_transactions(core_conn)
     patch_calendar_today(monkeypatch)
     args = MultiDict([("month", "2026-05"), ("tags", UNTAGGED_TAG_FILTER)])
 
@@ -197,9 +187,9 @@ def test_calendar_context_applies_untagged_filter(app, db_conn, monkeypatch):
     assert calendar_day(context, "2026-05-04")["transactions"][0]["description"] == "Unknown Shop"
 
 
-def test_recurring_activity_context_exposes_json_payload(app, db_conn, monkeypatch):
+def test_recurring_activity_context_exposes_json_payload(app, core_conn, monkeypatch):
     """Verify recurring activity context includes serializable recurrence data."""
-    seed_calendar_transactions(db_conn)
+    seed_calendar_transactions(core_conn)
     patch_calendar_today(monkeypatch)
 
     with app.test_request_context("/calendar"):

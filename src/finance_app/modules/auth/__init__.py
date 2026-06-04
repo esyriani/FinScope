@@ -8,7 +8,7 @@ from flask_login import LoginManager
 
 from finance_app.modules.auth.controller import auth_bp
 from finance_app.modules.auth.permissions import register_authorization_guards
-from finance_app.modules.auth.service import load_login_user
+from finance_app.modules.auth.service import has_owner_account, load_login_user
 
 
 def register_auth(app):
@@ -18,4 +18,4 @@ def register_auth(app):
     login_manager.login_message = "Please log in to continue."
     login_manager.user_loader(load_login_user)
     login_manager.init_app(app)
-    register_authorization_guards(app)
+    register_authorization_guards(app, has_owner_account)

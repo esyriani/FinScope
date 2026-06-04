@@ -132,12 +132,16 @@ def forbidden_response():
     abort(403)
 
 
-def register_authorization_guards(app):
+def register_authorization_guards(app, has_owner_account):
     """Register cross-cutting authentication and authorization request guards.
 
     The guard keeps bootstrap public until an owner exists, protects every
     application route, forces password changes before regular app access, and
     blocks accidental viewer mutations even if a controller misses a decorator.
+
+    Args:
+        app: Flask application receiving the before-request guard.
+        has_owner_account: Callable returning whether a bootstrap owner exists.
     """
 
     @app.before_request
@@ -146,8 +150,6 @@ def register_authorization_guards(app):
         endpoint = request.endpoint or ""
         if endpoint == "static":
             return None
-
-        from finance_app.modules.auth.service import has_owner_account
 
         if not has_owner_account():
             if endpoint == "auth.bootstrap":

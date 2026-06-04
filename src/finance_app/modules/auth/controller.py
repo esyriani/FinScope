@@ -4,6 +4,7 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 from flask_login import current_user, login_required, login_user, logout_user
 
 from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_VIEWER
+from finance_app.core.i18n import gettext
 from finance_app.modules.auth.permissions import owner_required
 from finance_app.modules.auth.service import (
     authenticate_user,
@@ -50,12 +51,12 @@ def bootstrap():
                 display_name=request.form.get("display_name"),
             )
         except ValueError as exc:
-            flash(str(exc))
+            flash(gettext(str(exc)))
         else:
             user = authenticate_user(row["username"], request.form.get("password"), request.remote_addr)
             if user is not None:
                 login_user(user)
-            flash("Owner account created.")
+            flash(gettext("Owner account created."))
             return redirect(url_for("home.home"))
 
     return render_template("auth_bootstrap.html")
@@ -82,7 +83,7 @@ def login():
             ip_address=request.remote_addr,
         )
         if user is None:
-            flash("Invalid username or password.")
+            flash(gettext("Invalid username or password."))
         else:
             if user.must_change_password:
                 session[PENDING_PASSWORD_CHANGE_USER_ID] = user.id
@@ -101,7 +102,7 @@ def logout():
     """Log out the current user and redirect to the login page."""
     clear_pending_password_change()
     logout_user()
-    flash("You have been logged out.")
+    flash(gettext("You have been logged out."))
     return redirect(url_for("auth.login"))
 
 
@@ -137,7 +138,7 @@ def account():
                     ip_address=request.remote_addr,
                 )
                 login_user(load_login_user(row["id"]))
-                flash("Display name updated.")
+                flash(gettext("Display name updated."))
             elif action == "password":
                 change_user_password(
                     current_user.id,
@@ -147,11 +148,11 @@ def account():
                     ip_address=request.remote_addr,
                 )
                 login_user(load_login_user(current_user.id))
-                flash("Password changed.")
+                flash(gettext("Password changed."))
             else:
-                flash("Choose an account action.")
+                flash(gettext("Choose an account action."))
         except ValueError as exc:
-            flash(str(exc))
+            flash(gettext(str(exc)))
         return redirect(url_for("auth.account"))
 
     return render_template("account.html", account_user=get_user_account(current_user.id))
@@ -184,10 +185,10 @@ def create_user():
             display_name=request.form.get("display_name"),
         )
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     else:
         session[TEMPORARY_PASSWORD_MODAL] = temporary_password_modal_payload(user, temporary_password)
-        flash("User created.")
+        flash(gettext("User created."))
     return redirect(url_for("auth.users"))
 
 
@@ -197,9 +198,9 @@ def deactivate_user(user_id):
     """Deactivate a user unless doing so would remove the final active owner."""
     try:
         set_user_active(user_id, False, actor=current_user, ip_address=request.remote_addr)
-        flash("User deactivated.")
+        flash(gettext("User deactivated."))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("auth.users"))
 
 
@@ -209,9 +210,9 @@ def reactivate_user(user_id):
     """Reactivate a previously deactivated user."""
     try:
         set_user_active(user_id, True, actor=current_user, ip_address=request.remote_addr)
-        flash("User reactivated.")
+        flash(gettext("User reactivated."))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("auth.users"))
 
 
@@ -226,9 +227,9 @@ def update_user_role(user_id):
             actor=current_user,
             ip_address=request.remote_addr,
         )
-        flash("User role updated.")
+        flash(gettext("User role updated."))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("auth.users"))
 
 
@@ -239,9 +240,9 @@ def reset_password(user_id):
     try:
         user, temporary_password = reset_user_password(user_id, actor=current_user, ip_address=request.remote_addr)
         session[TEMPORARY_PASSWORD_MODAL] = temporary_password_modal_payload(user, temporary_password)
-        flash("Temporary password generated.")
+        flash(gettext("Temporary password generated."))
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
     return redirect(url_for("auth.users"))
 
 
@@ -258,11 +259,11 @@ def handoff_ownership():
             ip_address=request.remote_addr,
         )
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
         return redirect(url_for("auth.users"))
 
     login_user(load_login_user(current_owner_id))
-    flash("Ownership handed off. Your account is now Viewer.")
+    flash(gettext("Ownership handed off. Your account is now Viewer."))
     return redirect(url_for("auth.account"))
 
 
@@ -281,13 +282,13 @@ def complete_forced_password_change():
             ip_address=request.remote_addr,
         )
     except ValueError as exc:
-        return render_forced_password_change(error=str(exc))
+        return render_forced_password_change(error=gettext(str(exc)))
 
     clear_pending_password_change()
     user = load_login_user(pending_user_id)
     if user is not None:
         login_user(user)
-    flash("Password changed.")
+    flash(gettext("Password changed."))
     return redirect(url_for("home.home"))
 
 

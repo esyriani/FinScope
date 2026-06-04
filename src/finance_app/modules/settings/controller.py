@@ -2,6 +2,7 @@
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
+from finance_app.core.i18n import gettext
 from finance_app.modules.auth.permissions import (
     PERMISSION_MANAGE_GLOBAL_SETTINGS,
     permission_required,
@@ -22,9 +23,9 @@ def settings_page():
     if request.method == "POST":
         try:
             save_settings_from_form(request.form)
-            flash("Settings saved.")
+            flash(gettext("Settings saved."))
         except ValueError as exc:
-            flash(str(exc))
+            flash(gettext(str(exc)))
 
         return redirect(url_for("settings_page.settings_page"))
 
@@ -35,5 +36,5 @@ def settings_page():
 @permission_required(PERMISSION_MANAGE_GLOBAL_SETTINGS)
 def validate_openai_model():
     """Validate openai model."""
-    flash(validate_openai_model_from_form(request.form))
+    flash(gettext(validate_openai_model_from_form(request.form)))
     return redirect(url_for("settings_page.settings_page"))

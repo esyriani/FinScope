@@ -1,11 +1,12 @@
 """Tests for recurring pattern routes and persistence helpers."""
 
+from sqlalchemy import text
 from datetime import date
 from pathlib import Path
 
 import pytest
 
-from finance_app.core.csrf import CSRF_HEADER_NAME, CSRF_SESSION_KEY
+from finance_app.core.csrf import CSRF_HEADER_NAME
 from finance_app.modules.calendar.presenter import build_recurring_activity_json
 from finance_app.modules.recurring.forms import parse_expected_day, recurring_pattern_payload
 from finance_app.modules.recurring.patterns import (
@@ -26,17 +27,10 @@ from finance_app.modules.recurring.service import (
     recurring_status_detail,
 )
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_name
+from tests.support.web import set_csrf_token
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-
-def set_csrf_token(client, token="test-csrf-token"):
-    """Store a CSRF token in the test client's session."""
-    with client.session_transaction() as session:
-        session[CSRF_SESSION_KEY] = token
-    return token
-
 
 def recurring_json(client, path, payload):
     """POST a JSON recurring-pattern payload with CSRF protection."""
@@ -59,17 +53,17 @@ def valid_payload(**overrides):
     return payload
 
 
-def test_recurring_confirm_ignore_and_edit_routes_persist_metadata(client, db_conn):
+def test_recurring_confirm_ignore_and_edit_routes_persist_metadata(client, core_conn):
     """Verify recurring pattern mutation routes persist user metadata."""
-    merchant_id = get_or_create_merchant_for_name(db_conn, "NETFLIX")["id"]
-    db_conn.commit()
+    merchant_id = get_or_create_merchant_for_name(core_conn, "NETFLIX")["id"]
+    core_conn.commit()
     payload = valid_payload(merchantId=merchant_id, matchType="merchant")
 
     confirm = recurring_json(client, "/recurring/patterns/confirm", payload)
-    confirmed = get_recurring_pattern_by_merchant_type(db_conn, merchant_id, "spending")
+    confirmed = get_recurring_pattern_by_merchant_type(core_conn, merchant_id, "spending")
 
     ignore = recurring_json(client, "/recurring/patterns/ignore", payload)
-    ignored = get_recurring_pattern_by_merchant_type(db_conn, merchant_id, "spending")
+    ignored = get_recurring_pattern_by_merchant_type(core_conn, merchant_id, "spending")
 
     edit = recurring_json(
         client,
@@ -85,7 +79,7 @@ def test_recurring_confirm_ignore_and_edit_routes_persist_metadata(client, db_co
             active="0",
         ),
     )
-    edited = get_recurring_pattern_by_merchant_type(db_conn, merchant_id, "spending")
+    edited = get_recurring_pattern_by_merchant_type(core_conn, merchant_id, "spending")
 
     assert confirm.status_code == 200
     assert confirm.get_json() == {"ok": True, "userStatus": "confirmed", "active": 1}
@@ -110,19 +104,19 @@ def test_recurring_confirm_ignore_and_edit_routes_persist_metadata(client, db_co
     assert edited["active"] == 0
 
 
-def test_recurring_routes_preserve_keyword_fuzzy_patterns(client, db_conn):
+def test_recurring_routes_preserve_keyword_fuzzy_patterns(client, core_conn):
     """Verify recurring routes keep keyword-fuzzy patterns unbound."""
     confirm = recurring_json(
         client,
         "/recurring/patterns/confirm",
         valid_payload(matchType="keyword"),
     )
-    pattern = get_recurring_pattern(db_conn, "NETFLIX::spending")
+    pattern = get_recurring_pattern(core_conn, "NETFLIX::spending")
 
     assert confirm.status_code == 200
     assert pattern["merchant_id"] is None
     assert pattern["match_type"] == "keyword"
-    assert db_conn.execute("SELECT COUNT(*) AS count FROM merchants").fetchone()["count"] == 0
+    assert core_conn.execute(text("SELECT COUNT(*) AS count FROM merchants")).fetchone()._mapping["count"] == 0
 
 
 @pytest.mark.parametrize(
@@ -382,14 +376,14 @@ def test_recurring_pattern_normalizers():
     assert normalize_optional_float("-1", minimum=0) is None
 
 
-def test_upsert_recurring_pattern_preserves_existing_values_when_not_overridden(db_conn):
+def test_upsert_recurring_pattern_preserves_existing_values_when_not_overridden(core_conn):
     """Verify recurring pattern upserts update only explicit metadata values."""
     upsert_recurring_pattern(
-        db_conn,
+        core_conn,
         "GYM::spending",
         "GYM",
         "spending",
-        merchant_id=get_or_create_merchant_for_name(db_conn, "GYM")["id"],
+        merchant_id=get_or_create_merchant_for_name(core_conn, "GYM")["id"],
         user_status="edited",
         frequency="Monthly-like",
         expected_day=5,
@@ -398,21 +392,21 @@ def test_upsert_recurring_pattern_preserves_existing_values_when_not_overridden(
         amount_tolerance=3.5,
         active=1,
     )
-    db_conn.commit()
-    merchant_id = db_conn.execute("SELECT id FROM merchants WHERE merchant_key = 'GYM'").fetchone()["id"]
+    core_conn.commit()
+    merchant_id = core_conn.execute(text("SELECT id FROM merchants WHERE merchant_key = 'GYM'")).fetchone()._mapping["id"]
 
     upsert_recurring_pattern(
-        db_conn,
+        core_conn,
         f"merchant:{merchant_id}::spending",
         "GYM",
         "spending",
         merchant_id=merchant_id,
         user_status="confirmed",
     )
-    db_conn.commit()
+    core_conn.commit()
 
-    pattern = get_recurring_pattern_by_merchant_type(db_conn, merchant_id, "spending")
-    metadata = get_recurring_pattern_metadata(db_conn)
+    pattern = get_recurring_pattern_by_merchant_type(core_conn, merchant_id, "spending")
+    metadata = get_recurring_pattern_metadata(core_conn)
     assert pattern["merchant"] == "GYM"
     assert pattern["user_status"] == "confirmed"
     assert pattern["frequency"] == "Monthly-like"

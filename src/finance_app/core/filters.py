@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from finance_app.core import config as config_module
+from finance_app.core.money import format_money_display
 from finance_app.core.i18n import month_abbreviation
 from finance_app.database.dates import coerce_utc_datetime
 
@@ -173,10 +174,7 @@ def format_datetime(value, timezone_name=None):
 
 def format_money(value):
     """Format money."""
-    if value is None:
-        return ""
-
-    return f"{value:,.2f}".replace(",", " ") + f" $"
+    return format_money_display(value)
 
 
 def register_filters(app):

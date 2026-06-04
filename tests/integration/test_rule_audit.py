@@ -1,17 +1,16 @@
 """Integration tests for read-only rule audit analysis."""
 
-from sqlalchemy import insert
+from sqlalchemy import text
+from types import SimpleNamespace
 
-from finance_app.database.tables import category_rules as category_rules_table
-from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.repository import resolve_category_id
-from finance_app.modules.categories.taxonomy import set_rule_tags, set_transaction_tags
 from finance_app.modules.rules.audit import (
     OVERLAP_CATEGORY_CONFLICT,
     OVERLAP_CRITICAL_CONFLICT,
     OVERLAP_HARMLESS,
     OVERLAP_TAG_DIFFERENCE,
+    RuleAuditData,
     STALE_UNUSED,
+    TransactionRuleAudit,
     analyze_rule_overlaps,
     analyze_shadowed_rules,
     analyze_specificity_warnings,
@@ -19,37 +18,12 @@ from finance_app.modules.rules.audit import (
     compute_rule_match_sets,
     get_rule_audit_summary,
     preview_rule_change,
+    shared_rule_pair_audits,
 )
+from tests.support.database import insert_rule, insert_transaction as insert_test_transaction
 
 
-def insert_rule(
-    conn,
-    keyword,
-    category,
-    tags=None,
-    amount_min=None,
-    amount_max=None,
-    source="manual",
-    ai_approved=0,
-):
-    """Insert an audit-test category rule and optional tags."""
-    rule_id = conn.execute(
-        insert(category_rules_table).values(
-            keyword=keyword,
-            category=category,
-            category_id=resolve_category_id(conn, category),
-            amount_min=amount_min,
-            amount_max=amount_max,
-            source=source,
-            ai_approved=ai_approved,
-        )
-    ).inserted_primary_key[0]
-    set_rule_tags(conn, rule_id, tags or [])
-    conn.commit()
-    return rule_id
-
-
-def insert_transaction(
+def insert_audit_transaction(
     conn,
     description,
     amount,
@@ -62,29 +36,20 @@ def insert_transaction(
     tx_date="2026-01-02",
 ):
     """Insert an audit-test transaction and optional current tags."""
-    transaction_id = conn.execute(
-        insert(transactions_table).values(
-            tx_date=tx_date,
-            description=description,
-            amount=amount,
-            category=category,
-            category_id=resolve_category_id(conn, category),
-            category_source=category_source,
-            category_rule_id=category_rule_id,
-            reviewed_at=reviewed_at,
-            needs_review=0 if category != "UNKNOWN" else 1,
-            fingerprint=fingerprint,
-        )
-    ).inserted_primary_key[0]
-    set_transaction_tags(
+    return insert_test_transaction(
         conn,
-        transaction_id,
-        tags or [],
-        source=category_source,
-        rule_id=category_rule_id,
+        description=description,
+        amount=amount,
+        category=category,
+        fingerprint=fingerprint,
+        category_source=category_source,
+        category_rule_id=category_rule_id,
+        reviewed_at=reviewed_at,
+        needs_review=0 if category != "UNKNOWN" else 1,
+        tags=tags or [],
+        tag_source=category_source,
+        tx_date=tx_date,
     )
-    conn.commit()
-    return transaction_id
 
 
 def overlap_by_rule_ids(overlaps, rule_a_id, rule_b_id):
@@ -96,13 +61,44 @@ def overlap_by_rule_ids(overlaps, rule_a_id, rule_b_id):
     return None
 
 
-def test_rule_audit_classifies_harmless_overlap(db_conn):
-    """Verify equivalent overlapping rules are harmless."""
-    broad_id = insert_rule(db_conn, "METRO", "Food", tags=["Tax"])
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Food", tags=["Tax"])
-    insert_transaction(db_conn, "Metro Grocery #123", 12.34, "audit-harmless")
+def test_rule_overlap_analysis_indexes_only_actual_co_matches():
+    """Verify overlap analysis builds rule pairs from transaction matches."""
+    rule_a = {"id": 1, "keyword": "A", "category": "Food", "tags": []}
+    rule_b = {"id": 2, "keyword": "B", "category": "Food", "tags": []}
+    rule_c = {"id": 3, "keyword": "C", "category": "Travel", "tags": []}
+    match_a = SimpleNamespace(rule=rule_a, category="Food", tags=(), specificity=1)
+    match_b = SimpleNamespace(rule=rule_b, category="Food", tags=(), specificity=1)
+    audit_data = RuleAuditData(
+        rules=(rule_a, rule_b, rule_c),
+        transactions=({"id": 10},),
+        transaction_audits=(
+            TransactionRuleAudit(
+                transaction={"id": 10},
+                matches=(match_a, match_b),
+                winning_match=match_a,
+                losing_matches=(match_b,),
+            ),
+        ),
+        rule_by_id={1: rule_a, 2: rule_b, 3: rule_c},
+        matches_by_rule_id={1: (), 2: (), 3: ()},
+        wins_by_rule_id={},
+        losses_by_rule_id={},
+        stored_applied_by_rule_id={},
+    )
 
-    audit_data = compute_rule_match_sets(db_conn)
+    assert set(shared_rule_pair_audits(audit_data)) == {(1, 2)}
+    overlaps = analyze_rule_overlaps(audit_data)
+    assert len(overlaps) == 1
+    assert {overlaps[0].rule_a["id"], overlaps[0].rule_b["id"]} == {1, 2}
+
+
+def test_rule_audit_classifies_harmless_overlap(core_conn):
+    """Verify equivalent overlapping rules are harmless."""
+    broad_id = insert_rule(core_conn, "METRO", "Food", tags=["Tax"])
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Food", tags=["Tax"])
+    insert_audit_transaction(core_conn, "Metro Grocery #123", 12.34, "audit-harmless")
+
+    audit_data = compute_rule_match_sets(core_conn)
     overlap = overlap_by_rule_ids(analyze_rule_overlaps(audit_data), broad_id, specific_id)
 
     assert overlap is not None
@@ -110,54 +106,54 @@ def test_rule_audit_classifies_harmless_overlap(db_conn):
     assert overlap.shared_count == 1
 
 
-def test_rule_audit_classifies_tag_difference_separately(db_conn):
+def test_rule_audit_classifies_tag_difference_separately(core_conn):
     """Verify same-category tag differences are not category conflicts."""
-    broad_id = insert_rule(db_conn, "METRO", "Food", tags=["Tax"])
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Food", tags=["Shared"])
-    insert_transaction(db_conn, "Metro Grocery #123", 12.34, "audit-tag-diff")
+    broad_id = insert_rule(core_conn, "METRO", "Food", tags=["Tax"])
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Food", tags=["Shared"])
+    insert_audit_transaction(core_conn, "Metro Grocery #123", 12.34, "audit-tag-diff")
 
-    audit_data = compute_rule_match_sets(db_conn)
+    audit_data = compute_rule_match_sets(core_conn)
     overlap = overlap_by_rule_ids(analyze_rule_overlaps(audit_data), broad_id, specific_id)
 
     assert overlap is not None
     assert overlap.severity == OVERLAP_TAG_DIFFERENCE
 
 
-def test_rule_audit_classifies_category_conflict(db_conn):
+def test_rule_audit_classifies_category_conflict(core_conn):
     """Verify one-row category conflicts are flagged without critical severity."""
-    broad_id = insert_rule(db_conn, "METRO", "Food")
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Utilities")
-    insert_transaction(db_conn, "Metro Grocery #123", 12.34, "audit-category-conflict")
+    broad_id = insert_rule(core_conn, "METRO", "Food")
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Utilities")
+    insert_audit_transaction(core_conn, "Metro Grocery #123", 12.34, "audit-category-conflict")
 
-    audit_data = compute_rule_match_sets(db_conn)
+    audit_data = compute_rule_match_sets(core_conn)
     overlap = overlap_by_rule_ids(analyze_rule_overlaps(audit_data), broad_id, specific_id)
 
     assert overlap is not None
     assert overlap.severity == OVERLAP_CATEGORY_CONFLICT
 
 
-def test_rule_audit_classifies_critical_conflict_for_multiple_shared_rows(db_conn):
+def test_rule_audit_classifies_critical_conflict_for_multiple_shared_rows(core_conn):
     """Verify multi-row category conflicts are critical."""
-    broad_id = insert_rule(db_conn, "METRO", "Food")
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Utilities")
-    insert_transaction(db_conn, "Metro Grocery #123", 12.34, "audit-critical-1")
-    insert_transaction(db_conn, "Metro Grocery #456", 20.00, "audit-critical-2")
+    broad_id = insert_rule(core_conn, "METRO", "Food")
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Utilities")
+    insert_audit_transaction(core_conn, "Metro Grocery #123", 12.34, "audit-critical-1")
+    insert_audit_transaction(core_conn, "Metro Grocery #456", 20.00, "audit-critical-2")
 
-    audit_data = compute_rule_match_sets(db_conn)
+    audit_data = compute_rule_match_sets(core_conn)
     overlap = overlap_by_rule_ids(analyze_rule_overlaps(audit_data), broad_id, specific_id)
 
     assert overlap is not None
     assert overlap.severity == OVERLAP_CRITICAL_CONFLICT
 
 
-def test_rule_audit_finds_shadowed_and_unused_rules(db_conn):
+def test_rule_audit_finds_shadowed_and_unused_rules(core_conn):
     """Verify shadowed and unused rules are reported from match data."""
-    broad_id = insert_rule(db_conn, "METRO", "Food")
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Utilities")
-    unused_id = insert_rule(db_conn, "UNUSED SHOP", "Food")
-    insert_transaction(db_conn, "Metro Grocery #123", 12.34, "audit-shadowed")
+    broad_id = insert_rule(core_conn, "METRO", "Food")
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Utilities")
+    unused_id = insert_rule(core_conn, "UNUSED SHOP", "Food")
+    insert_audit_transaction(core_conn, "Metro Grocery #123", 12.34, "audit-shadowed")
 
-    audit_data = compute_rule_match_sets(db_conn)
+    audit_data = compute_rule_match_sets(core_conn)
     shadowed = analyze_shadowed_rules(audit_data)
     stale = analyze_stale_rules(audit_data)
 
@@ -168,12 +164,12 @@ def test_rule_audit_finds_shadowed_and_unused_rules(db_conn):
     assert any(finding.rule["id"] == unused_id and finding.status == STALE_UNUSED for finding in stale)
 
 
-def test_rule_audit_excludes_unknown_transactions_by_default(db_conn):
+def test_rule_audit_excludes_unknown_transactions_by_default(core_conn):
     """Verify UNKNOWN rows do not create default overlap findings."""
-    broad_id = insert_rule(db_conn, "METRO", "Food")
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Utilities")
-    insert_transaction(
-        db_conn,
+    broad_id = insert_rule(core_conn, "METRO", "Food")
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Utilities")
+    insert_audit_transaction(
+        core_conn,
         "Metro Grocery #123",
         12.34,
         "audit-unknown",
@@ -181,27 +177,27 @@ def test_rule_audit_excludes_unknown_transactions_by_default(db_conn):
         category_source="unknown",
     )
 
-    default_data = compute_rule_match_sets(db_conn)
-    included_data = compute_rule_match_sets(db_conn, include_unknown=True)
+    default_data = compute_rule_match_sets(core_conn)
+    included_data = compute_rule_match_sets(core_conn, include_unknown=True)
 
     assert overlap_by_rule_ids(analyze_rule_overlaps(default_data), broad_id, specific_id) is None
     assert overlap_by_rule_ids(analyze_rule_overlaps(included_data), broad_id, specific_id) is not None
 
 
-def test_rule_audit_summary_reports_overlap_and_application_counts(db_conn):
+def test_rule_audit_summary_reports_overlap_and_application_counts(core_conn):
     """Verify summary diagnostics derive from the same match matrix."""
-    insert_rule(db_conn, "METRO", "Food")
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Utilities")
-    insert_rule(db_conn, "UNUSED SHOP", "Food")
-    insert_transaction(
-        db_conn,
+    insert_rule(core_conn, "METRO", "Food")
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Utilities")
+    insert_rule(core_conn, "UNUSED SHOP", "Food")
+    insert_audit_transaction(
+        core_conn,
         "Metro Grocery #123",
         12.34,
         "audit-summary",
         category_rule_id=specific_id,
     )
 
-    summary = get_rule_audit_summary(compute_rule_match_sets(db_conn))
+    summary = get_rule_audit_summary(compute_rule_match_sets(core_conn))
 
     assert summary["total_active_rules"] == 3
     assert summary["rules_with_zero_historical_matches"] == 1
@@ -210,19 +206,19 @@ def test_rule_audit_summary_reports_overlap_and_application_counts(db_conn):
     assert summary["category_conflict_overlaps"] == 1
 
 
-def test_rule_audit_warns_when_broad_rule_beats_more_specific_rule(db_conn):
+def test_rule_audit_warns_when_broad_rule_beats_more_specific_rule(core_conn):
     """Verify broad winners over more constrained rules create precedence warnings."""
-    broad_id = insert_rule(db_conn, "METRO GROCERY", "Food")
-    specific_id = insert_rule(db_conn, "METRO", "Utilities", amount_min=10)
-    insert_transaction(
-        db_conn,
+    broad_id = insert_rule(core_conn, "METRO GROCERY", "Food")
+    specific_id = insert_rule(core_conn, "METRO", "Utilities", amount_min=10)
+    insert_audit_transaction(
+        core_conn,
         "Metro Grocery",
         12.34,
         "audit-specificity-warning",
         category_rule_id=broad_id,
     )
 
-    audit_data = compute_rule_match_sets(db_conn)
+    audit_data = compute_rule_match_sets(core_conn)
     warnings = analyze_specificity_warnings(audit_data)
 
     assert len(warnings) == 1
@@ -234,12 +230,12 @@ def test_rule_audit_warns_when_broad_rule_beats_more_specific_rule(db_conn):
     assert get_rule_audit_summary(audit_data)["specificity_warnings"] == 1
 
 
-def test_rule_audit_preview_remove_rule_is_read_only(db_conn):
+def test_rule_audit_preview_remove_rule_is_read_only(core_conn):
     """Verify delete preview compares outcomes without mutating persisted rows."""
-    broad_id = insert_rule(db_conn, "METRO", "Food", tags=["Grocery"])
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Utilities", tags=["Tax"])
-    transaction_id = insert_transaction(
-        db_conn,
+    broad_id = insert_rule(core_conn, "METRO", "Food", tags=["Grocery"])
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Utilities", tags=["Tax"])
+    transaction_id = insert_audit_transaction(
+        core_conn,
         "Metro Grocery #123",
         12.34,
         "audit-preview-read-only",
@@ -248,15 +244,12 @@ def test_rule_audit_preview_remove_rule_is_read_only(db_conn):
         tags=["Tax"],
     )
 
-    preview = preview_rule_change(db_conn, {"type": "delete_rule", "rule_id": specific_id})
-    stored = db_conn.execute(
-        """
+    preview = preview_rule_change(core_conn, {"type": "delete_rule", "rule_id": specific_id})
+    stored = core_conn.execute(text("""
         SELECT category, category_rule_id
         FROM transactions
-        WHERE id = ?
-        """,
-        (transaction_id,),
-    ).fetchone()
+        WHERE id = :p0
+        """), {"p0": transaction_id}).fetchone()
 
     assert preview.rule["id"] == specific_id
     assert preview.summary["total_affected_transactions"] == 1
@@ -268,20 +261,20 @@ def test_rule_audit_preview_remove_rule_is_read_only(db_conn):
     assert tuple(stored) == ("Utilities", specific_id)
 
 
-def test_rule_audit_preview_apply_modes_distinguish_wins_from_force(db_conn):
+def test_rule_audit_preview_apply_modes_distinguish_wins_from_force(core_conn):
     """Verify selected-rule preview modes distinguish normal wins from force apply."""
-    broad_id = insert_rule(db_conn, "METRO", "Food")
-    specific_id = insert_rule(db_conn, "METRO GROCERY", "Utilities")
-    insert_transaction(
-        db_conn,
+    broad_id = insert_rule(core_conn, "METRO", "Food")
+    specific_id = insert_rule(core_conn, "METRO GROCERY", "Utilities")
+    insert_audit_transaction(
+        core_conn,
         "Metro Pharmacy",
         8.50,
         "audit-apply-preview-win",
         category="UNKNOWN",
         category_source="unknown",
     )
-    insert_transaction(
-        db_conn,
+    insert_audit_transaction(
+        core_conn,
         "Metro Grocery #123",
         12.34,
         "audit-apply-preview-loss",
@@ -289,8 +282,8 @@ def test_rule_audit_preview_apply_modes_distinguish_wins_from_force(db_conn):
         category_rule_id=specific_id,
     )
 
-    where_wins = preview_rule_change(db_conn, {"type": "apply_where_wins", "rule_id": broad_id})
-    force_apply = preview_rule_change(db_conn, {"type": "force_apply_rule", "rule_id": broad_id})
+    where_wins = preview_rule_change(core_conn, {"type": "apply_where_wins", "rule_id": broad_id})
+    force_apply = preview_rule_change(core_conn, {"type": "force_apply_rule", "rule_id": broad_id})
 
     assert where_wins.summary["total_affected_transactions"] == 1
     assert where_wins.impacts[0].transaction["description"] == "Metro Pharmacy"
@@ -302,10 +295,10 @@ def test_rule_audit_preview_apply_modes_distinguish_wins_from_force(db_conn):
     )
 
 
-def test_rule_audit_preview_create_rule_is_read_only(db_conn):
+def test_rule_audit_preview_create_rule_is_read_only(core_conn):
     """Verify create preview compares proposed rule behavior without saving it."""
-    transaction_id = insert_transaction(
-        db_conn,
+    transaction_id = insert_audit_transaction(
+        core_conn,
         "Metro Pharmacy",
         12.34,
         "audit-create-preview",
@@ -324,12 +317,10 @@ def test_rule_audit_preview_create_rule_is_read_only(db_conn):
     }
 
     preview = preview_rule_change(
-        db_conn,
+        core_conn,
         {"type": "create_rule", "proposed_rule": proposed_rule},
     )
-    stored_rule = db_conn.execute(
-        "SELECT id FROM category_rules WHERE keyword = 'METRO'"
-    ).fetchone()
+    stored_rule = core_conn.execute(text("SELECT id FROM category_rules WHERE keyword = 'METRO'")).fetchone()
 
     assert preview.rule == {}
     assert preview.proposed_rule["keyword"] == "METRO"
@@ -341,22 +332,19 @@ def test_rule_audit_preview_create_rule_is_read_only(db_conn):
     assert stored_rule is None
 
 
-def test_rule_audit_preview_approve_rule_is_read_only(db_conn):
+def test_rule_audit_preview_approve_rule_is_read_only(core_conn):
     """Verify approval preview does not mutate automatic rule approval."""
-    rule_id = insert_rule(db_conn, "AUTO STORE", "Food", source="automatic")
+    rule_id = insert_rule(core_conn, "AUTO STORE", "Food", source="automatic")
 
     preview = preview_rule_change(
-        db_conn,
+        core_conn,
         {"type": "approve_rule", "rule_id": rule_id},
     )
-    stored_rule = db_conn.execute(
-        """
+    stored_rule = core_conn.execute(text("""
         SELECT source, ai_approved
         FROM category_rules
-        WHERE id = ?
-        """,
-        (rule_id,),
-    ).fetchone()
+        WHERE id = :p0
+        """), {"p0": rule_id}).fetchone()
 
     assert preview.rule["id"] == rule_id
     assert preview.summary["total_affected_transactions"] == 0
@@ -364,11 +352,11 @@ def test_rule_audit_preview_approve_rule_is_read_only(db_conn):
     assert tuple(stored_rule) == ("automatic", 0)
 
 
-def test_rule_audit_preview_edit_rule_is_read_only(db_conn):
+def test_rule_audit_preview_edit_rule_is_read_only(core_conn):
     """Verify edit preview compares proposed rule behavior without saving it."""
-    rule_id = insert_rule(db_conn, "METRO", "Food", tags=["Grocery"])
-    included_id = insert_transaction(
-        db_conn,
+    rule_id = insert_rule(core_conn, "METRO", "Food", tags=["Grocery"])
+    included_id = insert_audit_transaction(
+        core_conn,
         "Metro Pharmacy",
         12.34,
         "audit-edit-preview-keep",
@@ -376,8 +364,8 @@ def test_rule_audit_preview_edit_rule_is_read_only(db_conn):
         category_rule_id=rule_id,
         tags=["Grocery"],
     )
-    excluded_id = insert_transaction(
-        db_conn,
+    excluded_id = insert_audit_transaction(
+        core_conn,
         "Metro Cafe",
         8.50,
         "audit-edit-preview-exclude",
@@ -397,17 +385,14 @@ def test_rule_audit_preview_edit_rule_is_read_only(db_conn):
     }
 
     preview = preview_rule_change(
-        db_conn,
+        core_conn,
         {"type": "edit_rule", "rule_id": rule_id, "proposed_rule": proposed_rule},
     )
-    stored_rule = db_conn.execute(
-        """
+    stored_rule = core_conn.execute(text("""
         SELECT category, amount_min, amount_max
         FROM category_rules
-        WHERE id = ?
-        """,
-        (rule_id,),
-    ).fetchone()
+        WHERE id = :p0
+        """), {"p0": rule_id}).fetchone()
 
     assert preview.rule["category"] == "Food"
     assert preview.proposed_rule["category"] == "Utilities"
@@ -420,19 +405,19 @@ def test_rule_audit_preview_edit_rule_is_read_only(db_conn):
     assert tuple(stored_rule) == ("Food", None, None)
 
 
-def test_rule_audit_preview_apply_all_rules_is_read_only(db_conn):
+def test_rule_audit_preview_apply_all_rules_is_read_only(core_conn):
     """Verify apply-all preview reports normal winners without mutating transactions."""
-    rule_id = insert_rule(db_conn, "METRO", "Food")
-    transaction_id = insert_transaction(
-        db_conn,
+    rule_id = insert_rule(core_conn, "METRO", "Food")
+    transaction_id = insert_audit_transaction(
+        core_conn,
         "Metro Pharmacy",
         8.50,
         "audit-apply-all-preview",
         category="UNKNOWN",
         category_source="unknown",
     )
-    insert_transaction(
-        db_conn,
+    insert_audit_transaction(
+        core_conn,
         "Other Store",
         6.00,
         "audit-apply-all-preview-miss",
@@ -440,15 +425,12 @@ def test_rule_audit_preview_apply_all_rules_is_read_only(db_conn):
         category_source="unknown",
     )
 
-    preview = preview_rule_change(db_conn, {"type": "apply_all_rules"})
-    stored = db_conn.execute(
-        """
+    preview = preview_rule_change(core_conn, {"type": "apply_all_rules"})
+    stored = core_conn.execute(text("""
         SELECT category, category_rule_id
         FROM transactions
-        WHERE id = ?
-        """,
-        (transaction_id,),
-    ).fetchone()
+        WHERE id = :p0
+        """), {"p0": transaction_id}).fetchone()
 
     assert preview.rule == {}
     assert preview.summary["total_affected_transactions"] == 1

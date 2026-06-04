@@ -1,6 +1,7 @@
 """Tests for calendar recurring-transaction inference."""
 
 from datetime import date
+from decimal import Decimal
 
 from finance_app.modules.calendar.recurrence import (
     classify_recurring_match,
@@ -110,8 +111,9 @@ def test_amount_tolerance_and_amount_change_details():
         recurrence_settings,
     )
 
-    assert recurrence_amount_tolerance(20.0, recurrence_settings) == 5
-    assert recurrence_amount_tolerance(100.0, recurrence_settings) == 10
+    assert recurrence_amount_tolerance(Decimal("20.00"), recurrence_settings) == Decimal("5")
+    assert recurrence_amount_tolerance(Decimal("100.00"), recurrence_settings) == Decimal("10")
+    assert isinstance(recurrence_amount_tolerance(Decimal("100.00"), recurrence_settings), Decimal)
     assert recurring_amount_change_details(100.0, amount_changed_match) == {
         "typical_amount": 100.0,
         "actual_amount": 130.0,

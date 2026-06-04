@@ -3,9 +3,10 @@
 from calendar import monthrange
 from dataclasses import replace
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from statistics import median
 
-from finance_app.core.money import money_to_float, rounded_money_float
+from finance_app.core.money import money_to_decimal, rounded_money_decimal, rounded_money_float
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 from finance_app.modules.recurring.patterns import recurring_pattern_key
 from finance_app.modules.merchants.repository import merchant_identity_from_row
@@ -34,7 +35,7 @@ def infer_recurring_items(
         if not merchant["key"]:
             continue
 
-        amount = money_to_float(row["amount"])
+        amount = money_to_decimal(row["amount"])
         tx_type = "spending" if amount > 0 else "income" if amount < 0 else "neutral"
         if tx_type == "neutral":
             continue
@@ -63,7 +64,9 @@ def infer_recurring_items(
         group["days"].append(tx_date.day)
         group["dates"].append(tx_date)
         group["months"].add(tx_date.strftime("%Y-%m"))
-        group["category_totals"][row["category"]] = group["category_totals"].get(row["category"], 0) + amount_abs
+        group["category_totals"][row["category"]] = (
+            group["category_totals"].get(row["category"], Decimal("0")) + amount_abs
+        )
         group["occurrences"].append(
             {
                 "date": row["tx_date"],
@@ -112,7 +115,11 @@ def infer_recurring_items(
             group["category_totals"],
             key=lambda item: (group["category_totals"][item], item),
         )
-        typical_amount = rounded_money_float(pattern_metadata.get("typical_amount") or median(group["amounts"]))
+        typical_amount = rounded_money_decimal(
+            pattern_metadata["typical_amount"]
+            if pattern_metadata.get("typical_amount") is not None
+            else median(group["amounts"])
+        )
         candidates = month_transactions_by_key.get((group["merchant_key"], group["type"]), [])
         pattern_recurrence_settings = recurrence_settings_for_pattern(recurrence_settings, pattern_metadata)
         last_seen = max(
@@ -138,7 +145,7 @@ def infer_recurring_items(
                 "match_type": match_type,
                 "date": expected_date.isoformat(),
                 "merchant": group["merchant"],
-                "amount": typical_amount,
+                "amount": rounded_money_float(typical_amount),
                 "type": group["type"],
                 "category": category,
                 "last_seen": last_seen.isoformat(),
@@ -201,13 +208,14 @@ def recurring_amount_change_details(typical_amount, match):
     if match.get("status") != "amount_changed" or match.get("matched_amount") is None:
         return None
 
-    actual_amount = rounded_money_float(match["matched_amount"])
-    difference = rounded_money_float(actual_amount - typical_amount)
-    percent = round((difference / typical_amount) * 100, 1) if typical_amount else None
+    typical_amount = rounded_money_decimal(typical_amount)
+    actual_amount = rounded_money_decimal(match["matched_amount"])
+    difference = rounded_money_decimal(actual_amount - typical_amount)
+    percent = round(float((difference / typical_amount) * Decimal("100")), 1) if typical_amount else None
     return {
         "typical_amount": rounded_money_float(typical_amount),
-        "actual_amount": actual_amount,
-        "difference": difference,
+        "actual_amount": rounded_money_float(actual_amount),
+        "difference": rounded_money_float(difference),
         "percent": percent,
     }
 
@@ -304,13 +312,13 @@ def classify_recurring_match(
     for candidate in candidates:
         candidate_date = datetime.strptime(candidate["date"], "%Y-%m-%d").date()
         date_difference = (candidate_date - expected_date).days
-        amount_difference = rounded_money_float(candidate["amount"] - typical_amount)
+        amount_difference = rounded_money_decimal(money_to_decimal(candidate["amount"]) - money_to_decimal(typical_amount))
         candidate_match = {
             **base_match,
             "date_difference_days": date_difference,
-            "amount_difference": amount_difference,
+            "amount_difference": rounded_money_float(amount_difference),
             "matched_date": candidate["date"],
-            "matched_amount": candidate["amount"],
+            "matched_amount": rounded_money_float(candidate["amount"]),
         }
         within_date = abs(date_difference) <= recurrence_settings.date_tolerance_days
         within_amount = abs(amount_difference) <= amount_tolerance
@@ -347,10 +355,10 @@ def recurring_match_sort_key(match):
 def recurrence_amount_tolerance(typical_amount, recurrence_settings=None):
     """Build amount tolerance."""
     recurrence_settings = recurrence_settings or RECURRENCE_DETECTION_DEFAULTS
-    typical_amount = money_to_float(typical_amount)
+    typical_amount = abs(money_to_decimal(typical_amount))
     return max(
-        recurrence_settings.amount_tolerance_absolute,
-        typical_amount * recurrence_settings.amount_tolerance_percent,
+        money_to_decimal(recurrence_settings.amount_tolerance_absolute),
+        typical_amount * money_to_decimal(recurrence_settings.amount_tolerance_percent),
     )
 
 

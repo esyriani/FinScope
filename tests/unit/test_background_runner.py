@@ -1,8 +1,14 @@
 """Tests for the in-memory background job runner."""
 
+import re
+import warnings
+
 import pytest
 
 from finance_app.background import runner
+
+
+UTC_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
 class CapturingExecutor:
@@ -55,6 +61,15 @@ def test_submit_background_job_records_queued_job_and_submission(isolated_backgr
     assert submitted_func is runner.run_job
     assert submitted_args[0] == job_id
     assert submitted_kwargs == {}
+
+
+def test_utc_now_does_not_emit_naive_utc_deprecation_warning():
+    """Verify job timestamps use an aware UTC clock and keep the Z format."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        timestamp = runner.utc_now()
+
+    assert UTC_TIMESTAMP_PATTERN.match(timestamp)
 
 
 def test_submit_background_job_routes_ai_jobs_to_ai_executor(isolated_background_runner):

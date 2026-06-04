@@ -70,6 +70,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "AI categorization completed: {summary}",
     "AI request issue in batch {start}-{end}: {error_type}: {detail}",
     "Processed {current} of {total}; {updated} categorized.",
+    "Processing...",
     "Processing {start}-{end} of {total}; {updated} categorized so far.",
     "Starting AI categorization for {total} unknown transactions.",
     "Starting batch {start}-{end} of {total}.",
@@ -167,10 +168,10 @@ def create_app():
     app.config["FINANCE_SETTINGS"] = settings
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = not settings.server_debug
+    app.config["SESSION_COOKIE_SECURE"] = settings.secure_cookies
     app.config["REMEMBER_COOKIE_HTTPONLY"] = True
     app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
-    app.config["REMEMBER_COOKIE_SECURE"] = not settings.server_debug
+    app.config["REMEMBER_COOKIE_SECURE"] = settings.secure_cookies
 
     register_core_db(app)
     register_auth(app)

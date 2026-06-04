@@ -95,7 +95,7 @@ def build_settings_context():
         ),
         "verify_threshold": current.get("verify_threshold", format_probability(app_settings.default_verify_threshold)),
         "auto_llm_categorization_enabled": str(
-            current.get("auto_llm_categorization_enabled", "1")
+            current.get("auto_llm_categorization_enabled", "0")
         ).strip().lower() not in {"0", "false", "no", "off"},
         "transaction_ai_rerun_enabled": str(
             current.get(

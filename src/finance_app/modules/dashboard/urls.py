@@ -22,7 +22,6 @@ from .constants import (
     DASHBOARD_MERCHANT_SORT_SPENDING,
     QUICK_VIEW_ALL,
     QUICK_VIEW_CATEGORIZED,
-    QUICK_VIEW_CUSTOM,
     QUICK_VIEW_NEEDS_REVIEW,
     QUICK_VIEW_UNKNOWN,
 )
@@ -96,6 +95,7 @@ def dashboard_transaction_params(
     date_to="",
     quick_view=QUICK_VIEW_ALL,
     selected_tags=None,
+    merchant_search="",
 ):
     """Render transaction params."""
     selected_tags = selected_tags or []
@@ -112,14 +112,14 @@ def dashboard_transaction_params(
         params["category_status"] = CATEGORY_STATUS_UNKNOWN
     elif quick_view == QUICK_VIEW_CATEGORIZED:
         params["category_status"] = CATEGORY_STATUS_CATEGORIZED
-    if quick_view == QUICK_VIEW_CUSTOM and (
-        (include_category_filter and selected_categories) or selected_tags
-    ):
+    if (include_category_filter and selected_categories) or selected_tags:
         params["filter_mode"] = filter_mode
-    if quick_view == QUICK_VIEW_CUSTOM and selected_tags:
+    if selected_tags:
         params["tags"] = selected_tags
-    if quick_view == QUICK_VIEW_CUSTOM and include_category_filter and selected_categories:
+    if include_category_filter and selected_categories:
         params["categories"] = selected_categories
+    if merchant_search:
+        params["search"] = merchant_search
 
     return params
 
@@ -133,6 +133,7 @@ def dashboard_transactions_url(
     date_to="",
     quick_view=QUICK_VIEW_ALL,
     selected_tags=None,
+    merchant_search="",
     **overrides,
 ):
     """Render transactions URL."""
@@ -145,6 +146,7 @@ def dashboard_transactions_url(
         date_to=date_to,
         quick_view=quick_view,
         selected_tags=selected_tags,
+        merchant_search=merchant_search,
     )
     params.update(overrides)
     return app_url("transactions.transactions", **params)
@@ -158,6 +160,7 @@ def dashboard_month_url(
     range_to="",
     quick_view=QUICK_VIEW_ALL,
     selected_tags=None,
+    merchant_search="",
     **overrides,
 ):
     """Render month URL."""
@@ -173,6 +176,7 @@ def dashboard_month_url(
         date_to,
         quick_view,
         selected_tags=selected_tags,
+        merchant_search=merchant_search,
         **overrides,
     )
 

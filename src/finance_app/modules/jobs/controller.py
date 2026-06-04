@@ -14,6 +14,7 @@ from finance_app.background.runner import (
 from finance_app.modules.auth.permissions import PERMISSION_MANAGE_JOBS, permission_required
 from finance_app.core.config import settings
 from finance_app.core.filters import format_datetime
+from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.core.query import parse_page
@@ -54,7 +55,7 @@ def job_status(job_id):
     """Return the current status for a background job."""
     job = get_background_job(job_id)
     if job is None:
-        return jsonify({"error": "Job not found."}), 404
+        return jsonify({"error": gettext("Job not found.")}), 404
     return jsonify(job_status_payload(job))
 
 
@@ -80,16 +81,22 @@ def undo_job(job_id):
     try:
         job = undo_background_job(job_id)
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
         return redirect(next_url)
     except Exception as exc:
-        flash(f"Could not undo job: {type(exc).__name__}: {exc}")
+        flash(
+            gettext(
+                "Could not undo job: {error_type}: {detail}",
+                error_type=type(exc).__name__,
+                detail=exc,
+            )
+        )
         return redirect(next_url)
 
     if job is None:
-        flash("Job not found.")
+        flash(gettext("Job not found."))
     else:
-        flash(job.get("undo_result") or "Job undone.")
+        flash(gettext(job.get("undo_result") or "Job undone."))
 
     return redirect(next_url)
 
@@ -103,15 +110,15 @@ def cancel_job(job_id):
     try:
         job = cancel_background_job(job_id)
     except ValueError as exc:
-        flash(str(exc))
+        flash(gettext(str(exc)))
         return redirect(next_url)
 
     if job is None:
-        flash("Job not found.")
+        flash(gettext("Job not found."))
     elif job["status"] == "cancelled":
-        flash("Job cancelled.")
+        flash(gettext("Job cancelled."))
     else:
-        flash("Cancellation requested. The job will stop after the current batch.")
+        flash(gettext("Cancellation requested. The job will stop after the current batch."))
 
     return redirect(next_url)
 
@@ -123,8 +130,14 @@ def cancel_queued_ai_jobs():
     next_url = jobs_redirect_target()
     cancelled_count = cancel_queued_background_jobs(queue=AI_JOB_QUEUE)
     flash(
-        f"Cancelled {cancelled_count} queued AI job"
-        f"{'' if cancelled_count == 1 else 's'}."
+        gettext(
+            (
+                "Cancelled {count} queued AI job."
+                if cancelled_count == 1
+                else "Cancelled {count} queued AI jobs."
+            ),
+            count=cancelled_count,
+        )
     )
     return redirect(next_url)
 
@@ -138,14 +151,20 @@ def categorize_all_unknowns():
         unknown_count = upload_workflow.count_unknown_transactions(conn)
 
     if not unknown_count:
-        flash("No unknown transactions need AI categorization.")
+        flash(gettext("No unknown transactions need AI categorization."))
         return redirect(next_url)
 
     job_id = upload_workflow.queue_all_unknown_llm_categorization()
     flash(
-        f"AI categorization queued for {unknown_count} unknown transaction"
-        f"{'' if unknown_count == 1 else 's'}. "
-        f"Job: {job_id[:8]}"
+        gettext(
+            (
+                "AI categorization queued for {count} unknown transaction. Job: {job_id}"
+                if unknown_count == 1
+                else "AI categorization queued for {count} unknown transactions. Job: {job_id}"
+            ),
+            count=unknown_count,
+            job_id=job_id[:8],
+        )
     )
     return redirect(next_url)
 

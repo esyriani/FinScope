@@ -9,13 +9,12 @@ from finance_app.modules.review.presenter import (
     active_ungroup_keys,
     attach_review_row_urls,
     review_display_rows,
-    review_group_rows,
-    review_groups,
     review_summary,
     selected_ungroup_keys,
     sort_review_groups,
 )
 from finance_app.modules.review.queries import review_candidate_rows
+from finance_app.modules.review.service import review_group_rows, review_groups
 
 
 def seed_review_candidates(conn):
@@ -45,11 +44,11 @@ def seed_review_candidates(conn):
     conn.commit()
 
 
-def test_review_candidate_rows_exclude_ignored_and_done_transactions(db_conn):
+def test_review_candidate_rows_exclude_ignored_and_done_transactions(core_conn):
     """Verify review query returns only active rows needing review or unknown."""
-    seed_review_candidates(db_conn)
+    seed_review_candidates(core_conn)
 
-    rows = review_candidate_rows(db_conn, "UNKNOWN")
+    rows = review_candidate_rows(core_conn, "UNKNOWN")
 
     assert [row["description"] for row in rows] == [
         "Metro Grocery #222",
@@ -58,11 +57,11 @@ def test_review_candidate_rows_exclude_ignored_and_done_transactions(db_conn):
     ]
 
 
-def test_review_groups_aggregate_by_normalized_merchant(db_conn):
+def test_review_groups_aggregate_by_normalized_merchant(core_conn):
     """Verify review groups aggregate normalized merchant variants."""
-    seed_review_candidates(db_conn)
+    seed_review_candidates(core_conn)
 
-    groups = review_groups(db_conn, "UNKNOWN")
+    groups = review_groups(core_conn, "UNKNOWN")
     by_key = {group["merchant_key"]: group for group in groups}
 
     assert set(by_key) == {"METRO GROCERY", "HYDRO QUEBEC"}
@@ -87,20 +86,20 @@ def test_review_groups_aggregate_by_normalized_merchant(db_conn):
     assert metro["selected_tags"] == []
 
 
-def test_review_groups_prefill_consistent_category_and_common_tags(db_conn):
+def test_review_groups_prefill_consistent_category_and_common_tags(core_conn):
     """Verify group review modals use existing consistent assignments."""
     rows = [
         ("2026-01-01", "Costco Wholesale W527 Montreal", 277.72, "review-presenter-costco-1", ["Grocery", "Tax"]),
         ("2026-01-02", "Costco Wholesale W527 Montreal", 9.19, "review-presenter-costco-2", ["Grocery"]),
     ]
     for tx_date, description, amount, fingerprint, tags in rows:
-        result = db_conn.execute(
+        result = core_conn.execute(
             insert(transactions_table).values(
                 tx_date=tx_date,
                 description=description,
                 amount=amount,
                 category="Food",
-                category_id=resolve_category_id(db_conn, "Food"),
+                category_id=resolve_category_id(core_conn, "Food"),
                 category_source="rule",
                 category_confidence=0.8988,
                 needs_review=1,
@@ -108,10 +107,10 @@ def test_review_groups_prefill_consistent_category_and_common_tags(db_conn):
                 fingerprint=fingerprint,
             )
         )
-        set_transaction_tags(db_conn, result.inserted_primary_key[0], tags, source="rule")
-    db_conn.commit()
+        set_transaction_tags(core_conn, result.inserted_primary_key[0], tags, source="rule")
+    core_conn.commit()
 
-    groups = review_groups(db_conn, "UNKNOWN")
+    groups = review_groups(core_conn, "UNKNOWN")
     costco = next(group for group in groups if group["merchant_key"] == "COSTCO WHOLESALE W527 MONTREAL")
 
     assert costco["categories"] == ["Food"]
@@ -126,10 +125,10 @@ def test_review_groups_prefill_consistent_category_and_common_tags(db_conn):
     assert [row["selected_tags"] for row in rows] == [["Grocery"], ["Grocery", "Tax"]]
 
 
-def test_review_display_rows_ungroup_and_attach_urls(app, db_conn):
+def test_review_display_rows_ungroup_and_attach_urls(app, core_conn):
     """Verify grouped rows can be split into transaction-level display rows."""
-    seed_review_candidates(db_conn)
-    groups = review_groups(db_conn, "UNKNOWN")
+    seed_review_candidates(core_conn)
+    groups = review_groups(core_conn, "UNKNOWN")
     ungrouped = selected_ungroup_keys(["Metro Grocery #999", "METRO GROCERY"])
     active = active_ungroup_keys(ungrouped, groups)
     rows = review_display_rows(groups, active, "UNKNOWN")
@@ -157,10 +156,10 @@ def test_review_display_rows_ungroup_and_attach_urls(app, db_conn):
     assert hydro_row["ungroup_url"] == ""
 
 
-def test_review_sort_behavior_and_summary_counts(db_conn):
+def test_review_sort_behavior_and_summary_counts(core_conn):
     """Verify review sort behavior and summary totals."""
-    seed_review_candidates(db_conn)
-    groups = review_groups(db_conn, "UNKNOWN")
+    seed_review_candidates(core_conn)
+    groups = review_groups(core_conn, "UNKNOWN")
 
     sort_review_groups(groups, "merchant", "asc")
     assert [group["merchant_key"] for group in groups] == ["HYDRO QUEBEC", "METRO GROCERY"]
@@ -178,11 +177,11 @@ def test_review_sort_behavior_and_summary_counts(db_conn):
     }
 
 
-def test_review_group_rows_returns_rows_for_one_normalized_merchant(db_conn):
+def test_review_group_rows_returns_rows_for_one_normalized_merchant(core_conn):
     """Verify review group row lookup uses normalized merchant keys."""
-    seed_review_candidates(db_conn)
+    seed_review_candidates(core_conn)
 
-    rows = review_group_rows(db_conn, "METRO GROCERY", "UNKNOWN")
+    rows = review_group_rows(core_conn, "METRO GROCERY", "UNKNOWN")
 
     assert [row["description"] for row in rows] == [
         "Metro Grocery #222",

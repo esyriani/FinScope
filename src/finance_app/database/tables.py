@@ -51,6 +51,7 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_EXPENSE,
     TRANSACTION_KINDS,
     TRANSACTION_TAG_SOURCES,
+    USER_ROLE_OWNER,
     USER_ROLES,
 )
 
@@ -111,10 +112,16 @@ users = Table(
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("username", String(150), nullable=False),
+    Column("username_key", String(150), Computed("lower(trim(username))", persisted=True)),
     Column("display_name", String(150), nullable=False),
     Column("password_hash", PASSWORD_HASH_TYPE, nullable=False),
     Column("role", String(32), nullable=False),
     Column("is_active", Integer, nullable=False, server_default=text("1")),
+    Column(
+        "owner_role_key",
+        Integer,
+        Computed(f"CASE WHEN role = '{USER_ROLE_OWNER}' THEN 1 ELSE NULL END", persisted=True),
+    ),
     Column("must_change_password", Integer, nullable=False, server_default=text("0")),
     Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
     Column("updated_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
@@ -122,6 +129,8 @@ users = Table(
     Column("failed_login_count", Integer, nullable=False, server_default=text("0")),
     Column("locked_until", TIMESTAMP_TYPE),
     UniqueConstraint("username", name="uq_users_username"),
+    UniqueConstraint("username_key", name="uq_users_username_key"),
+    UniqueConstraint("owner_role_key", name="uq_users_single_owner"),
     non_empty_constraint("username", "users_username_non_empty"),
     non_empty_constraint("display_name", "users_display_name_non_empty"),
     allowed_values_constraint("role", USER_ROLES, "users_role_allowed"),

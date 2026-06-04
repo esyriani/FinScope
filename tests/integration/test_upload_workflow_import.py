@@ -1,5 +1,6 @@
 """Tests for upload transaction import workflow edge cases."""
 
+from sqlalchemy import text
 import pytest
 from sqlalchemy import event, insert, select
 
@@ -18,29 +19,21 @@ from finance_app.modules.upload import workflow as upload_workflow
 
 def create_statement(conn, filename="workflow.csv", account_name="Personal"):
     """Create an account and statement for upload workflow tests."""
-    account_id = conn.execute(
-        """
+    account_id = conn.execute(text("""
         INSERT INTO accounts (name)
-        VALUES (?)
-        """,
-        (account_name,),
-    ).lastrowid
-    statement_type_id = conn.execute(
-        """
+        VALUES (:p0)
+        """), {"p0": account_name}).lastrowid
+    statement_type_id = conn.execute(text("""
         SELECT id
         FROM statement_types
         WHERE active = 1
         ORDER BY id
         LIMIT 1
-        """
-    ).fetchone()["id"]
-    statement_id = conn.execute(
-        """
+        """)).fetchone()._mapping["id"]
+    statement_id = conn.execute(text("""
         INSERT INTO statements (account_id, statement_type_id, filename, checksum, raw_text)
-        VALUES (?, ?, ?, ?, '')
-        """,
-        (account_id, statement_type_id, filename, f"checksum-{filename}"),
-    ).lastrowid
+        VALUES (:p0, :p1, :p2, :p3, '')
+        """), {"p0": account_id, "p1": statement_type_id, "p2": filename, "p3": f"checksum-{filename}"}).lastrowid
     conn.commit()
     return account_id, statement_id
 
@@ -376,9 +369,9 @@ def test_import_transactions_returns_zero_counts_for_non_csv(app, monkeypatch):
         ) == (0, 0, 0)
 
 
-def test_import_statement_job_records_failed_statement_status(db_conn, monkeypatch):
+def test_import_statement_job_records_failed_statement_status(core_conn, monkeypatch):
     """Verify failed import jobs leave the statement retryable."""
-    account_id, statement_id = create_statement(db_conn, "failed.csv")
+    account_id, statement_id = create_statement(core_conn, "failed.csv")
     monkeypatch.setattr(
         upload_workflow,
         "parse_csv_transactions",
@@ -394,22 +387,19 @@ def test_import_statement_job_records_failed_statement_status(db_conn, monkeypat
             "raw",
         )
 
-    statement = db_conn.execute(
-        """
+    statement = core_conn.execute(text("""
         SELECT import_status, import_error, imported_count
         FROM statements
-        WHERE id = ?
-        """,
-        (statement_id,),
-    ).fetchone()
-    assert statement["import_status"] == "failed"
-    assert statement["import_error"] == "RuntimeError: parser broke"
-    assert statement["imported_count"] == 0
+        WHERE id = :p0
+        """), {"p0": statement_id}).fetchone()
+    assert statement._mapping["import_status"] == "failed"
+    assert statement._mapping["import_error"] == "RuntimeError: parser broke"
+    assert statement._mapping["imported_count"] == 0
 
 
-def test_import_statement_job_rolls_back_inserted_rows_when_finalization_fails(db_conn, monkeypatch):
+def test_import_statement_job_rolls_back_inserted_rows_when_finalization_fails(core_conn, monkeypatch):
     """Verify import rows and final statement state commit atomically."""
-    account_id, statement_id = create_statement(db_conn, "finalize-failed.csv")
+    account_id, statement_id = create_statement(core_conn, "finalize-failed.csv")
     monkeypatch.setattr(
         upload_workflow,
         "count_statement_unknown_transactions",
@@ -425,32 +415,26 @@ def test_import_statement_job_rolls_back_inserted_rows_when_finalization_fails(d
             "Date,Description,Amount\n2026-01-02,UNKNOWN SHOP,12.34\n",
         )
 
-    statement = db_conn.execute(
-        """
+    statement = core_conn.execute(text("""
         SELECT import_status, import_error, imported_count
         FROM statements
-        WHERE id = ?
-        """,
-        (statement_id,),
-    ).fetchone()
-    transaction_count = db_conn.execute(
-        """
+        WHERE id = :p0
+        """), {"p0": statement_id}).fetchone()
+    transaction_count = core_conn.execute(text("""
         SELECT COUNT(*) AS count
         FROM transactions
-        WHERE statement_id = ?
-        """,
-        (statement_id,),
-    ).fetchone()["count"]
+        WHERE statement_id = :p0
+        """), {"p0": statement_id}).fetchone()._mapping["count"]
 
-    assert statement["import_status"] == "failed"
-    assert statement["import_error"] == "RuntimeError: counter broke"
-    assert statement["imported_count"] == 0
+    assert statement._mapping["import_status"] == "failed"
+    assert statement._mapping["import_error"] == "RuntimeError: counter broke"
+    assert statement._mapping["imported_count"] == 0
     assert transaction_count == 0
 
 
-def test_failed_import_retry_does_not_leave_orphan_transactions(db_conn, monkeypatch):
+def test_failed_import_retry_does_not_leave_orphan_transactions(core_conn, monkeypatch):
     """Verify a failed finalization can be retried without orphaned rows."""
-    account_id, statement_id = create_statement(db_conn, "retry-after-failure.csv")
+    account_id, statement_id = create_statement(core_conn, "retry-after-failure.csv")
     attempts = {"count": 0}
 
     def count_unknowns_once_then_succeed(conn, counted_statement_id):
@@ -478,22 +462,16 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(db_conn, monkeyp
             raw_csv,
         )
 
-    failed_count = db_conn.execute(
-        """
+    failed_count = core_conn.execute(text("""
         SELECT COUNT(*) AS count
         FROM transactions
-        WHERE statement_id = ?
-        """,
-        (statement_id,),
-    ).fetchone()["count"]
-    failed_statement = db_conn.execute(
-        """
+        WHERE statement_id = :p0
+        """), {"p0": statement_id}).fetchone()._mapping["count"]
+    failed_statement = core_conn.execute(text("""
         SELECT import_status, imported_count
         FROM statements
-        WHERE id = ?
-        """,
-        (statement_id,),
-    ).fetchone()
+        WHERE id = :p0
+        """), {"p0": statement_id}).fetchone()
 
     message = upload_workflow.import_statement_transactions_job(
         statement_id,
@@ -503,22 +481,16 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(db_conn, monkeyp
         raw_csv,
     )
 
-    rows = db_conn.execute(
-        """
+    rows = core_conn.execute(text("""
         SELECT description, amount
         FROM transactions
-        WHERE statement_id = ?
-        """,
-        (statement_id,),
-    ).fetchall()
-    completed_statement = db_conn.execute(
-        """
+        WHERE statement_id = :p0
+        """), {"p0": statement_id}).fetchall()
+    completed_statement = core_conn.execute(text("""
         SELECT import_status, import_error, imported_count, skipped_count, ignored_count
         FROM statements
-        WHERE id = ?
-        """,
-        (statement_id,),
-    ).fetchone()
+        WHERE id = :p0
+        """), {"p0": statement_id}).fetchone()
 
     assert failed_count == 0
     assert tuple(failed_statement) == ("failed", 0)
@@ -527,15 +499,15 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(db_conn, monkeyp
     assert tuple(completed_statement) == ("completed", None, 1, 0, 0)
 
 
-def test_multi_account_retry_keeps_account_scoped_deduplication(db_conn, monkeypatch):
+def test_multi_account_retry_keeps_account_scoped_deduplication(core_conn, monkeypatch):
     """Verify a failed retry does not dedupe the same row across accounts."""
     account_a_id, statement_a_id = create_statement(
-        db_conn,
+        core_conn,
         "account-a-retry.csv",
         account_name="Account A",
     )
     account_b_id, statement_b_id = create_statement(
-        db_conn,
+        core_conn,
         "account-b-retry.csv",
         account_name="Account B",
     )
@@ -580,15 +552,13 @@ def test_multi_account_retry_keeps_account_scoped_deduplication(db_conn, monkeyp
         raw_csv,
     )
 
-    rows = db_conn.execute(
-        """
+    rows = core_conn.execute(text("""
         SELECT accounts.name, transactions.fingerprint, transactions.statement_id
         FROM transactions
         JOIN accounts ON accounts.id = transactions.account_id
         WHERE transactions.description = 'Shared Retry Merchant'
         ORDER BY accounts.name
-        """
-    ).fetchall()
+        """)).mappings().fetchall()
 
     assert [(row["name"], row["statement_id"]) for row in rows] == [
         ("Account A", statement_a_id),

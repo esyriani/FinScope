@@ -1,5 +1,6 @@
 """SQLAlchemy Core tests for rules listing context queries."""
 
+from sqlalchemy import text
 from flask import request
 
 from finance_app.modules.categories.taxonomy import set_rule_tags
@@ -19,8 +20,7 @@ def insert_listing_rule(
     tags=None,
 ):
     """Insert a category rule and optional tags for listing tests."""
-    rule_id = conn.execute(
-        """
+    rule_id = conn.execute(text("""
         INSERT INTO category_rules (
             merchant_id,
             keyword,
@@ -30,19 +30,17 @@ def insert_listing_rule(
             amount_min,
             amount_max
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (merchant_id, keyword, category, source, ai_approved, amount_min, amount_max),
-    ).lastrowid
+        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)
+        """), {"p0": merchant_id, "p1": keyword, "p2": category, "p3": source, "p4": ai_approved, "p5": amount_min, "p6": amount_max}).lastrowid
     set_rule_tags(conn, rule_id, tags or [])
     conn.commit()
     return rule_id
 
 
-def test_rules_context_filters_with_core_queries(app, db_conn):
+def test_rules_context_filters_with_core_queries(app, core_conn):
     """Verify the rules context applies tag, source, approval, and category filters."""
     matching_id = insert_listing_rule(
-        db_conn,
+        core_conn,
         "AUTO TAX FOOD",
         "Food",
         source="automatic",
@@ -50,7 +48,7 @@ def test_rules_context_filters_with_core_queries(app, db_conn):
         tags=["Tax"],
     )
     insert_listing_rule(
-        db_conn,
+        core_conn,
         "AUTO APPROVED FOOD",
         "Food",
         source="automatic",
@@ -58,7 +56,7 @@ def test_rules_context_filters_with_core_queries(app, db_conn):
         tags=["Tax"],
     )
     insert_listing_rule(
-        db_conn,
+        core_conn,
         "MANUAL TAX FOOD",
         "Food",
         source="manual",
@@ -78,17 +76,17 @@ def test_rules_context_filters_with_core_queries(app, db_conn):
     assert context["selected_tags"] == ["Tax"]
 
 
-def test_rules_context_searches_merchant_and_amount_fields_with_core(app, db_conn):
+def test_rules_context_searches_merchant_and_amount_fields_with_core(app, core_conn):
     """Verify Core listing search includes merchant labels and amount fields."""
-    merchant = get_or_create_merchant_for_name(db_conn, "Core Market")
+    merchant = get_or_create_merchant_for_name(core_conn, "Core Market")
     insert_listing_rule(
-        db_conn,
+        core_conn,
         "HIDDEN KEYWORD",
         "Utilities",
         amount_min=123.45,
         merchant_id=merchant["id"],
     )
-    insert_listing_rule(db_conn, "OTHER STORE", "Food")
+    insert_listing_rule(core_conn, "OTHER STORE", "Food")
 
     with app.test_request_context("/rules?search=core market"):
         merchant_context = build_rules_context(request.args)

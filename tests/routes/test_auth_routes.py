@@ -1,22 +1,22 @@
 """Route tests for authentication and authorization."""
 
+from sqlalchemy import text
 from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_OWNER, USER_ROLE_VIEWER
-from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.core.filters import format_datetime
 from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.auth.service import create_managed_user, hash_password, utc_now
+from tests.support.html import (
+    assert_input,
+    assert_no_element,
+    assert_not_visible_text,
+    assert_visible_text,
+)
+from tests.support.web import set_csrf_token
 
 
 EDITOR_PASSWORD = "EditorPass123!"
 VIEWER_PASSWORD = "ViewerPass123!"
-
-
-def set_csrf_token(client, token="test-csrf-token"):
-    """Store a CSRF token in the test client's session."""
-    with client.session_transaction() as session:
-        session[CSRF_SESSION_KEY] = token
-    return token
-
 
 def login_session(client, user_id):
     """Authenticate a test client as a persisted user."""
@@ -39,14 +39,11 @@ def create_test_user(conn, username, role, password):
 
 def user_by_username(conn, username):
     """Return one user row by username for route assertions."""
-    return conn.execute(
-        """
+    return conn.execute(text("""
         SELECT *
         FROM users
-        WHERE username = ?
-        """,
-        (username,),
-    ).fetchone()
+        WHERE username = :p0
+        """), {"p0": username}).mappings().fetchone()
 
 
 def test_anonymous_routes_redirect_to_login(anonymous_client):
@@ -57,11 +54,11 @@ def test_anonymous_routes_redirect_to_login(anonymous_client):
     assert "/login" in response.headers["Location"]
 
 
-def test_first_run_bootstrap_creates_owner(anonymous_client, db_conn):
+def test_first_run_bootstrap_creates_owner(anonymous_client, core_conn):
     """Verify the first-run bootstrap creates the initial owner account."""
-    db_conn.execute("DELETE FROM audit_log")
-    db_conn.execute("DELETE FROM users")
-    db_conn.commit()
+    core_conn.execute(text("DELETE FROM audit_log"))
+    core_conn.execute(text("DELETE FROM users"))
+    core_conn.commit()
 
     response = anonymous_client.post(
         "/auth/bootstrap",
@@ -75,7 +72,7 @@ def test_first_run_bootstrap_creates_owner(anonymous_client, db_conn):
         follow_redirects=False,
     )
 
-    owner = user_by_username(db_conn, "firstowner")
+    owner = user_by_username(core_conn, "firstowner")
     assert response.status_code == 302
     assert owner["role"] == USER_ROLE_OWNER
     assert owner["display_name"] == "First Owner"
@@ -84,7 +81,7 @@ def test_first_run_bootstrap_creates_owner(anonymous_client, db_conn):
     assert owner["password_hash"] != "OwnerPass123!"
 
 
-def test_login_success_failure_logout_and_lockout(client, anonymous_client, db_conn):
+def test_login_success_failure_logout_and_lockout(client, anonymous_client, core_conn):
     """Verify login, generic failures, logout, and temporary lockout behavior."""
     failed_response = anonymous_client.post(
         "/login",
@@ -95,8 +92,8 @@ def test_login_success_failure_logout_and_lockout(client, anonymous_client, db_c
         },
         follow_redirects=True,
     )
-    assert b"Invalid username or password." in failed_response.data
-    assert user_by_username(db_conn, "owner")["failed_login_count"] == 1
+    assert_visible_text(failed_response, "Invalid username or password.")
+    assert user_by_username(core_conn, "owner")["failed_login_count"] == 1
 
     for _ in range(4):
         anonymous_client.post(
@@ -107,7 +104,7 @@ def test_login_success_failure_logout_and_lockout(client, anonymous_client, db_c
                 "password": "wrong-password",
             },
         )
-    locked_owner = user_by_username(db_conn, "owner")
+    locked_owner = user_by_username(core_conn, "owner")
     assert locked_owner["failed_login_count"] == 5
     assert locked_owner["locked_until"] is not None
 
@@ -120,7 +117,7 @@ def test_login_success_failure_logout_and_lockout(client, anonymous_client, db_c
         },
         follow_redirects=True,
     )
-    assert b"Invalid username or password." in locked_response.data
+    assert_visible_text(locked_response, "Invalid username or password.")
 
     logout_response = client.post(
         "/logout",
@@ -147,10 +144,10 @@ def test_inactive_user_cannot_login(anonymous_client, core_conn):
         follow_redirects=True,
     )
 
-    assert b"Invalid username or password." in response.data
+    assert_visible_text(response, "Invalid username or password.")
 
 
-def test_owner_editor_and_viewer_authorization(client, app, core_conn, db_conn):
+def test_owner_editor_and_viewer_authorization(client, app, core_conn):
     """Verify role-specific route permissions are enforced in the backend."""
     editor_id = create_test_user(core_conn, "editor", USER_ROLE_EDITOR, EDITOR_PASSWORD)
     viewer_id = create_test_user(core_conn, "viewer", USER_ROLE_VIEWER, VIEWER_PASSWORD)
@@ -161,13 +158,11 @@ def test_owner_editor_and_viewer_authorization(client, app, core_conn, db_conn):
     viewer_client = app.test_client()
     login_session(viewer_client, viewer_id)
 
-    tx_id = db_conn.execute(
-        """
+    tx_id = core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
         VALUES ('2026-01-02', 'Viewer blocked store', 12.34, 'UNKNOWN', 'viewer-blocked')
-        """
-    ).lastrowid
-    db_conn.commit()
+        """)).lastrowid
+    core_conn.commit()
 
     assert client.get("/admin/users").status_code == 200
     assert editor_client.get("/upload").status_code == 200
@@ -175,35 +170,32 @@ def test_owner_editor_and_viewer_authorization(client, app, core_conn, db_conn):
     assert viewer_client.get("/transactions").status_code == 200
     assert viewer_client.get("/upload").status_code == 403
 
-    transactions_html = viewer_client.get("/transactions").get_data(as_text=True)
-    recurring_html = viewer_client.get("/recurring").get_data(as_text=True)
-    home_html = viewer_client.get("/").get_data(as_text=True)
-    assert f"/transactions/{tx_id}/verify" not in transactions_html
-    assert "/ignored" not in transactions_html
-    assert "data-row-edit-target" not in transactions_html
-    assert "Categorize transaction" not in transactions_html
-    assert "data-recurring-confirm-action" not in recurring_html
-    assert "data-recurring-ignore-action" not in recurring_html
-    assert "data-recurring-edit-action" not in recurring_html
-    assert "data-recurring-save-edit-action" not in recurring_html
-    assert 'href="/upload"' not in home_html
-    assert 'href="/rules"' not in home_html
-    assert 'href="/jobs"' not in home_html
-    assert 'href="/review"' not in home_html
+    transactions_response = viewer_client.get("/transactions")
+    recurring_response = viewer_client.get("/recurring")
+    home_response = viewer_client.get("/")
+    assert_no_element(transactions_response, "a", attrs={"href": f"/transactions/{tx_id}/verify"})
+    assert_no_element(transactions_response, "form", attrs={"action": f"/transactions/{tx_id}/ignored"})
+    assert_no_element(transactions_response, None, attrs={"data-row-edit-target": True})
+    assert_not_visible_text(transactions_response, "Categorize transaction")
+    assert_no_element(recurring_response, None, attrs={"data-recurring-confirm-action": True})
+    assert_no_element(recurring_response, None, attrs={"data-recurring-ignore-action": True})
+    assert_no_element(recurring_response, None, attrs={"data-recurring-edit-action": True})
+    assert_no_element(recurring_response, None, attrs={"data-recurring-save-edit-action": True})
+    assert_no_element(home_response, "a", attrs={"href": "/upload"})
+    assert_no_element(home_response, "a", attrs={"href": "/rules"})
+    assert_no_element(home_response, "a", attrs={"href": "/jobs"})
+    assert_no_element(home_response, "a", attrs={"href": "/review"})
 
     blocked = viewer_client.post(
         f"/transactions/{tx_id}/ignored",
         data={CSRF_FIELD_NAME: set_csrf_token(viewer_client), "ignored": "1"},
     )
-    ignored = db_conn.execute(
-        "SELECT ignored FROM transactions WHERE id = ?",
-        (tx_id,),
-    ).fetchone()["ignored"]
+    ignored = core_conn.execute(text("SELECT ignored FROM transactions WHERE id = :p0"), {"p0": tx_id}).fetchone()._mapping["ignored"]
     assert blocked.status_code == 403
     assert ignored == 0
 
 
-def test_owner_user_management_and_last_owner_guard(client, db_conn):
+def test_owner_user_management_and_last_owner_guard(client, core_conn):
     """Verify owner-managed user lifecycle routes and last-owner protection."""
     create_response = client.post(
         "/admin/users/create",
@@ -215,15 +207,11 @@ def test_owner_user_management_and_last_owner_guard(client, db_conn):
         },
         follow_redirects=True,
     )
-    managed = user_by_username(db_conn, "managed")
-    db_conn.execute(
-        "UPDATE users SET last_login_at = ? WHERE username = ?",
-        ("2026-05-17T14:42:11Z", "managed"),
-    )
-    db_conn.commit()
-    assert b"Temporary password" in create_response.data
-    assert b"Managed Person" in create_response.data
-    assert f"Temporary password for user {managed['id']}".encode() not in create_response.data
+    managed = user_by_username(core_conn, "managed")
+    core_conn.execute(text("UPDATE users SET last_login_at = :p0 WHERE username = :p1"), {"p0": "2026-05-17T14:42:11Z", "p1": "managed"})
+    core_conn.commit()
+    assert_visible_text(create_response, "Temporary password", "Managed Person")
+    assert_not_visible_text(create_response, f"Temporary password for user {managed['id']}")
     assert managed["display_name"] == "Managed Person"
     assert managed["role"] == USER_ROLE_VIEWER
     assert managed["must_change_password"] == 1
@@ -233,60 +221,63 @@ def test_owner_user_management_and_last_owner_guard(client, db_conn):
         data={CSRF_FIELD_NAME: set_csrf_token(client), "role": USER_ROLE_EDITOR},
         follow_redirects=True,
     )
-    assert b"User role updated." in role_response.data
-    assert user_by_username(db_conn, "managed")["role"] == USER_ROLE_EDITOR
+    assert_visible_text(role_response, "User role updated.")
+    assert user_by_username(core_conn, "managed")["role"] == USER_ROLE_EDITOR
 
     deactivate_response = client.post(
         f"/admin/users/{managed['id']}/deactivate",
         data={CSRF_FIELD_NAME: set_csrf_token(client)},
         follow_redirects=True,
     )
-    assert b"User deactivated." in deactivate_response.data
-    assert user_by_username(db_conn, "managed")["is_active"] == 0
+    assert_visible_text(deactivate_response, "User deactivated.")
+    assert user_by_username(core_conn, "managed")["is_active"] == 0
 
     reactivate_response = client.post(
         f"/admin/users/{managed['id']}/reactivate",
         data={CSRF_FIELD_NAME: set_csrf_token(client)},
         follow_redirects=True,
     )
-    assert b"User reactivated." in reactivate_response.data
-    assert user_by_username(db_conn, "managed")["is_active"] == 1
+    assert_visible_text(reactivate_response, "User reactivated.")
+    assert user_by_username(core_conn, "managed")["is_active"] == 1
 
-    owner = user_by_username(db_conn, "owner")
+    owner = user_by_username(core_conn, "owner")
     owner_response = client.post(
         f"/admin/users/{owner['id']}/deactivate",
         data={CSRF_FIELD_NAME: set_csrf_token(client)},
         follow_redirects=True,
     )
-    assert b"The last active owner cannot be changed." in owner_response.data
-    assert user_by_username(db_conn, "owner")["is_active"] == 1
+    assert_visible_text(owner_response, "The last active owner cannot be changed.")
+    assert user_by_username(core_conn, "owner")["is_active"] == 1
 
-    users_html = client.get("/admin/users").get_data(as_text=True)
-    assert "Owner password must be changed from the Account page." in users_html
-    assert format_datetime("2026-05-17T14:42:11Z") in users_html
-    assert f"/admin/users/{owner['id']}/reset-password" not in users_html
-    assert f"/admin/users/{owner['id']}/deactivate" not in users_html
-    assert 'value="owner"' not in users_html
-    assert 'value="editor"' in users_html
-    assert 'value="viewer"' in users_html
+    users_response = client.get("/admin/users")
+    assert_visible_text(
+        users_response,
+        "Owner password must be changed from the Account page.",
+        format_datetime("2026-05-17T14:42:11Z"),
+    )
+    assert_no_element(users_response, "a", attrs={"href": f"/admin/users/{owner['id']}/reset-password"})
+    assert_no_element(users_response, "a", attrs={"href": f"/admin/users/{owner['id']}/deactivate"})
+    assert_no_element(users_response, "input", attrs={"value": "owner"})
+    assert_input(users_response, name="role", value="editor")
+    assert_input(users_response, name="role", value="viewer")
 
     owner_reset_response = client.post(
         f"/admin/users/{owner['id']}/reset-password",
         data={CSRF_FIELD_NAME: set_csrf_token(client)},
         follow_redirects=True,
     )
-    assert b"Owner password must be changed from the Account page." in owner_reset_response.data
+    assert_visible_text(owner_reset_response, "Owner password must be changed from the Account page.")
 
     owner_role_response = client.post(
         f"/admin/users/{owner['id']}/role",
         data={CSRF_FIELD_NAME: set_csrf_token(client), "role": USER_ROLE_EDITOR},
         follow_redirects=True,
     )
-    assert b"Owner role cannot be changed." in owner_role_response.data
-    assert user_by_username(db_conn, "owner")["role"] == USER_ROLE_OWNER
+    assert_visible_text(owner_role_response, "Owner role cannot be changed.")
+    assert user_by_username(core_conn, "owner")["role"] == USER_ROLE_OWNER
 
 
-def test_owner_can_hand_off_ownership_to_active_user(client, db_conn):
+def test_owner_can_hand_off_ownership_to_active_user(client, core_conn):
     """Verify ownership hand-off promotes one user and demotes the old owner."""
     create_response = client.post(
         "/admin/users/create",
@@ -298,13 +289,11 @@ def test_owner_can_hand_off_ownership_to_active_user(client, db_conn):
         },
         follow_redirects=True,
     )
-    owner = user_by_username(db_conn, "owner")
-    successor = user_by_username(db_conn, "successor")
-    users_html = create_response.get_data(as_text=True)
+    owner = user_by_username(core_conn, "owner")
+    successor = user_by_username(core_conn, "successor")
 
-    assert "Hand off ownership" in users_html
-    assert "Confirm ownership hand-off" in users_html
-    assert f"/admin/users/{owner['id']}/deactivate" not in users_html
+    assert_visible_text(create_response, "Hand off ownership", "Confirm ownership hand-off")
+    assert_no_element(create_response, "a", attrs={"href": f"/admin/users/{owner['id']}/deactivate"})
 
     response = client.post(
         "/admin/users/handoff-ownership",
@@ -315,13 +304,13 @@ def test_owner_can_hand_off_ownership_to_active_user(client, db_conn):
         follow_redirects=True,
     )
 
-    assert b"Ownership handed off. Your account is now Viewer." in response.data
-    assert user_by_username(db_conn, "owner")["role"] == USER_ROLE_VIEWER
-    assert user_by_username(db_conn, "successor")["role"] == USER_ROLE_OWNER
+    assert_visible_text(response, "Ownership handed off. Your account is now Viewer.")
+    assert user_by_username(core_conn, "owner")["role"] == USER_ROLE_VIEWER
+    assert user_by_username(core_conn, "successor")["role"] == USER_ROLE_OWNER
     assert client.get("/admin/users").status_code == 403
 
 
-def test_must_change_password_flow(anonymous_client, db_conn):
+def test_must_change_password_flow(anonymous_client, core_conn):
     """Verify temporary passwords force a password change before app access."""
     user, temporary_password = create_managed_user("needschange", USER_ROLE_VIEWER, display_name="Needs Change")
 
@@ -346,12 +335,11 @@ def test_must_change_password_flow(anonymous_client, db_conn):
         },
         follow_redirects=False,
     )
-    changed_user = user_by_username(db_conn, "needschange")
+    changed_user = user_by_username(core_conn, "needschange")
 
     assert user["id"] == changed_user["id"]
     assert login_response.status_code == 200
-    assert b"Change temporary password" in login_response.data
-    assert b"Needs Change" in login_response.data
+    assert_visible_text(login_response, "Change temporary password", "Needs Change")
     assert dashboard_response.status_code == 302
     assert "/login" in dashboard_response.headers["Location"]
     assert password_response.status_code == 302
@@ -359,11 +347,11 @@ def test_must_change_password_flow(anonymous_client, db_conn):
     assert changed_user["must_change_password"] == 0
 
 
-def test_account_page_updates_display_name_and_password(client, db_conn):
+def test_account_page_updates_display_name_and_password(client, core_conn):
     """Verify users can manage display name and password from Account."""
     account_response = client.get("/account")
     assert account_response.status_code == 200
-    assert b"owner" in account_response.data
+    assert_visible_text(account_response, "owner")
 
     display_response = client.post(
         "/account",
@@ -374,8 +362,8 @@ def test_account_page_updates_display_name_and_password(client, db_conn):
         },
         follow_redirects=True,
     )
-    assert b"Display name updated." in display_response.data
-    assert user_by_username(db_conn, "owner")["display_name"] == "Eugene"
+    assert_visible_text(display_response, "Display name updated.")
+    assert user_by_username(core_conn, "owner")["display_name"] == "Eugene"
 
     password_response = client.post(
         "/account",
@@ -388,10 +376,10 @@ def test_account_page_updates_display_name_and_password(client, db_conn):
         },
         follow_redirects=True,
     )
-    assert b"Password changed." in password_response.data
+    assert_visible_text(password_response, "Password changed.")
 
 
-def test_home_greets_user_by_display_name_and_shows_shared_context(client, db_conn, core_conn):
+def test_home_greets_user_by_display_name_and_shows_shared_context(client, core_conn):
     """Verify Home title copy uses display names and subtle shared-access context."""
     owner = auth_repository.get_user_by_username(core_conn, "owner")
     auth_repository.update_display_name(
@@ -412,9 +400,10 @@ def test_home_greets_user_by_display_name_and_shows_shared_context(client, db_co
     core_conn.commit()
 
     response = client.get("/")
-    html = response.get_data(as_text=True)
-
     assert response.status_code == 200
-    assert "Eugene" in html
-    assert "What needs attention, what changed, and where to act next." in html
-    assert "Shared with Edith" in html
+    assert_visible_text(
+        response,
+        "Eugene",
+        "What needs attention, what changed, and where to act next.",
+        "Shared with Edith",
+    )

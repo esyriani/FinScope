@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from finance_app.core.constants import (
     CATEGORY_SOURCES,
@@ -164,7 +164,7 @@ class TransactionCategoryChange:
 
 def utc_timestamp():
     """Return the current UTC timestamp for category metadata."""
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def category_metadata_json(metadata):

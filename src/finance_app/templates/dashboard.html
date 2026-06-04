@@ -5,6 +5,7 @@
 {% set selected_categories = selected_categories | default([]) %}
 {% set tag_options = tag_options | default([]) %}
 {% set selected_tags = selected_tags | default([]) %}
+{% set merchant_search = merchant_search | default("") %}
 {% macro dashboard_sort_icon(active_sort, active_direction, column) -%}
     {% if active_sort == column %}<span class="sort-icon {{ active_direction }}" aria-hidden="true"></span>{% endif %}
 {%- endmacro %}
@@ -46,7 +47,7 @@
                 >
             </div>
 
-            <div class="col-md-2 {% if selected_period != period_custom %}d-none{% endif %}" data-dashboard-custom-range>
+            <div class="col-md-1 {% if selected_period != period_custom %}d-none{% endif %}" data-dashboard-custom-range>
                 <label class="form-label" for="dashboard-date-to">{{ _("To") }}</label>
                 <input
                     id="dashboard-date-to"
@@ -59,7 +60,19 @@
                 >
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-4">
+                <label class="form-label" for="dashboard-merchant-search">{{ _("Merchant") }}</label>
+                <input
+                    id="dashboard-merchant-search"
+                    class="form-control"
+                    type="search"
+                    name="merchant_search"
+                    value="{{ merchant_search }}"
+                    placeholder="{{ _('Search merchant') }}"
+                >
+            </div>
+
+            <div class="col-md-6 col-xl-5">
                 <label class="form-label">{{ _("Quick view") }}</label>
                 <div class="d-flex flex-wrap gap-1" role="group" aria-label="{{ _('Quick view') }}">
                     {% for option in quick_view_options %}
@@ -75,15 +88,7 @@
                 </div>
             </div>
 
-            <div
-                class="w-100 {% if quick_view != quick_view_custom %}d-none{% endif %}"
-                data-dashboard-custom-filter-break
-            ></div>
-
-            <div
-                class="col-md-3 {% if quick_view != quick_view_custom %}d-none{% endif %}"
-                data-dashboard-custom-categories
-            >
+            <div class="col-md-4">
                 <label class="form-label" id="dashboard-categories-label">{{ _("Categories") }}</label>
                 <div
                     class="tag-multiselect"
@@ -96,10 +101,10 @@
                     <div
                         class="tag-multiselect-control"
                         role="button"
-                        tabindex="{% if quick_view == quick_view_custom %}0{% else %}-1{% endif %}"
+                        tabindex="0"
                         aria-labelledby="dashboard-categories-label"
                         aria-expanded="false"
-                        aria-disabled="{{ 'false' if quick_view == quick_view_custom else 'true' }}"
+                        aria-disabled="false"
                         data-tag-multiselect-toggle
                     >
                         <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
@@ -114,7 +119,6 @@
                                     name="categories"
                                     value="{{ option }}"
                                     {% if option in selected_categories %}checked{% endif %}
-                                    {% if quick_view != quick_view_custom %}disabled{% endif %}
                                 >
                                 <span>{{ option }}</span>
                             </label>
@@ -123,19 +127,16 @@
                 </div>
             </div>
 
-            <div
-                class="col-md-3 {% if quick_view != quick_view_custom %}d-none{% endif %}"
-                data-dashboard-custom-tags
-            >
+            <div class="col-md-4">
                 <label class="form-label" id="dashboard-tags-label">{{ _("Tags") }}</label>
                 <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
                     <div
                         class="tag-multiselect-control"
                         role="button"
-                        tabindex="{% if quick_view == quick_view_custom %}0{% else %}-1{% endif %}"
+                        tabindex="0"
                         aria-labelledby="dashboard-tags-label"
                         aria-expanded="false"
-                        aria-disabled="{{ 'false' if quick_view == quick_view_custom else 'true' }}"
+                        aria-disabled="false"
                         data-tag-multiselect-toggle
                     >
                         <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
@@ -149,7 +150,6 @@
                                 name="tags"
                                 value="{{ untagged_tag_filter_value }}"
                                 {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
-                                {% if quick_view != quick_view_custom %}disabled{% endif %}
                             >
                             <span>{{ _("Untagged") }}</span>
                         </label>
@@ -161,7 +161,6 @@
                                     name="tags"
                                     value="{{ option.name }}"
                                     {% if option.name in selected_tags %}checked{% endif %}
-                                    {% if quick_view != quick_view_custom %}disabled{% endif %}
                                 >
                                 <span>{{ option.name }}</span>
                             </label>
@@ -170,7 +169,7 @@
                 </div>
             </div>
 
-            <div class="col-md-3 ms-md-auto filter-actions">
+            <div class="col-md-4 ms-md-auto filter-actions">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
                 <a class="btn btn-outline-secondary" href="/dashboard"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>

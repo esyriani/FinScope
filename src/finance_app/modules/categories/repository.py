@@ -3,6 +3,8 @@
 import re
 
 from sqlalchemy import and_, case, func, insert, or_, select, update
+from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
+from sqlalchemy.exc import ProgrammingError as SqlAlchemyProgrammingError
 
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
@@ -25,6 +27,18 @@ from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,
     seed_category_taxonomy,
     set_rule_tags,
+)
+
+
+CATEGORY_DATABASE_UNAVAILABLE_ERRORS = (
+    SqlAlchemyOperationalError,
+    SqlAlchemyProgrammingError,
+)
+CATEGORY_TABLE_MISSING_MARKERS = (
+    "no such table: categories",
+    "undefined table",
+    "doesn't exist",
+    "does not exist",
 )
 
 
@@ -177,7 +191,12 @@ def existing_rule_select(
 
 
 def get_category_options(conn=None):
-    """Return category options."""
+    """Return category options.
+
+    Missing taxonomy tables fall back to UNKNOWN during early database
+    initialization. Other query or schema errors are allowed to propagate so
+    tests and operators see real defects.
+    """
     if conn is None:
         with db_core_transaction() as conn:
             return get_category_options(conn)
@@ -187,7 +206,9 @@ def get_category_options(conn=None):
         if not categories:
             seed_category_taxonomy(conn)
             categories = fetch_category_names(conn)
-    except Exception:
+    except CATEGORY_DATABASE_UNAVAILABLE_ERRORS as exc:
+        if not is_missing_categories_table_error(exc):
+            raise
         return [UNKNOWN_CATEGORY]
 
     return categories or [UNKNOWN_CATEGORY]
@@ -221,7 +242,9 @@ def get_builtin_category_names(conn=None):
         try:
             with db_core_transaction() as conn:
                 return get_builtin_category_names(conn)
-        except Exception:
+        except CATEGORY_DATABASE_UNAVAILABLE_ERRORS as exc:
+            if not is_missing_categories_table_error(exc):
+                raise
             return list(fallback_builtin_category_names())
 
     try:
@@ -229,7 +252,9 @@ def get_builtin_category_names(conn=None):
         if not categories:
             seed_category_taxonomy(conn)
             categories = fetch_builtin_category_names(conn)
-    except Exception:
+    except CATEGORY_DATABASE_UNAVAILABLE_ERRORS as exc:
+        if not is_missing_categories_table_error(exc):
+            raise
         return list(fallback_builtin_category_names())
 
     return categories or list(fallback_builtin_category_names())
@@ -246,6 +271,22 @@ def fetch_builtin_category_names(conn):
         )
     ).mappings().fetchall()
     return [row["name"] for row in rows]
+
+
+def is_missing_categories_table_error(exc):
+    """Return whether a database error means the categories table is absent.
+
+    Args:
+        exc: SQLAlchemy operational or programming exception raised while
+            reading taxonomy categories.
+
+    Returns:
+        ``True`` only for known table-missing messages. Missing columns,
+        malformed SQL, server outages, and Python defects intentionally return
+        ``False`` so callers do not hide broken schemas or query bugs.
+    """
+    message = " ".join(str(part) for part in (exc, getattr(exc, "orig", ""))).casefold()
+    return any(marker in message for marker in CATEGORY_TABLE_MISSING_MARKERS)
 
 
 def create_category(conn, name):

@@ -1,18 +1,19 @@
 """Route tests for the review feature."""
 
-import re
+from sqlalchemy import text
 
-from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.review import controller as review_controller
 from finance_app.modules.review.service import apply_review_group_job, undo_review_group_job
-
-
-def set_csrf_token(client, token="test-csrf-token"):
-    """Store a CSRF token in the test client's session."""
-    with client.session_transaction() as session:
-        session[CSRF_SESSION_KEY] = token
-    return token
+from tests.support.html import (
+    assert_has_element,
+    assert_input,
+    assert_not_visible_text,
+    assert_option,
+    assert_visible_text,
+)
+from tests.support.web import set_csrf_token
 
 
 def insert_review_transaction(
@@ -25,8 +26,7 @@ def insert_review_transaction(
     tags=None,
 ):
     """Insert a transaction that can be reviewed."""
-    tx_id = conn.execute(
-        """
+    tx_id = conn.execute(text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -37,10 +37,8 @@ def insert_review_transaction(
             needs_review,
             fingerprint
         )
-        VALUES ('2026-01-02', ?, 12.34, ?, ?, ?, 1, ?)
-        """,
-        (description, category, source, confidence, fingerprint),
-    ).lastrowid
+        VALUES ('2026-01-02', :p0, 12.34, :p1, :p2, :p3, 1, :p4)
+        """), {"p0": description, "p1": category, "p2": source, "p3": confidence, "p4": fingerprint}).lastrowid
     if tags:
         set_transaction_tags(conn, tx_id, tags, source=source)
     conn.commit()
@@ -69,9 +67,9 @@ def capture_review_jobs(monkeypatch):
     return submitted_jobs
 
 
-def test_review_apply_route_queues_group_job(client, db_conn, monkeypatch):
+def test_review_apply_route_queues_group_job(client, core_conn, monkeypatch):
     """Verify review group route queues a background review job."""
-    insert_review_transaction(db_conn)
+    insert_review_transaction(core_conn)
     submitted_jobs = capture_review_jobs(monkeypatch)
 
     response = client.post(
@@ -90,7 +88,7 @@ def test_review_apply_route_queues_group_job(client, db_conn, monkeypatch):
     )
 
     assert response.status_code == 200
-    assert b"Review group queued in the background." in response.data
+    assert_visible_text(response, "Review group queued in the background.")
     submitted = submitted_jobs[0]
     assert submitted["label"] == "Review METRO GROCERY as Food"
     assert submitted["func"] is apply_review_group_job
@@ -109,9 +107,9 @@ def test_review_apply_route_queues_group_job(client, db_conn, monkeypatch):
     assert submitted["undo_args"] == (submitted["args"][0],)
 
 
-def test_review_apply_route_queues_single_transaction_job(client, db_conn, monkeypatch):
+def test_review_apply_route_queues_single_transaction_job(client, core_conn, monkeypatch):
     """Verify review route can queue a job for one transaction in a group."""
-    tx_id = insert_review_transaction(db_conn)
+    tx_id = insert_review_transaction(core_conn)
     submitted_jobs = capture_review_jobs(monkeypatch)
 
     response = client.post(
@@ -126,7 +124,7 @@ def test_review_apply_route_queues_single_transaction_job(client, db_conn, monke
     )
 
     assert response.status_code == 200
-    assert b"Review transaction queued in the background." in response.data
+    assert_visible_text(response, "Review transaction queued in the background.")
     submitted = submitted_jobs[0]
     assert submitted["label"] == f"Review transaction {tx_id} as Food"
     assert submitted["args"][1:] == (
@@ -141,10 +139,10 @@ def test_review_apply_route_queues_single_transaction_job(client, db_conn, monke
     )
 
 
-def test_review_apply_route_queues_selected_transactions_job(client, db_conn, monkeypatch):
+def test_review_apply_route_queues_selected_transactions_job(client, core_conn, monkeypatch):
     """Verify review route can queue a job for selected transactions in a group."""
-    first_id = insert_review_transaction(db_conn, "Metro Grocery", "review-route-selected-1")
-    second_id = insert_review_transaction(db_conn, "Metro Grocery", "review-route-selected-2")
+    first_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-selected-1")
+    second_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-selected-2")
     submitted_jobs = capture_review_jobs(monkeypatch)
 
     response = client.post(
@@ -161,7 +159,7 @@ def test_review_apply_route_queues_selected_transactions_job(client, db_conn, mo
     )
 
     assert response.status_code == 200
-    assert b"Review transactions queued in the background." in response.data
+    assert_visible_text(response, "Review transactions queued in the background.")
     submitted = submitted_jobs[0]
     assert submitted["label"] == "Review 2 transactions as Food"
     assert submitted["args"][1:] == (
@@ -177,30 +175,50 @@ def test_review_apply_route_queues_selected_transactions_job(client, db_conn, mo
     assert submitted["kwargs"] == {"selected_transaction_ids": [first_id, second_id]}
 
 
-def test_review_page_renders_group_transaction_selector(client, db_conn):
+def test_review_page_renders_group_transaction_selector(client, core_conn):
     """Verify review group modal renders its transaction selector rows."""
-    first_id = insert_review_transaction(db_conn, "Metro Grocery", "review-route-modal-1")
-    second_id = insert_review_transaction(db_conn, "Metro Grocery", "review-route-modal-2")
+    first_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-modal-1")
+    second_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-modal-2")
 
     response = client.get("/review")
 
     assert response.status_code == 200
-    assert b"Show all transactions" in response.data
-    assert f'value="{first_id}"'.encode() in response.data
-    assert f'value="{second_id}"'.encode() in response.data
-    assert b'name="transaction_ids"' in response.data
-    assert b"data-no-export data-no-row-select" in response.data
-    assert b"No transactions selected. The category will apply to the whole group." in response.data
-    assert b"data-review-submit-label" in response.data
-    assert b"data-category-description-select" in response.data
-    assert b"Food and drink, including groceries" in response.data
-    assert b"Marks transactions that may be useful for tax preparation" in response.data
+    assert_visible_text(
+        response,
+        "Show all transactions",
+        "No transactions selected. The category will apply to the whole group.",
+    )
+    assert_input(response, name="transaction_ids", value=str(first_id))
+    assert_input(response, name="transaction_ids", value=str(second_id))
+    assert_has_element(response, "table", attrs={"data-no-export": True, "data-no-row-select": True})
+    assert_has_element(response, "span", attrs={"data-review-submit-label": True})
+    assert_has_element(response, "select", attrs={"data-category-description-select": True})
+    assert_has_element(
+        response,
+        "option",
+        attrs={
+            "data-category-description": (
+                "Food and drink, including groceries, restaurants, cafes, bakeries, "
+                "takeout, delivery, and prepared meals."
+            )
+        },
+    )
+    assert_has_element(
+        response,
+        "label",
+        attrs={
+            "title": (
+                "Marks transactions that may be useful for tax preparation, accounting, "
+                "or year-end review."
+            )
+        },
+    )
 
 
-def test_review_page_prefills_consistent_group_assignment(client, db_conn):
+def test_review_page_prefills_consistent_group_assignment(client, core_conn):
     """Verify review group modal defaults to the existing suggested assignment."""
     insert_review_transaction(
-        db_conn,
+        core_conn,
         "Costco Wholesale W527 Montreal",
         "review-route-prefill-1",
         category="Food",
@@ -209,7 +227,7 @@ def test_review_page_prefills_consistent_group_assignment(client, db_conn):
         tags=["Grocery"],
     )
     insert_review_transaction(
-        db_conn,
+        core_conn,
         "Costco Wholesale W527 Montreal",
         "review-route-prefill-2",
         category="Food",
@@ -219,30 +237,28 @@ def test_review_page_prefills_consistent_group_assignment(client, db_conn):
     )
 
     response = client.get("/review")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert re.search(r'<option\s+value="Food"[^>]*selected', body, re.DOTALL)
-    assert re.search(r'<input[^>]*name="tags"[^>]*value="Grocery"[^>]*checked', body, re.DOTALL)
+    assert_option(response, value="Food", selected=True)
+    assert_input(response, name="tags", value="Grocery", checked=True)
 
 
-def test_review_page_filters_by_merchant_search(client, db_conn):
+def test_review_page_filters_by_merchant_search(client, core_conn):
     """Verify the review page can be filtered by merchant name."""
-    insert_review_transaction(db_conn, "Metro Grocery", "review-route-search-metro")
-    insert_review_transaction(db_conn, "Hydro Quebec", "review-route-search-hydro")
+    insert_review_transaction(core_conn, "Metro Grocery", "review-route-search-metro")
+    insert_review_transaction(core_conn, "Hydro Quebec", "review-route-search-hydro")
 
     response = client.get("/review?merchant=hydro")
 
     assert response.status_code == 200
-    assert b'name="merchant"' in response.data
-    assert b'value="hydro"' in response.data
-    assert b"HYDRO QUEBEC" in response.data
-    assert b"METRO GROCERY" not in response.data
+    assert_input(response, name="merchant", value="hydro")
+    assert_visible_text(response, "HYDRO QUEBEC")
+    assert_not_visible_text(response, "METRO GROCERY")
 
 
-def test_review_apply_route_rejects_invalid_payloads(client, db_conn, monkeypatch):
+def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypatch):
     """Verify review route validation avoids queueing malformed jobs."""
-    outside_group_id = insert_review_transaction(db_conn, "Other Shop", "review-route-other")
+    outside_group_id = insert_review_transaction(core_conn, "Other Shop", "review-route-other")
     submitted_jobs = capture_review_jobs(monkeypatch)
     token = set_csrf_token(client)
 
@@ -297,9 +313,9 @@ def test_review_apply_route_rejects_invalid_payloads(client, db_conn, monkeypatc
         follow_redirects=True,
     )
 
-    assert b"Review transaction not found." in invalid_transaction.data
-    assert b"Review group not found." in missing_group.data
-    assert b"Choose a category before applying the review group." in unknown_category.data
-    assert b"Amount bounds must be valid numbers." in invalid_amount.data
-    assert b"Review transaction not found." in invalid_selection.data
+    assert_visible_text(invalid_transaction, "Review transaction not found.")
+    assert_visible_text(missing_group, "Review group not found.")
+    assert_visible_text(unknown_category, "Choose a category before applying the review group.")
+    assert_visible_text(invalid_amount, "Amount bounds must be valid numbers.")
+    assert_visible_text(invalid_selection, "Review transaction not found.")
     assert submitted_jobs == []

@@ -1,45 +1,36 @@
 """Route and service tests for taxonomy admin mutations."""
 
-from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from sqlalchemy import text
 
-
-def set_csrf_token(client, token="test-csrf-token"):
-    """Store a CSRF token in the test client's session."""
-    with client.session_transaction() as session:
-        session[CSRF_SESSION_KEY] = token
-    return token
+from finance_app.core.csrf import CSRF_FIELD_NAME
+from tests.support.html import assert_visible_text
+from tests.support.web import set_csrf_token
 
 
 def insert_category(conn, name):
     """Insert a category and return its id."""
-    category_id = conn.execute(
-        """
+    category_id = conn.execute(text("""
         INSERT INTO categories (name)
-        VALUES (?)
-        """,
-        (name,),
-    ).lastrowid
+        VALUES (:p0)
+        """), {"p0": name}).lastrowid
     conn.commit()
     return category_id
 
 
 def insert_tag(conn, name, color="#64748b"):
     """Insert a tag and return its id."""
-    tag_id = conn.execute(
-        """
+    tag_id = conn.execute(text("""
         INSERT INTO tags (name, color)
-        VALUES (?, ?)
-        """,
-        (name, color),
-    ).lastrowid
+        VALUES (:p0, :p1)
+        """), {"p0": name, "p1": color}).lastrowid
     conn.commit()
     return tag_id
 
 
-def test_category_update_route_rejects_rename_conflict(client, db_conn):
+def test_category_update_route_rejects_rename_conflict(client, core_conn):
     """Verify category renames cannot collide with an existing category."""
-    source_id = insert_category(db_conn, "Pets")
-    insert_category(db_conn, "Food Delivery")
+    source_id = insert_category(core_conn, "Pets")
+    insert_category(core_conn, "Food Delivery")
 
     response = client.post(
         "/taxonomy/categories/update",
@@ -53,29 +44,24 @@ def test_category_update_route_rejects_rename_conflict(client, db_conn):
         follow_redirects=True,
     )
 
-    source = db_conn.execute(
-        """
+    source = core_conn.execute(text("""
         SELECT name, description, instruction
         FROM categories
-        WHERE id = ?
-        """,
-        (source_id,),
-    ).fetchone()
+        WHERE id = :p0
+        """), {"p0": source_id}).fetchone()
     assert response.status_code == 200
-    assert b"Choose a unique category name." in response.data
+    assert_visible_text(response, "Choose a unique category name.")
     assert tuple(source) == ("Pets", None, None)
 
 
-def test_category_routes_protect_builtin_categories(client, db_conn):
+def test_category_routes_protect_builtin_categories(client, core_conn):
     """Verify built-in categories cannot be created over, edited, or deleted."""
     token = set_csrf_token(client)
-    unknown = db_conn.execute(
-        """
+    unknown = core_conn.execute(text("""
         SELECT id, name, builtin_key, description, instruction
         FROM categories
         WHERE builtin_key = 'unknown'
-        """
-    ).fetchone()
+        """)).fetchone()
 
     create_response = client.post(
         "/taxonomy/categories/create",
@@ -91,7 +77,7 @@ def test_category_routes_protect_builtin_categories(client, db_conn):
         "/taxonomy/categories/update",
         data={
             CSRF_FIELD_NAME: token,
-            "category_id": unknown["id"],
+            "category_id": unknown._mapping["id"],
             "name": "UNCATEGORIZED",
             "description": "Override",
             "instruction": "Override",
@@ -100,26 +86,26 @@ def test_category_routes_protect_builtin_categories(client, db_conn):
     )
     delete_response = client.post(
         "/taxonomy/categories/delete",
-        data={CSRF_FIELD_NAME: token, "category_id": unknown["id"]},
+        data={CSRF_FIELD_NAME: token, "category_id": unknown._mapping["id"]},
         follow_redirects=True,
     )
 
-    current = db_conn.execute(
-        """
+    current = core_conn.execute(
+        text("""
         SELECT id, name, builtin_key, description, instruction
         FROM categories
-        WHERE id = ?
-        """,
-        (unknown["id"],),
+        WHERE id = :p0
+        """),
+        {"p0": unknown._mapping["id"]},
     ).fetchone()
     assert create_response.status_code == 200
-    assert b"Built-in categories are managed by FinScope." in create_response.data
-    assert b"Built-in categories cannot be modified." in update_response.data
-    assert b"Built-in categories cannot be deleted." in delete_response.data
+    assert_visible_text(create_response, "Built-in categories are managed by FinScope.")
+    assert_visible_text(update_response, "Built-in categories cannot be modified.")
+    assert_visible_text(delete_response, "Built-in categories cannot be deleted.")
     assert tuple(current) == tuple(unknown)
 
 
-def test_tag_create_update_and_delete_routes(client, db_conn):
+def test_tag_create_update_and_delete_routes(client, core_conn):
     """Verify tag create, update, and unused delete behavior."""
     token = set_csrf_token(client)
 
@@ -134,15 +120,13 @@ def test_tag_create_update_and_delete_routes(client, db_conn):
         },
         follow_redirects=True,
     )
-    tag = db_conn.execute(
-        """
+    tag = core_conn.execute(text("""
         SELECT id, name, description, instruction, color
         FROM tags
         WHERE name = 'Audit'
-        """
-    ).fetchone()
+    """)).fetchone()
     assert create_response.status_code == 200
-    assert b"Tag saved: Audit" in create_response.data
+    assert_visible_text(create_response, "Tag saved: Audit")
     assert tuple(tag[1:]) == (
         "Audit",
         "Needs audit",
@@ -154,7 +138,7 @@ def test_tag_create_update_and_delete_routes(client, db_conn):
         "/taxonomy/tags/update",
         data={
             CSRF_FIELD_NAME: token,
-            "tag_id": tag["id"],
+            "tag_id": tag._mapping["id"],
             "name": "Reviewed",
             "description": "Reviewed later",
             "instruction": "Use after manual inspection.",
@@ -162,16 +146,16 @@ def test_tag_create_update_and_delete_routes(client, db_conn):
         },
         follow_redirects=True,
     )
-    updated = db_conn.execute(
-        """
+    updated = core_conn.execute(
+        text("""
         SELECT id, name, description, instruction, color
         FROM tags
-        WHERE id = ?
-        """,
-        (tag["id"],),
+        WHERE id = :p0
+        """),
+        {"p0": tag._mapping["id"]},
     ).fetchone()
     assert update_response.status_code == 200
-    assert b"Tag updated: Reviewed" in update_response.data
+    assert_visible_text(update_response, "Tag updated: Reviewed")
     assert tuple(updated[1:]) == (
         "Reviewed",
         "Reviewed later",
@@ -183,23 +167,23 @@ def test_tag_create_update_and_delete_routes(client, db_conn):
         "/taxonomy/tags/delete",
         data={
             CSRF_FIELD_NAME: token,
-            "tag_id": tag["id"],
+            "tag_id": tag._mapping["id"],
         },
         follow_redirects=True,
     )
-    remaining = db_conn.execute(
-        "SELECT COUNT(*) AS count FROM tags WHERE id = ?",
-        (tag["id"],),
-    ).fetchone()["count"]
+    remaining = core_conn.execute(
+        text("SELECT COUNT(*) AS count FROM tags WHERE id = :p0"),
+        {"p0": tag._mapping["id"]},
+    ).fetchone()._mapping["count"]
     assert delete_response.status_code == 200
-    assert b"Tag deleted: Reviewed" in delete_response.data
+    assert_visible_text(delete_response, "Tag deleted: Reviewed")
     assert remaining == 0
 
 
-def test_tag_update_route_rejects_name_conflict(client, db_conn):
+def test_tag_update_route_rejects_name_conflict(client, core_conn):
     """Verify tag updates cannot collide with another tag name."""
-    first_id = insert_tag(db_conn, "Audit")
-    second_id = insert_tag(db_conn, "Reviewed")
+    first_id = insert_tag(core_conn, "Audit")
+    second_id = insert_tag(core_conn, "Reviewed")
 
     response = client.post(
         "/taxonomy/tags/update",
@@ -214,45 +198,35 @@ def test_tag_update_route_rejects_name_conflict(client, db_conn):
         follow_redirects=True,
     )
 
-    first = db_conn.execute("SELECT name FROM tags WHERE id = ?", (first_id,)).fetchone()
-    second = db_conn.execute("SELECT name FROM tags WHERE id = ?", (second_id,)).fetchone()
+    first = core_conn.execute(text("SELECT name FROM tags WHERE id = :p0"), {"p0": first_id}).fetchone()
+    second = core_conn.execute(text("SELECT name FROM tags WHERE id = :p0"), {"p0": second_id}).fetchone()
     assert response.status_code == 200
-    assert b"Choose a unique tag name." in response.data
-    assert first["name"] == "Audit"
-    assert second["name"] == "Reviewed"
+    assert_visible_text(response, "Choose a unique tag name.")
+    assert first._mapping["name"] == "Audit"
+    assert second._mapping["name"] == "Reviewed"
 
 
-def test_tag_delete_route_blocks_transaction_and_rule_usage(client, db_conn):
+def test_tag_delete_route_blocks_transaction_and_rule_usage(client, core_conn):
     """Verify used tags cannot be deleted when attached to transactions or rules."""
-    transaction_tag_id = insert_tag(db_conn, "Transaction Used")
-    rule_tag_id = insert_tag(db_conn, "Rule Used")
-    tx_id = db_conn.execute(
-        """
+    transaction_tag_id = insert_tag(core_conn, "Transaction Used")
+    rule_tag_id = insert_tag(core_conn, "Rule Used")
+    tx_id = core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
         VALUES ('2026-01-02', 'STORE', 12.34, 'UNKNOWN', 'tag-used-tx')
-        """
-    ).lastrowid
-    rule_id = db_conn.execute(
-        """
+        """)).lastrowid
+    rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category)
         VALUES ('STORE', 'Food')
-        """
-    ).lastrowid
-    db_conn.execute(
-        """
+        """)).lastrowid
+    core_conn.execute(text("""
         INSERT INTO transaction_tags (transaction_id, tag_id)
-        VALUES (?, ?)
-        """,
-        (tx_id, transaction_tag_id),
-    )
-    db_conn.execute(
-        """
+        VALUES (:p0, :p1)
+        """), {"p0": tx_id, "p1": transaction_tag_id})
+    core_conn.execute(text("""
         INSERT INTO category_rule_tags (rule_id, tag_id)
-        VALUES (?, ?)
-        """,
-        (rule_id, rule_tag_id),
-    )
-    db_conn.commit()
+        VALUES (:p0, :p1)
+        """), {"p0": rule_id, "p1": rule_tag_id})
+    core_conn.commit()
     token = set_csrf_token(client)
 
     transaction_response = client.post(
@@ -266,14 +240,11 @@ def test_tag_delete_route_blocks_transaction_and_rule_usage(client, db_conn):
         follow_redirects=True,
     )
 
-    remaining = db_conn.execute(
-        """
+    remaining = core_conn.execute(text("""
         SELECT COUNT(*) AS count
-        FROM tags
-        WHERE id IN (?, ?)
-        """,
-        (transaction_tag_id, rule_tag_id),
-    ).fetchone()["count"]
-    assert b"Only unused tags can be deleted." in transaction_response.data
-    assert b"Only unused tags can be deleted." in rule_response.data
+    FROM tags
+    WHERE id IN (:p0, :p1)
+        """), {"p0": transaction_tag_id, "p1": rule_tag_id}).fetchone()._mapping["count"]
+    assert_visible_text(transaction_response, "Only unused tags can be deleted.")
+    assert_visible_text(rule_response, "Only unused tags can be deleted.")
     assert remaining == 2

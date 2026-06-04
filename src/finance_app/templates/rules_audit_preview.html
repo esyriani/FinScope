@@ -10,11 +10,23 @@
     </div>
     <div class="home-actions">
         {% if preview.rule %}
-        <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">
+        <a
+            class="btn btn-outline-secondary"
+            href="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+            data-busy-message="{{ _('Loading rule audit details...') }}"
+        >
             <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule detail") }}
         </a>
         {% endif %}
-        <a class="btn btn-outline-secondary" href="{{ url_for('rules.audit_rules') }}">
+        <a
+            class="btn btn-outline-secondary"
+            href="{{ url_for('rules.audit_rules') }}"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+            data-busy-message="{{ _('Loading rule audit...') }}"
+        >
             <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule audit") }}
         </a>
     </div>
@@ -47,7 +59,13 @@
             <h5 class="mb-1">{{ _("Confirm delete") }}</h5>
             <p class="text-muted mb-0">{{ _("Deleting this rule keeps existing transaction categories and tags, but future rule matching will ignore it.") }}</p>
         </div>
-        <form method="post" action="{{ url_for('rules.delete_rule', rule_id=preview.rule.id) }}" class="d-inline">
+        <form
+            method="post"
+            action="{{ url_for('rules.delete_rule', rule_id=preview.rule.id) }}"
+            class="d-inline"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
             <input type="hidden" name="next" value="{{ url_for('rules.audit_rules') }}">
@@ -70,7 +88,13 @@
                 <p class="text-muted mb-0">{{ _("This force applies the rule to all matching transactions, including transactions where another rule would normally win.") }}</p>
             {% endif %}
         </div>
-        <form method="post" action="{{ url_for('rules.apply_rule', rule_id=preview.rule.id) }}" class="d-inline">
+        <form
+            method="post"
+            action="{{ url_for('rules.apply_rule', rule_id=preview.rule.id) }}"
+            class="d-inline"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
             <input type="hidden" name="mode" value="{{ preview.action }}">
@@ -90,7 +114,13 @@
             <h5 class="mb-1">{{ _("Confirm approve") }}</h5>
             <p class="text-muted mb-0">{{ _("This approves the suggested rule after confirming matching behavior is unchanged.") }}</p>
         </div>
-        <form method="post" action="{{ url_for('rules.approve_rule', rule_id=preview.rule.id) }}" class="d-inline">
+        <form
+            method="post"
+            action="{{ url_for('rules.approve_rule', rule_id=preview.rule.id) }}"
+            class="d-inline"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
             <input type="hidden" name="next" value="{{ url_for('rules.rules') }}">
@@ -109,7 +139,13 @@
             <h5 class="mb-1">{{ _("Confirm apply all") }}</h5>
             <p class="text-muted mb-0">{{ _("This queues all current winning rules for application using normal rule precedence.") }}</p>
         </div>
-        <form method="post" action="{{ url_for('rules.apply_all_rules') }}" class="d-inline">
+        <form
+            method="post"
+            action="{{ url_for('rules.apply_all_rules') }}"
+            class="d-inline"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
             <input type="hidden" name="next" value="{{ url_for('rules.audit_rules') }}">
@@ -144,7 +180,13 @@
                 <dd class="col-sm-8">{{ preview.proposed_rule.amount_label }}</dd>
             </dl>
         </div>
-        <form method="post" action="{{ url_for('rules.add_rule') }}" class="d-inline">
+        <form
+            method="post"
+            action="{{ url_for('rules.add_rule') }}"
+            class="d-inline"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
             <input type="hidden" name="next" value="{{ url_for('rules.rules') }}">
@@ -189,7 +231,13 @@
                 <dd class="col-sm-8">{{ preview.proposed_rule.amount_label }}</dd>
             </dl>
         </div>
-        <form method="post" action="{{ url_for('rules.update_rule', rule_id=preview.rule.id) }}" class="d-inline">
+        <form
+            method="post"
+            action="{{ url_for('rules.update_rule', rule_id=preview.rule.id) }}"
+            class="d-inline"
+            data-busy-overlay
+            data-busy-delay-ms="0"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
             <input type="hidden" name="next" value="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">

@@ -7,14 +7,6 @@ from finance_app.core.i18n import normalize_language
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 
 
-def parse_settings_form(form, app_settings):
-    """Parse the full owner settings form."""
-    return {
-        **parse_general_settings_form(form, app_settings),
-        **parse_global_settings_form(form, app_settings),
-    }
-
-
 def parse_general_settings_form(form, app_settings):
     """Parse user-specific General settings from a submitted form."""
     return {

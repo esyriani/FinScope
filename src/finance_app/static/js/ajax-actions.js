@@ -235,6 +235,7 @@ async function submitAjaxRefreshForm(form, submitter) {
     });
     form.setAttribute("aria-busy", "true");
     const method = (form.method || "POST").toUpperCase();
+    const busyToken = window.showBusyOverlayForElement?.(form, submitter);
 
     try {
         const actionUrl = new URL(form.action || window.location.href, window.location.href);
@@ -269,6 +270,7 @@ async function submitAjaxRefreshForm(form, submitter) {
             });
             form.removeAttribute("aria-busy");
         }
+        window.hideBusyOverlay?.(busyToken);
     }
 }
 
@@ -309,6 +311,7 @@ function setupAjaxRefreshLinks(root = document) {
             const target = link.closest("[data-ajax-refresh-target]") || ajaxRefreshTargetElements(selector)[0];
             target?.setAttribute("aria-busy", "true");
             link.setAttribute("aria-disabled", "true");
+            const busyToken = window.showBusyOverlayForElement?.(link);
 
             try {
                 await ajaxRefreshFromUrl(url, selector);
@@ -325,6 +328,7 @@ function setupAjaxRefreshLinks(root = document) {
                 if (target && document.body.contains(target)) {
                     target.removeAttribute("aria-busy");
                 }
+                window.hideBusyOverlay?.(busyToken);
             }
         });
     });

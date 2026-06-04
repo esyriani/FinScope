@@ -4,7 +4,7 @@ from calendar import monthrange
 from datetime import date
 
 from finance_app.core.i18n import format_month_year, gettext
-from finance_app.core.money import money_to_float, rounded_money_float
+from finance_app.core.money import format_money_display, money_to_float, rounded_money_float
 from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.comparison.constants import UNKNOWN_WARNING_THRESHOLD
 
@@ -593,7 +593,7 @@ def format_signed_count(value):
 
 def format_money_text(value):
     """Format money text."""
-    return f"{value:,.2f} $".replace(",", " ")
+    return format_money_display(value)
 
 
 

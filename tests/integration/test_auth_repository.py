@@ -30,6 +30,14 @@ def test_auth_repository_creates_users_and_user_settings(core_conn):
     assert settings["theme_mode"] == "dark"
 
 
+def test_auth_repository_uses_database_username_key(core_conn):
+    """Verify username lookups follow the database uniqueness key."""
+    owner = auth_repository.get_user_by_username(core_conn, " OWNER ")
+
+    assert owner["username"] == "owner"
+    assert auth_repository.username_exists(core_conn, " OWNER ")
+
+
 def test_auth_repository_writes_are_transactional(core_conn):
     """Verify auth repository writes roll back with the surrounding transaction."""
     with pytest.raises(RuntimeError):

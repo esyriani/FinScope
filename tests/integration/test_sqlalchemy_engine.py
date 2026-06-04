@@ -5,13 +5,14 @@ from unittest.mock import patch
 
 import pytest
 from flask import Flask
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, insert, inspect, select, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import IntegrityError
 
 from finance_app.core.config import sqlite_database_url
 from finance_app.database import connection as connection_module
 from finance_app.database import engine as engine_module
+from finance_app.database.tables import categories as categories_table
 from finance_app.database.engine import (
     create_database_engine,
     db_core_transaction,
@@ -157,6 +158,82 @@ def test_core_request_teardown_rolls_back_uncommitted_work(tmp_path):
     finally:
         verification_engine.dispose()
     assert count == 0
+
+
+def test_core_request_nested_transaction_without_conn_uses_savepoint(tmp_path):
+    """Keep a request-owned outer transaction open across nested helper calls."""
+    database_path = tmp_path / "finance.db"
+    database_url = sqlite_database_url(database_path)
+    setup_engine = create_engine(database_url)
+    try:
+        with setup_engine.begin() as conn:
+            conn.execute(text("CREATE TABLE sample (value TEXT NOT NULL)"))
+    finally:
+        setup_engine.dispose()
+
+    app = Flask(__name__)
+    register_core_db(app)
+    active_after_inner = []
+
+    @app.route("/nested-rollback")
+    def nested_rollback():
+        """Rollback outer and nested writes when the outer block fails."""
+        try:
+            with db_core_transaction() as outer:
+                outer.execute(text("INSERT INTO sample (value) VALUES ('outer')"))
+                with db_core_transaction() as inner:
+                    inner.execute(text("INSERT INTO sample (value) VALUES ('nested')"))
+                active_after_inner.append(outer.in_transaction())
+                raise RuntimeError("force outer rollback")
+        except RuntimeError:
+            return "active" if active_after_inner[0] else "inactive"
+
+    with patch.object(engine_module, "settings", SimpleNamespace(database_url=database_url)):
+        response = app.test_client().get("/nested-rollback")
+
+    assert response.data == b"active"
+    verification_engine = create_engine(database_url)
+    try:
+        with verification_engine.connect() as conn:
+            count = conn.execute(text("SELECT COUNT(*) FROM sample")).scalar_one()
+    finally:
+        verification_engine.dispose()
+    assert count == 0
+
+
+def test_app_request_nested_transaction_without_conn_keeps_outer_boundary(app):
+    """Verify real app request-scoped no-arg nesting cannot commit the outer block."""
+    outer_category = "Request scoped outer rollback"
+    nested_category = "Request scoped nested rollback"
+    active_after_inner = []
+
+    with app.test_request_context("/request-scoped-nested-transaction"):
+        with pytest.raises(RuntimeError, match="force outer rollback"):
+            with db_core_transaction() as outer:
+                outer.execute(insert(categories_table).values(name=outer_category))
+
+                with db_core_transaction() as inner:
+                    assert inner is outer
+                    inner.execute(insert(categories_table).values(name=nested_category))
+
+                active_after_inner.append(outer.in_transaction())
+                in_request_count = outer.execute(
+                    select(categories_table.c.id).where(
+                        categories_table.c.name.in_((outer_category, nested_category))
+                    )
+                ).fetchall()
+                assert len(in_request_count) == 2
+                raise RuntimeError("force outer rollback")
+
+    with db_core_transaction() as conn:
+        persisted_count = conn.execute(
+            select(categories_table.c.id).where(
+                categories_table.c.name.in_((outer_category, nested_category))
+            )
+        ).fetchall()
+
+    assert active_after_inner == [True]
+    assert persisted_count == []
 
 
 def test_core_transaction_commits_and_rolls_back(tmp_path):

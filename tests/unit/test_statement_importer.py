@@ -2,9 +2,16 @@
 
 import pytest
 
-from finance_app.core.constants import UNKNOWN_CATEGORY
+from finance_app.core.constants import (
+    DATE_ORDER_AUTO,
+    DATE_ORDER_DAY_FIRST,
+    DATE_ORDER_MONTH_FIRST,
+    UNKNOWN_CATEGORY,
+)
 from finance_app.modules.statements.importer import (
+    analyze_slash_date_order,
     build_transaction,
+    date_formats_for_order,
     parse_csv_transactions,
     parse_date,
     parse_money,
@@ -41,6 +48,103 @@ def test_parse_money_accepts_statement_number_formats(raw_value, expected):
 def test_parse_date_accepts_supported_statement_formats(raw_value, expected):
     """Verify that supported date formats normalize to ISO dates."""
     assert parse_date(raw_value) == expected
+
+
+@pytest.mark.parametrize(
+    ("values", "date_order", "expected"),
+    [
+        (
+            ["05/18/2026", "05/06/2026"],
+            DATE_ORDER_AUTO,
+            {
+                "effective_order": DATE_ORDER_MONTH_FIRST,
+                "inferred_order": DATE_ORDER_MONTH_FIRST,
+                "source": "detected",
+                "requires_choice": False,
+                "month_first_evidence_count": 1,
+                "day_first_evidence_count": 0,
+                "ambiguous_count": 1,
+                "slash_date_count": 2,
+            },
+        ),
+        (
+            ["18/05/2026", "07/05/2026"],
+            DATE_ORDER_AUTO,
+            {
+                "effective_order": DATE_ORDER_DAY_FIRST,
+                "inferred_order": DATE_ORDER_DAY_FIRST,
+                "source": "detected",
+                "requires_choice": False,
+                "month_first_evidence_count": 0,
+                "day_first_evidence_count": 1,
+                "ambiguous_count": 1,
+                "slash_date_count": 2,
+            },
+        ),
+        (
+            ["05/12/2026", "06/07/2026"],
+            DATE_ORDER_AUTO,
+            {
+                "effective_order": DATE_ORDER_AUTO,
+                "inferred_order": None,
+                "source": "auto",
+                "requires_choice": True,
+                "month_first_evidence_count": 0,
+                "day_first_evidence_count": 0,
+                "ambiguous_count": 2,
+                "slash_date_count": 2,
+            },
+        ),
+        (
+            ["05/18/2026", "18/05/2026"],
+            DATE_ORDER_AUTO,
+            {
+                "effective_order": DATE_ORDER_AUTO,
+                "inferred_order": None,
+                "source": "auto",
+                "requires_choice": True,
+                "month_first_evidence_count": 1,
+                "day_first_evidence_count": 1,
+                "ambiguous_count": 0,
+                "slash_date_count": 2,
+            },
+        ),
+        (
+            ["05/12/2026"],
+            DATE_ORDER_DAY_FIRST,
+            {
+                "effective_order": DATE_ORDER_DAY_FIRST,
+                "inferred_order": None,
+                "source": "selected",
+                "requires_choice": False,
+                "month_first_evidence_count": 0,
+                "day_first_evidence_count": 0,
+                "ambiguous_count": 1,
+                "slash_date_count": 1,
+            },
+        ),
+    ],
+)
+def test_analyze_slash_date_order_table_driven(values, date_order, expected):
+    """Verify slash-date order inference reports evidence and selected overrides."""
+    analysis = analyze_slash_date_order(values, date_order=date_order)
+
+    for key, expected_value in expected.items():
+        assert analysis[key] == expected_value
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "date_order", "expected"),
+    [
+        ("05/12/2026", DATE_ORDER_MONTH_FIRST, "2026-05-12"),
+        ("05/12/2026", DATE_ORDER_DAY_FIRST, "2026-12-05"),
+        ("13/02/2026", DATE_ORDER_MONTH_FIRST, "2026-02-13"),
+        ("02/13/2026", DATE_ORDER_DAY_FIRST, "2026-02-13"),
+    ],
+)
+def test_parse_date_respects_selected_slash_date_order(raw_value, date_order, expected):
+    """Verify selected date-order formats drive ambiguous slash-date parsing."""
+    assert parse_date(raw_value, date_formats=date_formats_for_order(date_order)) == expected
 
 
 def test_build_transaction_prefers_debit_credit_columns():

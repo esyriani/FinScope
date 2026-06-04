@@ -11,6 +11,8 @@ from finance_app.core.constants import BASE_DIR
 
 CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(BASE_DIR) / "config.ini"))
 EXAMPLE_CONFIG_PATH = Path(BASE_DIR) / "config.example.ini"
+DEVELOPMENT_SECRET_KEY = "dev-secret-key"
+LOCAL_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,7 @@ class AppSettings:
     server_host: str
     server_port: int
     server_debug: bool
+    secure_cookies: bool
     allowed_statement_extensions: set[str]
     openai_api_key: str
     default_table_page_size: int
@@ -74,19 +77,34 @@ def load_settings(config_path=CONFIG_PATH):
         if extension.strip()
     }
 
+    server_host = env("FINANCE_HOST", parser.get("server", "host", fallback="127.0.0.1")).strip() or "127.0.0.1"
+    server_debug = parse_bool(env("FINANCE_DEBUG", parser.get("server", "debug", fallback="true")))
+    secret_key = validate_secret_key(
+        env("FINANCE_SECRET_KEY", parser.get("app", "secret_key", fallback=DEVELOPMENT_SECRET_KEY)),
+        server_debug=server_debug,
+        server_host=server_host,
+    )
+
     return AppSettings(
         config_path=Path(config_path),
-        secret_key=env("FINANCE_SECRET_KEY", parser.get("app", "secret_key", fallback="dev-secret-key")),
+        secret_key=secret_key,
         timezone=env("FINANCE_TIMEZONE", parser.get("app", "timezone", fallback="America/Toronto")),
         locale=env("FINANCE_LOCALE", parser.get("app", "locale", fallback="en_CA")),
         currency=env("FINANCE_CURRENCY", parser.get("app", "currency", fallback="CAD")),
         currency_symbol=env("FINANCE_CURRENCY_SYMBOL", parser.get("app", "currency_symbol", fallback="$")),
-        max_upload_mb=int(env("FINANCE_MAX_UPLOAD_MB", parser.get("app", "max_upload_mb", fallback="16"))),
+        max_upload_mb=parse_positive_int(
+            env("FINANCE_MAX_UPLOAD_MB", parser.get("app", "max_upload_mb", fallback="16")),
+            16,
+        ),
         database_path=database_path,
         database_url=database_url,
-        server_host=env("FINANCE_HOST", parser.get("server", "host", fallback="127.0.0.1")),
-        server_port=int(env("FINANCE_PORT", parser.get("server", "port", fallback="5000"))),
-        server_debug=parse_bool(env("FINANCE_DEBUG", parser.get("server", "debug", fallback="true"))),
+        server_host=server_host,
+        server_port=parse_port(env("FINANCE_PORT", parser.get("server", "port", fallback="5000"))),
+        server_debug=server_debug,
+        secure_cookies=parse_secure_cookies(
+            env("FINANCE_SECURE_COOKIES", parser.get("app", "secure_cookies", fallback="")),
+            server_host,
+        ),
         allowed_statement_extensions=allowed_extensions,
         openai_api_key=env("OPENAI_API_KEY", parser.get("api_keys", "openai_api_key", fallback="")),
         default_table_page_size=parse_positive_int(
@@ -182,6 +200,39 @@ def sqlite_path_from_database_url(database_url):
 def parse_bool(value):
     """Parse bool."""
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def parse_secure_cookies(value, server_host):
+    """Return whether browser cookies should require HTTPS transport."""
+    text = str(value or "").strip().lower()
+    if text:
+        return parse_bool(text)
+    return not is_local_bind_host(server_host)
+
+
+def validate_secret_key(value, server_debug=False, server_host=""):
+    """Return a usable Flask secret key or raise for unsafe deployments."""
+    secret_key = str(value or "").strip()
+    if not secret_key:
+        raise ValueError("FINANCE_SECRET_KEY or app.secret_key must be configured.")
+    if secret_key == DEVELOPMENT_SECRET_KEY and not (server_debug or is_local_bind_host(server_host)):
+        raise ValueError(
+            "The development secret key is only allowed for debug or loopback local runs. "
+            "Set FINANCE_SECRET_KEY before binding FinScope to a non-local host."
+        )
+    return secret_key
+
+
+def is_local_bind_host(value):
+    """Return whether a configured bind host is loopback-only."""
+    host = str(value or "").strip().lower()
+    return host in LOCAL_BIND_HOSTS
+
+
+def parse_port(value, fallback=5000):
+    """Parse a TCP port number, falling back when the value is invalid."""
+    parsed = parse_positive_int(value, fallback)
+    return parsed if 1 <= parsed <= 65535 else fallback
 
 
 def parse_positive_int(value, fallback):

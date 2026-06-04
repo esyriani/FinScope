@@ -264,7 +264,15 @@
                 <button class="btn btn-sm btn-outline-secondary" type="submit" name="batch_action" value="ignore">
                     <i class="bi bi-ban" aria-hidden="true"></i>{{ _("Ignore selected") }}
                 </button>
-                <button class="btn btn-sm btn-primary" type="submit" name="batch_action" value="recategorize">
+                <button
+                    class="btn btn-sm btn-primary"
+                    type="submit"
+                    name="batch_action"
+                    value="recategorize"
+                    data-busy-overlay
+                    data-busy-delay-ms="0"
+                    data-busy-message="{{ _('Recategorizing selected transactions...') }}"
+                >
                     <i class="bi bi-arrow-repeat" aria-hidden="true"></i>{{ _("Recategorize selected") }}
                 </button>
             </div>
@@ -401,7 +409,13 @@
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         {% if run_transaction_ai_enabled %}
                                         <li>
-                                            <form method="post" action="{{ url_for('transactions.suggest_transaction_category', transaction_id=tx['id']) }}">
+                                            <form
+                                                method="post"
+                                                action="{{ url_for('transactions.suggest_transaction_category', transaction_id=tx['id']) }}"
+                                                data-busy-overlay
+                                                data-busy-delay-ms="0"
+                                                data-busy-message="{{ _('Suggesting category...') }}"
+                                            >
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <input type="hidden" name="next" value="{{ request.full_path }}">
                                                 <button class="dropdown-item" type="submit">
@@ -476,7 +490,13 @@
                         </div>
                         <div>
                             <dt>{{ _("Merchant") }}</dt>
-                            <dd>{{ (tx["merchant_key"] or "&mdash;") | safe }}</dd>
+                            <dd>
+                                {% if tx["merchant_key"] %}
+                                    {{ tx["merchant_key"] }}
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </dd>
                         </div>
                         <div>
                             <dt>{{ _("Tags") }}</dt>

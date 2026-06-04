@@ -75,6 +75,54 @@ def test_setting_defaults_include_llm_review_and_single_transaction_ai(monkeypat
     assert settings.default_transaction_ai_rerun_enabled is False
 
 
+def test_invalid_integer_settings_fall_back_without_import_crash(monkeypatch, tmp_path):
+    """Verify malformed integer config values do not crash settings loading."""
+    monkeypatch.setenv("FINANCE_MAX_UPLOAD_MB", "not-an-int")
+    monkeypatch.setenv("FINANCE_PORT", "70000")
+
+    settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    assert settings.max_upload_mb == 16
+    assert settings.server_port == 5000
+
+
+def test_development_secret_key_is_rejected_for_non_local_runs(monkeypatch, tmp_path):
+    """Verify the known development secret cannot be used on network binds."""
+    monkeypatch.setenv("FINANCE_HOST", "0.0.0.0")
+    monkeypatch.setenv("FINANCE_DEBUG", "false")
+    monkeypatch.delenv("FINANCE_SECRET_KEY", raising=False)
+
+    try:
+        config_module.load_settings(tmp_path / "missing.ini")
+    except ValueError as exc:
+        assert "development secret key" in str(exc)
+    else:
+        raise AssertionError("Expected non-local dev-secret-key configuration to fail")
+
+
+def test_secure_cookie_default_tracks_bind_host(monkeypatch, tmp_path):
+    """Verify loopback defaults to HTTP-friendly cookies and network binds do not."""
+    monkeypatch.setenv("FINANCE_HOST", "127.0.0.1")
+    local_settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    monkeypatch.setenv("FINANCE_HOST", "0.0.0.0")
+    monkeypatch.setenv("FINANCE_SECRET_KEY", "test-secret-key")
+    network_settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    monkeypatch.setenv("FINANCE_SECURE_COOKIES", "false")
+    explicit_settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    assert local_settings.secure_cookies is False
+    assert network_settings.secure_cookies is True
+    assert explicit_settings.secure_cookies is False
+
+
+def test_app_cookie_security_uses_configured_setting(app):
+    """Verify Flask cookie security follows settings instead of debug mode."""
+    assert app.config["SESSION_COOKIE_SECURE"] is False
+    assert app.config["REMEMBER_COOKIE_SECURE"] is False
+
+
 def test_database_dialect_reads_sqlalchemy_driver_prefix():
     """Read the database dialect from the configured SQLAlchemy URL."""
     assert config_module.database_dialect("mysql+pymysql://user:password@localhost/finscope") == "mysql"
