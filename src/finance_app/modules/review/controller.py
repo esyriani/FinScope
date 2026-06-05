@@ -5,6 +5,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from finance_app.background.runner import submit_background_job
 from finance_app.modules.auth.permissions import PERMISSION_EDIT_TRANSACTIONS, permission_required
 from finance_app.core.constants import UNKNOWN_CATEGORY
+from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.service import get_category_options, normalize_category
 from finance_app.modules.categories.taxonomy import get_tag_options, normalize_tag_names
@@ -42,11 +43,11 @@ def apply_review_group():
         try:
             transaction_id = int(transaction_id_text)
         except ValueError:
-            flash("Review transaction not found.")
+            flash(gettext("Review transaction not found."))
             return redirect(next_url)
 
         if transaction_id <= 0:
-            flash("Review transaction not found.")
+            flash(gettext("Review transaction not found."))
             return redirect(next_url)
 
     try:
@@ -56,11 +57,11 @@ def apply_review_group():
             else parse_review_transaction_ids(request.form.getlist("transaction_ids"))
         )
     except ValueError:
-        flash("Review transaction not found.")
+        flash(gettext("Review transaction not found."))
         return redirect(next_url)
 
     if not merchant_key:
-        flash("Review group not found.")
+        flash(gettext("Review group not found."))
         return redirect(next_url)
 
     create_rule = request.form.get("create_rule") == "1" and not selected_transaction_ids
@@ -82,7 +83,7 @@ def apply_review_group():
     if selected_transaction_ids and not set(selected_transaction_ids).issubset(
         group_transaction_ids
     ):
-        flash("Review transaction not found.")
+        flash(gettext("Review transaction not found."))
         return redirect(next_url)
 
     if (
@@ -91,7 +92,7 @@ def apply_review_group():
         or category == unknown_category
         or category.upper() == UNKNOWN_CATEGORY
     ):
-        flash("Choose a category before applying the review group.")
+        flash(gettext("Choose a category before applying the review group."))
         return redirect(next_url)
 
     if create_rule:
@@ -102,11 +103,11 @@ def apply_review_group():
                 request.form.get("amount_max", ""),
             )
         except ValueError as exc:
-            flash(str(exc))
+            flash(gettext(str(exc)))
             return redirect(next_url)
 
         if not rule_keyword:
-            flash("Rule keyword is required when saving a rule.")
+            flash(gettext("Rule keyword is required when saving a rule."))
             return redirect(next_url)
 
     undo_state = {}
@@ -146,8 +147,11 @@ def apply_review_group():
         else "group"
     )
     flash(
-        f"Review {review_target} queued in the background. "
-        f"Track progress on the Jobs page. Job: {job_id[:8]}"
+        gettext(
+            "Review {target} queued in the background. Track progress on the Jobs page. Job: {job_id}",
+            target=gettext(review_target),
+            job_id=job_id[:8],
+        )
     )
     return redirect(next_url)
 

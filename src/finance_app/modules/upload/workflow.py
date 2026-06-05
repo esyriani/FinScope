@@ -1,9 +1,6 @@
 """Background workflow helpers for the upload feature."""
 
-import json
-from datetime import timedelta
-
-from sqlalchemy import delete, func, insert, or_, select, update
+from sqlalchemy import func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 
 from finance_app.background.runner import (
@@ -16,26 +13,19 @@ from finance_app.background.runner import (
 )
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
-    ACCOUNT_TYPE_CREDIT_CARD,
     ACCOUNT_TYPE_SAVINGS,
     INTERAC_DIRECTION_AUTO,
     DATE_ORDER_AUTO,
     STATEMENT_IMPORT_MODE_ENRICHMENT,
-    STATEMENT_IMPORT_MODE_LEDGER,
     STATEMENT_IMPORT_STATUS_COMPLETED,
     STATEMENT_IMPORT_STATUS_FAILED,
     STATEMENT_IMPORT_STATUS_QUEUED,
     STATEMENT_IMPORT_STATUS_RUNNING,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
     TRANSACTION_KIND_EXPENSE,
-    TRANSACTION_KIND_INCOME,
     TRANSACTION_KIND_PAYMENT,
-    TRANSACTION_KIND_REFUND,
-    TRANSACTION_KIND_TRANSFER,
-    TRANSFER_CATEGORY,
     UNKNOWN_CATEGORY,
 )
-from finance_app.database.dates import coerce_date
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -43,22 +33,15 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.sources import (
-    CATEGORY_SOURCE_AI,
-    CATEGORY_SOURCE_HISTORY,
     CATEGORY_SOURCE_MANUAL,
-    CATEGORY_SOURCE_RULE,
     CATEGORY_SOURCE_UNKNOWN,
-    TransactionCategoryState,
-    category_assignment,
     category_metadata_json,
     utc_timestamp,
 )
-from finance_app.modules.categories.decision import DECISION_SOURCE_RULE
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.service import categorize_transactions
 from finance_app.modules.categories.taxonomy import (
-    get_transaction_tag_names,
     set_transaction_tags,
 )
 from finance_app.modules.merchants.repository import (
@@ -68,30 +51,39 @@ from finance_app.modules.merchants.repository import (
 from finance_app.modules.settings.runtime import get_bool_setting, get_unknown_category
 from finance_app.modules.statements.importer import parse_csv_transactions
 from finance_app.modules.transactions.importer import filter_new_transactions
+from finance_app.modules.upload.messages import (
+    ai_batch_report,
+    ai_request_status_needs_log,
+    automatic_categorization_message,
+    format_failure_counts,
+    merge_source_counts,
+    upload_result_message,
+)
+from finance_app.modules.upload.transaction_kinds import (
+    apply_transaction_kind_categories,
+    classify_transaction_kind,
+    date_window_end,
+    date_window_start,
+    default_import_mode,
+    mark_linked_account_payments,
+    nearest_unique_match,
+    record_interac_undo_state,
+    transaction_snapshot_select,
+)
+from finance_app.modules.upload.undo import (
+    delete_statement,
+    delete_statement_transactions,
+    restore_interac_undo_state,
+    statement_filename_row,
+    statement_transaction_count,
+)
 
 
 INTERAC_MATCH_DATE_TOLERANCE_DAYS = 5
-PAYMENT_MATCH_DATE_TOLERANCE_DAYS = 5
-AUTOMATIC_CATEGORIZATION_SOURCE_ORDER = (
-    CATEGORY_SOURCE_HISTORY,
-    CATEGORY_SOURCE_AI,
-    CATEGORY_SOURCE_RULE,
-)
-AUTOMATIC_CATEGORIZATION_SOURCE_LABELS = {
-    CATEGORY_SOURCE_HISTORY: "similarity",
-    CATEGORY_SOURCE_AI: "AI",
-    CATEGORY_SOURCE_RULE: "rule",
-}
 INTERAC_DESCRIPTION_MARKERS = {
     "sent": ("ENVOI", "SENT E-TRANSFER"),
     "received": ("RECEPT", "RECEIVED E-TRANSFER"),
 }
-PAYMENT_DESCRIPTION_MARKERS = (
-    "PAYMENT THANK YOU",
-    "PAIEMENT",
-    "PAIEMEN T MERCI",
-    "CREDIT CARD PAYMENT",
-)
 
 
 def import_transactions(
@@ -105,8 +97,30 @@ def import_transactions(
     import_mode=None,
     interac_direction=INTERAC_DIRECTION_AUTO,
     date_order=DATE_ORDER_AUTO,
+    categorizer=None,
+    tag_setter=None,
 ):
-    """Import transactions."""
+    """Import parsed statement transactions.
+
+    Args:
+        conn: Open SQLAlchemy Core connection.
+        statement_id: Persisted statement primary key.
+        account_id: Account receiving the imported statement rows.
+        statement_type: Parser type for the statement.
+        extension: Uploaded file extension.
+        raw_text: Decoded statement contents.
+        undo_state: Optional mutable state used by background-job undo.
+        import_mode: Optional explicit import mode.
+        interac_direction: Direction override for Interac history imports.
+        date_order: Date parsing override for ambiguous statement dates.
+        categorizer: Optional transaction categorization function.
+        tag_setter: Optional transaction tag persistence function.
+
+    Returns:
+        A tuple of inserted, skipped, and ignored row counts.
+    """
+    categorizer = categorizer or categorize_transactions
+    tag_setter = tag_setter or set_transaction_tags
     inserted_count = 0
     skipped_count = 0
     ignored_count = 0
@@ -140,6 +154,8 @@ def import_transactions(
             account_id,
             undo_state=undo_state,
             ignored_count=ignored_count,
+            categorizer=categorizer,
+            tag_setter=tag_setter,
         )
 
     transactions, duplicate_count = filter_new_transactions(
@@ -154,7 +170,7 @@ def import_transactions(
         tx["merchant_id"] = merchant["id"] if merchant else None
         tx["transaction_kind"] = classify_transaction_kind(conn, account_id, tx)
 
-    transactions = categorize_transactions(transactions, conn=conn, use_llm=False)
+    transactions = categorizer(transactions, conn=conn, use_llm=False)
     apply_transaction_kind_categories(transactions, unknown_category=get_unknown_category(conn) or UNKNOWN_CATEGORY)
 
     inserted_fingerprints = set()
@@ -168,7 +184,7 @@ def import_transactions(
             skipped_count += 1
             continue
 
-        set_transaction_tags(
+        tag_setter(
             conn,
             transaction_id,
             tx.get("tags", []),
@@ -225,254 +241,15 @@ def insert_imported_transaction(conn, statement_id, account_id, tx):
     return result.inserted_primary_key[0]
 
 
-def default_import_mode(statement_type):
-    """Return the legacy-compatible import mode for a parser type."""
-    if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
-        return STATEMENT_IMPORT_MODE_ENRICHMENT
-    return STATEMENT_IMPORT_MODE_LEDGER
-
-
-def apply_transaction_kind_categories(transactions, unknown_category=UNKNOWN_CATEGORY):
-    """Set category metadata for payment and transfer transactions."""
-    for tx in transactions:
-        if tx.get("transaction_kind") not in {TRANSACTION_KIND_PAYMENT, TRANSACTION_KIND_TRANSFER}:
-            continue
-
-        state = TransactionCategoryState(
-            category=TRANSFER_CATEGORY,
-            needs_review=0,
-            assignment=category_assignment(
-                TRANSFER_CATEGORY,
-                unknown_category,
-                CATEGORY_SOURCE_RULE,
-                confidence=1.0,
-                rule_id=None,
-                metadata={
-                    "decision_source": DECISION_SOURCE_RULE,
-                    "reason": "transaction_kind_payment_or_transfer",
-                    "final_category": TRANSFER_CATEGORY,
-                    "final_confidence": 1.0,
-                    "review_required": False,
-                },
-            ),
-        )
-        state.apply_to(tx)
-
-
-def classify_transaction_kind(conn, account_id, transaction):
-    """Classify a transaction as reportable spending/income or balance movement."""
-    amount = transaction.get("amount") or 0
-    account = account_row(conn, account_id)
-    account_type = account["account_type"] if account else ACCOUNT_TYPE_CHECKING
-    description = transaction.get("description", "")
-
-    if is_payment_description(description):
-        return TRANSACTION_KIND_PAYMENT
-    if account_type in {ACCOUNT_TYPE_CHECKING, ACCOUNT_TYPE_SAVINGS} and amount > 0:
-        if is_payment_to_linked_credit_account(conn, account_id, description):
-            return TRANSACTION_KIND_PAYMENT
-    if account_type == ACCOUNT_TYPE_CREDIT_CARD and amount < 0:
-        return TRANSACTION_KIND_PAYMENT if is_payment_description(description) else TRANSACTION_KIND_REFUND
-
-    return TRANSACTION_KIND_INCOME if amount < 0 else TRANSACTION_KIND_EXPENSE
-
-
-def account_row(conn, account_id):
-    """Return account metadata for import classification."""
-    if account_id is None:
-        return None
-    return conn.execute(
-        select(
-            accounts_table.c.id,
-            accounts_table.c.name,
-            accounts_table.c.account_type,
-            accounts_table.c.paid_from_account_id,
-        ).where(accounts_table.c.id == account_id)
-    ).mappings().fetchone()
-
-
-def is_payment_description(description):
-    """Return whether a description clearly denotes a card/account payment."""
-    normalized = " ".join(str(description or "").upper().split())
-    return any(marker in normalized for marker in PAYMENT_DESCRIPTION_MARKERS)
-
-
-def is_payment_to_linked_credit_account(conn, paid_from_account_id, description):
-    """Return whether a checking row appears to pay a linked credit account."""
-    normalized_description = " ".join(str(description or "").upper().split())
-    if not normalized_description:
-        return False
-
-    linked_accounts = conn.execute(
-        select(accounts_table.c.name).where(
-            accounts_table.c.paid_from_account_id == paid_from_account_id,
-            accounts_table.c.account_type == ACCOUNT_TYPE_CREDIT_CARD,
-        )
-    ).mappings().fetchall()
-
-    for account in linked_accounts:
-        account_tokens = [
-            token
-            for token in " ".join(account["name"].upper().split()).split()
-            if len(token) >= 4
-        ]
-        if account_tokens and any(token in normalized_description for token in account_tokens):
-            return True
-
-    return False
-
-
-def mark_linked_account_payments(conn, account_id, imported_transactions, undo_state=None):
-    """Mark existing funding-account rows as payments for a credit card import."""
-    credit_account = account_row(conn, account_id)
-    if (
-        credit_account is None
-        or credit_account["account_type"] != ACCOUNT_TYPE_CREDIT_CARD
-        or credit_account["paid_from_account_id"] is None
-    ):
-        return 0
-
-    updated_count = 0
-    for tx in imported_transactions:
-        if tx.get("transaction_kind") != TRANSACTION_KIND_PAYMENT or tx.get("amount", 0) >= 0:
-            continue
-
-        match = find_linked_payment_match(
-            conn,
-            credit_account,
-            abs(tx["amount"]),
-            tx["tx_date"],
-        )
-        if match is None or match == "ambiguous":
-            continue
-
-        record_transaction_undo_state(conn, match, undo_state)
-        mark_transaction_as_payment(conn, match["id"])
-        updated_count += 1
-
-    return updated_count
-
-
-def find_linked_payment_match(conn, credit_account, amount, tx_date):
-    """Return the unique funding-account row that matches a card payment."""
-    rows = conn.execute(
-        transaction_snapshot_select()
-        .where(
-            transactions_table.c.account_id == credit_account["paid_from_account_id"],
-            transactions_table.c.ignored == 0,
-            transactions_table.c.amount > 0,
-            transactions_table.c.amount > amount - 0.005,
-            transactions_table.c.amount < amount + 0.005,
-            transactions_table.c.tx_date >= date_window_start(tx_date, PAYMENT_MATCH_DATE_TOLERANCE_DAYS),
-            transactions_table.c.tx_date <= date_window_end(tx_date, PAYMENT_MATCH_DATE_TOLERANCE_DAYS),
-            transactions_table.c.transaction_kind != TRANSACTION_KIND_PAYMENT,
-        )
-        .order_by(transactions_table.c.tx_date, transactions_table.c.id)
-    ).mappings().fetchall()
-    return nearest_unique_match(
-        [
-            row for row in rows
-            if is_linked_payment_description(row["description"], credit_account["name"])
-        ],
-        tx_date,
-    )
-
-
-def transaction_snapshot_select():
-    """Return a Core select for transaction fields needed by upload undo and matching."""
-    return select(
-        transactions_table.c.id,
-        transactions_table.c.statement_id,
-        transactions_table.c.account_id,
-        transactions_table.c.merchant_id,
-        transactions_table.c.tx_date,
-        transactions_table.c.description,
-        transactions_table.c.amount,
-        transactions_table.c.category,
-        transactions_table.c.category_id,
-        transactions_table.c.needs_review,
-        transactions_table.c.category_source,
-        transactions_table.c.category_confidence,
-        transactions_table.c.category_rule_id,
-        transactions_table.c.category_metadata,
-        transactions_table.c.categorized_at,
-        transactions_table.c.reviewed_at,
-        transactions_table.c.ignored,
-        transactions_table.c.transaction_kind,
-    )
-
-
-def nearest_unique_match(rows, target_date):
-    """Return the nearest transaction row or the ambiguity sentinel."""
-    if not rows:
-        return None
-
-    nearest_delta = min(abs_date_delta(row["tx_date"], target_date) for row in rows)
-    nearest_rows = [
-        row
-        for row in rows
-        if abs_date_delta(row["tx_date"], target_date) == nearest_delta
-    ]
-    if len(nearest_rows) != 1:
-        return "ambiguous"
-    return nearest_rows[0]
-
-
-def date_window_start(value, tolerance_days):
-    """Return the inclusive start date for a date-tolerance window."""
-    return coerce_date(value) - timedelta(days=tolerance_days)
-
-
-def date_window_end(value, tolerance_days):
-    """Return the inclusive end date for a date-tolerance window."""
-    return coerce_date(value) + timedelta(days=tolerance_days)
-
-
-def is_linked_payment_description(description, credit_account_name):
-    """Return whether a funding row description points to a credit account."""
-    normalized_description = " ".join(str(description or "").upper().split())
-    normalized_account = " ".join(str(credit_account_name or "").upper().split())
-    account_tokens = [token for token in normalized_account.split() if len(token) >= 4]
-    if account_tokens and any(token in normalized_description for token in account_tokens):
-        return True
-    return "CREDIT CARD" in normalized_description or " CIBC MC" in f" {normalized_description}"
-
-
-def mark_transaction_as_payment(conn, transaction_id):
-    """Mark a transaction as a non-reportable account payment."""
-    metadata = category_assignment(
-        TRANSFER_CATEGORY,
-        get_unknown_category(conn) or UNKNOWN_CATEGORY,
-        CATEGORY_SOURCE_RULE,
-        confidence=1.0,
-        rule_id=None,
-        metadata={
-            "decision_source": DECISION_SOURCE_RULE,
-            "reason": "linked_account_payment",
-            "final_category": TRANSFER_CATEGORY,
-            "final_confidence": 1.0,
-            "review_required": False,
-        },
-    )
-    conn.execute(
-        update(transactions_table)
-        .where(transactions_table.c.id == transaction_id)
-        .values(
-            transaction_kind=TRANSACTION_KIND_PAYMENT,
-            category=TRANSFER_CATEGORY,
-            category_id=resolve_category_id(conn, TRANSFER_CATEGORY),
-            needs_review=0,
-            category_source=metadata.category_source,
-            category_confidence=metadata.category_confidence,
-            category_rule_id=metadata.category_rule_id,
-            category_metadata=metadata.category_metadata,
-            categorized_at=metadata.categorized_at,
-            reviewed_at=metadata.reviewed_at,
-        )
-    )
-
-
-def enrich_interac_transactions(conn, transfers, account_id, undo_state=None, ignored_count=0):
+def enrich_interac_transactions(
+    conn,
+    transfers,
+    account_id,
+    undo_state=None,
+    ignored_count=0,
+    categorizer=None,
+    tag_setter=None,
+):
     """Enrich matching checking-account transactions from Interac history rows.
 
     Interac history rows duplicate bank movements that already exist in the
@@ -480,6 +257,8 @@ def enrich_interac_transactions(conn, transfers, account_id, undo_state=None, ig
     counterparty merchant and then re-run rule categorization for that row.
     Unmatched or ambiguous rows are not inserted as transactions.
     """
+    categorizer = categorizer or categorize_transactions
+    tag_setter = tag_setter or set_transaction_tags
     enriched_count = 0
     skipped_count = 0
 
@@ -508,7 +287,7 @@ def enrich_interac_transactions(conn, transfers, account_id, undo_state=None, ig
             enriched_count += 1
             continue
 
-        enriched = categorize_transactions(
+        enriched = categorizer(
             [
                 {
                     "id": match["id"],
@@ -530,7 +309,7 @@ def enrich_interac_transactions(conn, transfers, account_id, undo_state=None, ig
             enriched,
             match["transaction_kind"],
         )
-        set_transaction_tags(
+        tag_setter(
             conn,
             match["id"],
             enriched.get("tags", []),
@@ -689,46 +468,6 @@ def interac_counterparty_condition(transfer, merchant_id):
     return or_(*conditions)
 
 
-def abs_date_delta(left, right):
-    """Return absolute date distance in days."""
-    return abs((coerce_date(left) - coerce_date(right)).days)
-
-
-def record_interac_undo_state(conn, transaction, undo_state):
-    """Capture original transaction state before Interac enrichment."""
-    record_transaction_undo_state(conn, transaction, undo_state)
-
-
-def record_transaction_undo_state(conn, transaction, undo_state):
-    """Capture original transaction state before cross-account enrichment."""
-    if undo_state is None:
-        return
-
-    changes = undo_state.setdefault("updated_transactions", [])
-    transaction_id = transaction["id"]
-    if any(change["id"] == transaction_id for change in changes):
-        return
-
-    changes.append(
-        {
-            "id": transaction_id,
-            "merchant_id": transaction["merchant_id"],
-            "description": transaction["description"],
-            "category": transaction["category"],
-            "category_id": transaction["category_id"],
-            "needs_review": transaction["needs_review"],
-            "category_source": transaction["category_source"],
-            "category_confidence": transaction["category_confidence"],
-            "category_rule_id": transaction["category_rule_id"],
-            "category_metadata": transaction.get("category_metadata"),
-            "categorized_at": transaction["categorized_at"],
-            "reviewed_at": transaction["reviewed_at"],
-            "transaction_kind": transaction["transaction_kind"],
-            "tags": get_transaction_tag_names(conn, transaction_id),
-        }
-    )
-
-
 def import_statement_transactions_job(
     statement_id,
     account_id,
@@ -816,7 +555,7 @@ def import_statement_transactions_job(
 def auto_llm_categorization_enabled():
     """Return whether imports should automatically queue AI categorization."""
     with db_core_transaction() as conn:
-        return get_bool_setting(conn, "auto_llm_categorization_enabled", fallback=True)
+        return get_bool_setting(conn, "auto_llm_categorization_enabled", fallback=False)
 
 
 def queue_statement_llm_categorization(statement_id):
@@ -907,9 +646,23 @@ def unknown_transaction_conditions(unknown_category, statement_id=None, excluded
     return conditions
 
 
-def categorize_statement_unknown_transactions_job(statement_id):
+def categorize_statement_unknown_transactions_job(
+    statement_id,
+    batch_size=None,
+    transaction_categorizer=None,
+    row_categorizer=None,
+    progress_updater=None,
+    log_appender=None,
+):
     """Categorize statement unknown transactions job."""
-    return categorize_unknown_transactions_job(statement_id=statement_id)
+    return categorize_unknown_transactions_job(
+        statement_id=statement_id,
+        batch_size=batch_size,
+        transaction_categorizer=transaction_categorizer,
+        row_categorizer=row_categorizer,
+        progress_updater=progress_updater,
+        log_appender=log_appender,
+    )
 
 
 def categorize_all_unknown_transactions_job():
@@ -917,12 +670,23 @@ def categorize_all_unknown_transactions_job():
     return categorize_unknown_transactions_job(statement_id=None)
 
 
-def categorize_unknown_transactions_job(statement_id=None):
+def categorize_unknown_transactions_job(
+    statement_id=None,
+    batch_size=None,
+    transaction_categorizer=None,
+    row_categorizer=None,
+    progress_updater=None,
+    log_appender=None,
+):
     """Categorize unknown transactions in bounded, resumable AI batches.
 
     The job commits after each batch so previously updated transactions survive
     later timeouts, process shutdowns, or cooperative cancellation requests.
+    Optional collaborators allow tests and alternate runners to inject fakes
+    without replacing module globals.
     """
+    batch_size = batch_size or llm_module.LLM_BATCH_SIZE
+    row_categorizer = row_categorizer or categorize_unknown_transaction_rows
     processed_ids = set()
     processed_count = 0
     updated_count = 0
@@ -936,6 +700,8 @@ def categorize_unknown_transactions_job(statement_id=None):
             0,
             0,
             log_message="No unknown transactions needed AI categorization.",
+            progress_updater=progress_updater,
+            log_appender=log_appender,
         )
         return "No unknown transactions needed AI categorization."
 
@@ -945,6 +711,8 @@ def categorize_unknown_transactions_job(statement_id=None):
         0,
         log_message="Starting AI categorization for {total} unknown transactions.",
         log_params={"total": total_candidates},
+        progress_updater=progress_updater,
+        log_appender=log_appender,
     )
 
     while True:
@@ -952,6 +720,7 @@ def categorize_unknown_transactions_job(statement_id=None):
             append_ai_categorization_log(
                 "Cancellation requested; stopping before the next batch.",
                 level="warning",
+                log_appender=log_appender,
             )
         raise_if_cancel_requested("AI categorization cancelled after the current batch.")
         with db_core_transaction() as conn:
@@ -961,7 +730,7 @@ def categorize_unknown_transactions_job(statement_id=None):
                 unknown_category,
                 statement_id=statement_id,
                 excluded_ids=processed_ids,
-                limit=llm_module.LLM_BATCH_SIZE,
+                limit=batch_size,
             )
 
         if not rows:
@@ -976,6 +745,7 @@ def categorize_unknown_transactions_job(statement_id=None):
                 "end": batch_end,
                 "total": total_candidates,
             },
+            log_appender=log_appender,
         )
         update_ai_categorization_progress(
             processed_count,
@@ -988,10 +758,15 @@ def categorize_unknown_transactions_job(statement_id=None):
                 "total": total_candidates,
                 "updated": updated_count,
             },
+            progress_updater=progress_updater,
+            log_appender=log_appender,
         )
         processed_ids.update(row["id"] for row in rows)
         try:
-            batch_updated_count, batch_source_counts, batch_report = categorize_unknown_transaction_rows(rows)
+            batch_updated_count, batch_source_counts, batch_report = row_categorizer(
+                rows,
+                transaction_categorizer=transaction_categorizer,
+            )
         except Exception as exc:
             error_params = {
                 "start": batch_start,
@@ -1003,6 +778,7 @@ def categorize_unknown_transactions_job(statement_id=None):
                 "Batch {start}-{end} failed: {error_type}: {detail}",
                 params=error_params,
                 level="error",
+                log_appender=log_appender,
             )
             update_ai_categorization_progress(
                 processed_count,
@@ -1014,22 +790,35 @@ def categorize_unknown_transactions_job(statement_id=None):
                     "total": total_candidates,
                     "updated": updated_count,
                 },
+                progress_updater=progress_updater,
+                log_appender=log_appender,
             )
             raise
         processed_count += len(rows)
         updated_count += batch_updated_count
         merge_source_counts(source_counts, batch_source_counts)
-        log_ai_batch_report(batch_start, batch_end, len(rows), batch_updated_count, updated_count, batch_report)
+        log_ai_batch_report(
+            batch_start,
+            batch_end,
+            len(rows),
+            batch_updated_count,
+            updated_count,
+            batch_report,
+            log_appender=log_appender,
+        )
         update_ai_categorization_progress(
             processed_count,
             total_candidates,
             updated_count,
+            progress_updater=progress_updater,
+            log_appender=log_appender,
         )
 
     summary = automatic_categorization_message(updated_count, source_counts)
     append_ai_categorization_log(
         "AI categorization completed: {summary}",
         params={"summary": summary},
+        log_appender=log_appender,
     )
     return summary
 
@@ -1043,8 +832,11 @@ def update_ai_categorization_progress(
     log_message=None,
     log_params=None,
     log_level="info",
+    progress_updater=None,
+    log_appender=None,
 ):
     """Publish progress for the currently running AI categorization job."""
+    progress_updater = progress_updater or update_background_job_progress
     default_message = "Processed {current} of {total}; {updated} categorized."
     progress_params = {
         "current": current,
@@ -1053,7 +845,7 @@ def update_ai_categorization_progress(
     }
     if params:
         progress_params.update(params)
-    update_background_job_progress(
+    progress_updater(
         current=current,
         total=total,
         message=message or default_message,
@@ -1064,16 +856,19 @@ def update_ai_categorization_progress(
             log_message,
             params={**progress_params, **(log_params or {})},
             level=log_level,
+            log_appender=log_appender,
         )
 
 
-def append_ai_categorization_log(message, params=None, level="info"):
+def append_ai_categorization_log(message, params=None, level="info", log_appender=None):
     """Append an AI categorization log entry to the current background job."""
-    append_background_job_log(message, params=params, level=level)
+    log_appender = log_appender or append_background_job_log
+    log_appender(message, params=params, level=level)
 
 
-def categorize_unknown_transaction_rows(rows):
+def categorize_unknown_transaction_rows(rows, transaction_categorizer=None):
     """Categorize and persist one batch of unknown transaction rows."""
+    transaction_categorizer = transaction_categorizer or categorize_transactions
     llm_module.clear_llm_request_status()
     with db_core_transaction() as conn:
         unknown_category = get_unknown_category(conn)
@@ -1090,7 +885,7 @@ def categorize_unknown_transaction_rows(rows):
             }
             for row in rows
         ]
-        categorized = categorize_transactions(transactions, conn=conn, use_llm=True)
+        categorized = transaction_categorizer(transactions, conn=conn, use_llm=True)
         batch_report = ai_batch_report(categorized, llm_module.last_llm_request_status())
         updated_count = 0
         source_counts = {}
@@ -1115,42 +910,15 @@ def categorize_unknown_transaction_rows(rows):
     return updated_count, source_counts, batch_report
 
 
-def ai_batch_report(categorized, request_status):
-    """Return concise AI request and unresolved-result details for one batch."""
-    failure_counts = llm_failure_counts(categorized)
-    return {
-        "request_status": dict(request_status or {}),
-        "failure_counts": failure_counts,
-        "unknown_count": sum(failure_counts.values()),
-    }
-
-
-def llm_failure_counts(transactions):
-    """Count LLM failure reasons from categorized transaction metadata."""
-    counts = {}
-    for tx in transactions:
-        metadata = transaction_category_metadata(tx)
-        reason = metadata.get("failure_reason")
-        if reason:
-            counts[reason] = counts.get(reason, 0) + 1
-    return counts
-
-
-def transaction_category_metadata(transaction):
-    """Return category metadata as a dictionary when available."""
-    metadata = transaction.get("category_metadata")
-    if not metadata:
-        return {}
-    if isinstance(metadata, dict):
-        return metadata
-    try:
-        parsed = json.loads(metadata)
-    except (TypeError, json.JSONDecodeError):
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
-
-
-def log_ai_batch_report(batch_start, batch_end, processed, batch_updated, total_updated, report):
+def log_ai_batch_report(
+    batch_start,
+    batch_end,
+    processed,
+    batch_updated,
+    total_updated,
+    report,
+    log_appender=None,
+):
     """Append useful AI batch request details to the current job log."""
     request_status = report.get("request_status") or {}
     if ai_request_status_needs_log(request_status):
@@ -1163,6 +931,7 @@ def log_ai_batch_report(batch_start, batch_end, processed, batch_updated, total_
                 "detail": request_status.get("detail") or "",
             },
             level="warning",
+            log_appender=log_appender,
         )
 
     unknown_count = int(report.get("unknown_count") or 0)
@@ -1181,6 +950,7 @@ def log_ai_batch_report(batch_start, batch_end, processed, batch_updated, total_
                 "reasons": format_failure_counts(report.get("failure_counts") or {}),
             },
             level="warning",
+            log_appender=log_appender,
         )
 
     append_ai_categorization_log(
@@ -1192,62 +962,8 @@ def log_ai_batch_report(batch_start, batch_end, processed, batch_updated, total_
             "updated": total_updated,
             "batch_updated": batch_updated,
         },
+        log_appender=log_appender,
     )
-
-
-def ai_request_status_needs_log(status):
-    """Return whether an LLM request status should be surfaced in the job log."""
-    if not status:
-        return False
-    return status.get("status") not in {"ok", "not_requested"}
-
-
-def format_failure_counts(counts):
-    """Return compact failure reason counts for progress logs."""
-    return ", ".join(
-        f"{reason}: {count}"
-        for reason, count in sorted(counts.items())
-    )
-
-
-def merge_source_counts(target, source):
-    """Add source-count values into an aggregate dictionary."""
-    for key, value in source.items():
-        target[key] = target.get(key, 0) + value
-
-
-def automatic_categorization_message(updated_count, source_counts=None):
-    """Return a concise background-job summary for automatic categorization."""
-    if not updated_count:
-        return "0 automatically categorized."
-
-    breakdown = automatic_categorization_breakdown(source_counts or {})
-    suffix = f": {breakdown}" if breakdown else ""
-    return f"{updated_count} automatically categorized{suffix}."
-
-
-def automatic_categorization_breakdown(source_counts):
-    """Return a stable source-count breakdown for automatic categorization."""
-    parts = []
-    seen = set()
-    for source in AUTOMATIC_CATEGORIZATION_SOURCE_ORDER:
-        count = source_counts.get(source, 0)
-        if count:
-            parts.append(f"{count} {AUTOMATIC_CATEGORIZATION_SOURCE_LABELS[source]}")
-            seen.add(source)
-
-    for source in sorted(set(source_counts) - seen):
-        count = source_counts[source]
-        if count:
-            label = AUTOMATIC_CATEGORIZATION_SOURCE_LABELS.get(source, str(source or "other"))
-            parts.append(f"{count} {label}")
-
-    return ", ".join(parts)
-
-
-def statement_unknown_transaction_rows(conn, statement_id, unknown_category):
-    """Return statement transactions that still need unknown-category LLM categorization."""
-    return unknown_transaction_rows(conn, unknown_category, statement_id=statement_id)
 
 
 def unknown_transaction_rows(conn, unknown_category, statement_id=None, excluded_ids=None, limit=None):
@@ -1330,129 +1046,4 @@ def undo_statement_upload_job(statement_id, undo_state=None):
     )
     if restored_count:
         message += f" Restored {restored_count} enriched transaction{'s' if restored_count != 1 else ''}."
-    return message
-
-
-def statement_filename_row(conn, statement_id):
-    """Return the filename for one statement ID."""
-    return conn.execute(
-        select(statements_table.c.filename).where(statements_table.c.id == statement_id)
-    ).mappings().fetchone()
-
-
-def statement_transaction_count(conn, statement_id):
-    """Return the number of transactions imported by one statement."""
-    return conn.execute(
-        select(func.count().label("count"))
-        .select_from(transactions_table)
-        .where(transactions_table.c.statement_id == statement_id)
-    ).scalar_one()
-
-
-def delete_statement_transactions(conn, statement_id):
-    """Delete all transaction rows imported by one statement."""
-    conn.execute(
-        delete(transactions_table).where(transactions_table.c.statement_id == statement_id)
-    )
-
-
-def delete_statement(conn, statement_id):
-    """Delete one persisted statement row."""
-    conn.execute(delete(statements_table).where(statements_table.c.id == statement_id))
-
-
-def restore_interac_undo_state(conn, undo_state):
-    """Restore transactions changed by Interac enrichment."""
-    changes = (undo_state or {}).get("updated_transactions") or []
-    restored_count = 0
-    for change in changes:
-        cursor = restore_enriched_transaction(conn, change)
-        if cursor.rowcount:
-            set_transaction_tags(
-                conn,
-                change["id"],
-                change.get("tags", []),
-                source=change["category_source"],
-                rule_id=change["category_rule_id"],
-            )
-            restored_count += 1
-    return restored_count
-
-
-def restore_enriched_transaction(conn, change):
-    """Restore a transaction changed by upload enrichment."""
-    values = {
-        "merchant_id": change["merchant_id"],
-        "description": change["description"],
-        "category": change["category"],
-        "category_id": (
-            change.get("category_id")
-            if change.get("category_id") is not None
-            else resolve_category_id(conn, change["category"])
-        ),
-        "needs_review": change["needs_review"],
-        "category_source": change["category_source"],
-        "category_confidence": change["category_confidence"],
-        "category_rule_id": change["category_rule_id"],
-        "category_metadata": change.get("category_metadata"),
-        "categorized_at": change["categorized_at"],
-        "reviewed_at": change["reviewed_at"],
-        "transaction_kind": change.get("transaction_kind", TRANSACTION_KIND_EXPENSE),
-    }
-    return conn.execute(
-        update(transactions_table)
-        .where(transactions_table.c.id == change["id"])
-        .values(**values)
-    )
-
-
-def upload_result_message(
-    statement_type,
-    extension,
-    inserted_count,
-    skipped_count,
-    ignored_count,
-    llm_candidate_count=0,
-    llm_job_queued=False,
-):
-    """Render result message."""
-    if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
-        message = f"Interac history processed. Enriched {inserted_count} existing transactions. "
-        if skipped_count:
-            message += (
-                f"Skipped {skipped_count} ambiguous match"
-                f"{'' if skipped_count == 1 else 'es'} because each matched more than one possible checking transaction. "
-            )
-        if ignored_count:
-            ignored_label = "row" if ignored_count == 1 else "rows"
-            ignored_verb = "was" if ignored_count == 1 else "were"
-            message += (
-                f"Ignored {ignored_count} {ignored_label} that {ignored_verb} cancelled, "
-                "non-deposited, or had no matching checking ledger transaction yet. "
-                "Import matching checking statements first, then reprocess this Interac history. "
-            )
-        message += "No duplicate Interac ledger rows were added."
-        return message
-
-    message = (
-        f"Statement uploaded. Added {inserted_count} transactions. "
-        f"Skipped {skipped_count} duplicate transactions. "
-    )
-
-    if ignored_count:
-        message += f"Ignored {ignored_count} non-transaction rows. "
-
-    if llm_candidate_count:
-        if llm_job_queued:
-            message += (
-                f"Queued AI categorization for {llm_candidate_count} unknown transaction"
-                f"{'' if llm_candidate_count == 1 else 's'}. "
-            )
-        else:
-            message += (
-                f"{llm_candidate_count} unknown transaction"
-                f"{'' if llm_candidate_count == 1 else 's'} can be categorized with AI from Uploaded statements. "
-            )
-
-    message += "The original file was not stored."
     return message

@@ -5,26 +5,17 @@ import logging
 import re
 from threading import local
 
-from sqlalchemy import func, select
-
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTION_CREDIT,
     CATEGORY_RULE_DIRECTION_DEBIT,
     CATEGORY_RULE_SOURCE_AUTOMATIC,
-    CATEGORY_RULE_SOURCE_MANUAL,
     UNKNOWN_CATEGORY,
 )
 from finance_app.core.money import optional_money_to_float
-from finance_app.database.tables import (
-    tags as tags_table,
-    transaction_tags as transaction_tags_table,
-    transactions as transactions_table,
-)
 from finance_app.modules.categories.decision import (
     FinalCategoryDecision,
-    HIGH_CONFIDENCE_THRESHOLD,
     MEDIUM_CONFIDENCE_THRESHOLD,
     apply_review_policy,
     combine_confidence,
@@ -42,7 +33,14 @@ from finance_app.modules.categories.taxonomy import (
     get_category_rows,
     get_tag_options,
     get_tag_rows,
-    normalize_tag_names,
+)
+from finance_app.modules.categories.llm_prompts import (
+    build_llm_prompt,
+    build_llm_system_prompt,
+)
+from finance_app.modules.categories.llm_taxonomy import (
+    prepare_llm_candidate_taxonomies,
+    taxonomy_ids_for_names,
 )
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 from finance_app.modules.settings.runtime import get_float_setting, get_setting
@@ -52,35 +50,6 @@ logger = logging.getLogger(__name__)
 _request_context = local()
 LLM_BATCH_SIZE = 20
 LLM_TIMEOUT_SECONDS = 60
-COMMON_CATEGORY_LIMIT = 6
-MAX_CANDIDATE_CATEGORIES = 20
-MAX_CANDIDATE_TAGS = 16
-MAX_PROMPT_MANUAL_RULES = 50
-MIN_SEMANTIC_TOKEN_LENGTH = 3
-SEMANTIC_STOPWORDS = frozenset(
-    {
-        "AND",
-        "THE",
-        "FOR",
-        "WITH",
-        "FROM",
-        "THIS",
-        "THAT",
-        "WHEN",
-        "USE",
-        "NOT",
-        "OTHER",
-        "ORDINARY",
-        "TRANSACTION",
-        "TRANSACTIONS",
-        "CATEGORY",
-        "CATEGORIES",
-        "DESCRIPTION",
-        "DESCRIPTIONS",
-        "PAYMENT",
-        "PURCHASE",
-    }
-)
 
 
 def clear_llm_request_status():
@@ -177,14 +146,29 @@ def automatic_rule_direction(amount):
     return CATEGORY_RULE_DIRECTION_CREDIT if amount < 0 else CATEGORY_RULE_DIRECTION_DEBIT
 
 
-def classify_unknowns_with_llm(conn, transactions, rules, unknown_category, save_automatic_rules=True):
+def classify_unknowns_with_llm(
+    conn,
+    transactions,
+    rules,
+    unknown_category,
+    save_automatic_rules=True,
+    request_categories=None,
+    prepare_candidate_taxonomies=None,
+    batch_size=None,
+):
     """Classify unknowns with LLM.
 
     When ``save_automatic_rules`` is false, accepted high-confidence results
     are applied to the provided transaction payloads without creating reusable
     automatic rules. This supports one-off suggestion previews from transaction
-    detail screens.
+    detail screens. ``request_categories`` can inject the model request
+    function for tests or alternate callers without replacing module globals.
+    ``prepare_candidate_taxonomies`` and ``batch_size`` provide the same
+    explicit injection points for candidate-taxonomy setup and batching.
     """
+    request_categories = request_categories or request_llm_categories
+    prepare_candidate_taxonomies = prepare_candidate_taxonomies or prepare_llm_candidate_taxonomies
+    batch_size = batch_size or LLM_BATCH_SIZE
     unknown_by_key = {}
     # Deduplicate by merchant and amount before calling the model; equivalent
     # unknown transactions should receive the same accepted classification.
@@ -229,7 +213,7 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category, save
     unknown_items = list(unknown_by_key.values())
     for index, tx in enumerate(unknown_items):
         tx["llm_request_id"] = str(index)
-    prepare_llm_candidate_taxonomies(
+    prepare_candidate_taxonomies(
         conn,
         unknown_items,
         category_options,
@@ -242,8 +226,8 @@ def classify_unknowns_with_llm(conn, transactions, rules, unknown_category, save
     accepted = {}
     llm_result_count = 0
 
-    for unknown_chunk in chunked(unknown_items, LLM_BATCH_SIZE):
-        llm_results = request_llm_categories(
+    for unknown_chunk in chunked(unknown_items, batch_size):
+        llm_results = request_categories(
             unknown_chunk,
             rules,
             category_options,
@@ -716,303 +700,6 @@ def llm_category_metadata(
     return metadata
 
 
-def prepare_llm_candidate_taxonomies(
-    conn,
-    unknown_items,
-    category_options,
-    tag_options,
-    unknown_category,
-    category_rows=None,
-    tag_rows=None,
-):
-    """Attach compact candidate category and tag lists to LLM transaction payloads.
-
-    Candidate taxonomies are intentionally transaction-local. They prioritize
-    rule evidence, retrieved historical examples, merchant history, semantic
-    taxonomy matches, and common local categories. They are prompt hints rather
-    than acceptance gates.
-    """
-    category_rows = category_rows or []
-    tag_rows = tag_rows or []
-    common_categories = common_category_names(conn, category_options, unknown_category)
-    for tx in unknown_items:
-        categories = []
-        categories.extend(rule_evidence_categories(tx))
-        categories.extend(historical_evidence_categories(tx))
-        categories.extend(merchant_history_category_names(conn, tx, category_options, unknown_category))
-        categories.extend(semantic_taxonomy_names(tx, category_rows, category_options, unknown_category))
-        categories.extend(common_categories)
-        categories.append(unknown_category)
-
-        candidate_categories = compact_category_candidates(
-            categories,
-            category_options,
-            unknown_category,
-        )
-        tx["llm_candidate_categories"] = candidate_categories
-        tx["llm_candidate_tags"] = compact_tag_candidates(
-            conn,
-            tx,
-            candidate_categories,
-            tag_options,
-            tag_rows,
-        )
-
-
-def rule_evidence_categories(transaction):
-    """Return category candidates from matched rule evidence."""
-    evidence = transaction.get("rule_evidence") or {}
-    return [evidence.get("category")]
-
-
-def historical_evidence_categories(transaction):
-    """Return category candidates from historical retrieval evidence."""
-    evidence = transaction.get("historical_evidence") or {}
-    categories = [evidence.get("category")]
-    categories.extend(example.get("category") for example in evidence.get("examples") or [])
-    return categories
-
-
-def semantic_taxonomy_names(transaction, taxonomy_rows, taxonomy_options, unknown_category=None):
-    """Return taxonomy names whose instructions overlap the merchant text."""
-    query_tokens = semantic_tokens(
-        " ".join(
-            str(value or "")
-            for value in (
-                transaction.get("merchant_key"),
-                transaction.get("description"),
-            )
-        )
-    )
-    if not query_tokens:
-        return []
-
-    option_order = {
-        name: index
-        for index, name in enumerate(taxonomy_options)
-    }
-    rows_by_name = {row["name"]: row for row in taxonomy_rows}
-    scored = []
-    for name in taxonomy_options:
-        if unknown_category is not None and name == unknown_category:
-            continue
-        row = rows_by_name.get(name, {})
-        taxonomy_tokens = semantic_tokens(
-            " ".join(
-                str(value or "")
-                for value in (
-                    name,
-                    row.get("description"),
-                    row.get("instruction"),
-                )
-            )
-        )
-        overlap = query_tokens & taxonomy_tokens
-        if overlap:
-            scored.append((len(overlap), option_order.get(name, 0), name))
-
-    scored.sort(key=lambda item: (-item[0], item[1]))
-    return [name for _, _, name in scored]
-
-
-def semantic_tokens(value):
-    """Return meaningful normalized tokens for lightweight taxonomy matching."""
-    normalized = normalize_merchant_description(value)
-    return {
-        token
-        for token in re.findall(r"[A-Z0-9]+", normalized)
-        if len(token) >= MIN_SEMANTIC_TOKEN_LENGTH
-        and token not in SEMANTIC_STOPWORDS
-    }
-
-
-def common_category_names(conn, category_options, unknown_category):
-    """Return commonly used non-unknown categories from persisted transactions."""
-    rows = conn.execute(
-        select(
-            transactions_table.c.category,
-            func.count().label("count"),
-        )
-        .where(
-            transactions_table.c.ignored == 0,
-            transactions_table.c.category.is_not(None),
-            transactions_table.c.category != unknown_category,
-            transactions_table.c.category.in_(category_options),
-        )
-        .group_by(transactions_table.c.category)
-        .order_by(func.count().desc(), transactions_table.c.category)
-        .limit(COMMON_CATEGORY_LIMIT)
-    ).mappings().fetchall()
-    return [row["category"] for row in rows]
-
-
-def merchant_history_category_names(conn, transaction, category_options, unknown_category):
-    """Return categories historically used for the same durable merchant."""
-    merchant_id = transaction.get("merchant_id")
-    if merchant_id is None:
-        return []
-
-    rows = conn.execute(
-        select(
-            transactions_table.c.category,
-            func.count().label("count"),
-        )
-        .where(
-            transactions_table.c.ignored == 0,
-            transactions_table.c.merchant_id == int(merchant_id),
-            transactions_table.c.category.is_not(None),
-            transactions_table.c.category != unknown_category,
-            transactions_table.c.category.in_(category_options),
-        )
-        .group_by(transactions_table.c.category)
-        .order_by(func.count().desc(), transactions_table.c.category)
-        .limit(COMMON_CATEGORY_LIMIT)
-    ).mappings().fetchall()
-    return [row["category"] for row in rows]
-
-
-def compact_category_candidates(categories, category_options, unknown_category):
-    """Return compact, valid category candidates with an unknown fallback."""
-    candidates = []
-    seen = set()
-    for category in categories:
-        normalized = normalize_candidate_category(category, category_options, unknown_category)
-        if not normalized or normalized in seen:
-            continue
-        if normalized == unknown_category:
-            continue
-        candidates.append(normalized)
-        seen.add(normalized)
-
-    if len(category_options) <= MAX_CANDIDATE_CATEGORIES:
-        for category in category_options:
-            if category == unknown_category or category in seen:
-                continue
-            candidates.append(category)
-            seen.add(category)
-
-    if unknown_category in category_options and unknown_category not in seen:
-        candidates.append(unknown_category)
-        seen.add(unknown_category)
-
-    if len(category_options) <= MAX_CANDIDATE_CATEGORIES:
-        return candidates
-
-    concrete = [category for category in candidates if category != unknown_category]
-    if not concrete:
-        return list(category_options)
-
-    limited = concrete[: max(1, MAX_CANDIDATE_CATEGORIES - 1)]
-    if unknown_category in seen:
-        limited.append(unknown_category)
-    return limited
-
-
-def normalize_candidate_category(category, category_options, unknown_category):
-    """Normalize a candidate category against the active taxonomy."""
-    text = str(category or "").strip()
-    if not text:
-        return None
-    if text == unknown_category or text.upper() == UNKNOWN_CATEGORY:
-        return unknown_category if unknown_category in category_options else None
-    normalized = normalize_category(text, category_options)
-    return normalized if normalized in category_options else None
-
-
-def compact_tag_candidates(conn, transaction, candidate_categories, tag_options, tag_rows=None):
-    """Return compact, valid tag candidates for one LLM transaction."""
-    tags = []
-    evidence = transaction.get("rule_evidence") or {}
-    tags.extend(evidence.get("tags") or [])
-    historical = transaction.get("historical_evidence") or {}
-    tags.extend(historical.get("tags") or [])
-    for example in historical.get("examples") or []:
-        tags.extend(example.get("tags") or [])
-    tags.extend(semantic_taxonomy_names(transaction, tag_rows or [], tag_options))
-    tags.extend(tags_for_candidate_categories(conn, candidate_categories, tag_options))
-
-    normalized = normalize_tag_names(tags, tag_options)
-    if normalized:
-        return normalized[:MAX_CANDIDATE_TAGS]
-
-    return common_tag_names(conn, tag_options)
-
-
-def tags_for_candidate_categories(conn, candidate_categories, tag_options):
-    """Return tags commonly associated with candidate categories."""
-    concrete_categories = [category for category in candidate_categories if category != UNKNOWN_CATEGORY]
-    if not concrete_categories or not tag_options:
-        return []
-
-    rows = conn.execute(
-        select(
-            tags_table.c.name,
-            func.count().label("count"),
-        )
-        .select_from(
-            transaction_tags_table
-            .join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
-            .join(transactions_table, transactions_table.c.id == transaction_tags_table.c.transaction_id)
-        )
-        .where(
-            transactions_table.c.category.in_(concrete_categories),
-            tags_table.c.name.in_(tag_options),
-        )
-        .group_by(tags_table.c.name)
-        .order_by(func.count().desc(), tags_table.c.name)
-        .limit(MAX_CANDIDATE_TAGS)
-    ).mappings().fetchall()
-    return [row["name"] for row in rows]
-
-
-def common_tag_names(conn, tag_options):
-    """Return commonly used tags as a compact fallback."""
-    if not tag_options:
-        return []
-
-    rows = conn.execute(
-        select(
-            tags_table.c.name,
-            func.count().label("count"),
-        )
-        .select_from(transaction_tags_table.join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id))
-        .where(tags_table.c.name.in_(tag_options))
-        .group_by(tags_table.c.name)
-        .order_by(func.count().desc(), tags_table.c.name)
-        .limit(MAX_CANDIDATE_TAGS)
-    ).mappings().fetchall()
-    names = [row["name"] for row in rows]
-    return names or list(tag_options[:MAX_CANDIDATE_TAGS])
-
-
-def chunk_candidate_options(unknown_chunk, field, all_options):
-    """Return the union of per-transaction candidate options for one LLM chunk."""
-    selected = set()
-    for tx in unknown_chunk:
-        selected.update(tx.get(field) or [])
-    if not selected:
-        return list(all_options)
-    return [option for option in all_options if option in selected]
-
-
-def taxonomy_rows_for_names(rows, names):
-    """Return taxonomy rows ordered by a compact name list."""
-    rows_by_name = {row["name"]: row for row in rows}
-    return [
-        rows_by_name.get(name, {"id": None, "name": name, "description": "", "instruction": ""})
-        for name in names
-    ]
-
-
-def taxonomy_ids_for_names(rows, names):
-    """Return taxonomy row IDs ordered by a compact name list."""
-    return [
-        row["id"]
-        for row in taxonomy_rows_for_names(rows, names)
-        if row.get("id") is not None
-    ]
-
-
 def request_llm_categories(
     unknown_items,
     rules,
@@ -1023,11 +710,32 @@ def request_llm_categories(
     openai_model,
     verify_threshold,
     review_threshold,
+    client_factory=None,
+    api_key=None,
 ):
-    """Request llm categories."""
+    """Request LLM categories.
+
+    Args:
+        unknown_items: Transaction payloads to categorize.
+        rules: Matching manual and automatic rule context.
+        category_options: Category names available for validation.
+        tag_options: Tag names available for validation.
+        category_rows: Structured category taxonomy rows.
+        tag_rows: Structured tag taxonomy rows.
+        openai_model: Model name to request.
+        verify_threshold: Confidence threshold for verified results.
+        review_threshold: Confidence floor for review suggestions.
+        client_factory: Optional OpenAI-compatible client constructor for tests.
+        api_key: Optional API key override for tests or alternate callers.
+
+    Returns:
+        Parsed result dictionaries, or an empty list when the provider cannot
+        return usable JSON.
+    """
     requested_count = len(unknown_items)
     record_llm_request_status("started", requested_count=requested_count)
-    if not settings.openai_api_key:
+    effective_api_key = settings.openai_api_key if api_key is None else api_key
+    if not effective_api_key:
         logger.info("OpenAI API key is not configured; keeping unknown categories unchanged.")
         record_llm_request_status(
             "configuration_missing",
@@ -1037,17 +745,19 @@ def request_llm_categories(
         )
         return []
 
-    try:
-        from openai import OpenAI
-    except ImportError:
-        logger.warning("OpenAI package is not installed; keeping unknown categories unchanged.")
-        record_llm_request_status(
-            "dependency_missing",
-            requested_count=requested_count,
-            error_type="ImportError",
-            detail="OpenAI package is not installed.",
-        )
-        return []
+    if client_factory is None:
+        try:
+            from openai import OpenAI
+        except ImportError:
+            logger.warning("OpenAI package is not installed; keeping unknown categories unchanged.")
+            record_llm_request_status(
+                "dependency_missing",
+                requested_count=requested_count,
+                error_type="ImportError",
+                detail="OpenAI package is not installed.",
+            )
+            return []
+        client_factory = OpenAI
 
     system_prompt = build_llm_system_prompt(category_rows, tag_rows, verify_threshold, review_threshold)
     prompt = build_llm_prompt(
@@ -1060,7 +770,7 @@ def request_llm_categories(
     )
 
     try:
-        client = OpenAI(api_key=settings.openai_api_key, timeout=LLM_TIMEOUT_SECONDS)
+        client = client_factory(api_key=effective_api_key, timeout=LLM_TIMEOUT_SECONDS)
         response = client.chat.completions.create(
             model=openai_model,
             response_format={"type": "json_object"},
@@ -1115,269 +825,6 @@ def request_llm_categories(
         result_count=len(results),
     )
     return results if isinstance(results, list) else []
-
-
-def build_llm_system_prompt(category_rows=None, tag_rows=None, verify_threshold=None, review_threshold=None):
-    """Build LLM categorization policy instructions."""
-    if verify_threshold is None:
-        verify_threshold = HIGH_CONFIDENCE_THRESHOLD
-    if review_threshold is None:
-        review_threshold = settings.default_llm_review_threshold
-    del category_rows, tag_rows
-
-    return f"""You are a financial transaction categorization engine.
-
-Your task is to categorize bank transactions using the transaction description, supplied rule evidence, similar historical transactions, and the taxonomy supplied in the user JSON. You must assign exactly one category ID from taxonomy.categories and zero or more tag IDs from taxonomy.tags.
-
-You must be consistent, conservative, and deterministic. Do not invent private user context. Use common public merchant, biller, product, and service recognition when the descriptor clearly names a recognizable business, platform, or paid service.
-
-Bank statement context:
-- Checking and savings exports often use short bank descriptors, French abbreviations, and terse payment codes. Treat suffixes such as FAC, PAI, ASS, DIV, CC, PLAC, TFR, DEPOT, VIREMENT, CHQ, and VFC as bank context, not as categories by themselves.
-- Categorize by the recognizable merchant, biller, institution, or transaction purpose when it is clear despite those codes.
-- Common banking examples: utility providers such as Hydro-Quebec, Energir, internet, phone, and similar service providers are Utilities; bank fees, taxes, permits, interest, loans, and government fees are Administrative; transfers, credit card payments, deposits, reimbursements, refunds, and account movements are Transfers when those categories exist in taxonomy.categories.
-- Common merchant examples: streaming, sports media, music, movies, games, and paid media platforms such as Netflix, Disney Plus, Spotify, YouTube Premium, DAZN, or ESPN Plus are Entertainment when that category exists. Add the Service tag when the taxonomy includes it and the transaction is for paid access to an ongoing platform or media service.
-- Use account_name, account_type, and transaction_kind as context hints only. They describe the account and ledger direction already inferred by FinScope, but the merchant and category instructions remain authoritative.
-
-Decision rules:
-1. Use the transaction description as the primary signal.
-2. Use the amount only as a secondary signal. Do not categorize based only on amount.
-3. Use the amount direction only when it clearly helps identify Income, refund, fee, rent, or another transaction type.
-4. Manual rules may include signed amount_min and amount_max bounds. When present, the rule only applies if the transaction amount is inside that inclusive range. Negative amounts are credits/income/refunds.
-5. Normalize merchant names by removing transaction IDs, terminal IDs, dates, authorization codes, city names, card numbers, prefixes such as "POS PURCHASE", and repeated punctuation.
-6. Prefer the most specific supported category.
-7. Choose the best supported category when the merchant identity or transaction purpose points to one taxonomy category, even when confidence is not high enough for automatic approval. Use "needs_review": true for those lower-confidence best-fit suggestions.
-8. Do not create new categories or category IDs.
-9. Do not create new tags or tag IDs.
-10. Do not infer private personal context unless it is directly supported by the description.
-11. For refunds, categorize according to the original merchant category when identifiable. Otherwise use "UNKNOWN".
-12. Apply tags only when the description or user context clearly supports the tag instruction.
-13. Treat taxonomy.categories and taxonomy.tags as the authoritative full taxonomy.
-14. Treat candidate_taxonomy as helpful hints only. It is a compact subset of likely category and tag IDs chosen by FinScope for that transaction, not a restriction.
-15. Choose any ID from the full taxonomy when it best fits the merchant or transaction purpose, even when it is outside candidate_taxonomy.
-16. When choosing a category or tag outside candidate_taxonomy, set "needs_review" to true unless the merchant/category is obvious and confidence is at least {verify_threshold:.2f}. Do not choose "UNKNOWN" merely because the best taxonomy ID is outside candidate_taxonomy.
-17. Use similar_transactions as supporting evidence, but do not copy them blindly when they conflict or are weak.
-18. Use "UNKNOWN" only when the descriptor is generic, unreadable, mainly a payment processor without a clear merchant, or cannot be reasonably mapped to any taxonomy category.
-19. Before returning "UNKNOWN", check candidate_taxonomy and the full taxonomy for a review-worthy best fit. Prefer a supported best-fit category with "needs_review": true over "UNKNOWN" when the merchant or service identity provides a plausible match.
-
-Confidence scoring:
-- At or above {verify_threshold:.2f}: merchant/category is obvious enough for no-review output unless another review rule applies.
-- {review_threshold:.2f} up to below {verify_threshold:.2f}: plausible or likely best-fit category; return the best category and set "needs_review" to true.
-- below {review_threshold:.2f}: use "UNKNOWN".
-
-Review rule:
-Set "needs_review" to true when:
-- category is "UNKNOWN",
-- confidence < {verify_threshold:.2f},
-- merchant is ambiguous,
-- the description is mainly a payment processor without a clear merchant,
-- the transaction could plausibly belong to several categories.
-
-Output requirements:
-Return only valid JSON.
-Do not include markdown.
-Do not include explanations outside JSON.
-Do not include hidden reasoning or step-by-step reasoning.
-
-For each transaction, output:
-{{
-  "request_id": string,
-  "category_id": one ID from taxonomy.categories,
-  "tag_ids": array containing zero or more IDs from taxonomy.tags,
-  "confidence": number between 0 and 1,
-  "needs_review": boolean,
-  "supported_by_similar_transactions": boolean,
-  "reason": string
-}}"""
-
-
-def taxonomy_prompt_line(row):
-    """Render a taxonomy row as a compact prompt line for compatibility callers."""
-    detail = row["instruction"] or row["description"]
-    label = f"ID {row.get('id')}: {row['name']}"
-    return f"- {label}: {detail}" if detail else f"- {label}"
-
-
-def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, category_rows=None, tag_rows=None):
-    """Build the LLM request payload with full taxonomy and compact candidates."""
-    tag_options = tag_options or []
-    category_rows = category_rows or []
-    tag_rows = tag_rows or []
-    examples = build_rule_examples(rules, category_options)
-    category_rows_by_name = {row["name"]: row for row in category_rows}
-    tag_rows_by_name = {row["name"]: row for row in tag_rows}
-    manual_rules = [
-        {
-            "keyword": normalize_merchant_description(rule["keyword"]),
-            "category": normalize_category(rule["category"], category_options),
-            "category_id": category_rows_by_name.get(
-                normalize_category(rule["category"], category_options),
-                {},
-            ).get("id"),
-            "tags": normalize_tag_names(rule.get("tags"), tag_options),
-            "tag_ids": [
-                tag_rows_by_name[tag]["id"]
-                for tag in normalize_tag_names(rule.get("tags"), tag_options)
-                if tag in tag_rows_by_name
-            ],
-            "amount_min": optional_money_to_float(rule["amount_min"]),
-            "amount_max": optional_money_to_float(rule["amount_max"]),
-            "account_id": rule.get("account_id"),
-            "direction": rule.get("direction") or CATEGORY_RULE_DIRECTION_ANY,
-        }
-        for rule in prompt_relevant_manual_rules(rules, unknown_items)
-        if (
-            rule["source"] == CATEGORY_RULE_SOURCE_MANUAL
-            and normalize_category(rule["category"], category_options) in category_options
-        )
-    ]
-
-    payload = {
-        "taxonomy": {
-            "categories": taxonomy_payload_rows(category_options, category_rows),
-            "tags": taxonomy_payload_rows(tag_options, tag_rows),
-        },
-        "examples": examples,
-        "current_manual_rules": manual_rules,
-        "rule_matching": (
-            "Manual rules match by normalized keyword containment. "
-            "If amount_min or amount_max is present, the signed transaction amount must be inside the inclusive range. "
-            "Negative amounts are credits/income/refunds."
-        ),
-        "transactions": [
-            {
-                "request_id": tx.get("llm_request_id"),
-                "merchant_key": tx["merchant_key"],
-                "description": tx.get("description"),
-                "amount": optional_money_to_float(tx.get("amount")),
-                "date": tx.get("tx_date"),
-                "account_id": tx.get("account_id"),
-                "account_name": tx.get("account_name"),
-                "account_type": tx.get("account_type"),
-                "transaction_kind": tx.get("transaction_kind"),
-                "best_matching_rule": tx.get("rule_evidence"),
-                "similar_transactions": tx.get("historical_evidence"),
-                "candidate_taxonomy": {
-                    "categories": taxonomy_reference_rows(
-                        tx.get("llm_candidate_categories") or category_options,
-                        category_rows,
-                    ),
-                    "tags": taxonomy_reference_rows(
-                        tx.get("llm_candidate_tags") or tag_options,
-                        tag_rows,
-                    ),
-                },
-                "metadata": {
-                    "current_category": tx.get("category"),
-                },
-            }
-            for tx in unknown_items
-        ],
-        "matching_rule": "Return one result per transaction. Copy request_id exactly from each input transaction.",
-        "required_schema": {
-            "results": [
-                {
-                    "request_id": "same request_id as the input transaction",
-                    "category_id": "one category id from taxonomy.categories",
-                    "tag_ids": ["zero or more tag ids from taxonomy.tags"],
-                    "confidence": 0.0,
-                    "needs_review": True,
-                    "supported_by_similar_transactions": False,
-                    "reason": "short explanation",
-                }
-            ]
-        },
-    }
-    return json.dumps(payload, ensure_ascii=True, indent=2)
-
-
-def prompt_relevant_manual_rules(rules, unknown_items):
-    """Return manual rules most relevant to the current LLM batch."""
-    scored_rules = []
-    for index, rule in enumerate(rules):
-        if rule["source"] != CATEGORY_RULE_SOURCE_MANUAL:
-            continue
-        score = manual_rule_prompt_relevance(rule, unknown_items)
-        if score:
-            scored_rules.append((score, index, rule))
-
-    scored_rules.sort(key=lambda item: (-item[0], item[1]))
-    return [
-        rule
-        for _, _, rule in scored_rules[:MAX_PROMPT_MANUAL_RULES]
-    ]
-
-
-def manual_rule_prompt_relevance(rule, unknown_items):
-    """Return a lightweight relevance score for sending a manual rule."""
-    keyword = normalize_merchant_description(rule["keyword"])
-    if not keyword:
-        return 0
-
-    keyword_tokens = semantic_tokens(keyword)
-    best_score = 0
-    for tx in unknown_items:
-        candidate = normalize_merchant_description(
-            " ".join(
-                str(value or "")
-                for value in (
-                    tx.get("merchant_key"),
-                    tx.get("description"),
-                )
-            )
-        )
-        if not candidate:
-            continue
-        if keyword in candidate or candidate in keyword:
-            best_score = max(best_score, 100)
-            continue
-        overlap = keyword_tokens & semantic_tokens(candidate)
-        if overlap:
-            best_score = max(best_score, len(overlap))
-
-    return best_score
-
-
-def taxonomy_reference_rows(names, taxonomy_rows):
-    """Return compact taxonomy rows for transaction-local candidate hints."""
-    rows_by_name = {row["name"]: row for row in taxonomy_rows}
-    payload = []
-    for name in names:
-        row = rows_by_name.get(name, {})
-        payload.append(
-            {
-                "id": row.get("id"),
-                "name": name,
-                "description": row.get("description") or "",
-                "instruction": row.get("instruction") or "",
-            }
-        )
-    return payload
-
-
-def taxonomy_payload_rows(names, taxonomy_rows):
-    """Return compact taxonomy metadata for prompt payloads."""
-    rows_by_name = {row["name"]: row for row in taxonomy_rows}
-    payload = []
-    for name in names:
-        row = rows_by_name.get(name, {})
-        payload.append(
-            {
-                "id": row.get("id"),
-                "name": name,
-                "description": row.get("description") or "",
-                "instruction": row.get("instruction") or "",
-            }
-        )
-    return payload
-
-
-def build_rule_examples(rules, category_options):
-    """Return the legacy prompt examples payload for supported rule sources.
-
-    Manual rules are sent through `current_manual_rules`, so this compatibility
-    payload remains intentionally empty.
-    """
-    return {}
 
 
 def parse_confidence(value):

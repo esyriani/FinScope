@@ -23,15 +23,15 @@ from finance_app.modules.rules.engine import apply_all_rules_to_transactions
 from finance_app.modules.transactions.repository import assign_manual_category
 
 
-def test_category_repository_rule_helpers_support_core_connections(app, db_conn):
+def test_category_repository_rule_helpers_support_core_connections(app, core_conn):
     """Verify category rule persistence can run through SQLAlchemy Core."""
     del app
-    merchant_id = db_conn.execute(
+    merchant_id = core_conn.execute(
         insert(merchants_table).values(
             merchant_key="CORE MARKET",
         )
     ).inserted_primary_key[0]
-    db_conn.commit()
+    core_conn.commit()
 
     with db_core_transaction() as conn:
         rule_id = save_category_rule(
@@ -78,7 +78,7 @@ def test_category_repository_rule_helpers_support_core_connections(app, db_conn)
         assert rule["merchant_name"] == "CORE MARKET"
         assert rule["tags"] == ["Government"]
 
-    persisted = db_conn.execute(
+    persisted = core_conn.execute(
         select(
             category_rules_table.c.keyword,
             category_rules_table.c.category,
@@ -90,7 +90,7 @@ def test_category_repository_rule_helpers_support_core_connections(app, db_conn)
     assert any(rule["keyword"] == "CORE MARKET UPDATED" for rule in get_category_rules())
 
 
-def test_category_repository_category_helpers_support_core_connections(app, db_conn):
+def test_category_repository_category_helpers_support_core_connections(app, core_conn):
     """Verify category helpers can run through SQLAlchemy Core."""
     del app
 
@@ -99,19 +99,19 @@ def test_category_repository_category_helpers_support_core_connections(app, db_c
         assert rename_category(conn, "Pet care", "Pet supplies") == "Pet supplies"
         assert "Pet supplies" in get_category_options(conn)
 
-    category = db_conn.execute(
+    category = core_conn.execute(
         select(categories_table.c.name).where(categories_table.c.name == "Pet supplies")
     ).mappings().fetchone()
     assert category["name"] == "Pet supplies"
     assert "Pet supplies" in get_category_options()
 
 
-def test_category_rename_updates_manual_rule_and_rule_applied_rows(app, db_conn):
+def test_category_rename_updates_manual_rule_and_rule_applied_rows(app, core_conn):
     """Verify category renames reach rows created by normal category workflows."""
     del app
-    food_id = resolve_category_id(db_conn, "Food")
-    unknown_id = resolve_category_id(db_conn, "UNKNOWN")
-    manual_id = db_conn.execute(
+    food_id = resolve_category_id(core_conn, "Food")
+    unknown_id = resolve_category_id(core_conn, "UNKNOWN")
+    manual_id = core_conn.execute(
         insert(transactions_table).values(
             tx_date="2026-01-02",
             description="Metro Grocery",
@@ -122,7 +122,7 @@ def test_category_rename_updates_manual_rule_and_rule_applied_rows(app, db_conn)
             fingerprint="rename-manual",
         )
     ).inserted_primary_key[0]
-    rule_target_id = db_conn.execute(
+    rule_target_id = core_conn.execute(
         insert(transactions_table).values(
             tx_date="2026-01-03",
             description="Express Market",
@@ -133,7 +133,7 @@ def test_category_rename_updates_manual_rule_and_rule_applied_rows(app, db_conn)
             fingerprint="rename-rule-target",
         )
     ).inserted_primary_key[0]
-    db_conn.commit()
+    core_conn.commit()
 
     with db_core_transaction() as conn:
         result = assign_manual_category(
@@ -148,7 +148,7 @@ def test_category_rename_updates_manual_rule_and_rule_applied_rows(app, db_conn)
         assert updated_count == 1
         assert rename_category(conn, "Food", "Meals") == "Meals"
 
-    rows = db_conn.execute(
+    rows = core_conn.execute(
         select(
             transactions_table.c.fingerprint,
             transactions_table.c.category_id,
@@ -157,7 +157,7 @@ def test_category_rename_updates_manual_rule_and_rule_applied_rows(app, db_conn)
         .where(transactions_table.c.id.in_((manual_id, rule_target_id)))
         .order_by(transactions_table.c.fingerprint)
     ).fetchall()
-    rule = db_conn.execute(
+    rule = core_conn.execute(
         select(
             category_rules_table.c.category_id,
             category_rules_table.c.category,
@@ -169,7 +169,7 @@ def test_category_rename_updates_manual_rule_and_rule_applied_rows(app, db_conn)
         ("rename-rule-target", food_id, "Meals"),
     ]
     assert tuple(rule) == (food_id, "Meals")
-    assert get_transaction_tag_names(db_conn, manual_id) == ["Tax"]
+    assert get_transaction_tag_names(core_conn, manual_id) == ["Tax"]
 
 
 def test_resolve_category_id_uses_existing_taxonomy_rows(app):

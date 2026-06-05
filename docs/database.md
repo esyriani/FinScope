@@ -2,7 +2,7 @@
 
 FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the default local backend at `runtime/finescope.db`; MySQL is selected by setting a `mysql+pymysql://` SQLAlchemy URL. Runtime schema creation is managed by SQLAlchemy Core metadata in `src/finance_app/database/tables.py`.
 
-The database layer maintains the Core engine/connection lifecycle in `src/finance_app/database/engine.py`. Startup creates the configured clean schema from Core metadata and seeds runtime defaults through Core for SQLite and MySQL URLs. `src/finance_app/database/tables.py` is the runtime initialization path and the schema source of truth.
+The database layer maintains the Core engine/connection lifecycle in `src/finance_app/database/engine.py`. Startup creates empty databases from Core metadata, validates existing FinScope databases against the current schema, and seeds runtime defaults through Core for SQLite and MySQL URLs. `src/finance_app/database/tables.py` remains the schema source of truth for the current clean database shape.
 
 User-bound runtime settings, statement type management, account persistence, merchant persistence, category/tag taxonomy helpers, taxonomy admin CRUD, category rule repository helpers, imported-rule repository helpers, rule import/export job entry points, rule listing queries, rule create/update/approval/delete/preview/apply workflows, standalone categorization, recurring pattern writes, transaction list queries and route mutations, transaction repository helpers, transaction import deduplication, home summary queries, upload page context queries, upload queue/import/reprocess/undo workflows, dashboard/comparison/calendar reporting read models, review page/workflow queries and mutations, and jobs page settings lookups use SQLAlchemy Core connections.
 
@@ -71,7 +71,7 @@ Use the schema overview when you need to inspect table relationships, indexes, c
 
 ## Data model
 
-FinScope uses SQLite by default and MySQL when configured. Both backends are supported application databases. Schema creation and startup initialization are handled by SQLAlchemy Core metadata and `init_db()`.
+FinScope uses SQLite by default and MySQL when configured. Both backends are supported application databases. Schema creation, schema validation, and startup initialization are handled by SQLAlchemy Core metadata and `init_db()`.
 
 
 ### Table responsibilities
@@ -98,11 +98,13 @@ Defines the statement parsers available on the settings and upload pages.
 
 Stores owner-managed user accounts for the single FinScope deployment.
 
-- `username`: Unique login name.
+- `username`: Unique login name as entered by the user.
+- `username_key`: Generated lower-case, trimmed username key used for case-insensitive uniqueness and lookups.
 - `display_name`: Required UI presentation name shown in greetings, shared-access context, and user-management pages.
 - `password_hash`: Secure password hash. SQLite stores this as `TEXT`; MySQL uses `VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`.
 - `role`: `owner`, `editor`, or `viewer`.
 - `is_active`: Soft-deactivation flag.
+- `owner_role_key`: Generated uniqueness key that enforces one owner-role account per database.
 - `must_change_password`: Forces a password change after temporary passwords.
 - `failed_login_count` and `locked_until`: Login throttling state.
 - `created_at`, `updated_at`, and `last_login_at`: Account lifecycle timestamps.

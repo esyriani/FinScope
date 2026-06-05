@@ -5,15 +5,6 @@ function translateJobsMessage(message, variables) {
     return window.financeTranslate ? window.financeTranslate(message, variables) : message;
 }
 
-function escapeJobsHtml(value) {
-    return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-}
-
 function aiLogIconClass(level) {
     if (level === "error") {
         return "bi bi-x-circle-fill text-danger flex-shrink-0";
@@ -70,22 +61,34 @@ function setupAiJobProgressPolling(root = document) {
             }
 
             if (!entries.length) {
-                log.innerHTML = `<div class="text-muted" data-ai-job-progress-log-empty>${escapeJobsHtml(translateJobsMessage("No log entries yet."))}</div>`;
+                const empty = document.createElement("div");
+                empty.className = "text-muted";
+                empty.dataset.aiJobProgressLogEmpty = "";
+                empty.textContent = translateJobsMessage("No log entries yet.");
+                log.replaceChildren(empty);
                 return;
             }
 
-            log.innerHTML = entries.map((entry) => {
+            log.replaceChildren(...entries.map((entry) => {
                 const level = String(entry.level || "info").toLowerCase();
-                const timestamp = escapeJobsHtml(entry.timestamp_label || "");
-                const message = escapeJobsHtml(translateJobsMessage(entry.message || "", entry.params || {}));
-                return `
-                    <div class="d-flex align-items-start gap-2 py-1" data-ai-job-progress-log-entry>
-                        <span class="text-muted flex-shrink-0">${timestamp}</span>
-                        <i class="${aiLogIconClass(level)}" aria-hidden="true"></i>
-                        <span>${message}</span>
-                    </div>
-                `;
-            }).join("");
+                const row = document.createElement("div");
+                row.className = "d-flex align-items-start gap-2 py-1";
+                row.dataset.aiJobProgressLogEntry = "";
+
+                const timestamp = document.createElement("span");
+                timestamp.className = "text-muted flex-shrink-0";
+                timestamp.textContent = entry.timestamp_label || "";
+
+                const icon = document.createElement("i");
+                icon.className = aiLogIconClass(level);
+                icon.setAttribute("aria-hidden", "true");
+
+                const message = document.createElement("span");
+                message.textContent = translateJobsMessage(entry.message || "", entry.params || {});
+
+                row.append(timestamp, icon, message);
+                return row;
+            }));
         }
 
         function refreshJobsSection() {
@@ -288,7 +291,8 @@ function setupJobsAutoRefresh(root = document) {
     }, 1000);
 }
 
+window.financeApp?.registerInitializer("jobs.auto-refresh", setupJobsAutoRefresh);
+window.financeApp?.registerInitializer("jobs.ai-progress-polling", setupAiJobProgressPolling);
+
 setupJobsAutoRefresh();
 setupAiJobProgressPolling();
-window.setupJobsAutoRefresh = setupJobsAutoRefresh;
-window.setupAiJobProgressPolling = setupAiJobProgressPolling;

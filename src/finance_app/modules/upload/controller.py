@@ -1,7 +1,6 @@
 """Flask routes for the upload feature."""
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
-from sqlalchemy import delete, insert, select
 
 from finance_app.background.runner import submit_background_job
 from finance_app.modules.auth.permissions import PERMISSION_IMPORT_STATEMENTS, permission_required
@@ -13,12 +12,8 @@ from finance_app.core.constants import (
     INTERAC_DIRECTION_AUTO,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
 )
+from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
-from finance_app.database.tables import (
-    statements as statements_table,
-    statement_types as statement_types_table,
-    transactions as transactions_table,
-)
 from finance_app.modules.accounts.repository import get_or_create_account, normalize_account_type
 from finance_app.modules.categories.service import categorize_transactions
 from finance_app.modules.categories.taxonomy import set_transaction_tags
@@ -31,6 +26,13 @@ from finance_app.modules.statements.importer import (
     normalize_interac_direction,
 )
 from finance_app.modules.upload import workflow as upload_workflow
+from finance_app.modules.upload.repository import (
+    create_uploaded_statement,
+    delete_statement_transactions,
+    statement_by_checksum,
+    statement_extension,
+    statement_import_row,
+)
 from finance_app.modules.upload.service import build_statement_preview, build_upload_context
 
 
@@ -59,7 +61,7 @@ def handle_statement_upload():
         statement_type = get_statement_type_by_id(conn, statement_type_id)
 
         if statement_type is None:
-            flash("Please choose a valid statement type.")
+            flash(gettext("Please choose a valid statement type."))
             return redirect(url_for("upload.upload"))
 
         interac_direction = INTERAC_DIRECTION_AUTO
@@ -67,12 +69,12 @@ def handle_statement_upload():
             interac_direction = normalize_interac_direction(request.form.get("interac_direction"))
 
         if uploaded_file is None or uploaded_file.filename == "":
-            flash("Please choose a statement file.")
+            flash(gettext("Please choose a statement file."))
             return redirect(url_for("upload.upload"))
 
         if not allowed_statement_file(uploaded_file.filename):
             allowed = ", ".join(sorted(settings.allowed_statement_extensions)).upper()
-            flash(f"Only {allowed} files are supported.")
+            flash(gettext("Only {allowed} files are supported.", allowed=allowed))
             return redirect(url_for("upload.upload"))
 
         checksum = file_checksum(uploaded_file)
@@ -80,10 +82,15 @@ def handle_statement_upload():
 
         if existing:
             flash(
-                "This statement was already uploaded as "
-                f"{existing['filename']} on {existing['uploaded_at']} "
-                f"({existing['import_status']}). "
-                "Use Retry import or Reprocess from Uploaded statements."
+                gettext(
+                    (
+                        "This statement was already uploaded as {filename} on {uploaded_at} "
+                        "({status}). Use Retry import or Reprocess from Uploaded statements."
+                    ),
+                    filename=existing["filename"],
+                    uploaded_at=existing["uploaded_at"],
+                    status=existing["import_status"],
+                )
             )
             return redirect(url_for("upload.upload"))
 
@@ -100,7 +107,7 @@ def handle_statement_upload():
             date_order=date_order,
         )
         if preview["date_format"]["requires_choice"]:
-            flash("Choose a statement date format before uploading.")
+            flash(gettext("Choose a statement date format before uploading."))
             return redirect(url_for("upload.upload"))
 
         # The statement import type controls parsing/import mode. The account
@@ -142,8 +149,10 @@ def handle_statement_upload():
     )
 
     flash(
-        "Statement queued for background import and categorization. "
-        f"Track progress on the Jobs page. Job: {job_id[:8]}"
+        gettext(
+            "Statement queued for background import and categorization. Track progress on the Jobs page. Job: {job_id}",
+            job_id=job_id[:8],
+        )
     )
     return redirect(url_for("upload.upload"))
 
@@ -165,32 +174,37 @@ def preview_statement_upload():
         statement_type = get_statement_type_by_id(conn, statement_type_id)
 
         if statement_type is None:
-            return preview_error("Please choose a valid statement type.")
+            return preview_error(gettext("Please choose a valid statement type."))
 
         interac_direction = INTERAC_DIRECTION_AUTO
         if statement_type["parser_type"] == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
             interac_direction = normalize_interac_direction(request.form.get("interac_direction"))
 
         if uploaded_file is None or uploaded_file.filename == "":
-            return preview_error("Please choose a statement file.")
+            return preview_error(gettext("Please choose a statement file."))
 
         if not allowed_statement_file(uploaded_file.filename):
             allowed = ", ".join(sorted(settings.allowed_statement_extensions)).upper()
-            return preview_error(f"Only {allowed} files are supported.")
+            return preview_error(gettext("Only {allowed} files are supported.", allowed=allowed))
 
         checksum = file_checksum(uploaded_file)
         existing = statement_by_checksum(conn, checksum)
         if existing:
             return preview_error(
-                "This statement was already uploaded as "
-                f"{existing['filename']} on {existing['uploaded_at']} "
-                f"({existing['import_status']}). "
-                "Use Retry import or Reprocess from Uploaded statements."
+                gettext(
+                    (
+                        "This statement was already uploaded as {filename} on {uploaded_at} "
+                        "({status}). Use Retry import or Reprocess from Uploaded statements."
+                    ),
+                    filename=existing["filename"],
+                    uploaded_at=existing["uploaded_at"],
+                    status=existing["import_status"],
+                )
             )
 
         extension = get_file_extension(uploaded_file.filename)
         if extension != "csv":
-            return preview_error("Unsupported file type.")
+            return preview_error(gettext("Unsupported file type."))
 
         raw_text = decode_csv_statement_text(uploaded_file)
         preview = build_statement_preview(
@@ -231,23 +245,29 @@ def categorize_statement_unknowns(statement_id):
     with db_core_transaction() as conn:
         statement = statement_import_row(conn, statement_id)
         if statement is None:
-            flash("Statement not found.")
+            flash(gettext("Statement not found."))
             return redirect(next_url)
 
         if statement["import_status"] in ACTIVE_STATEMENT_IMPORT_STATUSES:
-            flash("Wait for the statement import to finish before running AI categorization.")
+            flash(gettext("Wait for the statement import to finish before running AI categorization."))
             return redirect(next_url)
 
         unknown_count = upload_workflow.count_statement_unknown_transactions(conn, statement_id)
         if not unknown_count:
-            flash("No unknown transactions need AI categorization for this statement.")
+            flash(gettext("No unknown transactions need AI categorization for this statement."))
             return redirect(next_url)
 
     job_id = upload_workflow.queue_statement_llm_categorization(statement_id)
     flash(
-        f"AI categorization queued for {unknown_count} unknown transaction"
-        f"{'' if unknown_count == 1 else 's'}. "
-        f"Track progress on the Jobs page. Job: {job_id[:8]}"
+        gettext(
+            (
+                "AI categorization queued for {count} unknown transaction. Track progress on the Jobs page. Job: {job_id}"
+                if unknown_count == 1
+                else "AI categorization queued for {count} unknown transactions. Track progress on the Jobs page. Job: {job_id}"
+            ),
+            count=unknown_count,
+            job_id=job_id[:8],
+        )
     )
     return redirect(next_url)
 
@@ -259,16 +279,16 @@ def queue_existing_statement_import(statement_id, reprocess=False):
     with db_core_transaction() as conn:
         statement = statement_import_row(conn, statement_id)
         if statement is None:
-            flash("Statement not found.")
+            flash(gettext("Statement not found."))
             return redirect(next_url)
 
         if statement["import_status"] in ACTIVE_STATEMENT_IMPORT_STATUSES:
-            flash("This statement import is already queued or running.")
+            flash(gettext("This statement import is already queued or running."))
             return redirect(next_url)
 
         raw_text = statement["raw_text"] or ""
         if not raw_text.strip():
-            flash("This statement has no stored text to import.")
+            flash(gettext("This statement has no stored text to import."))
             return redirect(next_url)
 
         if reprocess:
@@ -290,95 +310,13 @@ def queue_existing_statement_import(statement_id, reprocess=False):
         date_order=statement["date_order"],
     )
     flash(
-        f"{'Reprocess' if reprocess else 'Retry'} queued. "
-        f"Track progress on the Jobs page. Job: {job_id[:8]}"
+        gettext(
+            "{action} queued. Track progress on the Jobs page. Job: {job_id}",
+            action=gettext("Reprocess" if reprocess else "Retry"),
+            job_id=job_id[:8],
+        )
     )
     return redirect(next_url)
-
-
-def statement_import_row(conn, statement_id):
-    """Return persisted statement data needed to queue import work."""
-    return conn.execute(
-        select(
-            statements_table.c.id,
-            statements_table.c.account_id,
-            statements_table.c.filename,
-            statements_table.c.extension,
-            statements_table.c.raw_text,
-            statements_table.c.import_status,
-            statements_table.c.interac_direction,
-            statements_table.c.date_order,
-            statement_types_table.c.parser_type,
-            statement_types_table.c.import_mode,
-        )
-        .select_from(
-            statements_table.join(
-                statement_types_table,
-                statement_types_table.c.id == statements_table.c.statement_type_id,
-            )
-        )
-        .where(statements_table.c.id == statement_id)
-    ).mappings().fetchone()
-
-
-def statement_by_checksum(conn, checksum):
-    """Return an uploaded statement row by checksum for duplicate detection."""
-    return conn.execute(
-        select(
-            statements_table.c.id,
-            statements_table.c.filename,
-            statements_table.c.uploaded_at,
-            statements_table.c.import_status,
-        ).where(statements_table.c.checksum == checksum)
-    ).mappings().fetchone()
-
-
-def create_uploaded_statement(
-    conn,
-    account_id,
-    statement_type_id,
-    filename,
-    checksum,
-    extension,
-    interac_direction,
-    date_order,
-    raw_text,
-):
-    """Insert an uploaded statement row and return its ID."""
-    date_order = normalize_date_order(date_order)
-    result = conn.execute(
-        insert(statements_table).values(
-            account_id=account_id,
-            statement_type_id=statement_type_id,
-            filename=filename,
-            checksum=checksum,
-            extension=extension,
-            interac_direction=interac_direction,
-            date_order=date_order,
-            raw_text=raw_text,
-        )
-    )
-    return result.inserted_primary_key[0]
-
-
-def delete_statement_transactions(conn, statement_id):
-    """Delete imported transactions for a statement before reprocessing."""
-    conn.execute(
-        delete(transactions_table).where(transactions_table.c.statement_id == statement_id)
-    )
-
-
-def statement_extension(statement):
-    """Return a stored or filename-derived extension for a statement row."""
-    extension = (statement["extension"] or "").strip().lower()
-    if extension:
-        return extension
-
-    filename = statement["filename"] or ""
-    if "." not in filename:
-        return ""
-
-    return get_file_extension(filename)
 
 
 def submit_statement_import_job(
@@ -428,7 +366,7 @@ def read_statement_text(uploaded_file, extension):
     if extension == "csv":
         return decode_csv_statement_text(uploaded_file)
 
-    flash("Unsupported file type.")
+    flash(gettext("Unsupported file type."))
     return None
 
 
@@ -452,27 +390,21 @@ def import_transactions(
     interac_direction="auto",
     date_order=DATE_ORDER_AUTO,
 ):
-    """Import transactions."""
-    original_categorize_transactions = upload_workflow.categorize_transactions
-    original_set_transaction_tags = upload_workflow.set_transaction_tags
-    upload_workflow.categorize_transactions = categorize_transactions
-    upload_workflow.set_transaction_tags = set_transaction_tags
-    try:
-        return upload_workflow.import_transactions(
-            conn,
-            statement_id,
-            account_id,
-            statement_type,
-            extension,
-            raw_text,
-            undo_state=undo_state,
-            import_mode=import_mode,
-            interac_direction=interac_direction,
-            date_order=date_order,
-        )
-    finally:
-        upload_workflow.categorize_transactions = original_categorize_transactions
-        upload_workflow.set_transaction_tags = original_set_transaction_tags
+    """Import transactions through the upload workflow with explicit helpers."""
+    return upload_workflow.import_transactions(
+        conn,
+        statement_id,
+        account_id,
+        statement_type,
+        extension,
+        raw_text,
+        undo_state=undo_state,
+        import_mode=import_mode,
+        interac_direction=interac_direction,
+        date_order=date_order,
+        categorizer=categorize_transactions,
+        tag_setter=set_transaction_tags,
+    )
 
 
 import_statement_transactions_job = upload_workflow.import_statement_transactions_job

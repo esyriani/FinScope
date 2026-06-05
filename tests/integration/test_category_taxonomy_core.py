@@ -1,5 +1,6 @@
 """SQLAlchemy Core tests for category taxonomy helpers."""
 
+from sqlalchemy import text
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,
@@ -13,22 +14,18 @@ from finance_app.modules.categories.taxonomy import (
 )
 
 
-def test_taxonomy_helpers_support_core_connections(app, db_conn):
+def test_taxonomy_helpers_support_core_connections(app, core_conn):
     """Verify taxonomy helpers can read and write through SQLAlchemy Core."""
     del app
-    rule_id = db_conn.execute(
-        """
+    rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category)
         VALUES ('CORE STORE', 'UNKNOWN')
-        """
-    ).lastrowid
-    transaction_id = db_conn.execute(
-        """
+        """)).lastrowid
+    transaction_id = core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
         VALUES ('2026-01-02', 'CORE STORE', 12.34, 'UNKNOWN', 'core-taxonomy-tx')
-        """
-    ).lastrowid
-    db_conn.commit()
+        """)).lastrowid
+    core_conn.commit()
 
     with db_core_transaction() as conn:
         assert upsert_category_metadata(conn, "Transit", "City travel", "Use for transit.") == "Transit"
@@ -42,28 +39,21 @@ def test_taxonomy_helpers_support_core_connections(app, db_conn):
         assert get_transaction_tag_names(conn, transaction_id) == ["Audit"]
         assert get_transaction_tags_by_id(conn, [transaction_id])[transaction_id] == ["Audit"]
 
-    category = db_conn.execute(
-        """
+    category = core_conn.execute(text("""
         SELECT description, instruction
         FROM categories
         WHERE name = 'Transit'
-        """
-    ).fetchone()
-    tag = db_conn.execute(
-        """
+        """)).fetchone()
+    tag = core_conn.execute(text("""
         SELECT description, instruction, color
         FROM tags
         WHERE name = 'Audit'
-        """
-    ).fetchone()
-    transaction_tag = db_conn.execute(
-        """
+        """)).fetchone()
+    transaction_tag = core_conn.execute(text("""
         SELECT source, rule_id
         FROM transaction_tags
-        WHERE transaction_id = ?
-        """,
-        (transaction_id,),
-    ).fetchone()
+        WHERE transaction_id = :p0
+        """), {"p0": transaction_id}).fetchone()
 
     assert tuple(category) == ("City travel", "Use for transit.")
     assert tuple(tag) == ("Reviewed", "Already reviewed.", "#123abc")

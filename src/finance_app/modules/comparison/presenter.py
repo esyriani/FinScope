@@ -4,7 +4,8 @@ from calendar import monthrange
 from datetime import date
 
 from finance_app.core.i18n import format_month_year, gettext
-from finance_app.core.money import money_to_float, rounded_money_float
+from finance_app.core.money import format_money_display, money_to_float, rounded_money_float
+from finance_app.modules.comparison.statistics import build_descriptive_statistics
 from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.comparison.constants import UNKNOWN_WARNING_THRESHOLD
 
@@ -19,6 +20,36 @@ def build_monthly_spending(years, rows):
         if row["year"] in by_year and 1 <= row["month"] <= 12:
             by_year[row["year"]][row["month"] - 1] = rounded_money_float(row["spending"])
     return by_year
+
+
+def build_monthly_spending_statistics(years, rows):
+    """Build descriptive statistics for observed monthly spending totals by year.
+
+    The comparison chart keeps its existing zero-filled twelve-month shape.
+    Statistics intentionally use only fetched monthly rows so months outside
+    the imported data, especially future months in the current year, are not
+    treated as real zero-spending periods.
+    """
+    values_by_year = {
+        year: []
+        for year in years
+    }
+    for row in rows:
+        year = row["year"]
+        if year in values_by_year:
+            values_by_year[year].append(row["spending"])
+
+    result = []
+    for year in years:
+        statistics = build_descriptive_statistics(values_by_year[year])
+        result.append(
+            {
+                "year": year,
+                "statistics": statistics,
+                "boxplot": statistics["boxplot"],
+            }
+        )
+    return result
 
 
 
@@ -593,7 +624,7 @@ def format_signed_count(value):
 
 def format_money_text(value):
     """Format money text."""
-    return f"{value:,.2f} $".replace(",", " ")
+    return format_money_display(value)
 
 
 

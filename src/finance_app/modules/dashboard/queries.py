@@ -25,7 +25,7 @@ from finance_app.modules.categories.sources import (
 )
 from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.transactions.constants import AMOUNT_TYPE_SPENDING
-from .filters import apply_quick_view_core_filter
+from .filters import apply_dashboard_dimension_filters, apply_quick_view_core_filter
 from .urls import dashboard_transactions_url
 from .constants import DASHBOARD_INCOME_CATEGORY, QUICK_VIEW_ALL
 from .presenter import (
@@ -215,6 +215,7 @@ def fetch_merchant_analytics(
     date_to="",
     quick_view=QUICK_VIEW_ALL,
     merchant_table_limit=10,
+    merchant_search="",
 ):
     """Fetch merchant analytics."""
     current_rows = fetch_merchant_transaction_rows(conn, filters, unknown_category)
@@ -227,6 +228,7 @@ def fetch_merchant_analytics(
         selected_tags,
         unknown_category,
         quick_view,
+        merchant_search,
     )
     rules = get_category_rules(conn)
     merchant_rows = []
@@ -259,6 +261,7 @@ def fetch_merchant_analytics(
                     date_to,
                     quick_view,
                     selected_tags=selected_tags,
+                    merchant_search=merchant_search,
                     merchant_key=aggregate["merchant_key"],
                     amount_type=AMOUNT_TYPE_SPENDING,
                 ),
@@ -301,6 +304,7 @@ def fetch_previous_merchant_totals(
     selected_tags,
     unknown_category,
     quick_view=QUICK_VIEW_ALL,
+    merchant_search="",
 ):
     """Fetch previous merchant totals."""
     previous_start, previous_end = previous_period_date_range(period)
@@ -311,6 +315,14 @@ def fetch_previous_merchant_totals(
     filters.add(transactions_table.c.ignored == 0)
     filters.add(transactions_table.c.tx_date >= previous_start)
     filters.add(transactions_table.c.tx_date < previous_end)
+    apply_dashboard_dimension_filters(
+        filters,
+        selected_categories,
+        selected_tags,
+        filter_mode,
+        unknown_category,
+        merchant_search,
+    )
     apply_quick_view_core_filter(
         filters,
         quick_view,

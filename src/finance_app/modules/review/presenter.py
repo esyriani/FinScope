@@ -6,20 +6,16 @@ from finance_app.modules.categories.sources import (
     category_source_badge_class,
     category_source_label,
 )
-from finance_app.modules.categories.taxonomy import get_transaction_tags_by_id
-from finance_app.modules.merchants.normalization import canonicalize_merchant_key
-from finance_app.modules.review.queries import review_candidate_rows
+from finance_app.modules.review.normalization import review_merchant_key
 from finance_app.modules.review.urls import build_review_url
 
 
-def review_groups(conn, unknown_category, merchant_candidate=""):
-    """Render groups."""
+def build_review_groups(rows, transaction_tags, unknown_category):
+    """Build review groups from candidate rows and tag mappings."""
     groups_by_key = {}
-    rows = review_candidate_rows(conn, unknown_category, merchant_candidate)
-    transaction_tags = get_transaction_tags_by_id(conn, [row["id"] for row in rows])
 
     for row in rows:
-        key = review_merchant_key(row["description"], conn=conn)
+        key = review_merchant_key(row["description"])
         if not key:
             continue
 
@@ -317,23 +313,6 @@ def review_summary(groups):
         "largest_group_key": largest_group["merchant_key"] if largest_group else "",
         "review_amount": sum(group["absolute_amount"] for group in groups),
     }
-
-
-def review_group_rows(conn, merchant_key, unknown_category):
-    """Render group rows."""
-    return [
-        row
-        for row in review_candidate_rows(conn, unknown_category, merchant_key)
-        if review_merchant_key(row["description"], conn=conn) == merchant_key
-    ]
-
-
-def review_merchant_key(value, conn=None):
-    """Render merchant key."""
-    normalized = canonicalize_merchant_key(value or "", conn=conn)
-    if normalized:
-        return normalized
-    return " ".join(str(value or "").upper().split())
 
 
 def is_unknown_category(category, unknown_category):

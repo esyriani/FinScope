@@ -1,5 +1,6 @@
 """SQLAlchemy Core tests for rules service helpers."""
 
+from sqlalchemy import text
 from werkzeug.datastructures import MultiDict
 
 from finance_app.database.engine import db_core_transaction
@@ -14,16 +15,14 @@ from finance_app.modules.rules.service import (
 )
 
 
-def test_rules_service_mutations_support_core_connections(app, db_conn):
+def test_rules_service_mutations_support_core_connections(app, core_conn):
     """Verify rule create, update, approval, lookup, and delete support Core."""
     del app
-    auto_rule_id = db_conn.execute(
-        """
+    auto_rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source, ai_approved)
         VALUES ('AUTO STORE', 'Food', 'automatic', 0)
-        """
-    ).lastrowid
-    db_conn.commit()
+        """)).lastrowid
+    core_conn.commit()
 
     with db_core_transaction() as conn:
         keyword = create_rule_from_form(
@@ -68,22 +67,17 @@ def test_rules_service_mutations_support_core_connections(app, db_conn):
         assert rule["tags"] == ["Government"]
         assert delete_rule(conn, auto_rule_id)
 
-    updated_rule = db_conn.execute(
-        """
+    updated_rule = core_conn.execute(text("""
         SELECT keyword, category, amount_min, amount_max, source, ai_approved
         FROM category_rules
         WHERE keyword = 'METRO GROCERY UPDATED'
-        """
-    ).fetchone()
-    auto_count = db_conn.execute(
-        """
+        """)).fetchone()
+    auto_count = core_conn.execute(text("""
         SELECT COUNT(*) AS count
         FROM category_rules
-        WHERE id = ?
-        """,
-        (auto_rule_id,),
-    ).fetchone()["count"]
+        WHERE id = :p0
+        """), {"p0": auto_rule_id}).fetchone()._mapping["count"]
 
     assert tuple(updated_rule) == ("METRO GROCERY UPDATED", "Utilities", 25.0, 50.0, "manual", 0)
-    assert get_rule_tags_by_rule_id(db_conn, [rule_id])[rule_id] == ["Government"]
+    assert get_rule_tags_by_rule_id(core_conn, [rule_id])[rule_id] == ["Government"]
     assert auto_count == 0

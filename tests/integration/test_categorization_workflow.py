@@ -3,26 +3,11 @@
 import json
 
 from finance_app.modules.categories import categorization
-from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.categorization import categorize_transactions
-from finance_app.modules.categories.taxonomy import set_rule_tags, set_transaction_tags
+from tests.support.database import insert_rule, insert_transaction
 
 
-def insert_rule(conn, keyword, category, amount_min=None, amount_max=None, tags=None):
-    """Insert a category rule and optional tags."""
-    rule_id = conn.execute(
-        """
-        INSERT INTO category_rules (keyword, category, amount_min, amount_max, source)
-        VALUES (?, ?, ?, ?, 'manual')
-        """,
-        (keyword, category, amount_min, amount_max),
-    ).lastrowid
-    set_rule_tags(conn, rule_id, tags or [])
-    conn.commit()
-    return rule_id
-
-
-def insert_transaction(
+def insert_historical_transaction(
     conn,
     description,
     amount,
@@ -36,44 +21,34 @@ def insert_transaction(
 ):
     """Insert a categorized historical transaction and optional tags."""
     fingerprint = f"history-{description}-{amount}-{category}-{source}-{tx_date}"
-    tx_id = conn.execute(
-        """
-        INSERT INTO transactions (
-            account_id, tx_date, description, amount, category, category_id,
-            category_source, category_confidence, needs_review, reviewed_at,
-            fingerprint
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-        """,
-        (
-            account_id,
-            tx_date,
-            description,
-            amount,
-            category,
-            resolve_category_id(conn, category),
-            source,
-            1.0 if source == "manual" else 0.95,
-            reviewed_at,
-            fingerprint,
-        ),
-    ).lastrowid
-    set_transaction_tags(conn, tx_id, tags or [])
-    conn.commit()
-    return tx_id
+    return insert_transaction(
+        conn,
+        description=description,
+        amount=amount,
+        category=category,
+        tx_date=tx_date,
+        account_id=account_id,
+        category_source=source,
+        category_confidence=1.0 if source == "manual" else 0.95,
+        needs_review=0,
+        reviewed_at=reviewed_at,
+        fingerprint=fingerprint,
+        tags=tags or [],
+        tag_source=source,
+    )
 
 
-def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(db_conn):
+def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(core_conn):
     """Verify amount-aware rule matches do not leak to different amounts."""
     metro_rule_id = insert_rule(
-        db_conn,
+        core_conn,
         "METRO",
         "Food",
         amount_min=10,
         amount_max=20,
         tags=["Tax", "Shared"],
     )
-    payroll_rule_id = insert_rule(db_conn, "PAYROLL", "Income")
+    payroll_rule_id = insert_rule(core_conn, "PAYROLL", "Income")
     transactions = [
         {"description": "Metro Grocery #123", "amount": 12.34},
         {"description": "Metro Grocery #456", "amount": 30.00},
@@ -82,7 +57,7 @@ def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(
         {"description": "Unseen Merchant", "amount": 22.00},
     ]
 
-    categorized = categorize_transactions(transactions, conn=db_conn, use_llm=False)
+    categorized = categorize_transactions(transactions, conn=core_conn, use_llm=False)
 
     metro_match, metro_out_of_range, payroll_income, payroll_positive, unknown = categorized
     assert metro_match["merchant_key"] == "METRO GROCERY"
@@ -118,13 +93,13 @@ def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(
     assert unknown["tags"] == []
 
 
-def test_manual_prefix_rule_auto_applies_location_suffix(db_conn):
+def test_manual_prefix_rule_auto_applies_location_suffix(core_conn):
     """Verify a strong manual prefix rule applies merchant location suffixes."""
-    rule_id = insert_rule(db_conn, "COSTCO WHOLESALE", "Food", tags=["Grocery"])
+    rule_id = insert_rule(core_conn, "COSTCO WHOLESALE", "Food", tags=["Grocery"])
 
     categorized = categorize_transactions(
         [{"description": "COSTCO WHOLESALE W527 MONTREAL, QC", "amount": 277.72}],
-        conn=db_conn,
+        conn=core_conn,
         use_llm=False,
     )
 
@@ -139,7 +114,7 @@ def test_manual_prefix_rule_auto_applies_location_suffix(db_conn):
     assert metadata["review_required"] is False
 
 
-def test_categorize_transactions_invokes_llm_when_enabled(db_conn, monkeypatch):
+def test_categorize_transactions_invokes_llm_when_enabled(core_conn, monkeypatch):
     """Verify the workflow hands categorized rows to the optional LLM pass."""
     calls = []
 
@@ -169,7 +144,7 @@ def test_categorize_transactions_invokes_llm_when_enabled(db_conn, monkeypatch):
 
     categorized = categorize_transactions(
         [{"description": "Mystery Shop", "amount": 9.99}],
-        conn=db_conn,
+        conn=core_conn,
         use_llm=True,
     )
 
@@ -180,9 +155,9 @@ def test_categorize_transactions_invokes_llm_when_enabled(db_conn, monkeypatch):
     assert categorized[0]["category_source"] == "ai"
 
 
-def test_high_confidence_rule_skips_history_and_llm(db_conn, monkeypatch):
+def test_high_confidence_rule_skips_history_and_llm(core_conn, monkeypatch):
     """Verify a specific rule finalizes without retrieval or LLM fallback."""
-    rule_id = insert_rule(db_conn, "METRO", "Food", amount_min=10, amount_max=20)
+    rule_id = insert_rule(core_conn, "METRO", "Food", amount_min=10, amount_max=20)
 
     def fail_history(*args, **kwargs):
         """Fail if high-confidence rule decisions ask for historical evidence."""
@@ -199,7 +174,7 @@ def test_high_confidence_rule_skips_history_and_llm(db_conn, monkeypatch):
 
     categorized = categorize_transactions(
         [{"description": "Metro Grocery #123", "amount": 12.34}],
-        conn=db_conn,
+        conn=core_conn,
         use_llm=True,
     )
 
@@ -214,14 +189,14 @@ def test_high_confidence_rule_skips_history_and_llm(db_conn, monkeypatch):
     assert metadata["review_required"] is False
 
 
-def test_medium_confidence_rule_confirmed_by_history(db_conn):
+def test_medium_confidence_rule_confirmed_by_history(core_conn):
     """Verify historical agreement can raise a broad rule to high confidence."""
-    rule_id = insert_rule(db_conn, "MARKET", "Food")
-    insert_transaction(db_conn, "Market Lane", 30.00, "Food", tags=["Shared"])
+    rule_id = insert_rule(core_conn, "MARKET", "Food")
+    insert_historical_transaction(core_conn, "Market Lane", 30.00, "Food", tags=["Shared"])
 
     categorized = categorize_transactions(
         [{"description": "Market Lane", "amount": 30.00}],
-        conn=db_conn,
+        conn=core_conn,
         use_llm=False,
     )
 
@@ -237,14 +212,14 @@ def test_medium_confidence_rule_confirmed_by_history(db_conn):
     assert metadata["similar_transaction_ids"]
 
 
-def test_medium_confidence_rule_contradicted_by_history_requires_review(db_conn):
+def test_medium_confidence_rule_contradicted_by_history_requires_review(core_conn):
     """Verify useful but conflicting evidence keeps the transaction reviewable."""
-    rule_id = insert_rule(db_conn, "MARKET", "Food")
-    insert_transaction(db_conn, "Market Lane", 30.00, "Utilities")
+    rule_id = insert_rule(core_conn, "MARKET", "Food")
+    insert_historical_transaction(core_conn, "Market Lane", 30.00, "Utilities")
 
     categorized = categorize_transactions(
         [{"description": "Market Lane", "amount": 30.00}],
-        conn=db_conn,
+        conn=core_conn,
         use_llm=False,
     )
 
@@ -260,10 +235,17 @@ def test_medium_confidence_rule_contradicted_by_history_requires_review(db_conn)
     assert metadata["review_required"] is True
 
 
-def test_no_rule_high_confidence_history_skips_llm(db_conn, monkeypatch):
+def test_no_rule_high_confidence_history_skips_llm(core_conn, monkeypatch):
     """Verify strongly agreeing historical transactions categorize without LLM."""
-    insert_transaction(db_conn, "Hydro Quebec", 120.00, "Utilities", tags=["Government"])
-    insert_transaction(db_conn, "Hydro Quebec", 119.50, "Utilities", tx_date="2026-01-03", tags=["Government"])
+    insert_historical_transaction(core_conn, "Hydro Quebec", 120.00, "Utilities", tags=["Government"])
+    insert_historical_transaction(
+        core_conn,
+        "Hydro Quebec",
+        119.50,
+        "Utilities",
+        tx_date="2026-01-03",
+        tags=["Government"],
+    )
     llm_calls = []
 
     def fail_llm(*args, **kwargs):
@@ -274,7 +256,7 @@ def test_no_rule_high_confidence_history_skips_llm(db_conn, monkeypatch):
 
     categorized = categorize_transactions(
         [{"description": "Hydro Quebec", "amount": 120.00}],
-        conn=db_conn,
+        conn=core_conn,
         use_llm=True,
     )
 
@@ -288,10 +270,10 @@ def test_no_rule_high_confidence_history_skips_llm(db_conn, monkeypatch):
     assert metadata["decision_source"] == "similar_transactions"
 
 
-def test_no_rule_ambiguous_history_invokes_llm(db_conn, monkeypatch):
+def test_no_rule_ambiguous_history_invokes_llm(core_conn, monkeypatch):
     """Verify contradictory historical evidence falls through to LLM."""
-    insert_transaction(db_conn, "Ambiguous Shop", 10.00, "Food")
-    insert_transaction(db_conn, "Ambiguous Shop", 10.00, "Utilities", tx_date="2026-01-03")
+    insert_historical_transaction(core_conn, "Ambiguous Shop", 10.00, "Food")
+    insert_historical_transaction(core_conn, "Ambiguous Shop", 10.00, "Utilities", tx_date="2026-01-03")
     calls = []
 
     def classify_for_test(conn, transactions, rules, unknown_category):
@@ -314,7 +296,7 @@ def test_no_rule_ambiguous_history_invokes_llm(db_conn, monkeypatch):
 
     categorized = categorize_transactions(
         [{"description": "Ambiguous Shop", "amount": 10.00}],
-        conn=db_conn,
+        conn=core_conn,
         use_llm=True,
     )
 

@@ -3,7 +3,7 @@
 from flask import url_for
 
 from finance_app.core.i18n import gettext
-from finance_app.core.money import money_to_float, rounded_money_float
+from finance_app.core.money import format_money_display, money_to_float, rounded_money_float
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
@@ -36,7 +36,6 @@ from .constants import (
     DASHBOARD_MERCHANT_SORT_TRANSACTIONS,
     QUICK_VIEW_ALL,
     QUICK_VIEW_CATEGORIZED,
-    QUICK_VIEW_CUSTOM,
     QUICK_VIEW_NEEDS_REVIEW,
     QUICK_VIEW_UNKNOWN,
 )
@@ -61,12 +60,9 @@ def build_quick_view_options(active_view, counts):
             "count": counts["unknown_count"],
         },
         {
-            "value": QUICK_VIEW_CUSTOM,
-            "label": "Choose filters",
-        },
-        {
             "value": QUICK_VIEW_ALL,
             "label": "All",
+            "count": counts["all_count"],
         },
     ]
 
@@ -85,6 +81,7 @@ def build_dashboard_links(
     date_to="",
     quick_view=QUICK_VIEW_ALL,
     include_transfer_credits=False,
+    merchant_search="",
 ):
     """Build dashboard drill-down links for the current reporting scope."""
     selected_tags = selected_tags or []
@@ -99,6 +96,7 @@ def build_dashboard_links(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
         ),
         "spending": dashboard_transactions_url(
             period,
@@ -109,6 +107,7 @@ def build_dashboard_links(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             amount_type=AMOUNT_TYPE_SPENDING,
         ),
         "income": dashboard_transactions_url(
@@ -120,6 +119,7 @@ def build_dashboard_links(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             amount_type=credit_amount_type,
         ),
         "unknown": dashboard_transactions_url(
@@ -131,6 +131,7 @@ def build_dashboard_links(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             category_status=CATEGORY_STATUS_UNKNOWN,
         ),
         "categorized": dashboard_transactions_url(
@@ -142,6 +143,7 @@ def build_dashboard_links(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             category_status=CATEGORY_STATUS_CATEGORIZED,
         ),
         "needs_review": dashboard_transactions_url(
@@ -153,6 +155,7 @@ def build_dashboard_links(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             review=REVIEW_FILTER_NEEDS_REVIEW,
         ),
         "verified": dashboard_transactions_url(
@@ -164,6 +167,7 @@ def build_dashboard_links(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             review=REVIEW_FILTER_VERIFIED,
         ),
         "review": url_for("review.review"),
@@ -181,6 +185,7 @@ def build_dashboard_insights(
     date_from="",
     date_to="",
     quick_view=QUICK_VIEW_ALL,
+    merchant_search="",
 ):
     """Build finance-oriented dashboard insight tiles for the current view."""
     selected_tags = selected_tags or []
@@ -209,6 +214,7 @@ def build_dashboard_insights(
             date_from,
             date_to,
             quick_view,
+            merchant_search,
         ),
     }
 
@@ -260,6 +266,7 @@ def source_transactions_url(
     date_from,
     date_to,
     quick_view,
+    merchant_search="",
 ):
     """Return a transactions URL for a category source insight."""
     if not source:
@@ -278,6 +285,7 @@ def source_transactions_url(
         date_to,
         quick_view,
         selected_tags=selected_tags,
+        merchant_search=merchant_search,
         category_source=source_filter,
     )
 
@@ -326,6 +334,7 @@ def attach_data_quality_urls(
     date_from="",
     date_to="",
     quick_view=QUICK_VIEW_ALL,
+    merchant_search="",
 ):
     """Attach data quality URLs."""
     selected_tags = selected_tags or []
@@ -339,6 +348,7 @@ def attach_data_quality_urls(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             category_status=CATEGORY_STATUS_CATEGORIZED,
         ),
         "Needs review": dashboard_transactions_url(
@@ -350,6 +360,7 @@ def attach_data_quality_urls(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             review=REVIEW_FILTER_NEEDS_REVIEW,
         ),
         "Unknown": dashboard_transactions_url(
@@ -361,6 +372,7 @@ def attach_data_quality_urls(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             category_status=CATEGORY_STATUS_UNKNOWN,
         ),
         "Manual reviewed": dashboard_transactions_url(
@@ -372,6 +384,7 @@ def attach_data_quality_urls(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             category_source=CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED,
         ),
         "By rule": dashboard_transactions_url(
@@ -383,6 +396,7 @@ def attach_data_quality_urls(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             category_source=CATEGORY_SOURCE_RULE,
         ),
         "By similarity": dashboard_transactions_url(
@@ -394,6 +408,7 @@ def attach_data_quality_urls(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             category_source=CATEGORY_SOURCE_HISTORY,
         ),
         "By AI": dashboard_transactions_url(
@@ -405,6 +420,7 @@ def attach_data_quality_urls(
             date_to,
             quick_view,
             selected_tags=selected_tags,
+            merchant_search=merchant_search,
             category_source=CATEGORY_SOURCE_AI,
         ),
     }
@@ -425,6 +441,7 @@ def attach_data_quality_urls(
                     date_to,
                     quick_view,
                     selected_tags=selected_tags,
+                    merchant_search=merchant_search,
                 ),
             )
 
@@ -604,7 +621,7 @@ def merchant_period_change(current_total, previous_total):
 
 def format_money_text(value):
     """Format money text."""
-    return f"{value:,.0f} $".replace(",", " ")
+    return format_money_display(value, places=0)
 
 
 def build_category_rows(
@@ -617,6 +634,7 @@ def build_category_rows(
     date_from="",
     date_to="",
     quick_view=QUICK_VIEW_ALL,
+    merchant_search="",
     breakdown="category",
 ):
     """Build category or tag breakdown rows."""
@@ -638,8 +656,9 @@ def build_category_rows(
                 True,
                 date_from,
                 date_to,
-                QUICK_VIEW_CUSTOM,
+                quick_view,
                 selected_tags=selected_tags,
+                merchant_search=merchant_search,
                 tags=[tag_name],
                 amount_type=AMOUNT_TYPE_SPENDING,
             )
@@ -653,6 +672,7 @@ def build_category_rows(
                 date_to,
                 quick_view,
                 selected_tags=selected_tags,
+                merchant_search=merchant_search,
                 category=row_data["category"],
                 amount_type=AMOUNT_TYPE_SPENDING,
             )

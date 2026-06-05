@@ -9,7 +9,7 @@ from finance_app.modules.transactions.filters import (
 )
 
 
-def test_parse_transaction_filters_normalizes_request_args(db_conn):
+def test_parse_transaction_filters_normalizes_request_args(core_conn):
     """Verify that transaction filter parsing keeps only supported values."""
     args = MultiDict(
         [
@@ -34,7 +34,7 @@ def test_parse_transaction_filters_normalizes_request_args(db_conn):
         ]
     )
 
-    filters = parse_transaction_filters(args, db_conn)
+    filters = parse_transaction_filters(args, core_conn)
 
     assert filters["selected_categories"] == ["Groceries", "Utilities"]
     assert filters["selected_tags"] == ["Tax"]
@@ -53,7 +53,7 @@ def test_parse_transaction_filters_normalizes_request_args(db_conn):
     assert filters["merchant_key"] == "AMZN MKTP"
 
 
-def test_parse_transaction_filters_defaults_invalid_values(db_conn):
+def test_parse_transaction_filters_defaults_invalid_values(core_conn):
     """Verify that unsupported filter values fall back to safe defaults."""
     filters = parse_transaction_filters(
         MultiDict(
@@ -69,7 +69,7 @@ def test_parse_transaction_filters_defaults_invalid_values(db_conn):
                 ("page", "-1"),
             ]
         ),
-        db_conn,
+        core_conn,
     )
 
     assert filters["filter_mode"] == "include"
@@ -83,17 +83,17 @@ def test_parse_transaction_filters_defaults_invalid_values(db_conn):
     assert filters["page"] == 1
 
 
-def test_parse_transaction_filters_accepts_history_source(db_conn):
+def test_parse_transaction_filters_accepts_history_source(core_conn):
     """Verify historical categorization is a supported source filter."""
     filters = parse_transaction_filters(
         MultiDict([("category_source", "history")]),
-        db_conn,
+        core_conn,
     )
 
     assert filters["category_source"] == "history"
 
 
-def test_build_transaction_core_filters_combines_high_value_filters(db_conn):
+def test_build_transaction_core_filters_combines_high_value_filters(core_conn):
     """Verify that parsed transaction filters translate into Core criteria."""
     filters = parse_transaction_filters(
         MultiDict(
@@ -111,7 +111,7 @@ def test_build_transaction_core_filters_combines_high_value_filters(db_conn):
                 ("date_to", "2026-01-31"),
             ]
         ),
-        db_conn,
+        core_conn,
     )
 
     core_filters = build_transaction_core_filters(filters, "UNKNOWN")
@@ -130,11 +130,11 @@ def test_build_transaction_core_filters_combines_high_value_filters(db_conn):
     assert "transactions.tx_date <=" in sql
 
 
-def test_build_transaction_core_filters_supports_credit_filter(db_conn):
+def test_build_transaction_core_filters_supports_credit_filter(core_conn):
     """Verify dashboard credit drill-down can include income and transfer credits."""
     filters = parse_transaction_filters(
         MultiDict([("amount_type", "credit")]),
-        db_conn,
+        core_conn,
     )
 
     core_filters = build_transaction_core_filters(filters, "UNKNOWN")
@@ -145,11 +145,11 @@ def test_build_transaction_core_filters_supports_credit_filter(db_conn):
     assert "transactions.transaction_kind IN" in sql
 
 
-def test_build_transaction_core_filters_supports_pending_approval_review_filter(db_conn):
+def test_build_transaction_core_filters_supports_pending_approval_review_filter(core_conn):
     """Verify pending approval means categorized but not manually approved."""
     filters = parse_transaction_filters(
         MultiDict([("review", "pending_approval")]),
-        db_conn,
+        core_conn,
     )
 
     core_filters = build_transaction_core_filters(filters, "UNKNOWN")

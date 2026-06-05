@@ -1,6 +1,25 @@
 const sidebarToggles = Array.from(document.querySelectorAll("[data-sidebar-toggle], [data-sidebar-mobile-toggle]"));
 const sidebarBackdrop = document.querySelector("[data-sidebar-backdrop]");
 const sidebarMediaQuery = window.matchMedia("(max-width: 850px)");
+const financeInitializers = new Map();
+
+function registerFinanceInitializer(name, initializer) {
+    if (!name || typeof initializer !== "function") {
+        return;
+    }
+
+    financeInitializers.set(name, initializer);
+}
+
+function runFinanceInitializers(root = document) {
+    financeInitializers.forEach((initializer) => initializer(root));
+}
+
+window.financeApp = {
+    ...(window.financeApp || {}),
+    registerInitializer: registerFinanceInitializer,
+    runInitializers: runFinanceInitializers,
+};
 
 function getCsrfToken() {
     return document.querySelector("meta[name='csrf-token']")?.getAttribute("content") || "";
@@ -160,11 +179,11 @@ function setupAutoShowModals(root = document) {
     });
 }
 
+window.financeApp.registerInitializer("core.tooltips", setupTooltips);
+window.financeApp.registerInitializer("core.auto-show-modals", setupAutoShowModals);
+
 setupTooltips();
 setupAutoShowModals();
-
-window.setupTooltips = setupTooltips;
-window.setupAutoShowModals = setupAutoShowModals;
 
 function escapeHtml(value) {
     return String(value ?? "")

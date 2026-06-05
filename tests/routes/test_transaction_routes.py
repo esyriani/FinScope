@@ -1,55 +1,39 @@
 """Route tests for transaction mutation endpoints."""
 
-from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from sqlalchemy import text
+from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
-from finance_app.modules.merchants.repository import get_or_create_merchant_for_description
+from tests.support.database import insert_transaction as insert_test_transaction
+from tests.support.html import assert_visible_text
+from tests.support.web import set_csrf_token
 
 
-def set_csrf_token(client, token="test-csrf-token"):
-    """Store a CSRF token in the test client's session."""
-    with client.session_transaction() as session:
-        session[CSRF_SESSION_KEY] = token
-    return token
-
-
-def insert_transaction(conn, fingerprint="route-tx", category="UNKNOWN", needs_review=1):
+def insert_route_transaction(conn, fingerprint="route-tx", category="UNKNOWN", needs_review=1):
     """Insert a transaction and return its id."""
-    merchant_id = get_or_create_merchant_for_description(conn, "Metro Grocery #123")["id"]
-    tx_id = conn.execute(
-        """
-        INSERT INTO transactions (
-            merchant_id,
-            tx_date,
-            description,
-            amount,
-            category,
-            needs_review,
-            fingerprint
-        )
-        VALUES (?, '2026-01-02', 'Metro Grocery #123', 12.34, ?, ?, ?)
-        """,
-        (merchant_id, category, needs_review, fingerprint),
-    ).lastrowid
-    conn.commit()
-    return tx_id
+    return insert_test_transaction(
+        conn,
+        description="Metro Grocery #123",
+        amount=12.34,
+        category=category,
+        needs_review=needs_review,
+        fingerprint=fingerprint,
+        merchant_from_description=True,
+    )
 
 
 def transaction_state(conn, tx_id):
     """Return selected transaction state."""
-    return conn.execute(
-        """
+    return conn.execute(text("""
         SELECT category, needs_review, category_source, category_confidence,
                category_rule_id, categorized_at, reviewed_at, ignored
         FROM transactions
-        WHERE id = ?
-        """,
-        (tx_id,),
-    ).fetchone()
+        WHERE id = :p0
+        """), {"p0": tx_id}).mappings().fetchone()
 
 
-def test_update_transaction_category_route_saves_manual_category_rule_and_tags(client, db_conn):
+def test_update_transaction_category_route_saves_manual_category_rule_and_tags(client, core_conn):
     """Verify category route updates transaction and saves an optional rule."""
-    tx_id = insert_transaction(db_conn)
+    tx_id = insert_route_transaction(core_conn)
 
     response = client.post(
         f"/transactions/{tx_id}/category",
@@ -65,16 +49,14 @@ def test_update_transaction_category_route_saves_manual_category_rule_and_tags(c
         follow_redirects=True,
     )
 
-    tx = transaction_state(db_conn, tx_id)
-    rule = db_conn.execute(
-        """
+    tx = transaction_state(core_conn, tx_id)
+    rule = core_conn.execute(text("""
         SELECT id, merchant_id, keyword, category, amount_min, amount_max, source
         FROM category_rules
         WHERE keyword = 'METRO GROCERY'
-        """
-    ).fetchone()
+        """)).fetchone()
     assert response.status_code == 200
-    assert b"Category updated. Rule saved for: METRO GROCERY from 10.00 to 20.00" in response.data
+    assert_visible_text(response, "Category updated. Rule saved for: METRO GROCERY from 10.00 to 20.00")
     assert tx["category"] == "Food"
     assert tx["needs_review"] == 0
     assert tx["category_source"] == "manual"
@@ -82,15 +64,15 @@ def test_update_transaction_category_route_saves_manual_category_rule_and_tags(c
     assert tx["category_rule_id"] is None
     assert tx["categorized_at"] is not None
     assert tx["reviewed_at"] is not None
-    assert get_transaction_tag_names(db_conn, tx_id) == ["Tax"]
-    assert rule["merchant_id"] is not None
+    assert get_transaction_tag_names(core_conn, tx_id) == ["Tax"]
+    assert rule._mapping["merchant_id"] is not None
     assert tuple(rule[2:]) == ("METRO GROCERY", "Food", 10.0, 20.0, "manual")
-    assert get_rule_tags_by_rule_id(db_conn, [rule["id"]])[rule["id"]] == ["Tax"]
+    assert get_rule_tags_by_rule_id(core_conn, [rule._mapping["id"]])[rule._mapping["id"]] == ["Tax"]
 
 
-def test_update_transaction_category_route_can_update_transaction_only(client, db_conn):
+def test_update_transaction_category_route_can_update_transaction_only(client, core_conn):
     """Verify category route can update one transaction without creating a rule."""
-    tx_id = insert_transaction(db_conn, fingerprint="route-tx-only")
+    tx_id = insert_route_transaction(core_conn, fingerprint="route-tx-only")
 
     response = client.post(
         f"/transactions/{tx_id}/category",
@@ -102,17 +84,17 @@ def test_update_transaction_category_route_can_update_transaction_only(client, d
         follow_redirects=True,
     )
 
-    rule_count = db_conn.execute("SELECT COUNT(*) AS count FROM category_rules").fetchone()["count"]
+    rule_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM category_rules")).fetchone()._mapping["count"]
     assert response.status_code == 200
-    assert b"Category updated for this transaction only." in response.data
-    assert transaction_state(db_conn, tx_id)["category"] == "Food"
+    assert_visible_text(response, "Category updated for this transaction only.")
+    assert transaction_state(core_conn, tx_id)["category"] == "Food"
     assert rule_count == 0
 
 
-def test_update_transaction_category_route_does_not_verify_unchanged_transaction(client, db_conn):
+def test_update_transaction_category_route_does_not_verify_unchanged_transaction(client, core_conn):
     """Verify unchanged category submissions do not mark a transaction verified."""
-    tx_id = insert_transaction(
-        db_conn,
+    tx_id = insert_route_transaction(
+        core_conn,
         fingerprint="route-tx-unchanged",
         category="Food",
         needs_review=0,
@@ -128,18 +110,18 @@ def test_update_transaction_category_route_does_not_verify_unchanged_transaction
         follow_redirects=True,
     )
 
-    tx = transaction_state(db_conn, tx_id)
+    tx = transaction_state(core_conn, tx_id)
     assert response.status_code == 200
-    assert b"No transaction changes to save." in response.data
+    assert_visible_text(response, "No transaction changes to save.")
     assert tx["category"] == "Food"
     assert tx["needs_review"] == 0
     assert tx["reviewed_at"] is None
 
 
-def test_update_transaction_category_route_approves_unchanged_transaction_when_saving_rule(client, db_conn):
+def test_update_transaction_category_route_approves_unchanged_transaction_when_saving_rule(client, core_conn):
     """Verify saving a rule counts as explicit approval for the current transaction."""
-    tx_id = insert_transaction(
-        db_conn,
+    tx_id = insert_route_transaction(
+        core_conn,
         fingerprint="route-tx-unchanged-rule",
         category="Food",
         needs_review=0,
@@ -158,25 +140,23 @@ def test_update_transaction_category_route_approves_unchanged_transaction_when_s
         follow_redirects=True,
     )
 
-    tx = transaction_state(db_conn, tx_id)
-    rule = db_conn.execute(
-        """
+    tx = transaction_state(core_conn, tx_id)
+    rule = core_conn.execute(text("""
         SELECT keyword, category, amount_min, amount_max
         FROM category_rules
         WHERE keyword = 'METRO GROCERY'
-        """
-    ).fetchone()
+        """)).fetchone()
     assert response.status_code == 200
-    assert b"Rule saved for: METRO GROCERY at amount 12.34" in response.data
+    assert_visible_text(response, "Rule saved for: METRO GROCERY at amount 12.34")
     assert tx["category"] == "Food"
     assert tx["needs_review"] == 0
     assert tx["reviewed_at"] is not None
     assert tuple(rule) == ("METRO GROCERY", "Food", 12.34, 12.34)
 
 
-def test_update_transaction_category_route_validates_missing_transaction_and_amounts(client, db_conn):
+def test_update_transaction_category_route_validates_missing_transaction_and_amounts(client, core_conn):
     """Verify category route handles missing rows and invalid amount bounds."""
-    tx_id = insert_transaction(db_conn, fingerprint="route-invalid-amount")
+    tx_id = insert_route_transaction(core_conn, fingerprint="route-invalid-amount")
     token = set_csrf_token(client)
 
     missing = client.post(
@@ -200,14 +180,14 @@ def test_update_transaction_category_route_validates_missing_transaction_and_amo
         follow_redirects=True,
     )
 
-    assert b"Transaction not found." in missing.data
-    assert b"Amount bounds must be valid numbers." in invalid_amount.data
-    assert transaction_state(db_conn, tx_id)["category"] == "UNKNOWN"
+    assert_visible_text(missing, "Transaction not found.")
+    assert_visible_text(invalid_amount, "Amount bounds must be valid numbers.")
+    assert transaction_state(core_conn, tx_id)["category"] == "UNKNOWN"
 
 
-def test_verify_transaction_route_marks_transaction_reviewed(client, db_conn):
+def test_verify_transaction_route_marks_transaction_reviewed(client, core_conn):
     """Verify verify route marks a transaction as no longer needing review."""
-    tx_id = insert_transaction(db_conn, fingerprint="route-verify")
+    tx_id = insert_route_transaction(core_conn, fingerprint="route-verify")
 
     response = client.post(
         f"/transactions/{tx_id}/verify",
@@ -215,9 +195,9 @@ def test_verify_transaction_route_marks_transaction_reviewed(client, db_conn):
         follow_redirects=True,
     )
 
-    tx = transaction_state(db_conn, tx_id)
+    tx = transaction_state(core_conn, tx_id)
     assert response.status_code == 200
-    assert b"Transaction approved." in response.data
+    assert_visible_text(response, "Transaction approved.")
     assert tx["needs_review"] == 0
     assert tx["reviewed_at"] is not None
 
@@ -231,12 +211,12 @@ def test_verify_transaction_route_reports_missing_transaction(client):
     )
 
     assert response.status_code == 200
-    assert b"Transaction not found." in response.data
+    assert_visible_text(response, "Transaction not found.")
 
 
-def test_update_transaction_ignored_route_ignores_and_restores(client, db_conn):
+def test_update_transaction_ignored_route_ignores_and_restores(client, core_conn):
     """Verify ignored route toggles ignored state and review status."""
-    tx_id = insert_transaction(db_conn, fingerprint="route-ignore")
+    tx_id = insert_route_transaction(core_conn, fingerprint="route-ignore")
     token = set_csrf_token(client)
 
     ignored = client.post(
@@ -250,9 +230,9 @@ def test_update_transaction_ignored_route_ignores_and_restores(client, db_conn):
         follow_redirects=True,
     )
 
-    tx = transaction_state(db_conn, tx_id)
-    assert b"Transaction ignored." in ignored.data
-    assert b"Transaction restored." in restored.data
+    tx = transaction_state(core_conn, tx_id)
+    assert_visible_text(ignored, "Transaction ignored.")
+    assert_visible_text(restored, "Transaction restored.")
     assert tx["ignored"] == 0
     assert tx["needs_review"] == 0
 
@@ -266,14 +246,14 @@ def test_update_transaction_ignored_route_reports_missing_transaction(client):
     )
 
     assert response.status_code == 200
-    assert b"Transaction not found." in response.data
+    assert_visible_text(response, "Transaction not found.")
 
 
-def test_batch_transactions_route_approves_only_selected_ids(client, db_conn):
+def test_batch_transactions_route_approves_only_selected_ids(client, core_conn):
     """Verify batch approval mutates only explicitly selected transactions."""
-    first_id = insert_transaction(db_conn, fingerprint="route-batch-approve-1")
-    second_id = insert_transaction(db_conn, fingerprint="route-batch-approve-2")
-    other_id = insert_transaction(db_conn, fingerprint="route-batch-approve-other")
+    first_id = insert_route_transaction(core_conn, fingerprint="route-batch-approve-1")
+    second_id = insert_route_transaction(core_conn, fingerprint="route-batch-approve-2")
+    other_id = insert_route_transaction(core_conn, fingerprint="route-batch-approve-other")
 
     response = client.post(
         "/transactions/batch",
@@ -285,11 +265,11 @@ def test_batch_transactions_route_approves_only_selected_ids(client, db_conn):
         follow_redirects=True,
     )
 
-    first = transaction_state(db_conn, first_id)
-    second = transaction_state(db_conn, second_id)
-    other = transaction_state(db_conn, other_id)
+    first = transaction_state(core_conn, first_id)
+    second = transaction_state(core_conn, second_id)
+    other = transaction_state(core_conn, other_id)
     assert response.status_code == 200
-    assert b"Approved selected transactions." in response.data
+    assert_visible_text(response, "Approved selected transactions.")
     assert first["needs_review"] == 0
     assert first["reviewed_at"] is not None
     assert second["needs_review"] == 0
@@ -298,10 +278,10 @@ def test_batch_transactions_route_approves_only_selected_ids(client, db_conn):
     assert other["reviewed_at"] is None
 
 
-def test_batch_transactions_route_ignores_only_selected_ids(client, db_conn):
+def test_batch_transactions_route_ignores_only_selected_ids(client, core_conn):
     """Verify batch ignore mutates only explicitly selected transactions."""
-    ignored_id = insert_transaction(db_conn, fingerprint="route-batch-ignore")
-    other_id = insert_transaction(db_conn, fingerprint="route-batch-ignore-other")
+    ignored_id = insert_route_transaction(core_conn, fingerprint="route-batch-ignore")
+    other_id = insert_route_transaction(core_conn, fingerprint="route-batch-ignore-other")
 
     response = client.post(
         "/transactions/batch",
@@ -313,10 +293,10 @@ def test_batch_transactions_route_ignores_only_selected_ids(client, db_conn):
         follow_redirects=True,
     )
 
-    ignored = transaction_state(db_conn, ignored_id)
-    other = transaction_state(db_conn, other_id)
+    ignored = transaction_state(core_conn, ignored_id)
+    other = transaction_state(core_conn, other_id)
     assert response.status_code == 200
-    assert b"Ignored selected transaction." in response.data
+    assert_visible_text(response, "Ignored selected transaction.")
     assert ignored["ignored"] == 1
     assert ignored["needs_review"] == 0
     assert other["ignored"] == 0
@@ -352,7 +332,7 @@ def test_batch_transactions_route_queues_selected_recategorization(client, monke
 
     assert response.status_code == 200
     assert captured["transaction_ids"] == ["11", "22"]
-    assert b"Recategorization queued for 2 selected transactions. Job: abcdef12" in response.data
+    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
 
 
 def test_batch_transactions_route_requires_selection(client):
@@ -367,14 +347,14 @@ def test_batch_transactions_route_requires_selection(client):
     )
 
     assert response.status_code == 200
-    assert b"Select at least one transaction." in response.data
+    assert_visible_text(response, "Select at least one transaction.")
 
 
-def test_suggest_transaction_category_route_shows_result_modal(client, db_conn, monkeypatch):
+def test_suggest_transaction_category_route_shows_result_modal(client, core_conn, monkeypatch):
     """Verify the one-off AI route redirects back with suggestion modal content."""
     from finance_app.modules.transactions import controller as transaction_controller
 
-    tx_id = insert_transaction(db_conn, fingerprint="route-suggest-ai")
+    tx_id = insert_route_transaction(core_conn, fingerprint="route-suggest-ai")
 
     def suggest_ai_for_test(transaction_id):
         """Return deterministic modal content without calling OpenAI."""
@@ -428,19 +408,22 @@ def test_suggest_transaction_category_route_shows_result_modal(client, db_conn, 
     )
 
     assert response.status_code == 200
-    assert b"AI category suggestion" in response.data
-    assert b"TVA SPORTS DIRECT" in response.data
-    assert b"Entertainment" in response.data
-    assert b"TVA Sports is a streaming sports service." in response.data
-    assert b"Apply to transaction" in response.data
-    assert b"Apply and create rule" in response.data
+    assert_visible_text(
+        response,
+        "AI category suggestion",
+        "TVA SPORTS DIRECT",
+        "Entertainment",
+        "TVA Sports is a streaming sports service.",
+        "Apply to transaction",
+        "Apply and create rule",
+    )
 
 
-def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client, db_conn, monkeypatch):
+def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client, core_conn, monkeypatch):
     """Verify the AI suggestion apply route delegates to the transaction service."""
     from finance_app.modules.transactions import controller as transaction_controller
 
-    tx_id = insert_transaction(db_conn, fingerprint="route-apply-ai-suggestion")
+    tx_id = insert_route_transaction(core_conn, fingerprint="route-apply-ai-suggestion")
     pending_suggestion = {
         "transaction_id": tx_id,
         "can_apply": True,
@@ -487,7 +470,7 @@ def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client
         stored_suggestion = session.get("transaction_ai_suggestion")
 
     assert response.status_code == 200
-    assert b"AI suggestion applied. Rule saved." in response.data
+    assert_visible_text(response, "AI suggestion applied. Rule saved.")
     assert captured["transaction_id"] == tx_id
     assert captured["suggestion"] == pending_suggestion
     assert captured["action"] == "apply_and_create_rule"

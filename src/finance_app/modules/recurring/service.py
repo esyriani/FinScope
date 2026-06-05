@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from flask import url_for
 
 from finance_app.core.i18n import format_month_year, gettext, weekday_abbreviation_labels
+from finance_app.core.money import format_money_display
 from finance_app.modules.calendar.service import (
     build_recurring_activity_context,
     build_recurring_activity_json,
@@ -473,20 +474,18 @@ def recurring_calendar_needs_attention(item):
 def recurring_signed_amount_label(item):
     """Build signed amount label."""
     sign = "+" if item["type"] == "income" else "-"
-    amount = f"{item['amount']:,.2f}".replace(",", " ")
-    return f"{sign}{amount} $"
+    return f"{sign}{format_money_display(item['amount'])}"
 
 
 def recurring_calendar_chip_label(item):
     """Build calendar chip label."""
     direction = gettext("income") if item["type"] == "income" else gettext("payment")
-    amount = f"{item['amount']:,.2f}".replace(",", " ")
     return gettext(
-        "{status} recurring {direction} {merchant}, typical amount {amount} dollars.",
+        "{status} recurring {direction} {merchant}, typical amount {amount}.",
         status=gettext(recurring_status_label(item["status"])),
         direction=direction,
         merchant=item["merchant"],
-        amount=amount,
+        amount=format_money_display(item["amount"]),
     )
 
 

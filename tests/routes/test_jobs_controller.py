@@ -1,10 +1,12 @@
 """Route tests for the background jobs feature."""
 
+from sqlalchemy import text
 import pytest
 
 from finance_app.background import runner
-from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_SESSION_KEY
+from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.core.filters import format_datetime
+from tests.support.web import set_csrf_token
 
 
 class CapturingExecutor:
@@ -32,14 +34,6 @@ def isolated_background_runner(monkeypatch):
     with runner._lock:
         runner._jobs.clear()
         runner._job_sequence = 0
-
-
-def set_csrf_token(client, token="test-csrf-token"):
-    """Store a CSRF token in the test client's session."""
-    with client.session_transaction() as session:
-        session[CSRF_SESSION_KEY] = token
-    return token
-
 
 def complete_job(label="Completed job", result="done", undo_handler=None):
     """Create a completed background job for route tests."""
@@ -112,17 +106,15 @@ def test_job_status_json_formats_progress_log_timestamps(client):
     assert "T" not in payload["progress_log"][0]["timestamp_label"]
 
 
-def test_jobs_page_paginates_and_renders_public_job_data(client, db_conn):
+def test_jobs_page_paginates_and_renders_public_job_data(client, core_conn):
     """Verify that the jobs page renders paginated newest-first job rows."""
-    db_conn.execute(
-        """
+    core_conn.execute(text("""
         UPDATE user_settings
         SET value = '2'
         WHERE key = 'default_table_page_size'
           AND user_id = (SELECT id FROM users WHERE username = 'owner')
-        """
-    )
-    db_conn.commit()
+        """))
+    core_conn.commit()
     oldest_job_id = complete_job("Oldest job", result="old")
     complete_job("Middle job", result="middle")
     complete_job("Newest job", result="new")
@@ -297,15 +289,13 @@ def test_cancel_job_post_marks_queued_job_cancelled(client):
     assert runner.get_background_job(job_id)["status"] == "cancelled"
 
 
-def test_categorize_all_unknowns_queues_ai_job(client, db_conn, monkeypatch):
+def test_categorize_all_unknowns_queues_ai_job(client, core_conn, monkeypatch):
     """Verify the Jobs page can queue AI categorization for all unknown rows."""
-    db_conn.execute(
-        """
+    core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
         VALUES ('2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 'jobs-ai-unknown')
-        """
-    )
-    db_conn.commit()
+        """))
+    core_conn.commit()
     submitted = []
 
     def queue_for_test():

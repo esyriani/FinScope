@@ -1,34 +1,106 @@
 function setupTableRowInteractions(root = document) {
     const interactiveSelector = "a, button, input, select, textarea, form, [data-row-action]";
 
+    function rowHref(row) {
+        return row.getAttribute("data-row-href") || "";
+    }
+
+    function rowEditTarget(row) {
+        const targetSelector = row.getAttribute("data-row-edit-target");
+        return targetSelector ? document.querySelector(targetSelector) : null;
+    }
+
+    function selectRow(row) {
+        const table = row.closest("table");
+        table?.querySelectorAll("tbody tr.table-row-selected").forEach((selectedRow) => {
+            selectedRow.classList.remove("table-row-selected");
+        });
+        row.classList.add("table-row-selected");
+    }
+
+    function openRowEditTarget(row) {
+        const modalElement = rowEditTarget(row);
+        if (!modalElement || !window.bootstrap?.Modal) {
+            return false;
+        }
+
+        window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        return true;
+    }
+
+    function navigateRow(row, href) {
+        if (href) {
+            window.showBusyOverlayForElement?.(row);
+            window.location.href = href;
+            return true;
+        }
+
+        return false;
+    }
+
+    function activateRowFromClick(row) {
+        const href = rowHref(row);
+        if (href) {
+            if (row.dataset.rowDrilldown === "dblclick") {
+                if (typeof selectDashboardDrilldownItem === "function") {
+                    selectDashboardDrilldownItem(row);
+                } else {
+                    selectRow(row);
+                }
+                return;
+            }
+
+            navigateRow(row, href);
+            return;
+        }
+
+        selectRow(row);
+    }
+
+    function activateRowFromKeyboard(row) {
+        const href = rowHref(row);
+        if (href) {
+            navigateRow(row, href);
+            return;
+        }
+
+        if (openRowEditTarget(row)) {
+            return;
+        }
+
+        selectRow(row);
+    }
+
+    function prepareInteractiveRow(row) {
+        if (!rowHref(row) && !row.getAttribute("data-row-edit-target")) {
+            return;
+        }
+
+        if (!row.hasAttribute("tabindex")) {
+            row.tabIndex = 0;
+        }
+        if (!row.hasAttribute("role")) {
+            row.setAttribute("role", "button");
+        }
+        if (!row.hasAttribute("aria-label") && !row.hasAttribute("aria-labelledby")) {
+            row.setAttribute("aria-label", row.textContent.replace(/\s+/g, " ").trim());
+        }
+    }
+
     root.querySelectorAll("table:not([data-no-row-select]) tbody tr").forEach((row) => {
         if (row.dataset.tableRowInteractionReady === "true") {
             return;
         }
 
         row.dataset.tableRowInteractionReady = "true";
+        prepareInteractiveRow(row);
 
         row.addEventListener("click", (event) => {
             if (event.target.closest(interactiveSelector)) {
                 return;
             }
 
-            const rowHref = row.getAttribute("data-row-href");
-            if (rowHref) {
-                if (row.dataset.rowDrilldown === "dblclick") {
-                    selectDashboardDrilldownItem(row);
-                    return;
-                }
-
-                window.location.href = rowHref;
-                return;
-            }
-
-            const table = row.closest("table");
-            table?.querySelectorAll("tbody tr.table-row-selected").forEach((selectedRow) => {
-                selectedRow.classList.remove("table-row-selected");
-            });
-            row.classList.add("table-row-selected");
+            activateRowFromClick(row);
         });
 
         row.addEventListener("dblclick", (event) => {
@@ -36,19 +108,26 @@ function setupTableRowInteractions(root = document) {
                 return;
             }
 
-            const rowHref = row.getAttribute("data-row-href");
-            if (rowHref && row.dataset.rowDrilldown === "dblclick") {
-                window.location.href = rowHref;
+            const href = rowHref(row);
+            if (href && row.dataset.rowDrilldown === "dblclick") {
+                navigateRow(row, href);
                 return;
             }
 
-            const targetSelector = row.getAttribute("data-row-edit-target");
-            const modalElement = targetSelector ? document.querySelector(targetSelector) : null;
-            if (!modalElement || !window.bootstrap?.Modal) {
+            openRowEditTarget(row);
+        });
+
+        row.addEventListener("keydown", (event) => {
+            if (event.target.closest(interactiveSelector)) {
                 return;
             }
 
-            window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+            if (event.key !== "Enter" && event.key !== " ") {
+                return;
+            }
+
+            event.preventDefault();
+            activateRowFromKeyboard(row);
         });
     });
 }
@@ -221,7 +300,6 @@ function openAuditSectionFromLocation(root = document) {
     }
 }
 
-setupDashboardDrilldownInteractions();
 setupTableRowInteractions();
 setupTransactionBatchActions();
 setupCollapseToggleLabels();
@@ -461,10 +539,10 @@ function setupPaginatedTables(root = document) {
 
 setupPaginatedTables();
 
-window.setupCollapseToggleLabels = setupCollapseToggleLabels;
-window.setupAuditSectionLinks = setupAuditSectionLinks;
-window.openAuditSectionFromLocation = openAuditSectionFromLocation;
-window.setupTableRowInteractions = setupTableRowInteractions;
-window.setupTransactionBatchActions = setupTransactionBatchActions;
-window.setupSortableTables = setupSortableTables;
-window.setupPaginatedTables = setupPaginatedTables;
+window.financeApp?.registerInitializer("tables.row-interactions", setupTableRowInteractions);
+window.financeApp?.registerInitializer("tables.transaction-batch-actions", setupTransactionBatchActions);
+window.financeApp?.registerInitializer("tables.collapse-toggle-labels", setupCollapseToggleLabels);
+window.financeApp?.registerInitializer("tables.audit-section-links", setupAuditSectionLinks);
+window.financeApp?.registerInitializer("tables.open-audit-section", openAuditSectionFromLocation);
+window.financeApp?.registerInitializer("tables.sortable", setupSortableTables);
+window.financeApp?.registerInitializer("tables.paginated", setupPaginatedTables);

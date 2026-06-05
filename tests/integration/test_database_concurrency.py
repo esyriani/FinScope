@@ -15,7 +15,7 @@ from finance_app.modules.categories import taxonomy as category_taxonomy
 from finance_app.modules.merchants import repository as merchant_repository
 
 
-def test_concurrent_merchant_get_or_create_reselects_existing_row(db_conn, monkeypatch):
+def test_concurrent_merchant_get_or_create_reselects_existing_row(core_conn, monkeypatch):
     """Verify merchant creation tolerates a unique conflict and reselects the row."""
     real_insert_or_select = merchant_repository.insert_or_select_unique_row
     injected = {"merchant": False}
@@ -38,11 +38,11 @@ def test_concurrent_merchant_get_or_create_reselects_existing_row(db_conn, monke
     )
 
     merchant = merchant_repository.get_or_create_merchant(
-        db_conn,
+        core_conn,
         "RACE MERCHANT",
     )
 
-    merchant_count = db_conn.execute(
+    merchant_count = core_conn.execute(
         select(func.count())
         .select_from(merchants_table)
         .where(merchants_table.c.merchant_key == "RACE MERCHANT")
@@ -53,7 +53,7 @@ def test_concurrent_merchant_get_or_create_reselects_existing_row(db_conn, monke
     assert merchant["merchant_key"] == "RACE MERCHANT"
 
 
-def test_concurrent_category_and_tag_metadata_create_handles_unique_conflicts(db_conn, monkeypatch):
+def test_concurrent_category_and_tag_metadata_create_handles_unique_conflicts(core_conn, monkeypatch):
     """Verify taxonomy metadata helpers reselect rows created by racing writers."""
     real_insert_or_select = category_taxonomy.insert_or_select_unique_row
     injected = {"category": False, "tag": False}
@@ -88,27 +88,27 @@ def test_concurrent_category_and_tag_metadata_create_handles_unique_conflicts(db
     )
 
     category = category_taxonomy.upsert_category_metadata(
-        db_conn,
+        core_conn,
         "Race Category",
         description="Updated description",
         instruction="Updated instruction",
     )
     tag = category_taxonomy.upsert_tag_metadata(
-        db_conn,
+        core_conn,
         "Race Tag",
         description="Updated tag description",
         instruction="Updated tag instruction",
         color="#abcdef",
     )
 
-    category_row = db_conn.execute(
+    category_row = core_conn.execute(
         select(
             categories_table.c.description,
             categories_table.c.instruction,
             func.count().over().label("row_count"),
         ).where(categories_table.c.name == "Race Category")
     ).fetchone()
-    tag_row = db_conn.execute(
+    tag_row = core_conn.execute(
         select(
             tags_table.c.description,
             tags_table.c.instruction,

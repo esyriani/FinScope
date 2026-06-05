@@ -5,16 +5,15 @@ from finance_app.core.query import parse_page, parse_sort_direction
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.service import get_category_options
 from finance_app.modules.categories.taxonomy import get_category_description_map, get_tag_option_rows
+from finance_app.modules.review.normalization import review_merchant_key
 from finance_app.modules.review.presenter import (
     active_ungroup_keys,
     attach_review_row_urls,
+    build_review_groups,
     is_unknown_category,
     review_display_rows,
     review_group_default_sort_key,
     review_group_display_row,
-    review_group_rows,
-    review_groups,
-    review_merchant_key,
     review_summary,
     review_transaction_display_row,
     selected_ungroup_keys,
@@ -23,6 +22,10 @@ from finance_app.modules.review.presenter import (
     sortable_text,
     with_ungroup_key,
     without_ungroup_key,
+)
+from finance_app.modules.review.repository import (
+    review_candidates_with_tags,
+    review_group_rows,
 )
 from finance_app.modules.review.queries import find_review_rule, review_candidate_rows, rule_snapshot
 from finance_app.modules.review.urls import build_review_sort_url, build_review_url, parse_review_sort
@@ -114,6 +117,12 @@ def filter_review_groups_by_merchant(groups, merchant_search):
         for group in groups
         if needle in str(group.get("merchant_key") or "").casefold()
     ]
+
+
+def review_groups(conn, unknown_category, merchant_candidate=""):
+    """Return review groups for candidate rows fetched from persistence."""
+    rows, transaction_tags = review_candidates_with_tags(conn, unknown_category, merchant_candidate)
+    return build_review_groups(rows, transaction_tags, unknown_category)
 
 
 __all__ = [

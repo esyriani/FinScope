@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import secrets
 import string
 
+from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -24,6 +25,7 @@ from finance_app.modules.auth.models import AuthenticatedUser
 
 
 AUTH_OPERATIONAL_ERRORS = (SqlAlchemyOperationalError,)
+AUTH_INTEGRITY_ERRORS = (SqlAlchemyIntegrityError,)
 FAILED_LOGIN_LIMIT = 5
 LOCKOUT_MINUTES = 15
 MIN_PASSWORD_LENGTH = 10
@@ -127,33 +129,36 @@ def bootstrap_owner(username, password, confirm_password, ip_address=None, displ
     normalized_display_name = clean_display_name(display_name, normalized_username)
     validate_password_pair(password, confirm_password)
 
-    with db_core_transaction() as conn:
-        if repository.owner_exists(conn):
-            raise ValueError("The owner account already exists.")
-        if repository.username_exists(conn, normalized_username):
-            raise ValueError("Username is already in use.")
+    try:
+        with db_core_transaction() as conn:
+            if repository.owner_exists(conn):
+                raise ValueError("The owner account already exists.")
+            if repository.username_exists(conn, normalized_username):
+                raise ValueError("Username is already in use.")
 
-        now = utc_now()
-        user_id = repository.insert_user(
-            conn,
-            normalized_username,
-            hash_password(password),
-            USER_ROLE_OWNER,
-            must_change_password=False,
-            now=now,
-            display_name=normalized_display_name,
-        )
-        from finance_app.modules.settings.runtime import seed_runtime_settings
+            now = utc_now()
+            user_id = repository.insert_user(
+                conn,
+                normalized_username,
+                hash_password(password),
+                USER_ROLE_OWNER,
+                must_change_password=False,
+                now=now,
+                display_name=normalized_display_name,
+            )
+            from finance_app.modules.settings.runtime import seed_runtime_settings
 
-        seed_runtime_settings(conn)
-        repository.insert_audit_event(
-            conn,
-            user_id,
-            normalized_username,
-            "owner_bootstrap",
-            ip_address=ip_address,
-        )
-        return repository.get_user_by_id(conn, user_id)
+            seed_runtime_settings(conn)
+            repository.insert_audit_event(
+                conn,
+                user_id,
+                normalized_username,
+                "owner_bootstrap",
+                ip_address=ip_address,
+            )
+            return repository.get_user_by_id(conn, user_id)
+    except AUTH_INTEGRITY_ERRORS as exc:
+        raise ValueError("The owner account already exists or username is already in use.") from exc
 
 
 def create_managed_user(username, role, actor=None, ip_address=None, display_name=None):
@@ -163,34 +168,37 @@ def create_managed_user(username, role, actor=None, ip_address=None, display_nam
     normalized_role = clean_managed_role(role)
     temporary_password = generate_temporary_password()
 
-    with db_core_transaction() as conn:
-        if repository.username_exists(conn, normalized_username):
-            raise ValueError("Username is already in use.")
+    try:
+        with db_core_transaction() as conn:
+            if repository.username_exists(conn, normalized_username):
+                raise ValueError("Username is already in use.")
 
-        now = utc_now()
-        user_id = repository.insert_user(
-            conn,
-            normalized_username,
-            hash_password(temporary_password),
-            normalized_role,
-            must_change_password=True,
-            now=now,
-            display_name=normalized_display_name,
-        )
-        from finance_app.modules.settings.runtime import seed_runtime_settings
+            now = utc_now()
+            user_id = repository.insert_user(
+                conn,
+                normalized_username,
+                hash_password(temporary_password),
+                normalized_role,
+                must_change_password=True,
+                now=now,
+                display_name=normalized_display_name,
+            )
+            from finance_app.modules.settings.runtime import seed_runtime_settings
 
-        seed_runtime_settings(conn)
-        audit_actor_id, audit_actor_name = actor_identity(actor)
-        repository.insert_audit_event(
-            conn,
-            audit_actor_id,
-            audit_actor_name,
-            "user_created",
-            details=f"user_id={user_id};role={normalized_role}",
-            ip_address=ip_address,
-        )
+            seed_runtime_settings(conn)
+            audit_actor_id, audit_actor_name = actor_identity(actor)
+            repository.insert_audit_event(
+                conn,
+                audit_actor_id,
+                audit_actor_name,
+                "user_created",
+                details=f"user_id={user_id};role={normalized_role}",
+                ip_address=ip_address,
+            )
 
-        created_user = repository.get_user_by_id(conn, user_id)
+            created_user = repository.get_user_by_id(conn, user_id)
+    except AUTH_INTEGRITY_ERRORS as exc:
+        raise ValueError("Username is already in use.") from exc
 
     return created_user, temporary_password
 

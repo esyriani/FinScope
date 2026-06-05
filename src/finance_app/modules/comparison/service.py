@@ -30,6 +30,7 @@ from finance_app.modules.comparison.presenter import (
     build_year_filter_context,
     build_year_unknown_warning,
     build_monthly_spending,
+    build_monthly_spending_statistics,
     period_comparison_ranges,
 )
 from finance_app.modules.comparison.queries import (
@@ -100,6 +101,7 @@ def build_comparison_context(args):
 
     category_comparison = build_category_comparison(selected_years, category_rows, selected_baseline_year)
     monthly_spending = build_monthly_spending(selected_years, monthly_rows)
+    monthly_spending_statistics = build_monthly_spending_statistics(selected_years, monthly_rows)
     year_unknown_warning = build_year_unknown_warning(category_comparison, unknown_category)
 
     return dict(
@@ -147,6 +149,7 @@ def build_comparison_context(args):
         year_unknown_warning=year_unknown_warning,
         month_labels=month_abbreviation_labels(),
         monthly_spending=monthly_spending,
+        monthly_spending_statistics=monthly_spending_statistics,
         monthly_spending_json=[
             {
                 "year": year,
@@ -154,6 +157,7 @@ def build_comparison_context(args):
             }
             for year in selected_years
         ],
+        monthly_spending_statistics_json=monthly_spending_statistics,
     )
 
 

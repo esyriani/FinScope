@@ -11,10 +11,12 @@ EXPECTED_TABLE_COLUMNS = {
     "users": [
         "id",
         "username",
+        "username_key",
         "display_name",
         "password_hash",
         "role",
         "is_active",
+        "owner_role_key",
         "must_change_password",
         "created_at",
         "updated_at",
@@ -166,6 +168,8 @@ EXPECTED_EXPLICIT_INDEXES = {
 EXPECTED_UNIQUE_CONSTRAINTS = {
     "users": {
         "uq_users_username": ["username"],
+        "uq_users_username_key": ["username_key"],
+        "uq_users_single_owner": ["owner_role_key"],
     },
     "categories": {
         "uq_categories_builtin_key": ["builtin_key"],

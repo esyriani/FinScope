@@ -42,6 +42,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Choose how imported rows are interpreted.",
     "Choose the date format before importing.",
     "Choose which rows to export from this table.",
+    "Choose whether uploads create ledger rows or enrich existing rows.",
     "Close",
     "Confirmed by you",
     "Confirm recurring if this pattern is useful; ignore it if it is noise.",
@@ -53,6 +54,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Date format detected from unambiguous rows.",
     "Date format selected for this import.",
     "days",
+    "Default role for accounts created from this statement type.",
     "Detected because this merchant appeared in {months} distinct months with a typical amount of {amount}.",
     "Description",
     "Difference",
@@ -70,6 +72,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "AI categorization completed: {summary}",
     "AI request issue in batch {start}-{end}: {error_type}: {detail}",
     "Processed {current} of {total}; {updated} categorized.",
+    "Processing...",
     "Processing {start}-{end} of {total}; {updated} categorized so far.",
     "Starting AI categorization for {total} unknown transactions.",
     "Starting batch {start}-{end} of {total}.",
@@ -94,6 +97,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Low",
     "Medium",
     "Monthly-like",
+    "Monthly spending distribution",
     "Names appear in upload and statement history.",
     "No log entries yet.",
     "No preview rows available.",
@@ -115,6 +119,12 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Previous",
     "Preview could not be loaded.",
     "Preview unavailable.",
+    "Min",
+    "Q1",
+    "Median",
+    "Mean",
+    "Q3",
+    "Max",
     "n/a",
     "Expected",
     "Possibly inactive",
@@ -167,10 +177,10 @@ def create_app():
     app.config["FINANCE_SETTINGS"] = settings
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = not settings.server_debug
+    app.config["SESSION_COOKIE_SECURE"] = settings.secure_cookies
     app.config["REMEMBER_COOKIE_HTTPONLY"] = True
     app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
-    app.config["REMEMBER_COOKIE_SECURE"] = not settings.server_debug
+    app.config["REMEMBER_COOKIE_SECURE"] = settings.secure_cookies
 
     register_core_db(app)
     register_auth(app)
@@ -200,6 +210,7 @@ def create_app():
             "supported_languages": SUPPORTED_LANGUAGES,
             "_": gettext,
             "client_i18n": client_translations(ui_language, CLIENT_TRANSLATION_MESSAGES),
+            "currency_symbol": settings.currency_symbol,
             "untagged_tag_filter_value": UNTAGGED_TAG_FILTER,
             "category_filter_builtin_exclusions": get_builtin_category_names(),
             "current_user_can": current_user_can,

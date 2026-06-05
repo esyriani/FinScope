@@ -39,7 +39,6 @@ function setupRuleSaveModeControls(root = document) {
 }
 
 setupRuleSaveModeControls();
-window.setupRuleSaveModeControls = setupRuleSaveModeControls;
 
 function setupRuleAmountControls(root = document) {
     const controls = Array.from(root.querySelectorAll("[data-rule-amount-control]"));
@@ -144,7 +143,34 @@ function setupRulePreviewForms(root = document) {
 
         function renderEmpty(message) {
             status.textContent = message;
-            list.innerHTML = "";
+            list.replaceChildren();
+        }
+
+        function previewEmptyMessage() {
+            const empty = document.createElement("div");
+            empty.className = "rule-preview-empty";
+            empty.textContent = financeTranslate("No active transactions match this rule.");
+            return empty;
+        }
+
+        function previewRow(tx) {
+            const row = document.createElement("div");
+            row.className = "rule-preview-row";
+
+            const details = document.createElement("div");
+            const description = document.createElement("div");
+            description.className = "rule-preview-description";
+            description.textContent = tx.description || "";
+            const meta = document.createElement("div");
+            meta.className = "rule-preview-meta";
+            meta.textContent = `${tx.tx_date || ""} - ${tx.current_category || "UNKNOWN"}`;
+            details.append(description, meta);
+
+            const amount = document.createElement("strong");
+            amount.textContent = tx.amount_display || "";
+
+            row.append(details, amount);
+            return row;
         }
 
         function renderPreview(data) {
@@ -155,19 +181,11 @@ function setupRulePreviewForms(root = document) {
             );
 
             if (!data.transactions || data.transactions.length === 0) {
-                list.innerHTML = `<div class="rule-preview-empty">${escapeHtml(financeTranslate("No active transactions match this rule."))}</div>`;
+                list.replaceChildren(previewEmptyMessage());
                 return;
             }
 
-            list.innerHTML = data.transactions.map((tx) => `
-                <div class="rule-preview-row">
-                    <div>
-                        <div class="rule-preview-description">${escapeHtml(tx.description)}</div>
-                        <div class="rule-preview-meta">${escapeHtml(tx.tx_date)} - ${escapeHtml(tx.current_category || "UNKNOWN")}</div>
-                    </div>
-                    <strong>${escapeHtml(tx.amount_display)}</strong>
-                </div>
-            `).join("");
+            list.replaceChildren(...data.transactions.map(previewRow));
         }
 
         async function updatePreview() {
@@ -279,11 +297,12 @@ function setupRuleTableActions(root = document) {
         bootstrap.Modal.getOrCreateInstance(modalElement).hide();
     }
 
-    async function submitAction(form) {
+    async function submitAction(form, submitter = null) {
         const buttons = Array.from(form.querySelectorAll("button"));
         buttons.forEach((button) => {
             button.disabled = true;
         });
+        const busyToken = window.showBusyOverlayForElement?.(form, submitter);
 
         try {
             const response = await fetch(form.action, {
@@ -327,6 +346,7 @@ function setupRuleTableActions(root = document) {
                     button.disabled = false;
                 });
             }
+            window.hideBusyOverlay?.(busyToken);
         }
     }
 
@@ -338,10 +358,14 @@ function setupRuleTableActions(root = document) {
         form.dataset.ruleTableActionReady = "true";
         form.addEventListener("submit", (event) => {
             event.preventDefault();
-            submitAction(form);
+            submitAction(form, event.submitter);
         });
     });
 }
 
 setupRuleTableActions();
-window.setupRuleTableActions = setupRuleTableActions;
+
+window.financeApp?.registerInitializer("rules.save-mode-controls", setupRuleSaveModeControls);
+window.financeApp?.registerInitializer("rules.amount-controls", setupRuleAmountControls);
+window.financeApp?.registerInitializer("rules.preview-forms", setupRulePreviewForms);
+window.financeApp?.registerInitializer("rules.table-actions", setupRuleTableActions);

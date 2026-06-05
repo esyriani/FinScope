@@ -1,5 +1,6 @@
 """SQLAlchemy Core tests for rules repository helpers."""
 
+from sqlalchemy import text
 from sqlalchemy import delete, insert
 
 from finance_app.database.dates import format_utc_datetime
@@ -23,7 +24,7 @@ from finance_app.modules.rules.repository import (
 )
 
 
-def test_rules_repository_import_helpers_support_core_connections(app, db_conn):
+def test_rules_repository_import_helpers_support_core_connections(app, core_conn):
     """Verify imported-rule persistence helpers can run through SQLAlchemy Core."""
     del app
     rule = {
@@ -70,20 +71,18 @@ def test_rules_repository_import_helpers_support_core_connections(app, db_conn):
         ]
         assert snapshot in snapshot_category_rules(conn)
 
-    persisted = db_conn.execute(
-        """
+    persisted = core_conn.execute(text("""
         SELECT category_rules.keyword, category_rules.category, merchants.merchant_key
         FROM category_rules
         JOIN merchants ON merchants.id = category_rules.merchant_id
         WHERE category_rules.keyword = 'CORE MARKET'
-        """
-    ).fetchone()
+        """)).fetchone()
     assert tuple(persisted) == ("CORE MARKET", "Core Import", "CORE MARKET")
 
 
-def test_rules_repository_restore_and_cleanup_support_core_connections(app, db_conn):
+def test_rules_repository_restore_and_cleanup_support_core_connections(app, core_conn):
     """Verify rule restore and imported category cleanup support Core connections."""
-    del app, db_conn
+    del app, core_conn
     rule = {
         "id": 7001,
         "account_id": None,

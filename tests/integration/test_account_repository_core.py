@@ -32,7 +32,8 @@ def test_get_or_create_account_links_credit_card_to_funding_account(app):
         assert credit_card["paid_from_account_id"] == funding_account["id"]
 
 
-def test_get_or_create_account_requires_core_connection(db_conn):
-    """Reject non-Core adapters at the account repository boundary."""
+def test_get_or_create_account_requires_core_connection(core_conn):
+    """Reject non-Core objects at the account repository boundary."""
+    del core_conn
     with pytest.raises(TypeError):
-        get_or_create_account(db_conn, "Legacy")
+        get_or_create_account(object(), "Not Core")

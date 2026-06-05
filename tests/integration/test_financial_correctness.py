@@ -4,6 +4,8 @@ Validates dashboard and comparison totals for refunds, account payments, and
 date boundaries using the SQLAlchemy Core data layer.
 """
 
+import pytest
+from sqlalchemy import text
 from werkzeug.datastructures import MultiDict
 
 from finance_app.core.constants import (
@@ -39,10 +41,10 @@ def insert_financial_transaction(
     category,
     transaction_kind,
     fingerprint,
+    ignored=0,
 ):
     """Insert one report transaction for analytics assertions."""
-    conn.execute(
-        """
+    conn.execute(text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -54,10 +56,16 @@ def insert_financial_transaction(
             transaction_kind,
             fingerprint
         )
-        VALUES (?, ?, ?, ?, 0, 'manual', 0, ?, ?)
-        """,
-        (tx_date, description, amount, category, transaction_kind, fingerprint),
-    )
+        VALUES (:p0, :p1, :p2, :p3, 0, 'manual', :p4, :p5, :p6)
+        """), {
+            "p0": tx_date,
+            "p1": description,
+            "p2": amount,
+            "p3": category,
+            "p4": ignored,
+            "p5": transaction_kind,
+            "p6": fingerprint,
+        })
     conn.commit()
 
 
@@ -75,10 +83,66 @@ def dashboard_for_range(app, date_from, date_to):
         )
 
 
-def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app, db_conn):
+@pytest.mark.parametrize(
+    ("rows", "expected"),
+    [
+        (
+            [
+                ("2026-01-02", "Grocery run", 125.55, "Food", TRANSACTION_KIND_EXPENSE, 0),
+                ("2026-01-03", "Transit pass", 10.10, "Transport", TRANSACTION_KIND_EXPENSE, 0),
+                ("2026-01-04", "Grocery refund", -25.10, "Food", TRANSACTION_KIND_REFUND, 0),
+                ("2026-01-05", "Payroll", -2000.00, "Income", TRANSACTION_KIND_INCOME, 0),
+                ("2026-01-06", "Card payment", 500.00, "Transfers", TRANSACTION_KIND_PAYMENT, 0),
+                ("2026-01-07", "Ignored expense", 999.99, "Food", TRANSACTION_KIND_EXPENSE, 1),
+            ],
+            {
+                "total_spending": 110.55,
+                "total_income": 2000.00,
+                "net_cashflow": 1889.45,
+                "transaction_count": 4,
+            },
+        ),
+        (
+            [
+                ("2026-01-02", "Payroll", -1500.00, "Income", TRANSACTION_KIND_INCOME, 0),
+                ("2026-01-03", "Card payment", 750.00, "Transfers", TRANSACTION_KIND_PAYMENT, 0),
+                ("2026-01-04", "Ignored grocery", 45.00, "Food", TRANSACTION_KIND_EXPENSE, 1),
+            ],
+            {
+                "total_spending": 0.00,
+                "total_income": 1500.00,
+                "net_cashflow": 1500.00,
+                "transaction_count": 1,
+            },
+        ),
+    ],
+)
+def test_dashboard_financial_calculations_table_driven(app, core_conn, rows, expected):
+    """Verify dashboard totals classify transaction kinds and ignored rows."""
+    for index, (tx_date, description, amount, category, kind, ignored) in enumerate(rows):
+        insert_financial_transaction(
+            core_conn,
+            tx_date,
+            description,
+            amount,
+            category,
+            kind,
+            f"financial-table-{index}-{description}",
+            ignored=ignored,
+        )
+
+    context = dashboard_for_range(app, "2026-01-01", "2026-01-31")
+
+    for key, expected_value in expected.items():
+        assert context[key] == expected_value
+    assert round(context["total_income"] - context["total_spending"], 2) == context["net_cashflow"]
+    assert round(sum(context["category_totals"]), 2) == context["total_spending"]
+
+
+def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app, core_conn):
     """Verify refund rows reduce spending totals and stay out of income totals."""
     insert_financial_transaction(
-        db_conn,
+        core_conn,
         "2026-02-01",
         "Book Store Purchase",
         100.00,
@@ -87,7 +151,7 @@ def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app,
         "financial-refund-purchase",
     )
     insert_financial_transaction(
-        db_conn,
+        core_conn,
         "2026-02-02",
         "Book Store Refund",
         -25.00,
@@ -96,7 +160,7 @@ def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app,
         "financial-refund-credit",
     )
     insert_financial_transaction(
-        db_conn,
+        core_conn,
         "2026-02-03",
         "Payroll",
         -1000.00,
@@ -105,7 +169,7 @@ def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app,
         "financial-refund-income",
     )
     insert_financial_transaction(
-        db_conn,
+        core_conn,
         "2026-02-04",
         "Credit Card Payment",
         500.00,
@@ -125,7 +189,7 @@ def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app,
     assert context["income_month_totals"] == [1000.00]
 
 
-def test_dashboard_custom_date_boundaries_are_inclusive_for_leap_months(app, db_conn):
+def test_dashboard_custom_date_boundaries_are_inclusive_for_leap_months(app, core_conn):
     """Verify custom dashboard ranges include exact start/end dates only."""
     rows = [
         ("2024-01-31", "Before range", 10.00, "financial-before-range"),
@@ -135,7 +199,7 @@ def test_dashboard_custom_date_boundaries_are_inclusive_for_leap_months(app, db_
     ]
     for tx_date, description, amount, fingerprint in rows:
         insert_financial_transaction(
-            db_conn,
+            core_conn,
             tx_date,
             description,
             amount,
@@ -153,7 +217,7 @@ def test_dashboard_custom_date_boundaries_are_inclusive_for_leap_months(app, db_
     assert context["category_totals"] == [60.00]
 
 
-def test_comparison_refunds_reduce_current_and_previous_period_spending(app, db_conn, monkeypatch):
+def test_comparison_refunds_reduce_current_and_previous_period_spending(app, core_conn, monkeypatch):
     """Verify period comparison applies refund offsets in both periods."""
     monkeypatch.setattr(comparison_service, "date", FixedComparisonDate)
     for tx_date, description, amount, kind, fingerprint in [
@@ -164,7 +228,7 @@ def test_comparison_refunds_reduce_current_and_previous_period_spending(app, db_
         ("2026-03-03", "Current income", -1000.00, TRANSACTION_KIND_INCOME, "financial-current-income"),
     ]:
         insert_financial_transaction(
-            db_conn,
+            core_conn,
             tx_date,
             description,
             amount,

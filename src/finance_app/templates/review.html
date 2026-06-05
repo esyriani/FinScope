@@ -1,5 +1,18 @@
+{% set page_stylesheets = [
+    "css/home-dashboard.css",
+    "css/tables.css",
+    "css/rules-list.css",
+    "css/rule-forms.css",
+    "css/review.css"
+] %}
+{% set page_scripts = [
+    "js/rules.js",
+    "js/review.js",
+    "js/tables.js"
+] %}
 {% extends "base.html" %}
 {% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
+{% from "_pagination.html" import pagination with context %}
 
 {% block content %}
 {% set page = page | default(1) %}
@@ -17,30 +30,9 @@
 {% set category_descriptions = category_descriptions | default({}) %}
 {% set merchant_search = merchant_search | default("") %}
 
+{%- macro default_review_page_url(page_number) -%}{{ url_for('review.review', page=page_number) }}{%- endmacro -%}
 {% macro review_pagination(label, review_page_url) %}
-{% if total_pages > 1 %}
-<nav aria-label="{{ label }}">
-    <ul class="pagination mb-0">
-        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-            <a class="page-link" href="{{ review_page_url(page - 1) if review_page_url else url_for('review.review', page=page - 1) }}">{{ _("Previous") }}</a>
-        </li>
-
-        {% for page_number in range(1, total_pages + 1) %}
-            {% if page_number == 1 or page_number == total_pages or (page_number >= page - 2 and page_number <= page + 2) %}
-                <li class="page-item {% if page_number == page %}active{% endif %}">
-                    <a class="page-link" href="{{ review_page_url(page_number) if review_page_url else url_for('review.review', page=page_number) }}">{{ page_number }}</a>
-                </li>
-            {% elif page_number == page - 3 or page_number == page + 3 %}
-                <li class="page-item disabled"><span class="page-link">...</span></li>
-            {% endif %}
-        {% endfor %}
-
-        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-            <a class="page-link" href="{{ review_page_url(page + 1) if review_page_url else url_for('review.review', page=page + 1) }}">{{ _("Next") }}</a>
-        </li>
-    </ul>
-</nav>
-{% endif %}
+{{ pagination(page, total_pages, review_page_url if review_page_url else default_review_page_url, label) }}
 {% endmacro %}
 
 <div class="page-header">

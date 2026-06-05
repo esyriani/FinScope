@@ -71,46 +71,6 @@ function setupDashboardQuickView(root = document) {
     if (!input) return;
 
     const buttons = root.querySelectorAll("[data-dashboard-quick-view]");
-    const customGroups = Array.from(root.querySelectorAll(
-        "[data-dashboard-custom-categories], [data-dashboard-custom-tags]"
-    ));
-    const customBreak = dashboardScopedElement(root, "[data-dashboard-custom-filter-break]");
-
-    const updateCustomFilters = () => {
-        const isCustom = input.value === "custom";
-
-        customBreak?.classList.toggle("d-none", !isCustom);
-
-        customGroups.forEach((group) => {
-            group.classList.toggle("d-none", !isCustom);
-
-            const multiselect = group.querySelector("[data-tag-multiselect]");
-            if (multiselect) {
-                multiselect.dataset.disabled = isCustom ? "false" : "true";
-            }
-
-            const toggle = group.querySelector("[data-tag-multiselect-toggle]");
-            if (toggle) {
-                toggle.setAttribute("aria-disabled", isCustom ? "false" : "true");
-                toggle.setAttribute("tabindex", isCustom ? "0" : "-1");
-            }
-
-            const menu = group.querySelector("[data-tag-multiselect-menu]");
-            if (!isCustom) {
-                if (toggle) {
-                    toggle.setAttribute("aria-expanded", "false");
-                }
-                if (menu) {
-                    menu.style.display = "none";
-                }
-            }
-
-            group.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
-                checkbox.disabled = !isCustom;
-            });
-        });
-    };
-
     const updateButtons = () => {
         buttons.forEach((button) => {
             const isActive = button.dataset.dashboardQuickView === input.value;
@@ -126,20 +86,13 @@ function setupDashboardQuickView(root = document) {
         }
 
         button.dataset.dashboardQuickViewReady = "true";
-        button.addEventListener("click", (event) => {
+        button.addEventListener("click", () => {
             const nextView = button.dataset.dashboardQuickView || "all";
             input.value = nextView;
-            updateCustomFilters();
             updateButtons();
-
-            if (nextView === "custom") {
-                event.preventDefault();
-                customGroups[0]?.querySelector("[data-tag-multiselect-toggle]")?.focus();
-            }
         });
     });
 
-    updateCustomFilters();
     updateButtons();
 }
 
@@ -176,10 +129,10 @@ function setupDashboardPage(root = document) {
     setupDashboardQualityPanel(root);
 }
 
+window.financeApp?.registerInitializer("dashboard.page", setupDashboardPage);
+
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", setupDashboardPage);
 } else {
     setupDashboardPage();
 }
-
-window.setupDashboardPage = setupDashboardPage;

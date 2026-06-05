@@ -25,8 +25,8 @@ from finance_app.modules.categories.taxonomy import (
     set_rule_tags,
     set_transaction_tags,
 )
-from finance_app.modules.review.presenter import review_group_rows
 from finance_app.modules.review.queries import find_review_rule, rule_snapshot
+from finance_app.modules.review.repository import review_group_rows
 from finance_app.modules.rules.forms import amount_bounds_label
 from finance_app.modules.settings.runtime import get_unknown_category
 

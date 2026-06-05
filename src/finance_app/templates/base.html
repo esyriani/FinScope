@@ -1,5 +1,11 @@
 <!DOCTYPE html>
-<html lang="{{ ui_language }}" data-bs-theme="{{ ui_theme }}">
+<html
+    lang="{{ ui_language }}"
+    data-bs-theme="{{ ui_theme }}"
+    data-finance-locale="{{ ui_locale }}"
+    data-finance-currency-symbol="{{ currency_symbol }}"
+    data-finance-i18n="{{ client_i18n | tojson | forceescape }}"
+>
 <head>
     <meta charset="UTF-8">
     <title>FinScope</title>
@@ -8,40 +14,17 @@
     <link rel="icon" type="image/png" href="{{ static_asset('img/favicon.png') }}">
     <link rel="apple-touch-icon" href="{{ static_asset('img/favicon.png') }}">
 
-    <script>
-        window.financeLocale = {{ ui_locale | tojson }};
-        window.financeI18n = {{ client_i18n | tojson }};
-        window.financeTranslate = function(message, variables) {
-            const template = (window.financeI18n && window.financeI18n[message]) || message;
-            return Object.entries(variables || {}).reduce(
-                (result, entry) => result.replaceAll(`{${entry[0]}}`, String(entry[1])),
-                template
-            );
-        };
-        if (localStorage.getItem("finance.sidebarCollapsed") === "true") {
-            document.documentElement.classList.add("sidebar-collapsed");
-        }
-        document.documentElement.setAttribute(
-            "data-bs-theme",
-            "{{ 'dark' if ui_theme == 'dark' else 'light' }}"
-        );
-    </script>
-    <link href="{{ static_asset('vendor/bootstrap/5.3.3/css/bootstrap.min.css') }}" rel="stylesheet">
-    <link href="{{ static_asset('vendor/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css') }}" rel="stylesheet">
-    <link rel="stylesheet" href="{{ static_asset('vendor/flatpickr/4.6.13/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ static_asset('vendor/flatpickr/4.6.13/plugins/monthSelect/style.css') }}">
+    <script src="{{ static_asset('js/app-boot.js') }}"></script>
+    {% set vendor_stylesheet_files = [
+        'vendor/bootstrap/5.3.3/css/bootstrap.min.css',
+        'vendor/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css'
+    ] + (page_vendor_stylesheets | default([])) %}
+    {% for stylesheet_file in vendor_stylesheet_files %}
+    <link rel="stylesheet" href="{{ static_asset(stylesheet_file) }}">
+    {% endfor %}
     {% set stylesheet_files = [
-        'css/base.css',
-        'css/home-dashboard.css',
-        'css/comparison.css',
-        'css/calendar-recurring.css',
-        'css/tables.css',
-        'css/rules-list.css',
-        'css/settings.css',
-        'css/rule-forms.css',
-        'css/review.css',
-        'css/tag-multiselect.css',
-        'css/exports.css',
+        'css/base.css'
+    ] + (page_stylesheets | default([])) + [
         'css/responsive.css'
     ] %}
     {% for stylesheet_file in stylesheet_files %}
@@ -50,9 +33,11 @@
 </head>
 <body>
 {% set hide_app_shell = auth_shell|default(false) %}
+{% set active_endpoint = request.endpoint|default('', true) %}
+{% set active_blueprint = active_endpoint.split('.')[0] %}
 {% if current_user.is_authenticated and not hide_app_shell %}
 <header class="mobile-topbar">
-    <a class="mobile-brand {% if request.path == '/' %}active{% endif %}" href="/" aria-label="{{ _('Home') }}">
+    <a class="mobile-brand {% if active_endpoint == 'home.home' %}active{% endif %}" href="{{ url_for('home.home') }}" aria-label="{{ _('Home') }}">
         <span class="brand-mark" aria-hidden="true">
             <img src="{{ static_asset('img/favicon.png') }}" alt="">
         </span>
@@ -78,7 +63,7 @@
 <div class="app-layout">
     <aside class="sidebar" id="primary-sidebar">
         <div class="sidebar-top">
-            <a class="brand {% if request.path == '/' %}active{% endif %}" href="/" aria-label="{{ _('Home') }}">
+            <a class="brand {% if active_endpoint == 'home.home' %}active{% endif %}" href="{{ url_for('home.home') }}" aria-label="{{ _('Home') }}">
                 <div class="brand-mark" aria-hidden="true">
                     <img src="{{ static_asset('img/favicon.png') }}" alt="">
                 </div>
@@ -104,43 +89,43 @@
 
         <nav class="sidebar-nav" aria-label="{{ _('Primary navigation') }}">
             <div class="nav-group">
-                <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/" title="{{ _('Home') }}"><i class="bi bi-house-door" aria-hidden="true"></i><span>{{ _("Home") }}</span></a>
-                <a class="nav-link {% if request.path.startswith('/account') %}active{% endif %}" href="{{ url_for('auth.account') }}" title="{{ _('Account') }}"><i class="bi bi-person-circle" aria-hidden="true"></i><span>{{ _("Account") }}</span></a>
+                <a class="nav-link {% if active_endpoint == 'home.home' %}active{% endif %}" href="{{ url_for('home.home') }}" title="{{ _('Home') }}"><i class="bi bi-house-door" aria-hidden="true"></i><span>{{ _("Home") }}</span></a>
+                <a class="nav-link {% if active_endpoint == 'auth.account' %}active{% endif %}" href="{{ url_for('auth.account') }}" title="{{ _('Account') }}"><i class="bi bi-person-circle" aria-hidden="true"></i><span>{{ _("Account") }}</span></a>
             </div>
 
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Analytics") }}</div>
-                <a class="nav-link {% if request.path.startswith('/dashboard') %}active{% endif %}" href="/dashboard" title="{{ _('Dashboard') }}"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>{{ _("Dashboard") }}</span></a>
-                <a class="nav-link {% if request.path.startswith('/comparison') %}active{% endif %}" href="/comparison" title="{{ _('Comparison') }}"><i class="bi bi-layout-split" aria-hidden="true"></i><span>{{ _("Comparison") }}</span></a>
-                <a class="nav-link {% if request.path.startswith('/calendar') %}active{% endif %}" href="/calendar" title="{{ _('Calendar') }}"><i class="bi bi-calendar3" aria-hidden="true"></i><span>{{ _("Calendar") }}</span></a>
-                <a class="nav-link {% if request.path.startswith('/recurring') %}active{% endif %}" href="/recurring" title="{{ _('Recurring') }}"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>{{ _("Recurring") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.dashboard') }}" title="{{ _('Dashboard') }}"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>{{ _("Dashboard") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'comparison' %}active{% endif %}" href="{{ url_for('comparison.comparison') }}" title="{{ _('Comparison') }}"><i class="bi bi-layout-split" aria-hidden="true"></i><span>{{ _("Comparison") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'calendar_page' %}active{% endif %}" href="{{ url_for('calendar_page.calendar_view') }}" title="{{ _('Calendar') }}"><i class="bi bi-calendar3" aria-hidden="true"></i><span>{{ _("Calendar") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'recurring' %}active{% endif %}" href="{{ url_for('recurring.recurring') }}" title="{{ _('Recurring') }}"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>{{ _("Recurring") }}</span></a>
             </div>
 
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Workflow") }}</div>
                 {% if current_user_can('import_statements') %}
-                <a class="nav-link {% if request.path.startswith('/upload') %}active{% endif %}" href="/upload" title="{{ _('Statements') }}"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i><span>{{ _("Statements") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'upload' %}active{% endif %}" href="{{ url_for('upload.upload') }}" title="{{ _('Statements') }}"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i><span>{{ _("Statements") }}</span></a>
                 {% endif %}
-                <a class="nav-link {% if request.path.startswith('/transactions') %}active{% endif %}" href="/transactions" title="{{ _('Transactions') }}"><i class="bi bi-receipt" aria-hidden="true"></i><span>{{ _("Transactions") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'transactions' %}active{% endif %}" href="{{ url_for('transactions.transactions') }}" title="{{ _('Transactions') }}"><i class="bi bi-receipt" aria-hidden="true"></i><span>{{ _("Transactions") }}</span></a>
                 {% if current_user_can('edit_transactions') %}
-                <a class="nav-link {% if request.path.startswith('/review') %}active{% endif %}" href="/review" title="{{ _('Review') }}"><i class="bi bi-check2-square" aria-hidden="true"></i><span>{{ _("Review") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'review' %}active{% endif %}" href="{{ url_for('review.review') }}" title="{{ _('Review') }}"><i class="bi bi-check2-square" aria-hidden="true"></i><span>{{ _("Review") }}</span></a>
                 {% endif %}
                 {% if current_user_can('manage_rules') %}
-                <a class="nav-link {% if request.path.startswith('/rules') %}active{% endif %}" href="/rules" title="{{ _('Rules') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Rules") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'rules' %}active{% endif %}" href="{{ url_for('rules.rules') }}" title="{{ _('Rules') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Rules") }}</span></a>
                 {% endif %}
             </div>
 
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Admin") }}</div>
                 {% if current_user_can('manage_taxonomy') %}
-                <a class="nav-link {% if request.path.startswith('/taxonomy') %}active{% endif %}" href="/taxonomy" title="{{ _('Taxonomy') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Taxonomy") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'taxonomy_admin' %}active{% endif %}" href="{{ url_for('taxonomy_admin.taxonomy') }}" title="{{ _('Taxonomy') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Taxonomy") }}</span></a>
                 {% endif %}
                 {% if current_user_can('manage_jobs') %}
-                <a class="nav-link {% if request.path.startswith('/jobs') %}active{% endif %}" href="/jobs" title="{{ _('Jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i><span>{{ _("Jobs") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'jobs' %}active{% endif %}" href="{{ url_for('jobs.jobs') }}" title="{{ _('Jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i><span>{{ _("Jobs") }}</span></a>
                 {% endif %}
-                <a class="nav-link {% if request.path.startswith('/settings') %}active{% endif %}" href="/settings" title="{{ _('Settings') }}"><i class="bi bi-gear" aria-hidden="true"></i><span>{{ _("Settings") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'settings_page' %}active{% endif %}" href="{{ url_for('settings_page.settings_page') }}" title="{{ _('Settings') }}"><i class="bi bi-gear" aria-hidden="true"></i><span>{{ _("Settings") }}</span></a>
                 {% if current_user_can('manage_users') %}
-                <a class="nav-link {% if request.path.startswith('/admin/users') %}active{% endif %}" href="/admin/users" title="{{ _('Users') }}"><i class="bi bi-people" aria-hidden="true"></i><span>{{ _("Users") }}</span></a>
+                <a class="nav-link {% if active_endpoint == 'auth.users' %}active{% endif %}" href="{{ url_for('auth.users') }}" title="{{ _('Users') }}"><i class="bi bi-people" aria-hidden="true"></i><span>{{ _("Users") }}</span></a>
                 {% endif %}
             </div>
 
@@ -157,24 +142,29 @@
 </div>
 <button class="sidebar-backdrop" type="button" data-sidebar-backdrop aria-label="{{ _('Toggle sidebar') }}"></button>
 {% endif %}
+<div
+    class="app-busy-overlay"
+    data-busy-overlay-root
+    hidden
+    aria-hidden="true"
+    tabindex="-1"
+>
+    <div class="app-busy-dialog" role="status" aria-live="polite" aria-atomic="true">
+        <div class="spinner-border text-primary" aria-hidden="true"></div>
+        <div class="app-busy-message" data-busy-overlay-message>{{ _("Processing...") }}</div>
+    </div>
+</div>
 
-<script src="{{ static_asset('vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js') }}"></script>
-<script src="{{ static_asset('vendor/flatpickr/4.6.13/flatpickr.min.js') }}"></script>
-<script src="{{ static_asset('vendor/flatpickr/4.6.13/plugins/monthSelect/index.js') }}"></script>
+{% set vendor_script_files = [
+    'vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js'
+] + (page_vendor_scripts | default([])) %}
+{% for script_file in vendor_script_files %}
+<script src="{{ static_asset(script_file) }}"></script>
+{% endfor %}
 {% set script_files = [
     'js/core.js',
-    'js/settings.js',
-    'js/upload.js',
-    'js/jobs.js',
-    'js/rules.js',
-    'js/review.js',
-    'js/dashboard.js',
-    'js/tables.js',
-    'js/dates.js',
-    'js/calendar.js',
-    'js/recurring.js',
-    'js/exports.js',
-    'js/tag-multiselect.js',
+    'js/busy-overlay.js'
+] + (page_scripts | default([])) + [
     'js/ajax-actions.js'
 ] %}
 {% for script_file in script_files %}

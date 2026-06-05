@@ -2,6 +2,8 @@ function setupRecurringActivityDetailModal() {
     const dataNode = document.getElementById("recurring-activity-data");
     const modalElement = document.getElementById("recurring-activity-modal");
     if (!dataNode || !modalElement || !window.bootstrap?.Modal) return;
+    if (modalElement.dataset.recurringDetailReady === "true") return;
+    modalElement.dataset.recurringDetailReady = "true";
 
     let recurringData = {};
     try {
@@ -43,10 +45,6 @@ function setupRecurringActivityDetailModal() {
     const editDateTolerance = modalElement.querySelector("[data-recurring-edit-date-tolerance]");
     const editAmountTolerance = modalElement.querySelector("[data-recurring-edit-amount-tolerance]");
     const editActive = modalElement.querySelector("[data-recurring-edit-active]");
-    const moneyFormatter = new Intl.NumberFormat(window.financeLocale || "en-CA", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
     const dayDataNode = document.getElementById("recurring-calendar-day-data");
     const dayModalElement = document.getElementById("recurring-calendar-day-modal");
     let recurringDayData = [];
@@ -67,7 +65,9 @@ function setupRecurringActivityDetailModal() {
     const ignoredRecurringIds = new Set();
 
     function formatMoneyLocal(value) {
-        return moneyFormatter.format(Number(value) || 0).replace(/,/g, " ") + " $";
+        return window.financeFormatMoney
+            ? window.financeFormatMoney(value)
+            : Number(value || 0).toFixed(2);
     }
 
     function formatDateLocal(value) {
@@ -77,15 +77,6 @@ function setupRecurringActivityDetailModal() {
         const day = String(date.getDate()).padStart(2, "0");
         const month = date.toLocaleString(window.financeLocale || "en-CA", { month: "short" });
         return `${day}-${month}-${date.getFullYear()}`;
-    }
-
-    function escapeHtmlLocal(value) {
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
     }
 
     function statusLabel(value) {
@@ -111,6 +102,77 @@ function setupRecurringActivityDetailModal() {
         if (value === "High") return "text-bg-success";
         if (value === "Medium") return "text-bg-warning";
         return "text-bg-secondary";
+    }
+
+    function replaceConfidenceBadge(value) {
+        if (!confidence) return;
+        const badge = document.createElement("span");
+        badge.className = `badge ${confidenceBadgeClass(value)}`;
+        badge.textContent = financeTranslate(value || "Low");
+        confidence.replaceChildren(badge);
+    }
+
+    function occurrenceRow(occurrence) {
+        const row = document.createElement("tr");
+        const dateCell = document.createElement("td");
+        const dateLink = document.createElement("a");
+        dateLink.className = "text-reset text-decoration-none";
+        dateLink.href = occurrence.url || "#";
+        dateLink.textContent = formatDateLocal(occurrence.date);
+        dateCell.appendChild(dateLink);
+
+        const descriptionCell = document.createElement("td");
+        descriptionCell.textContent = occurrence.description || "";
+        const categoryCell = document.createElement("td");
+        categoryCell.textContent = occurrence.category || "";
+        const accountCell = document.createElement("td");
+        accountCell.textContent = occurrence.account_name || financeTranslate("Personal");
+        const amountCell = document.createElement("td");
+        amountCell.className = `text-end ${occurrence.type === "income" ? "text-success" : "text-danger"}`;
+        amountCell.textContent = formatMoneyLocal(occurrence.amount);
+
+        row.append(dateCell, descriptionCell, categoryCell, accountCell, amountCell);
+        return row;
+    }
+
+    function emptyOccurrenceRow() {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.className = "text-muted";
+        cell.textContent = financeTranslate("No recent occurrences available.");
+        row.appendChild(cell);
+        return row;
+    }
+
+    function recurringDayListButton(item) {
+        const button = document.createElement("button");
+        button.className = `recurring-calendar-day-list-item recurring-status-${recurringStatusClass(item.status)}`;
+        button.type = "button";
+        button.dataset.recurringId = item.id || "";
+        button.dataset.recurringUserStatus = item.user_status || "detected";
+        button.dataset.recurringActive = String(item.active ?? 1);
+
+        const status = document.createElement("span");
+        status.className = "recurring-calendar-day-list-status";
+        status.textContent = financeTranslate(item.status_label);
+
+        const main = document.createElement("span");
+        main.className = "recurring-calendar-day-list-main";
+        const merchant = document.createElement("strong");
+        merchant.textContent = item.merchant || "";
+        const detail = document.createElement("small");
+        detail.textContent = [item.category, financeTranslate(item.frequency), item.status_detail]
+            .filter(Boolean)
+            .join(" - ");
+        main.append(merchant, detail);
+
+        const amount = document.createElement("em");
+        amount.className = item.amount_class || "";
+        amount.textContent = item.amount_label || "";
+
+        button.append(status, main, amount);
+        return button;
     }
 
     function actionRecommendation(item) {
@@ -322,7 +384,7 @@ function setupRecurringActivityDetailModal() {
             (item.observedMonths || 0) === 1 ? "{count} distinct month" : "{count} distinct months",
             { count: item.observedMonths || 0 }
         );
-        confidence.innerHTML = `<span class="badge ${confidenceBadgeClass(item.confidence)}">${escapeHtmlLocal(financeTranslate(item.confidence || "Low"))}</span>`;
+        replaceConfidenceBadge(item.confidence);
         explanation.textContent = financeTranslate(
             "Detected because this merchant appeared in {months} distinct months with a typical amount of {amount}.",
             { months: item.observedMonths || 0, amount: formatMoneyLocal(item.amount) }
@@ -339,15 +401,7 @@ function setupRecurringActivityDetailModal() {
         }
 
         const rows = item.occurrences || [];
-        occurrences.innerHTML = rows.length ? rows.map((occurrence) => `
-            <tr>
-                <td><a class="text-reset text-decoration-none" href="${escapeHtmlLocal(occurrence.url)}">${escapeHtmlLocal(formatDateLocal(occurrence.date))}</a></td>
-                <td>${escapeHtmlLocal(occurrence.description || "")}</td>
-                <td>${escapeHtmlLocal(occurrence.category)}</td>
-                <td>${escapeHtmlLocal(occurrence.account_name || financeTranslate("Personal"))}</td>
-                <td class="text-end ${occurrence.type === "income" ? "text-success" : "text-danger"}">${formatMoneyLocal(occurrence.amount)}</td>
-            </tr>
-        `).join("") : `<tr><td colspan="5" class="text-muted">${escapeHtmlLocal(financeTranslate("No recent occurrences available."))}</td></tr>`;
+        occurrences.replaceChildren(...(rows.length ? rows.map(occurrenceRow) : [emptyOccurrenceRow()]));
 
         modal.show();
     }
@@ -386,16 +440,7 @@ function setupRecurringActivityDetailModal() {
             }
         }
 
-        dayModalList.innerHTML = items.map((item) => `
-            <button class="recurring-calendar-day-list-item recurring-status-${recurringStatusClass(item.status)}" type="button" data-recurring-id="${escapeHtmlLocal(item.id)}" data-recurring-user-status="${escapeHtmlLocal(item.user_status || "detected")}" data-recurring-active="${escapeHtmlLocal(item.active ?? 1)}">
-                <span class="recurring-calendar-day-list-status">${escapeHtmlLocal(financeTranslate(item.status_label))}</span>
-                <span class="recurring-calendar-day-list-main">
-                    <strong>${escapeHtmlLocal(item.merchant)}</strong>
-                    <small>${escapeHtmlLocal([item.category, financeTranslate(item.frequency), item.status_detail].filter(Boolean).join(" - "))}</small>
-                </span>
-                <em class="${escapeHtmlLocal(item.amount_class)}">${escapeHtmlLocal(item.amount_label)}</em>
-            </button>
-        `).join("");
+        dayModalList.replaceChildren(...items.map(recurringDayListButton));
 
         dayModalList.querySelectorAll("[data-recurring-id]").forEach((itemButton) => {
             itemButton.addEventListener("click", () => {
@@ -541,12 +586,7 @@ function setupRecurringAjaxNavigation() {
     }
 
     function initializeRecurringDynamic(dynamic) {
-        window.setupFlatpickrInputs?.();
-        window.setupTableRowInteractions?.(dynamic);
-        window.setupSortableTables?.(dynamic);
-        window.setupPaginatedTables?.(dynamic);
-        window.setupTableExports?.();
-        setupRecurringActivityDetailModal();
+        window.financeApp?.runInitializers(dynamic);
     }
 
     function setHiddenField(form, name, value) {
@@ -642,6 +682,9 @@ function setupRecurringAjaxNavigation() {
         if (url) replaceRecurringDynamic(url, false);
     });
 }
+
+window.financeApp?.registerInitializer("recurring.activity-detail", setupRecurringActivityDetailModal);
+window.financeApp?.registerInitializer("recurring.ajax-navigation", setupRecurringAjaxNavigation);
 
 setupRecurringActivityDetailModal();
 setupRecurringAjaxNavigation();

@@ -1,64 +1,10 @@
-function readJsonScript(id, fallback, root = document) {
-    const node = root.getElementById ? root.getElementById(id) : root.querySelector(`#${id}`);
-    if (!node) return fallback;
-
-    try {
-        return JSON.parse(node.textContent);
-    } catch {
-        return fallback;
-    }
-}
-
-let dashboardCharts = readJsonScript("dashboard-chart-data", {});
-const dashboardPalette = [
-    "#0f766e",
-    "#2563eb",
-    "#d97706",
-    "#be123c",
-    "#7c3aed",
-    "#16a34a",
-    "#0891b2",
-    "#ca8a04",
-    "#475569",
-    "#db2777"
-];
-
-function dashboardCssVar(name, fallback) {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return value || fallback;
-}
-
-const dashboardTheme = {
-    text: dashboardCssVar("--chart-text", "#334155"),
-    grid: dashboardCssVar("--chart-grid", "rgba(100, 116, 139, 0.22)"),
-    surface: dashboardCssVar("--chart-surface", "#ffffff"),
-    tooltipBg: dashboardCssVar("--chart-tooltip-bg", "#17201d"),
-    tooltipText: dashboardCssVar("--chart-tooltip-text", "#ffffff"),
-    success: dashboardCssVar("--app-success", "#15803d"),
-    danger: dashboardCssVar("--app-danger", "#be123c")
-};
-
-const dashboardMoneyFormatter = new Intl.NumberFormat(window.financeLocale || "en-CA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-});
-
-const dashboardAxisMoneyFormatter = new Intl.NumberFormat(window.financeLocale || "en-CA", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-});
-
-function formatDashboardMoney(value) {
-    return dashboardMoneyFormatter.format(Number(value) || 0).replace(/,/g, " ") + " $";
-}
-
-function formatDashboardAxisMoney(value) {
-    return dashboardAxisMoneyFormatter.format(Number(value) || 0).replace(/,/g, " ") + " $";
-}
-
-function dashboardTranslate(message, variables) {
-    return window.financeTranslate ? window.financeTranslate(message, variables) : message;
-}
+const dashboardChartUtils = window.financeCharts;
+let dashboardCharts = dashboardChartUtils.readJsonScript("dashboard-chart-data", {});
+const dashboardPalette = dashboardChartUtils.palette;
+const dashboardTheme = dashboardChartUtils.theme();
+const formatDashboardMoney = dashboardChartUtils.formatMoney;
+const formatDashboardAxisMoney = dashboardChartUtils.formatAxisMoney;
+const dashboardTranslate = dashboardChartUtils.translate;
 
 function dashboardMonthName(monthIndex) {
     return new Date(Date.UTC(2000, monthIndex, 1)).toLocaleString(
@@ -88,65 +34,6 @@ function dashboardMonthLabels(labels) {
 
     const years = new Set(parts.map(part => part.year));
     return parts.map(part => years.size > 1 ? `${part.month} ${part.year}` : part.month);
-}
-
-function dashboardAxisLine() {
-    return {
-        lineStyle: {
-            color: dashboardTheme.grid
-        }
-    };
-}
-
-function dashboardAxisLabel(formatter) {
-    return {
-        color: dashboardTheme.text,
-        formatter
-    };
-}
-
-function dashboardSplitLine() {
-    return {
-        lineStyle: {
-            color: dashboardTheme.grid
-        }
-    };
-}
-
-function dashboardTooltip(extra = {}) {
-    return {
-        trigger: "item",
-        backgroundColor: dashboardTheme.tooltipBg,
-        borderColor: dashboardTheme.grid,
-        borderWidth: 1,
-        textStyle: {
-            color: dashboardTheme.tooltipText
-        },
-        ...extra
-    };
-}
-
-function dashboardLegend() {
-    return {
-        textStyle: {
-            color: dashboardTheme.text
-        }
-    };
-}
-
-function dashboardBaseGrid(extra = {}) {
-    return {
-        containLabel: true,
-        left: 16,
-        right: 24,
-        top: 32,
-        bottom: 24,
-        ...extra
-    };
-}
-
-function dashboardChartElement(id, root = document) {
-    return root.getElementById ? root.getElementById(id) : root.querySelector(`#${id}`);
 }
 
 function dashboardDataPoint(value, drilldownUrl, itemStyle = {}) {
@@ -196,62 +83,23 @@ function dashboardRegisterDrilldown(chart) {
     });
 }
 
-function dashboardResizeChart(chart) {
-    window.requestAnimationFrame(() => chart.resize());
-}
-
-function dashboardObserveChartResize(chart, element) {
-    const resizeHandler = () => {
-        if (element.isConnected) {
-            dashboardResizeChart(chart);
-        }
-    };
-    element.financeDashboardResizeHandler = resizeHandler;
-    window.addEventListener("resize", resizeHandler);
-    window.addEventListener("finance:layoutchange", resizeHandler);
-
-    if (window.ResizeObserver) {
-        element.financeResizeObserver = new ResizeObserver(() => dashboardResizeChart(chart));
-        element.financeResizeObserver.observe(element);
-    }
-
-    dashboardResizeChart(chart);
-}
-
 function dashboardCreateChart(element, option, drilldown = true) {
-    if (!window.echarts || !element) return null;
-
-    dashboardDisposeChart(element);
-    const chart = echarts.init(element, null, { renderer: "canvas" });
-    chart.setOption(option);
-    if (drilldown) {
-        dashboardRegisterDrilldown(chart);
-    }
-
-    dashboardObserveChartResize(chart, element);
-    return chart;
-}
-
-function dashboardDisposeChart(element) {
-    if (!element) return;
-
-    if (element.financeResizeObserver) {
-        element.financeResizeObserver.disconnect();
-        delete element.financeResizeObserver;
-    }
-
-    if (element.financeDashboardResizeHandler) {
-        window.removeEventListener("resize", element.financeDashboardResizeHandler);
-        window.removeEventListener("finance:layoutchange", element.financeDashboardResizeHandler);
-        delete element.financeDashboardResizeHandler;
-    }
-
-    window.echarts?.getInstanceByDom(element)?.dispose();
+    return dashboardChartUtils.create(element, option, {
+        beforeObserve(chart) {
+            if (drilldown) {
+                dashboardRegisterDrilldown(chart);
+            }
+        },
+        handlerKey: "financeDashboardResizeHandler",
+    });
 }
 
 function disposeDashboardCharts(root = document) {
     ["categoryChart", "spendingIncomeChart", "netChart"].forEach((id) => {
-        dashboardDisposeChart(dashboardChartElement(id, root));
+        dashboardChartUtils.dispose(
+            dashboardChartUtils.element(id, root),
+            "financeDashboardResizeHandler"
+        );
     });
 }
 
@@ -261,22 +109,22 @@ function dashboardCategoryBarOption() {
         textStyle: {
             color: dashboardTheme.text
         },
-        tooltip: dashboardTooltip({
+        tooltip: dashboardChartUtils.tooltip(dashboardTheme, {
             formatter: params => `${params.name}: ${formatDashboardMoney(params.value)}`
         }),
-        grid: dashboardBaseGrid({ top: 12 }),
+        grid: dashboardChartUtils.baseGrid({ top: 12 }),
         xAxis: {
             type: "value",
-            axisLine: dashboardAxisLine(),
-            axisLabel: dashboardAxisLabel(formatDashboardAxisMoney),
-            splitLine: dashboardSplitLine()
+            axisLine: dashboardChartUtils.axisLine(dashboardTheme),
+            axisLabel: dashboardChartUtils.axisLabel(dashboardTheme, formatDashboardAxisMoney),
+            splitLine: dashboardChartUtils.splitLine(dashboardTheme)
         },
         yAxis: {
             type: "category",
             data: dashboardCharts.categoryLabels || [],
             inverse: true,
-            axisLine: dashboardAxisLine(),
-            axisLabel: dashboardAxisLabel()
+            axisLine: dashboardChartUtils.axisLine(dashboardTheme),
+            axisLabel: dashboardChartUtils.axisLabel(dashboardTheme)
         },
         series: [
             {
@@ -306,8 +154,8 @@ function dashboardSpendingIncomeOption() {
         textStyle: {
             color: dashboardTheme.text
         },
-        legend: dashboardLegend(),
-        tooltip: dashboardTooltip({
+        legend: dashboardChartUtils.legend(dashboardTheme),
+        tooltip: dashboardChartUtils.tooltip(dashboardTheme, {
             trigger: "axis",
             formatter(items) {
                 const rows = items.map(item => (
@@ -316,22 +164,22 @@ function dashboardSpendingIncomeOption() {
                 return [items[0]?.axisValue, ...rows].join("<br>");
             }
         }),
-        grid: dashboardBaseGrid(),
+        grid: dashboardChartUtils.baseGrid(),
         xAxis: {
             type: "category",
             boundaryGap: false,
             data: labels,
-            axisLine: dashboardAxisLine(),
-            axisLabel: dashboardAxisLabel(),
+            axisLine: dashboardChartUtils.axisLine(dashboardTheme),
+            axisLabel: dashboardChartUtils.axisLabel(dashboardTheme),
             splitLine: {
                 show: false
             }
         },
         yAxis: {
             type: "value",
-            axisLine: dashboardAxisLine(),
-            axisLabel: dashboardAxisLabel(formatDashboardAxisMoney),
-            splitLine: dashboardSplitLine()
+            axisLine: dashboardChartUtils.axisLine(dashboardTheme),
+            axisLabel: dashboardChartUtils.axisLabel(dashboardTheme, formatDashboardAxisMoney),
+            splitLine: dashboardChartUtils.splitLine(dashboardTheme)
         },
         series: [
             {
@@ -384,25 +232,25 @@ function dashboardNetCashflowOption() {
         textStyle: {
             color: dashboardTheme.text
         },
-        legend: dashboardLegend(),
-        tooltip: dashboardTooltip({
+        legend: dashboardChartUtils.legend(dashboardTheme),
+        tooltip: dashboardChartUtils.tooltip(dashboardTheme, {
             formatter: params => `${params.name}: ${formatDashboardMoney(params.value)}`
         }),
-        grid: dashboardBaseGrid(),
+        grid: dashboardChartUtils.baseGrid(),
         xAxis: {
             type: "category",
             data: labels,
-            axisLine: dashboardAxisLine(),
-            axisLabel: dashboardAxisLabel(),
+            axisLine: dashboardChartUtils.axisLine(dashboardTheme),
+            axisLabel: dashboardChartUtils.axisLabel(dashboardTheme),
             splitLine: {
                 show: false
             }
         },
         yAxis: {
             type: "value",
-            axisLine: dashboardAxisLine(),
-            axisLabel: dashboardAxisLabel(formatDashboardAxisMoney),
-            splitLine: dashboardSplitLine()
+            axisLine: dashboardChartUtils.axisLine(dashboardTheme),
+            axisLabel: dashboardChartUtils.axisLabel(dashboardTheme, formatDashboardAxisMoney),
+            splitLine: dashboardChartUtils.splitLine(dashboardTheme)
         },
         series: [
             {
@@ -423,24 +271,24 @@ function dashboardNetCashflowOption() {
 }
 
 function renderDashboardCharts(root = document) {
-    dashboardCharts = readJsonScript("dashboard-chart-data", {}, root);
-    const categoryChart = dashboardChartElement("categoryChart", root);
+    dashboardCharts = dashboardChartUtils.readJsonScript("dashboard-chart-data", {}, root);
+    const categoryChart = dashboardChartUtils.element("categoryChart", root);
     if (categoryChart && dashboardCharts.categoryLabels?.length > 0) {
         dashboardCreateChart(categoryChart, dashboardCategoryBarOption());
     }
 
-    const spendingIncomeChart = dashboardChartElement("spendingIncomeChart", root);
+    const spendingIncomeChart = dashboardChartUtils.element("spendingIncomeChart", root);
     if (spendingIncomeChart && dashboardCharts.spendingIncomeMonthLabels?.length > 0) {
         dashboardCreateChart(spendingIncomeChart, dashboardSpendingIncomeOption());
     }
 
-    const netChart = dashboardChartElement("netChart", root);
+    const netChart = dashboardChartUtils.element("netChart", root);
     if (netChart && dashboardCharts.netMonthLabels?.length > 0) {
         dashboardCreateChart(netChart, dashboardNetCashflowOption());
     }
 }
 
-renderDashboardCharts();
+window.financeApp?.registerInitializer("dashboard.charts", renderDashboardCharts);
 
 window.disposeDashboardCharts = disposeDashboardCharts;
-window.setupDashboardCharts = renderDashboardCharts;
+renderDashboardCharts();

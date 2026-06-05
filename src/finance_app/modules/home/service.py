@@ -34,7 +34,7 @@ from finance_app.modules.auth.permissions import (
     current_user_can,
 )
 from finance_app.modules.recurring.service import build_recurring_summary
-from finance_app.modules.review.presenter import review_groups, review_summary
+from finance_app.modules.review.service import review_groups, review_summary
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 
 

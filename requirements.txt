@@ -3,6 +3,7 @@ Flask-Login
 openai
 pytest
 pytest-cov
+pytest-xdist
 SQLAlchemy
 PyMySQL
 tzdata

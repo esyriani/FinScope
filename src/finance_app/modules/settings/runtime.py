@@ -29,8 +29,8 @@ from finance_app.database.tables import (
     user_settings as user_settings_table,
 )
 from finance_app.database.upsert import insert_or_select_unique_row
-from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
+from finance_app.modules.users import repository as user_repository
 
 
 SETTINGS_DEFAULTS = {
@@ -45,7 +45,7 @@ SETTINGS_DEFAULTS = {
     "llm_confidence_threshold": str(settings.default_llm_confidence_threshold),
     "llm_review_threshold": str(settings.default_llm_review_threshold),
     "verify_threshold": str(settings.default_verify_threshold),
-    "auto_llm_categorization_enabled": "1",
+    "auto_llm_categorization_enabled": "0",
     "transaction_ai_rerun_enabled": "1" if settings.default_transaction_ai_rerun_enabled else "0",
     "openai_model": settings.default_categorization_model,
     "recurrence_minimum_occurrences": str(RECURRENCE_DETECTION_DEFAULTS.minimum_occurrences),
@@ -72,7 +72,7 @@ DATABASE_OPERATIONAL_ERRORS = (SqlAlchemyOperationalError,)
 
 def seed_runtime_settings(conn):
     """Seed default settings for existing users without changing saved values."""
-    for user in auth_repository.list_users(conn):
+    for user in user_repository.list_users(conn):
         for key, value in SETTINGS_DEFAULTS.items():
             setting_select = select(user_settings_table.c.user_id).where(
                 user_settings_table.c.user_id == user["id"],
@@ -326,7 +326,7 @@ def get_all_settings(conn, user_id=None):
     active_user_id = resolve_settings_user_id(conn, user_id)
     if active_user_id is not None:
         try:
-            user_values = auth_repository.get_user_settings(conn, active_user_id)
+            user_values = user_repository.get_user_settings(conn, active_user_id)
         except DATABASE_OPERATIONAL_ERRORS:
             user_values = {}
         for key in EDITABLE_SETTING_KEYS:
@@ -346,7 +346,7 @@ def get_setting(conn, key, user_id=None):
     active_user_id = resolve_settings_user_id(conn, user_id)
     if active_user_id is not None:
         try:
-            user_value = auth_repository.get_user_setting(conn, active_user_id, key)
+            user_value = user_repository.get_user_setting(conn, active_user_id, key)
         except DATABASE_OPERATIONAL_ERRORS:
             user_value = None
         if user_value is not None:
@@ -428,7 +428,7 @@ def upsert_setting(conn, key, value):
 
 def upsert_user_setting(conn, user_id, key, value):
     """Insert or update one user-specific General setting."""
-    auth_repository.upsert_user_setting(
+    user_repository.upsert_user_setting(
         conn,
         user_id,
         key,
@@ -446,7 +446,7 @@ def resolve_settings_user_id(conn, explicit_user_id=None):
             return None
     if has_request_context() and current_user.is_authenticated:
         return int(current_user.id)
-    owner = auth_repository.get_first_active_owner(conn)
+    owner = user_repository.get_first_active_owner(conn)
     if owner is None:
         return None
     return int(owner["id"])

@@ -1,5 +1,6 @@
 """Tests for transaction list service context behavior."""
 
+from sqlalchemy import text
 import json
 
 from werkzeug.datastructures import MultiDict
@@ -73,9 +74,9 @@ def descriptions(context):
     return [row["description"] for row in context["transactions"]]
 
 
-def test_transactions_context_paginates_and_sorts(db_conn):
+def test_transactions_context_paginates_and_sorts(core_conn):
     """Verify transaction context pagination and stable sorting."""
-    ids = seed_transactions(db_conn)
+    ids = seed_transactions(core_conn)
 
     first_page = build_transactions_context(
         MultiDict(
@@ -116,9 +117,9 @@ def test_transactions_context_paginates_and_sorts(db_conn):
     assert first_page["run_transaction_ai_enabled"] is True
 
 
-def test_transactions_context_ignored_filters(db_conn):
+def test_transactions_context_ignored_filters(core_conn):
     """Verify active, ignored, and all ignored-state filters."""
-    seed_transactions(db_conn)
+    seed_transactions(core_conn)
 
     active = build_transactions_context(MultiDict([("period", "all")]))
     ignored = build_transactions_context(MultiDict([("period", "all"), ("ignored", "ignored")]))
@@ -132,9 +133,9 @@ def test_transactions_context_ignored_filters(db_conn):
     assert all_rows["total_count"] == 6
 
 
-def test_transactions_context_category_source_and_review_filters(db_conn):
+def test_transactions_context_category_source_and_review_filters(core_conn):
     """Verify category source, review, and unknown/categorized filters."""
-    seed_transactions(db_conn)
+    seed_transactions(core_conn)
 
     ai_context = build_transactions_context(
         MultiDict([("period", "all"), ("category_source", "ai")])
@@ -181,9 +182,9 @@ def test_transactions_context_category_source_and_review_filters(db_conn):
     assert descriptions(verified_context) == ["Cafe Bistro"]
 
 
-def test_transactions_context_merchant_filters_and_tag_rendering(db_conn):
+def test_transactions_context_merchant_filters_and_tag_rendering(core_conn):
     """Verify merchant filters and tag view model fields."""
-    seed_transactions(db_conn)
+    seed_transactions(core_conn)
 
     merchant_context = build_transactions_context(
         MultiDict([("period", "all"), ("merchant_key", "Metro Grocery")])
@@ -227,13 +228,13 @@ def test_transactions_context_merchant_filters_and_tag_rendering(db_conn):
     assert all(row["tag_label"] == "" for row in untagged_context["transactions"])
 
 
-def test_transactions_context_merchant_filter_uses_deterministic_keys(db_conn):
+def test_transactions_context_merchant_filter_uses_deterministic_keys(core_conn):
     """Verify merchant filtering does not expand through unmanaged aliases."""
-    account_id = db_conn.execute(
+    account_id = core_conn.execute(
         insert(accounts_table).values(name="Merchant checking")
     ).inserted_primary_key[0]
-    food_id = resolve_category_id(db_conn, "Food")
-    db_conn.execute(
+    food_id = resolve_category_id(core_conn, "Food")
+    core_conn.execute(
         insert(transactions_table),
         [
             {
@@ -286,7 +287,7 @@ def test_transactions_context_merchant_filter_uses_deterministic_keys(db_conn):
             },
         ],
     )
-    db_conn.commit()
+    core_conn.commit()
 
     context = build_transactions_context(
         MultiDict([("period", "all"), ("merchant_key", "AMZN MKTP")])
@@ -296,19 +297,19 @@ def test_transactions_context_merchant_filter_uses_deterministic_keys(db_conn):
     assert descriptions(context) == ["AMZN MKTP CA*1234"]
 
 
-def test_transactions_context_custom_dates_are_inclusive(db_conn):
+def test_transactions_context_custom_dates_are_inclusive(core_conn):
     """Verify custom date filters include exact start and end boundaries."""
-    account_id = db_conn.execute(
+    account_id = core_conn.execute(
         insert(accounts_table).values(name="Boundary checking")
     ).inserted_primary_key[0]
-    food_id = resolve_category_id(db_conn, "Food")
+    food_id = resolve_category_id(core_conn, "Food")
     for tx_date, description, fingerprint in [
         ("2026-03-31", "Before boundary", "tx-list-before-boundary"),
         ("2026-04-01", "Start boundary", "tx-list-start-boundary"),
         ("2026-04-30", "End boundary", "tx-list-end-boundary"),
         ("2026-05-01", "After boundary", "tx-list-after-boundary"),
     ]:
-        db_conn.execute(
+        core_conn.execute(
             insert(transactions_table).values(
                 account_id=account_id,
                 tx_date=tx_date,
@@ -322,7 +323,7 @@ def test_transactions_context_custom_dates_are_inclusive(db_conn):
                 fingerprint=fingerprint,
             )
         )
-    db_conn.commit()
+    core_conn.commit()
 
     context = build_transactions_context(
         MultiDict(
@@ -340,66 +341,66 @@ def test_transactions_context_custom_dates_are_inclusive(db_conn):
     assert descriptions(context) == ["Start boundary", "End boundary"]
 
 
-def test_transactions_context_reads_single_transaction_ai_setting(db_conn):
+def test_transactions_context_reads_single_transaction_ai_setting(core_conn):
     """Verify transaction context exposes the single-transaction AI setting."""
-    seed_transactions(db_conn)
-    db_conn.execute(
+    seed_transactions(core_conn)
+    core_conn.execute(
         update(user_settings_table)
         .where(user_settings_table.c["key"] == "transaction_ai_rerun_enabled")
         .values(value="0")
     )
-    db_conn.commit()
+    core_conn.commit()
 
     context = build_transactions_context(MultiDict([("period", "all")]))
 
     assert context["run_transaction_ai_enabled"] is False
 
 
-def test_recategorize_selected_transactions_job_updates_selected_rows(db_conn, monkeypatch):
+def test_recategorize_selected_transactions_job_updates_selected_rows(core_conn, monkeypatch):
     """Verify selected recategorization persists workflow results and tags."""
-    account_id = db_conn.execute(
+    account_id = core_conn.execute(
         insert(accounts_table).values(name="Batch AI")
     ).inserted_primary_key[0]
-    target_id = db_conn.execute(
+    target_id = core_conn.execute(
         insert(transactions_table).values(
             account_id=account_id,
             tx_date="2026-05-04",
             description="TVA SPORTS DIRECT",
             amount=20.68,
             category="UNKNOWN",
-            category_id=resolve_category_id(db_conn, "UNKNOWN"),
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
             category_source="unknown",
             needs_review=1,
             fingerprint="batch-recat-target",
         )
     ).inserted_primary_key[0]
-    other_id = db_conn.execute(
+    other_id = core_conn.execute(
         insert(transactions_table).values(
             account_id=account_id,
             tx_date="2026-05-05",
             description="METRO GROCERY",
             amount=42.00,
             category="UNKNOWN",
-            category_id=resolve_category_id(db_conn, "UNKNOWN"),
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
             category_source="unknown",
             needs_review=1,
             fingerprint="batch-recat-other",
         )
     ).inserted_primary_key[0]
-    untouched_id = db_conn.execute(
+    untouched_id = core_conn.execute(
         insert(transactions_table).values(
             account_id=account_id,
             tx_date="2026-05-06",
             description="UNTOUCHED STORE",
             amount=9.99,
             category="UNKNOWN",
-            category_id=resolve_category_id(db_conn, "UNKNOWN"),
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
             category_source="unknown",
             needs_review=1,
             fingerprint="batch-recat-untouched",
         )
     ).inserted_primary_key[0]
-    db_conn.commit()
+    core_conn.commit()
 
     def categorize_for_test(transactions, conn, use_llm=True):
         """Return deterministic categorization for the selected batch."""
@@ -438,36 +439,27 @@ def test_recategorize_selected_transactions_job_updates_selected_rows(db_conn, m
 
     message = transactions_service.recategorize_selected_transactions_job([target_id, other_id])
 
-    target = db_conn.execute(
-        "SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = ?",
-        (target_id,),
-    ).fetchone()
-    other = db_conn.execute(
-        "SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = ?",
-        (other_id,),
-    ).fetchone()
-    untouched = db_conn.execute(
-        "SELECT category, category_source, needs_review FROM transactions WHERE id = ?",
-        (untouched_id,),
-    ).fetchone()
+    target = core_conn.execute(text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"), {"p0": target_id}).fetchone()
+    other = core_conn.execute(text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"), {"p0": other_id}).fetchone()
+    untouched = core_conn.execute(text("SELECT category, category_source, needs_review FROM transactions WHERE id = :p0"), {"p0": untouched_id}).fetchone()
     assert message == "2 selected transactions recategorized."
     assert tuple(target) == ("Entertainment", "ai", 0.96, 0)
     assert tuple(other) == ("Food", "rule", 0.75, 1)
     assert tuple(untouched) == ("UNKNOWN", "unknown", 1)
-    assert get_transaction_tag_names(db_conn, target_id) == ["Service"]
-    assert get_transaction_tag_names(db_conn, other_id) == ["Tax"]
+    assert get_transaction_tag_names(core_conn, target_id) == ["Service"]
+    assert get_transaction_tag_names(core_conn, other_id) == ["Tax"]
 
 
-def test_suggest_transaction_ai_category_does_not_update_rows(db_conn, monkeypatch):
+def test_suggest_transaction_ai_category_does_not_update_rows(core_conn, monkeypatch):
     """Verify a one-off AI suggestion does not mutate transactions or rules."""
-    account_id = db_conn.execute(
+    account_id = core_conn.execute(
         insert(accounts_table).values(name="AI checking")
     ).inserted_primary_key[0]
-    merchant_id = get_or_create_merchant_for_description(db_conn, "TVA SPORTS DIRECT")["id"]
+    merchant_id = get_or_create_merchant_for_description(core_conn, "TVA SPORTS DIRECT")["id"]
     ids = []
     for fingerprint in ("ai-single-target", "ai-single-other"):
         ids.append(
-            db_conn.execute(
+            core_conn.execute(
                 insert(transactions_table).values(
                     account_id=account_id,
                     merchant_id=merchant_id,
@@ -475,14 +467,14 @@ def test_suggest_transaction_ai_category_does_not_update_rows(db_conn, monkeypat
                     description="TVA SPORTS DIRECT",
                     amount=20.68,
                     category="UNKNOWN",
-                    category_id=resolve_category_id(db_conn, "UNKNOWN"),
+                    category_id=resolve_category_id(core_conn, "UNKNOWN"),
                     needs_review=1,
                     category_source="unknown",
                     fingerprint=fingerprint,
                 )
             ).inserted_primary_key[0]
         )
-    db_conn.commit()
+    core_conn.commit()
     captured = {}
 
     def classify_for_test(conn, transactions, rules, unknown_category, save_automatic_rules=True):
@@ -517,7 +509,7 @@ def test_suggest_transaction_ai_category_does_not_update_rows(db_conn, monkeypat
 
     result = transactions_service.suggest_transaction_ai_category(ids[0])
 
-    target = db_conn.execute(
+    target = core_conn.execute(
         select(
             transactions_table.c.category,
             transactions_table.c.category_source,
@@ -526,10 +518,10 @@ def test_suggest_transaction_ai_category_does_not_update_rows(db_conn, monkeypat
             transactions_table.c.needs_review,
         ).where(transactions_table.c.id == ids[0])
     ).mappings().fetchone()
-    other = db_conn.execute(
+    other = core_conn.execute(
         select(transactions_table.c.category).where(transactions_table.c.id == ids[1])
     ).scalar_one()
-    rule_count = db_conn.execute("SELECT COUNT(*) AS count FROM category_rules").fetchone()["count"]
+    rule_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM category_rules")).fetchone()._mapping["count"]
 
     assert captured["save_automatic_rules"] is False
     assert result["ok"] is True
@@ -544,21 +536,21 @@ def test_suggest_transaction_ai_category_does_not_update_rows(db_conn, monkeypat
     assert target["category_confidence"] is None
     assert target["category_rule_id"] is None
     assert target["needs_review"] == 1
-    assert get_transaction_tag_names(db_conn, ids[0]) == []
+    assert get_transaction_tag_names(core_conn, ids[0]) == []
     assert other == "UNKNOWN"
     assert rule_count == 0
 
 
-def test_apply_transaction_ai_suggestion_updates_selected_row(db_conn, monkeypatch):
+def test_apply_transaction_ai_suggestion_updates_selected_row(core_conn, monkeypatch):
     """Verify accepting an AI suggestion applies only the selected transaction."""
-    account_id = db_conn.execute(
+    account_id = core_conn.execute(
         insert(accounts_table).values(name="AI checking apply")
     ).inserted_primary_key[0]
-    merchant_id = get_or_create_merchant_for_description(db_conn, "TVA SPORTS DIRECT")["id"]
+    merchant_id = get_or_create_merchant_for_description(core_conn, "TVA SPORTS DIRECT")["id"]
     ids = []
     for fingerprint in ("ai-apply-target", "ai-apply-other"):
         ids.append(
-            db_conn.execute(
+            core_conn.execute(
                 insert(transactions_table).values(
                     account_id=account_id,
                     merchant_id=merchant_id,
@@ -566,14 +558,14 @@ def test_apply_transaction_ai_suggestion_updates_selected_row(db_conn, monkeypat
                     description="TVA SPORTS DIRECT",
                     amount=20.68,
                     category="UNKNOWN",
-                    category_id=resolve_category_id(db_conn, "UNKNOWN"),
+                    category_id=resolve_category_id(core_conn, "UNKNOWN"),
                     needs_review=1,
                     category_source="unknown",
                     fingerprint=fingerprint,
                 )
             ).inserted_primary_key[0]
         )
-    db_conn.commit()
+    core_conn.commit()
 
     def classify_for_test(conn, transactions, rules, unknown_category, save_automatic_rules=True):
         """Return a deterministic one-row LLM decision."""
@@ -607,7 +599,7 @@ def test_apply_transaction_ai_suggestion_updates_selected_row(db_conn, monkeypat
 
     result = transactions_service.apply_transaction_ai_suggestion(ids[0], suggestion)
 
-    target = db_conn.execute(
+    target = core_conn.execute(
         select(
             transactions_table.c.category,
             transactions_table.c.category_source,
@@ -618,10 +610,10 @@ def test_apply_transaction_ai_suggestion_updates_selected_row(db_conn, monkeypat
             transactions_table.c.reviewed_at,
         ).where(transactions_table.c.id == ids[0])
     ).mappings().fetchone()
-    other = db_conn.execute(
+    other = core_conn.execute(
         select(transactions_table.c.category).where(transactions_table.c.id == ids[1])
     ).scalar_one()
-    rule_count = db_conn.execute("SELECT COUNT(*) AS count FROM category_rules").fetchone()["count"]
+    rule_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM category_rules")).fetchone()._mapping["count"]
     metadata = json.loads(target["category_metadata"])
 
     assert result["updated"] is True
@@ -634,18 +626,18 @@ def test_apply_transaction_ai_suggestion_updates_selected_row(db_conn, monkeypat
     assert target["reviewed_at"] is not None
     assert metadata["accepted_by_user"] is True
     assert metadata["review_required_before_acceptance"] is True
-    assert get_transaction_tag_names(db_conn, ids[0]) == ["Service"]
+    assert get_transaction_tag_names(core_conn, ids[0]) == ["Service"]
     assert other == "UNKNOWN"
     assert rule_count == 0
 
 
-def test_apply_transaction_ai_suggestion_can_create_rule(db_conn):
+def test_apply_transaction_ai_suggestion_can_create_rule(core_conn):
     """Verify accepting an AI suggestion can save a user-approved rule."""
-    account_id = db_conn.execute(
+    account_id = core_conn.execute(
         insert(accounts_table).values(name="AI checking rule")
     ).inserted_primary_key[0]
-    merchant_id = get_or_create_merchant_for_description(db_conn, "TVA SPORTS DIRECT")["id"]
-    tx_id = db_conn.execute(
+    merchant_id = get_or_create_merchant_for_description(core_conn, "TVA SPORTS DIRECT")["id"]
+    tx_id = core_conn.execute(
         insert(transactions_table).values(
             account_id=account_id,
             merchant_id=merchant_id,
@@ -653,13 +645,13 @@ def test_apply_transaction_ai_suggestion_can_create_rule(db_conn):
             description="TVA SPORTS DIRECT",
             amount=20.68,
             category="UNKNOWN",
-            category_id=resolve_category_id(db_conn, "UNKNOWN"),
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
             needs_review=1,
             category_source="unknown",
             fingerprint="ai-apply-rule-target",
         )
     ).inserted_primary_key[0]
-    db_conn.commit()
+    core_conn.commit()
     suggestion = {
         "transaction_id": tx_id,
         "can_apply": True,
@@ -685,26 +677,24 @@ def test_apply_transaction_ai_suggestion_can_create_rule(db_conn):
         rule_keyword="TVA SPORTS DIRECT",
     )
 
-    rule = db_conn.execute(
-        """
+    rule = core_conn.execute(text("""
         SELECT id, merchant_id, keyword, category, source, amount_min, amount_max
         FROM category_rules
         WHERE keyword = 'TVA SPORTS DIRECT'
-        """
-    ).fetchone()
-    tx = db_conn.execute(
+        """)).fetchone()
+    tx = core_conn.execute(
         select(transactions_table.c.category, transactions_table.c.needs_review)
         .where(transactions_table.c.id == tx_id)
     ).mappings().fetchone()
 
     assert result["updated"] is True
-    assert result["saved_rule_id"] == rule["id"]
+    assert result["saved_rule_id"] == rule._mapping["id"]
     assert result["message"] == "AI suggestion applied. Rule saved."
-    assert rule["merchant_id"] == merchant_id
-    assert rule["category"] == "Entertainment"
-    assert rule["source"] == "manual"
-    assert rule["amount_min"] is None
-    assert rule["amount_max"] is None
-    assert get_rule_tags_by_rule_id(db_conn, [rule["id"]])[rule["id"]] == ["Service"]
+    assert rule._mapping["merchant_id"] == merchant_id
+    assert rule._mapping["category"] == "Entertainment"
+    assert rule._mapping["source"] == "manual"
+    assert rule._mapping["amount_min"] is None
+    assert rule._mapping["amount_max"] is None
+    assert get_rule_tags_by_rule_id(core_conn, [rule._mapping["id"]])[rule._mapping["id"]] == ["Service"]
     assert tx["category"] == "Entertainment"
     assert tx["needs_review"] == 0

@@ -1,0 +1,302 @@
+"""Shared context service test data builders."""
+
+from sqlalchemy import text
+from datetime import date as real_date, timedelta
+
+from finance_app.modules.categories.taxonomy import set_transaction_tags
+
+
+class FixedDate(real_date):
+    """Fixed replacement for date.today in comparison service tests."""
+
+    @classmethod
+    def today(cls):
+        """Return a deterministic current date."""
+        return cls(2026, 5, 9)
+
+
+def seed_reporting_data(conn):
+    """Seed realistic accounts, statements, and transactions for context tests."""
+    account_id = conn.execute(text("""
+        INSERT INTO accounts (name)
+        VALUES ('Personal Checking')
+        """)).lastrowid
+    statement_type_id = conn.execute(text("""
+        SELECT id
+        FROM statement_types
+        WHERE parser_type = 'bank_account'
+        LIMIT 1
+        """)).fetchone()._mapping["id"]
+    conn.execute(text("""
+        INSERT INTO statements (account_id, statement_type_id, filename, checksum, raw_text, uploaded_at)
+        VALUES (:p0, :p1, 'latest.csv', 'latest-checksum', 'raw', '2026-05-01T12:00:00Z')
+        """), {"p0": account_id, "p1": statement_type_id})
+    rows = [
+        ("2025-01-05", "Metro Grocery", 80.00, "Food", 0, "rule", 0, "expense", "seed-2025-food"),
+        ("2025-02-10", "Hydro Quebec", 90.00, "Utilities", 0, "rule", 0, "expense", "seed-2025-utilities"),
+        ("2025-05-02", "Metro Grocery", 60.00, "Food", 0, "rule", 0, "expense", "seed-2025-may-food"),
+        ("2025-05-03", "Unknown Shop", 30.00, "UNKNOWN", 1, "unknown", 0, "expense", "seed-2025-unknown"),
+        ("2025-05-04", "Payroll", -900.00, "Income", 0, "rule", 0, "income", "seed-2025-income"),
+        ("2026-01-05", "Metro Grocery", 100.00, "Food", 0, "rule", 0, "expense", "seed-2026-food-jan"),
+        ("2026-01-06", "Cafe Bistro", 40.00, "Food", 0, "manual", 0, "expense", "seed-2026-food-cafe"),
+        ("2026-01-07", "Payroll", -1000.00, "Income", 0, "rule", 0, "income", "seed-2026-income-jan"),
+        ("2026-02-10", "Hydro Quebec", 120.00, "Utilities", 0, "rule", 0, "expense", "seed-2026-utilities"),
+        ("2026-02-11", "Unknown Shop", 30.00, "UNKNOWN", 1, "unknown", 0, "expense", "seed-2026-unknown"),
+        ("2026-05-02", "Metro Grocery", 200.00, "Food", 0, "rule", 0, "expense", "seed-2026-may-food"),
+        ("2026-05-03", "Unknown Shop", 50.00, "UNKNOWN", 1, "unknown", 0, "expense", "seed-2026-may-unknown"),
+        ("2026-05-04", "Payroll", -1200.00, "Income", 0, "rule", 0, "income", "seed-2026-may-income"),
+        ("2026-02-12", "Ignored Store", 999.00, "Food", 0, "rule", 1, "expense", "seed-ignored"),
+    ]
+    conn.execute(text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            category_source,
+            ignored,
+            transaction_kind,
+            fingerprint
+        )
+        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"), row)) for row in rows])
+    tag_assignments = (
+        ("seed-2025-may-food", ["Tax"]),
+        ("seed-2026-food-jan", ["Tax"]),
+        ("seed-2026-food-cafe", ["Shared"]),
+        ("seed-2026-utilities", ["Government"]),
+        ("seed-2026-may-food", ["Tax"]),
+    )
+    for fingerprint, tags in tag_assignments:
+        transaction_id = conn.execute(text("""
+            SELECT id
+            FROM transactions
+            WHERE fingerprint = :p0
+            """), {"p0": fingerprint}).fetchone()._mapping["id"]
+        set_transaction_tags(conn, transaction_id, tags, source="rule")
+    conn.execute(text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            category_source,
+            ignored,
+            transaction_kind,
+            fingerprint
+        )
+        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8)
+        """), [{"p0": "2026-01-08", "p1": "Savings transfer", "p2": 500.00, "p3": "Transfers", "p4": 0, "p5": "rule", "p6": 0, "p7": "transfer", "p8": "seed-2026-transfer-jan"}, {"p0": "2026-05-05", "p1": "Card payment", "p2": 700.00, "p3": "Transfers", "p4": 0, "p5": "rule", "p6": 0, "p7": "payment", "p8": "seed-2026-transfer-may"}])
+    conn.execute(text("""
+        UPDATE user_settings
+        SET value = '2'
+        WHERE key = 'home_top_category_limit'
+          AND user_id = (SELECT id FROM users WHERE username = 'owner')
+        """))
+    conn.execute(text("""
+        UPDATE user_settings
+        SET value = '2'
+        WHERE key = 'merchant_table_limit'
+          AND user_id = (SELECT id FROM users WHERE username = 'owner')
+        """))
+    conn.commit()
+
+
+def category_totals(context):
+    """Return dashboard category totals by category label."""
+    return {
+        row["category"]: row["total"]
+        for row in context["category_rows"]
+    }
+
+
+def merchant_totals(context):
+    """Return dashboard merchant totals by merchant label."""
+    return {
+        row["merchant"]: row["total"]
+        for row in context["merchant_rows"]
+    }
+
+
+def quick_view_count(context, value):
+    """Return a dashboard quick-view count by option value."""
+    option = next(
+        row for row in context["quick_view_options"]
+        if row["value"] == value
+    )
+    return option.get("count")
+
+
+def seed_dashboard_spending_only(conn):
+    """Seed a dashboard range with spending but no income."""
+    conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES ('2026-06-01', 'Coffee Stand', 25.00, 'Food', 'rule', 'dashboard-spending-only')
+        """))
+    conn.commit()
+
+
+def seed_dashboard_unknown_only(conn):
+    """Seed a dashboard range where all transactions are UNKNOWN."""
+    rows = [
+        ("2026-07-01", "Unknown Shop", 20.00, "dashboard-unknown-1"),
+        ("2026-07-02", "Unknown Cafe", 40.00, "dashboard-unknown-2"),
+    ]
+    conn.execute(text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            category_source,
+            fingerprint
+        )
+        VALUES (:p0, :p1, :p2, 'UNKNOWN', 1, 'unknown', :p3)
+        """), [dict(zip(("p0", "p1", "p2", "p3"), row)) for row in rows])
+    conn.commit()
+
+
+def seed_dashboard_review_queue_data(conn):
+    """Seed dashboard data with both UNKNOWN and categorized review candidates."""
+    rows = [
+        ("2026-08-01", "Unknown Market", 20.00, "UNKNOWN", 1, "unknown", "dashboard-review-unknown"),
+        ("2026-08-02", "Low Confidence Cafe", 30.00, "Food", 1, "ai", "dashboard-review-food"),
+        ("2026-08-03", "Approved Grocery", 40.00, "Food", 0, "rule", "dashboard-review-approved"),
+    ]
+    conn.execute(text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            category_source,
+            fingerprint
+        )
+        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6"), row)) for row in rows])
+    conn.commit()
+
+
+def seed_reimbursable_dashboard_data(conn):
+    """Seed tagged expenses and reimbursement credits for dashboard cash flow."""
+    rows = [
+        ("2026-03-05", "Work hotel", 300.00, "Travel", "expense", "dashboard-reimbursable-expense"),
+        (
+            "2026-03-20",
+            "Employer reimbursement",
+            -250.00,
+            "Transfers",
+            "transfer",
+            "dashboard-reimbursable-credit",
+        ),
+    ]
+    conn.execute(text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            transaction_kind,
+            needs_review,
+            category_source,
+            ignored,
+            fingerprint
+        )
+        VALUES (:p0, :p1, :p2, :p3, :p4, 0, 'manual', 0, :p5)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5"), row)) for row in rows])
+    for fingerprint in ("dashboard-reimbursable-expense", "dashboard-reimbursable-credit"):
+        transaction_id = conn.execute(text("""
+            SELECT id
+            FROM transactions
+            WHERE fingerprint = :p0
+            """), {"p0": fingerprint}).fetchone()._mapping["id"]
+        set_transaction_tags(conn, transaction_id, ["Reimbursable"], source="manual")
+    conn.commit()
+
+
+def seed_reimbursable_comparison_data(conn):
+    """Seed period-comparison data with reimbursed transfer credits."""
+    rows = [
+        ("2025-05-06", "Prior work hotel", 100.00, "Travel", "expense", "comparison-reimbursable-prior-expense"),
+        (
+            "2025-05-07",
+            "Prior employer reimbursement",
+            -80.00,
+            "Transfers",
+            "transfer",
+            "comparison-reimbursable-prior-credit",
+        ),
+        ("2026-05-06", "Current work hotel", 200.00, "Travel", "expense", "comparison-reimbursable-current-expense"),
+        (
+            "2026-05-07",
+            "Current employer reimbursement",
+            -150.00,
+            "Transfers",
+            "transfer",
+            "comparison-reimbursable-current-credit",
+        ),
+    ]
+    conn.execute(text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            transaction_kind,
+            needs_review,
+            category_source,
+            ignored,
+            fingerprint
+        )
+        VALUES (:p0, :p1, :p2, :p3, :p4, 0, 'manual', 0, :p5)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5"), row)) for row in rows])
+    for fingerprint in (
+        "comparison-reimbursable-prior-expense",
+        "comparison-reimbursable-prior-credit",
+        "comparison-reimbursable-current-expense",
+        "comparison-reimbursable-current-credit",
+    ):
+        transaction_id = conn.execute(text("""
+            SELECT id
+            FROM transactions
+            WHERE fingerprint = :p0
+            """), {"p0": fingerprint}).fetchone()._mapping["id"]
+        set_transaction_tags(conn, transaction_id, ["Reimbursable"], source="manual")
+    conn.commit()
+
+
+def seed_dashboard_period_delta_data(conn):
+    """Seed current and previous rolling-month merchant spending."""
+    current_date = (real_date.today() - timedelta(days=10)).isoformat()
+    previous_date = (real_date.today() - timedelta(days=45)).isoformat()
+    rows = [
+        (current_date, "Metro Grocery", 150.00, "Food", "dashboard-delta-current"),
+        (current_date, "New Bakery", 60.00, "Food", "dashboard-delta-new"),
+        (previous_date, "Metro Grocery", 100.00, "Food", "dashboard-delta-previous"),
+    ]
+    conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+    conn.commit()
+
+
+def seed_comparison_unknown_warning_data(conn):
+    """Seed comparison periods where UNKNOWN exceeds warning thresholds."""
+    rows = [
+        ("2026-04-02", "Unknown Prior", 40.00, "UNKNOWN", "comparison-unknown-prior"),
+        ("2026-04-03", "Prior Grocery", 60.00, "Food", "comparison-food-prior"),
+        ("2026-05-02", "Unknown Current", 70.00, "UNKNOWN", "comparison-unknown-current"),
+        ("2026-05-03", "Current Grocery", 30.00, "Food", "comparison-food-current"),
+    ]
+    conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+    conn.commit()
+
+

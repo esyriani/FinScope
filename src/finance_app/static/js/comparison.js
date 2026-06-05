@@ -1,0 +1,111 @@
+function setupComparisonChangeFilters(root = document) {
+    const filterGroups = [
+        ...(root.matches?.("[data-comparison-change-filters]") ? [root] : []),
+        ...Array.from(root.querySelectorAll("[data-comparison-change-filters]")),
+    ];
+
+    filterGroups.forEach((group) => {
+        if (group.dataset.comparisonChangeFiltersReady === "true") {
+            return;
+        }
+
+        const section = group.closest("section");
+        const rows = Array.from(section?.querySelectorAll("[data-comparison-change-row]") || []);
+        const buttons = Array.from(group.querySelectorAll("[data-comparison-change-filter]"));
+
+        if (!rows.length || !buttons.length) return;
+
+        function rowMatches(row, filter) {
+            if (filter === "all") return true;
+            if (filter === "increases") return row.dataset.changeDirection === "up";
+            if (filter === "decreases") return row.dataset.changeDirection === "down";
+            return row.dataset.changeState === filter;
+        }
+
+        function applyFilter(filter) {
+            rows.forEach((row) => {
+                row.hidden = !rowMatches(row, filter);
+            });
+
+            buttons.forEach((button) => {
+                const active = button.dataset.comparisonChangeFilter === filter;
+                button.classList.toggle("btn-primary", active);
+                button.classList.toggle("btn-outline-secondary", !active);
+                button.setAttribute("aria-pressed", active ? "true" : "false");
+            });
+        }
+
+        group.dataset.comparisonChangeFiltersReady = "true";
+        buttons.forEach((button) => {
+            button.addEventListener("click", () => applyFilter(button.dataset.comparisonChangeFilter || "all"));
+        });
+
+        applyFilter("all");
+    });
+}
+
+function comparisonTableCellValue(row, column, type) {
+    const cell = row.cells[column];
+    if (!cell) return type === "number" ? 0 : "";
+    if (type === "number") {
+        const explicit = cell.getAttribute("data-sort-value");
+        if (explicit !== null) return Number(explicit) || 0;
+        return Number(cell.textContent.replace(/[^0-9.-]/g, "")) || 0;
+    }
+    return cell.textContent.trim().toLocaleLowerCase();
+}
+
+function setComparisonSortIcon(table, button, direction) {
+    table.querySelectorAll(".sort-icon").forEach((icon) => icon.remove());
+    const icon = document.createElement("span");
+    icon.className = `sort-icon ${direction}`;
+    icon.setAttribute("aria-hidden", "true");
+    button.appendChild(icon);
+}
+
+function setupComparisonTableSorting(root = document) {
+    const tables = [
+        ...(root.matches?.("[data-comparison-sortable]") ? [root] : []),
+        ...Array.from(root.querySelectorAll("[data-comparison-sortable]")),
+    ];
+
+    tables.forEach((table) => {
+        if (table.dataset.comparisonSortableReady === "true") {
+            return;
+        }
+
+        const tbody = table.tBodies[0];
+        const buttons = Array.from(table.querySelectorAll("[data-sort-column]"));
+        if (!tbody || !buttons.length) return;
+
+        table.dataset.comparisonSortableReady = "true";
+        buttons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const column = Number(button.dataset.sortColumn || 0);
+                const type = button.dataset.sortType || "text";
+                const currentDirection = button.dataset.sortDirection || "desc";
+                const nextDirection = currentDirection === "asc" ? "desc" : "asc";
+                buttons.forEach((item) => delete item.dataset.sortDirection);
+                button.dataset.sortDirection = nextDirection;
+
+                const rows = Array.from(tbody.rows);
+                rows.sort((left, right) => {
+                    const leftValue = comparisonTableCellValue(left, column, type);
+                    const rightValue = comparisonTableCellValue(right, column, type);
+                    if (leftValue < rightValue) return nextDirection === "asc" ? -1 : 1;
+                    if (leftValue > rightValue) return nextDirection === "asc" ? 1 : -1;
+                    return 0;
+                });
+
+                rows.forEach((row) => tbody.appendChild(row));
+                setComparisonSortIcon(table, button, nextDirection);
+            });
+        });
+    });
+}
+
+window.financeApp?.registerInitializer("comparison.change-filters", setupComparisonChangeFilters);
+window.financeApp?.registerInitializer("comparison.table-sorting", setupComparisonTableSorting);
+
+setupComparisonChangeFilters();
+setupComparisonTableSorting();

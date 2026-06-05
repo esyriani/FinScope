@@ -169,25 +169,36 @@ function setupUploadPreview(root = document) {
         }
 
         if (!rows.length) {
-            rowsNode.innerHTML = "";
+            rowsNode.replaceChildren();
             emptyNode.classList.remove("d-none");
             return;
         }
 
         emptyNode.classList.add("d-none");
-        rowsNode.innerHTML = rows.map((row) => `
-            <tr>
-                <td>${escapeHtml(row.raw_date)}</td>
-                <td
-                    data-upload-preview-parsed-date
-                    data-auto-date="${escapeHtml(row.parsed_date)}"
-                    data-month-first-date="${escapeHtml(row.month_first_date)}"
-                    data-day-first-date="${escapeHtml(row.day_first_date)}"
-                >${escapeHtml(rowDateForOrder(row, selectedDateOrder || currentPreview?.date_format?.effective_order || ""))}</td>
-                <td>${escapeHtml(row.description)}</td>
-                <td class="text-end">${escapeHtml(row.amount)}</td>
-            </tr>
-        `).join("");
+        rowsNode.replaceChildren(...rows.map((row) => {
+            const tableRow = document.createElement("tr");
+            const rawDate = document.createElement("td");
+            rawDate.textContent = row.raw_date || "";
+
+            const parsedDate = document.createElement("td");
+            parsedDate.dataset.uploadPreviewParsedDate = "";
+            parsedDate.dataset.autoDate = row.parsed_date || "";
+            parsedDate.dataset.monthFirstDate = row.month_first_date || "";
+            parsedDate.dataset.dayFirstDate = row.day_first_date || "";
+            parsedDate.textContent = rowDateForOrder(
+                row,
+                selectedDateOrder || currentPreview?.date_format?.effective_order || ""
+            );
+
+            const description = document.createElement("td");
+            description.textContent = row.description || "";
+            const amount = document.createElement("td");
+            amount.className = "text-end";
+            amount.textContent = row.amount || "";
+
+            tableRow.append(rawDate, parsedDate, description, amount);
+            return tableRow;
+        }));
     };
 
     const updateDateChoice = () => {
@@ -308,8 +319,8 @@ function setupUploadPreview(root = document) {
     });
 }
 
+window.financeApp?.registerInitializer("upload.account-behavior", setupUploadAccountBehavior);
+window.financeApp?.registerInitializer("upload.preview", setupUploadPreview);
+
 setupUploadAccountBehavior();
 setupUploadPreview();
-
-window.setupUploadAccountBehavior = setupUploadAccountBehavior;
-window.setupUploadPreview = setupUploadPreview;

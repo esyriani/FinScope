@@ -1,4 +1,4 @@
-function setupCalendarDayModal() {
+function setupCalendarDayModal(root = document) {
     const dataNode = document.getElementById("calendar-day-data");
     const modalElement = document.getElementById("calendar-day-modal");
     if (!dataNode || !modalElement || !window.bootstrap?.Modal) return;
@@ -17,22 +17,31 @@ function setupCalendarDayModal() {
     const table = modalElement.querySelector("[data-calendar-modal-table]");
     const transactionBody = modalElement.querySelector("[data-calendar-modal-transactions]");
     const link = modalElement.querySelector("[data-calendar-modal-link]");
-    const moneyFormatter = new Intl.NumberFormat(window.financeLocale || "en-CA", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
-
     function formatMoney(value) {
-        return moneyFormatter.format(Number(value) || 0).replace(/,/g, " ") + " $";
+        return window.financeFormatMoney
+            ? window.financeFormatMoney(value)
+            : Number(value || 0).toFixed(2);
     }
 
-    function escapeHtmlLocal(value) {
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
+    function transactionRow(item) {
+        const row = document.createElement("tr");
+        const descriptionCell = document.createElement("td");
+        const linkNode = document.createElement("a");
+        linkNode.className = "text-reset text-decoration-none";
+        linkNode.href = item.url || "#";
+        linkNode.textContent = item.description || "";
+        descriptionCell.appendChild(linkNode);
+
+        const categoryCell = document.createElement("td");
+        categoryCell.textContent = item.category || "";
+        const accountCell = document.createElement("td");
+        accountCell.textContent = item.accountName || "";
+        const amountCell = document.createElement("td");
+        amountCell.className = `text-end ${item.type === "income" ? "text-success" : "text-danger"}`;
+        amountCell.textContent = formatMoney(item.amount);
+
+        row.append(descriptionCell, categoryCell, accountCell, amountCell);
+        return row;
     }
 
     function openDay(date) {
@@ -50,19 +59,14 @@ function setupCalendarDayModal() {
         const transactions = day.transactions || [];
         empty.classList.toggle("d-none", transactions.length > 0);
         table.classList.toggle("d-none", transactions.length === 0);
-        transactionBody.innerHTML = transactions.map((item) => `
-            <tr>
-                <td><a class="text-reset text-decoration-none" href="${escapeHtmlLocal(item.url)}">${escapeHtmlLocal(item.description)}</a></td>
-                <td>${escapeHtmlLocal(item.category)}</td>
-                <td>${escapeHtmlLocal(item.accountName)}</td>
-                <td class="text-end ${item.type === "income" ? "text-success" : "text-danger"}">${formatMoney(item.amount)}</td>
-            </tr>
-        `).join("");
+        transactionBody.replaceChildren(...transactions.map(transactionRow));
 
         modal.show();
     }
 
-    document.querySelectorAll("[data-calendar-day]").forEach((day) => {
+    root.querySelectorAll("[data-calendar-day]").forEach((day) => {
+        if (day.dataset.calendarDayReady === "true") return;
+        day.dataset.calendarDayReady = "true";
         day.addEventListener("dblclick", (event) => {
             if (event.target.closest("a, button")) return;
             openDay(day.dataset.calendarDay);
@@ -76,11 +80,12 @@ function setupCalendarDayModal() {
     });
 }
 
-setupCalendarDayModal();
-
-function setupCalendarHeatmapControls() {
-    const controls = document.querySelector("[data-calendar-heatmap-controls]");
+function setupCalendarHeatmapControls(root = document) {
+    const controls = root.querySelector("[data-calendar-heatmap-controls]")
+        || document.querySelector("[data-calendar-heatmap-controls]");
     if (!controls) return;
+    if (controls.dataset.calendarHeatmapReady === "true") return;
+    controls.dataset.calendarHeatmapReady = "true";
 
     const buttons = Array.from(controls.querySelectorAll("[data-calendar-heatmap]"));
     const days = Array.from(document.querySelectorAll("[data-calendar-day]"));
@@ -122,4 +127,8 @@ function setupCalendarHeatmapControls() {
     });
 }
 
+window.financeApp?.registerInitializer("calendar.day-modal", setupCalendarDayModal);
+window.financeApp?.registerInitializer("calendar.heatmap-controls", setupCalendarHeatmapControls);
+
+setupCalendarDayModal();
 setupCalendarHeatmapControls();

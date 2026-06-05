@@ -324,6 +324,8 @@ function setupTagMultiselects(root = document) {
     });
 }
 
+window.financeApp?.registerInitializer("tag-multiselect.controls", setupTagMultiselects);
+
 setupTagMultiselects();
 
 if (window.financeTagMultiselectGlobalReady !== "true") {

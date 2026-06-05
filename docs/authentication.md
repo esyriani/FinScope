@@ -13,7 +13,7 @@ When the configured database has no active owner, FinScope redirects application
 3. Create the owner username and password in the bootstrap form.
 4. Use Users to create editor and viewer accounts.
 
-Only one owner account is supported in a FinScope database. The user-management routes prevent deactivating or directly demoting the owner. Ownership can only be handed off from the Users page to another active user through a confirmation modal; the previous owner becomes a viewer.
+Only one owner account is supported in a FinScope database. The user-management routes prevent deactivating or directly demoting the owner, and the database enforces the single-owner role invariant. Ownership can only be handed off from the Users page to another active user through a confirmation modal; the previous owner becomes a viewer.
 
 ## Roles
 
@@ -70,7 +70,7 @@ Backend services enforce these permissions. Hidden UI controls are not the secur
 
 Authentication adds these SQLAlchemy Core tables:
 
-- `users`: account identity, role, password hash, status, lockout, and login tracking.
+- `users`: account identity, generated username and owner uniqueness keys, role, password hash, status, lockout, and login tracking.
 - `user_settings`: per-user runtime settings, including owner-only advanced settings.
 - `audit_log`: security-relevant account events without plaintext passwords.
 

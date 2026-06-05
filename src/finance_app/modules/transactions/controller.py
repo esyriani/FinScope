@@ -2,6 +2,7 @@
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
+from finance_app.core.i18n import gettext
 from finance_app.modules.categories.taxonomy import (
     get_tag_options,
     normalize_tag_names,
@@ -45,13 +46,13 @@ def update_transaction_category(transaction_id):
         tag_names = normalize_tag_names(request.form.getlist("tags"), tag_options)
 
         if not new_category:
-            flash("Category cannot be empty.")
+            flash(gettext("Category cannot be empty."))
             return redirect(next_url or url_for("transactions.transactions"))
 
         tx = get_transaction_for_category_update(conn, transaction_id)
 
         if tx is None:
-            flash("Transaction not found.")
+            flash(gettext("Transaction not found."))
             return redirect(next_url or url_for("transactions.transactions"))
 
         description = tx["description"].strip()
@@ -66,13 +67,13 @@ def update_transaction_category(transaction_id):
                 amount_min, amount_max = parse_amount_bounds(
                     request.form.get("amount_min", ""),
                     request.form.get("amount_max", ""),
-                )
+            )
             except ValueError as exc:
-                flash(str(exc))
+                flash(gettext(str(exc)))
                 return redirect(next_url or url_for("transactions.transactions"))
 
             if not merchant_key:
-                flash("Rule keyword is required when saving a rule.")
+                flash(gettext("Rule keyword is required when saving a rule."))
                 return redirect(next_url or url_for("transactions.transactions"))
 
         result = assign_manual_category(
@@ -87,19 +88,25 @@ def update_transaction_category(transaction_id):
         )
 
         if not result.updated:
-            flash("Transaction not found.")
+            flash(gettext("Transaction not found."))
             return redirect(next_url or url_for("transactions.transactions"))
 
         if rule_action == "save":
-            prefix = "Category updated. Rule saved for:" if result.transaction_changed else "Rule saved for:"
             flash(
-                f"{prefix} "
-                f"{merchant_key}{amount_bounds_label(amount_min, amount_max)}"
+                gettext(
+                    (
+                        "Category updated. Rule saved for: {keyword}{amount_bounds}"
+                        if result.transaction_changed
+                        else "Rule saved for: {keyword}{amount_bounds}"
+                    ),
+                    keyword=merchant_key,
+                    amount_bounds=amount_bounds_label(amount_min, amount_max),
+                )
             )
         elif result.transaction_changed:
-            flash("Category updated for this transaction only.")
+            flash(gettext("Category updated for this transaction only."))
         else:
-            flash("No transaction changes to save.")
+            flash(gettext("No transaction changes to save."))
     return redirect(next_url or url_for("transactions.transactions"))
 
 
@@ -111,7 +118,7 @@ def verify_transaction(transaction_id):
     with db_core_transaction() as conn:
         updated = mark_transaction_verified(conn, transaction_id)
 
-    flash("Transaction approved." if updated else "Transaction not found.")
+    flash(gettext("Transaction approved." if updated else "Transaction not found."))
     return redirect(next_url or url_for("transactions.transactions"))
 
 
@@ -125,9 +132,9 @@ def update_transaction_ignored(transaction_id):
         updated = set_transaction_ignored(conn, transaction_id, ignored)
 
     if updated:
-        flash("Transaction ignored." if ignored else "Transaction restored.")
+        flash(gettext("Transaction ignored." if ignored else "Transaction restored."))
     else:
-        flash("Transaction not found.")
+        flash(gettext("Transaction not found."))
     return redirect(transactions_redirect_with_ignored(next_url, "all"))
 
 
@@ -141,24 +148,28 @@ def batch_transactions():
     redirect_url = next_url or url_for("transactions.transactions")
 
     if not transaction_ids:
-        flash("Select at least one transaction.")
+        flash(gettext("Select at least one transaction."))
         return redirect(redirect_url)
 
     if action == "approve":
         updated = transactions_service.approve_selected_transactions(transaction_ids)
         flash(
-            "Approved selected transaction."
-            if updated == 1
-            else "Approved selected transactions."
+            gettext(
+                "Approved selected transaction."
+                if updated == 1
+                else "Approved selected transactions."
+            )
         )
         return redirect(redirect_url)
 
     if action == "ignore":
         updated = transactions_service.ignore_selected_transactions(transaction_ids)
         flash(
-            "Ignored selected transaction."
-            if updated == 1
-            else "Ignored selected transactions."
+            gettext(
+                "Ignored selected transaction."
+                if updated == 1
+                else "Ignored selected transactions."
+            )
         )
         return redirect(transactions_redirect_with_ignored(redirect_url, "all"))
 
@@ -168,14 +179,21 @@ def batch_transactions():
         selected_count = result.get("selected_count") or 0
         if job_id:
             flash(
-                f"Recategorization queued for {selected_count} selected transaction"
-                f"{'' if selected_count == 1 else 's'}. Job: {job_id[:8]}"
+                gettext(
+                    (
+                        "Recategorization queued for {count} selected transaction. Job: {job_id}"
+                        if selected_count == 1
+                        else "Recategorization queued for {count} selected transactions. Job: {job_id}"
+                    ),
+                    count=selected_count,
+                    job_id=job_id[:8],
+                )
             )
         else:
-            flash("Select at least one transaction.")
+            flash(gettext("Select at least one transaction."))
         return redirect(redirect_url)
 
-    flash("Choose a batch action.")
+    flash(gettext("Choose a batch action."))
     return redirect(redirect_url)
 
 
@@ -201,7 +219,7 @@ def suggest_transaction_category(transaction_id):
         }
     else:
         session.pop("transaction_ai_suggestion", None)
-    flash(result.get("message") or "AI categorization completed.")
+    flash(gettext(result.get("message") or "AI categorization completed."))
     return redirect(next_url or url_for("transactions.transactions"))
 
 
@@ -221,9 +239,9 @@ def apply_transaction_ai_suggestion(transaction_id):
             amount_min, amount_max = parse_amount_bounds(
                 request.form.get("amount_min", ""),
                 request.form.get("amount_max", ""),
-            )
+        )
         except ValueError as exc:
-            flash(str(exc))
+            flash(gettext(str(exc)))
             return redirect(next_url or url_for("transactions.transactions"))
 
     result = transactions_service.apply_transaction_ai_suggestion(
@@ -236,6 +254,6 @@ def apply_transaction_ai_suggestion(transaction_id):
     )
     if result.get("updated"):
         session.pop("transaction_ai_suggestion", None)
-    flash(result.get("message") or "AI suggestion cannot be applied.")
+    flash(gettext(result.get("message") or "AI suggestion cannot be applied."))
     return redirect(next_url or url_for("transactions.transactions"))
 

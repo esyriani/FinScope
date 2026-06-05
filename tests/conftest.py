@@ -8,22 +8,20 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 import pytest
-from sqlalchemy import text
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import finance_app as app_package  # noqa: E402
+from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_VIEWER  # noqa: E402
 from finance_app.core import config as config_module  # noqa: E402
+from finance_app.database import connection as connection_module  # noqa: E402
 from finance_app.database import engine as engine_module  # noqa: E402
-from finance_app.database.seeds import (  # noqa: E402
-    seed_category_taxonomy_defaults,
-    seed_runtime_settings_defaults,
-    seed_statement_type_defaults,
-)
-from finance_app.database.tables import metadata  # noqa: E402
 from finance_app.modules.auth import repository as auth_repository  # noqa: E402
-from finance_app.modules.auth.service import bootstrap_owner  # noqa: E402
+from finance_app.modules.auth.service import bootstrap_owner, hash_password, utc_now  # noqa: E402
+from tests.support.database import TestDataFactory  # noqa: E402
+from tests.support.network import install_network_guard  # noqa: E402
+from tests.support.web import CsrfEnabledClient  # noqa: E402
 
 
 LAYER_MARKERS = {
@@ -32,175 +30,26 @@ LAYER_MARKERS = {
     "routes": "route",
     "smoke": "smoke",
 }
-DB_FIXTURES = {"db_conn", "core_conn"}
-FLASK_FIXTURES = {"app", "client", "runner"}
+DB_FIXTURES = {"core_conn", "data_factory"}
+FLASK_FIXTURES = {
+    "app",
+    "client",
+    "owner_client",
+    "editor_client",
+    "viewer_client",
+    "anonymous_client",
+    "stale_session_client",
+    "must_change_password_client",
+    "csrf_client",
+    "anonymous_csrf_client",
+    "runner",
+}
 TEST_OWNER_USERNAME = "owner"
 TEST_OWNER_PASSWORD = "OwnerPass123!"
-
-
-class TestRow:
-    """Expose SQLAlchemy result rows with mapping and tuple-style access for tests."""
-
-    __test__ = False
-
-    def __init__(self, row):
-        """Store the wrapped SQLAlchemy row."""
-        self._row = row
-        self._mapping = row._mapping
-
-    def __getitem__(self, key):
-        """Return row values by column name, index, or slice."""
-        if isinstance(key, str):
-            return self._mapping[key]
-        return self._row[key]
-
-    def __iter__(self):
-        """Iterate row values."""
-        return iter(self._row)
-
-    def __len__(self):
-        """Return the number of columns in the row."""
-        return len(self._row)
-
-    def keys(self):
-        """Return available column names."""
-        return self._mapping.keys()
-
-    def get(self, key, default=None):
-        """Return a named value or a default."""
-        return self._mapping.get(key, default)
-
-
-class TestResult:
-    """Wrap SQLAlchemy results returned by SQLAlchemy test queries."""
-
-    __test__ = False
-
-    def __init__(self, result):
-        """Store the wrapped SQLAlchemy result."""
-        self._result = result
-
-    @property
-    def rowcount(self):
-        """Return the number of rows affected by the statement."""
-        return self._result.rowcount
-
-    @property
-    def lastrowid(self):
-        """Return the inserted row id when available."""
-        return self._result.lastrowid
-
-    def fetchone(self):
-        """Return one row with mapping-style keyed access."""
-        row = self._result.fetchone()
-        return None if row is None else TestRow(row)
-
-    def fetchall(self):
-        """Return all rows with mapping-style keyed access."""
-        return [TestRow(row) for row in self._result.fetchall()]
-
-    def __iter__(self):
-        """Iterate rows with mapping-style keyed access."""
-        for row in self._result:
-            yield TestRow(row)
-
-    def scalar_one(self):
-        """Return exactly one scalar value."""
-        return self._result.scalar_one()
-
-
-class TestDatabaseConnection:
-    """SQLAlchemy-backed connection adapter for integration tests.
-
-    Runtime helpers receive the underlying Core connection semantics, while
-    string-based setup and assertions in tests use SQLAlchemy text constructs.
-    """
-
-    __test__ = False
-
-    def __init__(self, conn):
-        """Store the wrapped SQLAlchemy Core connection."""
-        self._conn = conn
-
-    def execute(self, statement, parameters=None):
-        """Execute Core expressions or SQLAlchemy text statements for tests."""
-        if isinstance(statement, str):
-            statement, parameters = build_text_statement(statement, parameters)
-            result = self._conn.execute(statement, parameters)
-            return TestResult(result)
-        if parameters is None:
-            return self._conn.execute(statement)
-        return self._conn.execute(statement, parameters)
-
-    def executemany(self, statement, seq_of_parameters):
-        """Execute a SQLAlchemy text statement once for each parameter set."""
-        statement, parameters = build_many_text_statement(statement, seq_of_parameters)
-        return TestResult(self._conn.execute(statement, parameters))
-
-    def commit(self):
-        """Commit the current transaction."""
-        self._conn.commit()
-
-    def rollback(self):
-        """Roll back the current transaction."""
-        self._conn.rollback()
-
-    def begin_nested(self):
-        """Begin a nested transaction on the wrapped Core connection."""
-        return self._conn.begin_nested()
-
-
-def build_text_statement(statement, parameters=None):
-    """Return a SQLAlchemy text statement and named bind parameters."""
-    if parameters is None:
-        return text(statement), {}
-    if isinstance(parameters, dict):
-        return text(statement), parameters
-
-    return bind_positional_text_statement(statement, parameters)
-
-
-def build_many_text_statement(statement, seq_of_parameters):
-    """Return a SQLAlchemy text statement and row bind mappings."""
-    rows = list(seq_of_parameters)
-    if not rows:
-        return text(statement), []
-    if isinstance(rows[0], dict):
-        return text(statement), rows
-
-    statement, _ = bind_positional_text_statement(statement, rows[0])
-    names = positional_bind_names(rows[0])
-    return statement, [
-        dict(zip(names, row))
-        for row in rows
-    ]
-
-
-def bind_positional_text_statement(statement, parameters):
-    """Convert positional question-mark binds into SQLAlchemy named binds."""
-    values = tuple(parameters)
-    names = positional_bind_names(values)
-    parts = statement.split("?")
-    placeholder_count = len(parts) - 1
-    if placeholder_count != len(values):
-        raise ValueError(
-            f"Expected {placeholder_count} parameters for SQL statement, got {len(values)}"
-        )
-
-    converted = []
-    bind_parameters = {}
-    for index, part in enumerate(parts[:-1]):
-        name = names[index]
-        converted.append(part)
-        converted.append(f":{name}")
-        bind_parameters[name] = values[index]
-    converted.append(parts[-1])
-    return text("".join(converted)), bind_parameters
-
-
-def positional_bind_names(parameters):
-    """Return deterministic bind names for a positional parameter row."""
-    return [f"p{index}" for index, _ in enumerate(parameters)]
+TEST_EDITOR_USERNAME = "fixture_editor"
+TEST_VIEWER_USERNAME = "fixture_viewer"
+TEST_MUST_CHANGE_USERNAME = "fixture_must_change"
+TEST_USER_PASSWORD = "FixturePass123!"
 
 
 def remove_python_bytecode(root):
@@ -253,14 +102,9 @@ def pytest_collection_modifyitems(config, items):
 
 
 def initialize_test_database(database_path):
-    """Create the full application schema in a temporary SQLite database."""
+    """Create the full application schema through the production init path."""
     del database_path
-    engine = engine_module.get_database_engine()
-    metadata.create_all(engine)
-    with engine.begin() as conn:
-        seed_runtime_settings_defaults(conn)
-        seed_statement_type_defaults(conn)
-        seed_category_taxonomy_defaults(conn)
+    connection_module.init_core_db()
 
 
 def seed_test_owner():
@@ -272,11 +116,65 @@ def seed_test_owner():
     return bootstrap_owner(TEST_OWNER_USERNAME, TEST_OWNER_PASSWORD, TEST_OWNER_PASSWORD)
 
 
-def login_test_client(client, user_id):
+def get_or_create_test_user(username, role, *, must_change_password=False):
+    """Return an active user row for a named test role.
+
+    Args:
+        username: Stable username for the fixture-owned user.
+        role: Persisted application role.
+        must_change_password: Whether the user should be forced into the
+            password-change flow.
+
+    Returns:
+        A mapping row for the existing or newly inserted user. The helper opens
+        its own transaction so client fixtures do not need the database fixture.
+    """
+    with engine_module.db_core_transaction() as conn:
+        existing = auth_repository.get_user_by_username(conn, username)
+        if existing is not None:
+            return existing
+
+        now = utc_now()
+        user_id = auth_repository.insert_user(
+            conn,
+            username,
+            hash_password(TEST_USER_PASSWORD),
+            role,
+            must_change_password=must_change_password,
+            now=now,
+            display_name=username.replace("_", " ").title(),
+        )
+        return auth_repository.get_user_by_id(conn, user_id)
+
+
+def login_test_client(client, user_id, *, fresh=True):
     """Store Flask-Login session keys for a test client."""
     with client.session_transaction() as session:
         session["_user_id"] = str(user_id)
-        session["_fresh"] = True
+        session["_fresh"] = bool(fresh)
+
+
+def authenticated_test_client(app, user, *, fresh=True):
+    """Create a Flask test client logged in as a persisted user.
+
+    Args:
+        app: Flask application under test.
+        user: Persisted user mapping containing at least an ``id`` value.
+        fresh: Flask-Login freshness flag to store in the session.
+
+    Returns:
+        A Flask test client with ``test_user`` attached for assertions.
+    """
+    test_client = app.test_client()
+    login_test_client(test_client, user["id"], fresh=fresh)
+    test_client.test_user = dict(user)
+    return test_client
+
+
+@pytest.fixture(autouse=True)
+def block_network_calls(monkeypatch):
+    """Prevent tests from opening real network connections."""
+    install_network_guard(monkeypatch)
 
 
 @pytest.fixture
@@ -304,13 +202,56 @@ def app(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def client(app):
+def owner_client(app):
     """A test client authenticated as the default owner."""
-    test_client = app.test_client()
     with engine_module.db_core_transaction() as conn:
         owner = auth_repository.get_user_by_username(conn, TEST_OWNER_USERNAME)
-    login_test_client(test_client, owner["id"])
-    return test_client
+    return authenticated_test_client(app, owner)
+
+
+@pytest.fixture
+def client(owner_client):
+    """A backwards-compatible owner client fixture for existing tests."""
+    return owner_client
+
+
+@pytest.fixture
+def editor_client(app):
+    """A test client authenticated as an editor user."""
+    editor = get_or_create_test_user(TEST_EDITOR_USERNAME, USER_ROLE_EDITOR)
+    return authenticated_test_client(app, editor)
+
+
+@pytest.fixture
+def viewer_client(app):
+    """A test client authenticated as a viewer user."""
+    viewer = get_or_create_test_user(TEST_VIEWER_USERNAME, USER_ROLE_VIEWER)
+    return authenticated_test_client(app, viewer)
+
+
+@pytest.fixture
+def stale_session_client(app):
+    """A test client authenticated with a non-fresh owner session."""
+    with engine_module.db_core_transaction() as conn:
+        owner = auth_repository.get_user_by_username(conn, TEST_OWNER_USERNAME)
+    return authenticated_test_client(app, owner, fresh=False)
+
+
+@pytest.fixture
+def must_change_password_client(app):
+    """A test client authenticated as a user forced to change password."""
+    user = get_or_create_test_user(
+        TEST_MUST_CHANGE_USERNAME,
+        USER_ROLE_VIEWER,
+        must_change_password=True,
+    )
+    return authenticated_test_client(app, user)
+
+
+@pytest.fixture
+def csrf_client(client):
+    """A test client authenticated as the default owner with CSRF helpers."""
+    return CsrfEnabledClient(client)
 
 
 @pytest.fixture
@@ -320,16 +261,15 @@ def anonymous_client(app):
 
 
 @pytest.fixture
-def runner(app):
-    """A CLI runner for the Flask application."""
-    return app.test_cli_runner()
+def anonymous_csrf_client(anonymous_client):
+    """An anonymous test client with CSRF helpers."""
+    return CsrfEnabledClient(anonymous_client)
 
 
 @pytest.fixture
-def db_conn(app):
-    """Open a SQLAlchemy-backed test connection to the app database."""
-    with engine_module.db_core_transaction() as conn:
-        yield TestDatabaseConnection(conn)
+def runner(app):
+    """A CLI runner for the Flask application."""
+    return app.test_cli_runner()
 
 
 @pytest.fixture
@@ -337,3 +277,9 @@ def core_conn(app):
     """Open a Core transaction against the test application's database."""
     with engine_module.db_core_transaction() as conn:
         yield conn
+
+
+@pytest.fixture
+def data_factory(core_conn):
+    """Create test data through a raw SQLAlchemy Core connection."""
+    return TestDataFactory(core_conn)

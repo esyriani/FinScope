@@ -5,13 +5,15 @@ from finance_app.modules.categories.categorization import categorize_transaction
 from finance_app.modules.categories.llm import (
     build_llm_prompt,
     build_llm_system_prompt,
-    build_rule_examples,
     normalize_llm_category,
     pair_llm_results,
     parse_bool,
     parse_confidence,
     request_llm_categories,
     sanitize_openai_error,
+)
+from finance_app.modules.categories.llm_prompts import (
+    build_rule_examples,
     taxonomy_prompt_line,
 )
 from finance_app.modules.categories.repository import (
@@ -40,24 +42,28 @@ from finance_app.modules.categories.rules_matching import (
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
 
-def classify_unknowns_with_llm(conn, transactions, rules, unknown_category, save_automatic_rules=True):
+def classify_unknowns_with_llm(
+    conn,
+    transactions,
+    rules,
+    unknown_category,
+    save_automatic_rules=True,
+    request_categories=None,
+):
     """Classify unknowns with LLM.
 
     ``save_automatic_rules`` controls whether no-review AI decisions should
-    also create future matching rules.
+    also create future matching rules. ``request_categories`` can inject an LLM
+    requester without replacing module globals.
     """
-    original = _llm.request_llm_categories
-    _llm.request_llm_categories = request_llm_categories
-    try:
-        return _llm.classify_unknowns_with_llm(
-            conn,
-            transactions,
-            rules,
-            unknown_category,
-            save_automatic_rules=save_automatic_rules,
-        )
-    finally:
-        _llm.request_llm_categories = original
+    return _llm.classify_unknowns_with_llm(
+        conn,
+        transactions,
+        rules,
+        unknown_category,
+        save_automatic_rules=save_automatic_rules,
+        request_categories=request_categories or request_llm_categories,
+    )
 
 
 __all__ = [

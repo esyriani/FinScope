@@ -21,17 +21,17 @@ from finance_app.modules.transactions.repository import (
 
 
 @pytest.fixture
-def repository_transaction(db_conn):
+def repository_transaction(core_conn):
     """Create a transaction row used by repository mutation tests."""
-    merchant_id = get_or_create_merchant_for_description(db_conn, "STORE 123")["id"]
-    transaction_id = db_conn.execute(
+    merchant_id = get_or_create_merchant_for_description(core_conn, "STORE 123")["id"]
+    transaction_id = core_conn.execute(
         insert(transactions_table).values(
             merchant_id=merchant_id,
             tx_date="2026-01-02",
             description="STORE 123",
             amount=12.34,
             category="UNKNOWN",
-            category_id=resolve_category_id(db_conn, "UNKNOWN"),
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
             needs_review=1,
             fingerprint="tx-1",
         )
@@ -39,23 +39,23 @@ def repository_transaction(db_conn):
     return transaction_id, merchant_id
 
 
-def test_get_transaction_for_category_update_returns_edit_context(db_conn, repository_transaction):
+def test_get_transaction_for_category_update_returns_edit_context(core_conn, repository_transaction):
     """Verify get transaction for category update returns edit context."""
     transaction_id, merchant_id = repository_transaction
 
-    row = get_transaction_for_category_update(db_conn, transaction_id)
+    row = get_transaction_for_category_update(core_conn, transaction_id)
 
     assert row["description"] == "STORE 123"
     assert row["merchant_id"] == merchant_id
     assert row["amount"] == 12.34
 
 
-def test_assign_manual_category_updates_transaction_tags_and_optional_rule(db_conn, repository_transaction):
+def test_assign_manual_category_updates_transaction_tags_and_optional_rule(core_conn, repository_transaction):
     """Verify assign manual category updates transaction tags and optional rule."""
     transaction_id, merchant_id = repository_transaction
 
     result = assign_manual_category(
-        db_conn,
+        core_conn,
         transaction_id,
         "Food",
         tag_names=["Tax"],
@@ -65,7 +65,7 @@ def test_assign_manual_category_updates_transaction_tags_and_optional_rule(db_co
         rule_merchant_id=merchant_id,
     )
 
-    tx = db_conn.execute(
+    tx = core_conn.execute(
         select(
             transactions_table.c.category,
             transactions_table.c.category_id,
@@ -82,7 +82,7 @@ def test_assign_manual_category_updates_transaction_tags_and_optional_rule(db_co
     assert result.updated is True
     assert result.saved_rule_id is not None
     assert tx["category"] == "Food"
-    assert tx["category_id"] == resolve_category_id(db_conn, "Food")
+    assert tx["category_id"] == resolve_category_id(core_conn, "Food")
     assert tx["needs_review"] == 0
     assert tx["category_source"] == "manual"
     assert tx["category_confidence"] == 1.0
@@ -90,9 +90,9 @@ def test_assign_manual_category_updates_transaction_tags_and_optional_rule(db_co
     assert json.loads(tx["category_metadata"])["decision_source"] == "manual"
     assert tx["categorized_at"] is not None
     assert tx["reviewed_at"] is not None
-    assert get_transaction_tag_names(db_conn, transaction_id) == ["Tax"]
+    assert get_transaction_tag_names(core_conn, transaction_id) == ["Tax"]
 
-    rule = get_transaction_rule(db_conn, result.saved_rule_id)
+    rule = get_transaction_rule(core_conn, result.saved_rule_id)
     assert rule == {
         "merchant_id": merchant_id,
         "keyword": "STORE",
@@ -101,27 +101,27 @@ def test_assign_manual_category_updates_transaction_tags_and_optional_rule(db_co
         "amount_max": 20.0,
         "source": "manual",
     }
-    assert get_rule_tags_by_rule_id(db_conn, [result.saved_rule_id])[result.saved_rule_id] == ["Tax"]
+    assert get_rule_tags_by_rule_id(core_conn, [result.saved_rule_id])[result.saved_rule_id] == ["Tax"]
 
 
-def test_assign_manual_category_saves_rule_and_approves_unchanged_transaction(db_conn, repository_transaction):
+def test_assign_manual_category_saves_rule_and_approves_unchanged_transaction(core_conn, repository_transaction):
     """Verify saving a rule approves the current transaction even when category data is unchanged."""
     transaction_id, merchant_id = repository_transaction
-    db_conn.execute(
+    core_conn.execute(
         update(transactions_table)
         .where(transactions_table.c.id == transaction_id)
         .values(
             category="Food",
-            category_id=resolve_category_id(db_conn, "Food"),
+            category_id=resolve_category_id(core_conn, "Food"),
             category_source="rule",
             needs_review=0,
             reviewed_at=None,
         )
     )
-    set_transaction_tags(db_conn, transaction_id, ["Tax"], source="rule")
+    set_transaction_tags(core_conn, transaction_id, ["Tax"], source="rule")
 
     result = assign_manual_category(
-        db_conn,
+        core_conn,
         transaction_id,
         "Food",
         tag_names=["Tax"],
@@ -131,7 +131,7 @@ def test_assign_manual_category_saves_rule_and_approves_unchanged_transaction(db
         rule_merchant_id=merchant_id,
     )
 
-    tx = db_conn.execute(
+    tx = core_conn.execute(
         select(
             transactions_table.c.category,
             transactions_table.c.category_source,
@@ -147,20 +147,20 @@ def test_assign_manual_category_saves_rule_and_approves_unchanged_transaction(db
     assert tx["category_source"] == "rule"
     assert tx["needs_review"] == 0
     assert tx["reviewed_at"] is not None
-    assert get_transaction_tag_names(db_conn, transaction_id) == ["Tax"]
+    assert get_transaction_tag_names(core_conn, transaction_id) == ["Tax"]
 
 
-def test_mark_transaction_verified_updates_review_status(db_conn, repository_transaction):
+def test_mark_transaction_verified_updates_review_status(core_conn, repository_transaction):
     """Verify mark transaction verified updates review status."""
     transaction_id, _ = repository_transaction
 
     updated = mark_transaction_verified(
-        db_conn,
+        core_conn,
         transaction_id,
         reviewed_at="2026-05-08T00:00:00Z",
     )
 
-    tx = db_conn.execute(
+    tx = core_conn.execute(
         select(
             transactions_table.c.needs_review,
             transactions_table.c.reviewed_at,
@@ -171,13 +171,13 @@ def test_mark_transaction_verified_updates_review_status(db_conn, repository_tra
     assert tx["reviewed_at"] == "2026-05-08T00:00:00Z"
 
 
-def test_set_transaction_ignored_marks_review_complete_when_ignored(db_conn, repository_transaction):
+def test_set_transaction_ignored_marks_review_complete_when_ignored(core_conn, repository_transaction):
     """Verify set transaction ignored marks review complete when ignored."""
     transaction_id, _ = repository_transaction
 
-    updated = set_transaction_ignored(db_conn, transaction_id, True)
+    updated = set_transaction_ignored(core_conn, transaction_id, True)
 
-    tx = db_conn.execute(
+    tx = core_conn.execute(
         select(
             transactions_table.c.ignored,
             transactions_table.c.needs_review,
@@ -188,11 +188,11 @@ def test_set_transaction_ignored_marks_review_complete_when_ignored(db_conn, rep
     assert tx["needs_review"] == 0
 
 
-def test_missing_transaction_mutations_report_no_update(db_conn):
+def test_missing_transaction_mutations_report_no_update(core_conn):
     """Verify missing transaction mutations report no update."""
-    assert assign_manual_category(db_conn, 999, "Food", tag_names=[]).updated is False
-    assert mark_transaction_verified(db_conn, 999) is False
-    assert set_transaction_ignored(db_conn, 999, True) is False
+    assert assign_manual_category(core_conn, 999, "Food", tag_names=[]).updated is False
+    assert mark_transaction_verified(core_conn, 999) is False
+    assert set_transaction_ignored(core_conn, 999, True) is False
 
 
 def get_transaction_rule(conn, rule_id):

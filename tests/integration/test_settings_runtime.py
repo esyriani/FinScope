@@ -1,6 +1,7 @@
 """Tests for runtime settings persistence helpers."""
 
 import pytest
+from sqlalchemy import text
 
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.settings.runtime import (
@@ -20,15 +21,15 @@ from finance_app.modules.settings.runtime import (
 from finance_app.modules.categories.service import rename_category
 
 
-def test_seeded_runtime_settings_default_to_dark_theme(db_conn):
+def test_seeded_runtime_settings_default_to_dark_theme(core_conn):
     """Verify new databases default to dark mode."""
-    assert get_all_settings(db_conn)["theme_mode"] == "dark"
+    assert get_all_settings(core_conn)["theme_mode"] == "dark"
 
 
-def test_runtime_settings_helpers_support_core_connections(app, db_conn):
+def test_runtime_settings_helpers_support_core_connections(app, core_conn):
     """Verify runtime settings can be read and written through SQLAlchemy Core."""
     del app
-    active_rows = get_statement_type_options(db_conn)
+    active_rows = get_statement_type_options(core_conn)
     keep_row = active_rows[0]
 
     with db_core_transaction() as conn:
@@ -54,24 +55,24 @@ def test_runtime_settings_helpers_support_core_connections(app, db_conn):
 
     active = {
         row["name"]: row["parser_type"]
-        for row in get_statement_type_options(db_conn)
+        for row in get_statement_type_options(core_conn)
     }
-    assert get_all_settings(db_conn)["theme_mode"] == "light"
+    assert get_all_settings(core_conn)["theme_mode"] == "light"
     assert get_setting_with_fallback("theme_mode", "dark") == "light"
-    assert get_unknown_category(db_conn) == "UNKNOWN"
+    assert get_unknown_category(core_conn) == "UNKNOWN"
     assert active == {
         "Core bank account": "bank_account",
         "Core rewards card": "credit_card",
     }
 
 
-def test_sync_statement_types_updates_adds_and_inactivates_rows(db_conn):
+def test_sync_statement_types_updates_adds_and_inactivates_rows(core_conn):
     """Verify statement type sync keeps submitted rows active and retires omitted ones."""
-    active_rows = get_statement_type_options(db_conn)
+    active_rows = get_statement_type_options(core_conn)
     keep_row = active_rows[0]
 
     sync_statement_types(
-        db_conn,
+        core_conn,
         [
             {
                 "id": keep_row["id"],
@@ -85,15 +86,15 @@ def test_sync_statement_types_updates_adds_and_inactivates_rows(db_conn):
             },
         ],
     )
-    db_conn.commit()
+    core_conn.commit()
 
     active = {
         row["name"]: (row["parser_type"], row["import_mode"], row["default_account_type"])
-        for row in get_statement_type_options(db_conn)
+        for row in get_statement_type_options(core_conn)
     }
     inactive = [
         row
-        for row in get_statement_type_options(db_conn, include_inactive=True)
+        for row in get_statement_type_options(core_conn, include_inactive=True)
         if not row["active"]
     ]
     assert active == {
@@ -101,15 +102,15 @@ def test_sync_statement_types_updates_adds_and_inactivates_rows(db_conn):
         "Rewards card": ("credit_card", "ledger", "credit_card"),
     }
     assert len(inactive) == 2
-    assert get_statement_type_by_id(db_conn, inactive[0]["id"]) is None
-    assert get_statement_type_by_parser_type(db_conn, "bank_account")["name"] == "Daily bank account"
+    assert get_statement_type_by_id(core_conn, inactive[0]["id"]) is None
+    assert get_statement_type_by_parser_type(core_conn, "bank_account")["name"] == "Daily bank account"
 
 
-def test_sync_statement_types_rejects_duplicate_or_empty_rows(db_conn):
+def test_sync_statement_types_rejects_duplicate_or_empty_rows(core_conn):
     """Verify statement type sync enforces unique active names and non-empty sets."""
     with pytest.raises(ValueError, match="Statement type names must be unique."):
         sync_statement_types(
-            db_conn,
+            core_conn,
             [
                 {"id": "", "name": "Credit", "parser_type": "credit_card"},
                 {"id": "", "name": " credit ", "parser_type": "bank_account"},
@@ -118,17 +119,17 @@ def test_sync_statement_types_rejects_duplicate_or_empty_rows(db_conn):
 
     with pytest.raises(ValueError, match="Add at least one statement type."):
         sync_statement_types(
-            db_conn,
+            core_conn,
             [
                 {"id": "", "name": "  ", "parser_type": "credit_card"},
             ],
         )
 
 
-def test_statement_parser_type_validation_defaults_unknown_values(db_conn):
+def test_statement_parser_type_validation_defaults_unknown_values(core_conn):
     """Verify invalid parser types normalize to the default credit card parser."""
     sync_statement_types(
-        db_conn,
+        core_conn,
         [
             {
                 "id": "",
@@ -137,7 +138,7 @@ def test_statement_parser_type_validation_defaults_unknown_values(db_conn):
             },
         ],
     )
-    db_conn.commit()
+    core_conn.commit()
 
     assert normalize_statement_parser_type("bank_account") == "bank_account"
     assert normalize_statement_parser_type("interac_etransfer") == "interac_etransfer"
@@ -147,63 +148,57 @@ def test_statement_parser_type_validation_defaults_unknown_values(db_conn):
     assert normalize_statement_import_mode("unknown", parser_type="credit_card") == "ledger"
     assert normalize_default_account_type("credit_card") == "credit_card"
     assert normalize_default_account_type("unknown", parser_type="credit_card") == "credit_card"
-    assert get_statement_type_options(db_conn)[0]["parser_type"] == "credit_card"
+    assert get_statement_type_options(core_conn)[0]["parser_type"] == "credit_card"
 
 
-def test_unknown_category_is_fixed_and_protected(db_conn):
+def test_unknown_category_is_fixed_and_protected(core_conn):
     """Verify legacy settings cannot rename the built-in Unknown category."""
-    unknown_id = db_conn.execute(
-        """
+    unknown_id = core_conn.execute(text("""
         SELECT id, builtin_key
         FROM categories
         WHERE name = 'UNKNOWN'
-        """
-    ).fetchone()
-    db_conn.execute(
-        """
+        """)).fetchone()
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category_id, fingerprint)
-        VALUES ('2026-01-02', 'UNKNOWN SHOP', 12.34, ?, 'unknown-rename-tx')
-        """,
-        (unknown_id["id"],),
+        VALUES ('2026-01-02', 'UNKNOWN SHOP', 12.34, :p0, 'unknown-rename-tx')
+        """),
+        {"p0": unknown_id._mapping["id"]},
     )
-    db_conn.execute(
-        """
+    core_conn.execute(
+        text("""
         INSERT INTO category_rules (keyword, category_id)
-        VALUES ('UNKNOWN SHOP', ?)
-        """,
-        (unknown_id["id"],),
+        VALUES ('UNKNOWN SHOP', :p0)
+        """),
+        {"p0": unknown_id._mapping["id"]},
     )
 
-    upsert_setting(db_conn, "unknown_category", "UNCATEGORIZED")
-    renamed = rename_category(db_conn, "UNKNOWN", "UNCATEGORIZED")
-    db_conn.commit()
+    upsert_setting(core_conn, "unknown_category", "UNCATEGORIZED")
+    renamed = rename_category(core_conn, "UNKNOWN", "UNCATEGORIZED")
+    core_conn.commit()
 
-    category = db_conn.execute(
-        """
+    category = core_conn.execute(
+        text("""
         SELECT id, name
         FROM categories
-        WHERE id = ?
-        """,
-        (unknown_id["id"],),
+        WHERE id = :p0
+        """),
+        {"p0": unknown_id._mapping["id"]},
     ).fetchone()
-    transaction = db_conn.execute(
-        """
+    transaction = core_conn.execute(text("""
         SELECT category_id, category
         FROM transactions
         WHERE fingerprint = 'unknown-rename-tx'
-        """
-    ).fetchone()
-    rule = db_conn.execute(
-        """
+        """)).fetchone()
+    rule = core_conn.execute(text("""
         SELECT category_id, category
         FROM category_rules
         WHERE keyword = 'UNKNOWN SHOP'
-        """
-    ).fetchone()
+        """)).fetchone()
 
-    assert unknown_id["builtin_key"] == "unknown"
+    assert unknown_id._mapping["builtin_key"] == "unknown"
     assert renamed is None
-    assert tuple(category) == (unknown_id["id"], "UNKNOWN")
-    assert tuple(transaction) == (unknown_id["id"], None)
-    assert tuple(rule) == (unknown_id["id"], None)
-    assert get_unknown_category(db_conn) == "UNKNOWN"
+    assert tuple(category) == (unknown_id._mapping["id"], "UNKNOWN")
+    assert tuple(transaction) == (unknown_id._mapping["id"], None)
+    assert tuple(rule) == (unknown_id._mapping["id"], None)
+    assert get_unknown_category(core_conn) == "UNKNOWN"
