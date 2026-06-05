@@ -1,13 +1,18 @@
-"""Descriptive statistics helpers for comparison reports.
+"""Statistics helpers for comparison reports.
 
-Provides pure calculation helpers for period and grouped comparison values.
-Callers provide already-filtered values; this module does not query storage or
-decide which transactions belong to a reporting scope.
+Provides pure calculation helpers for period, grouped, and robust anomaly
+comparison values. Callers provide already-filtered values; this module does
+not query storage or decide which transactions belong to a reporting scope.
 """
 
 from decimal import Decimal
 
 from finance_app.core.money import money_to_decimal, rounded_money_float
+
+
+MIN_ROBUST_HISTORY_COUNT = 3
+ROBUST_Z_SCORE_SCALE = Decimal("0.6745")
+ROBUST_ANOMALY_THRESHOLD = 3.5
 
 
 def build_descriptive_statistics(values):
@@ -76,6 +81,150 @@ def normalize_statistics_values(values):
         for value in values
         if value is not None
     ]
+
+
+def median_absolute_deviation(values):
+    """Return median absolute deviation metadata for a sequence of values."""
+    normalized = sorted(normalize_statistics_values(values))
+    count = len(normalized)
+    if not count:
+        return {
+            "count": 0,
+            "median": None,
+            "mad": None,
+        }
+
+    median_value = percentile(normalized, Decimal("0.50"))
+    deviations = sorted(abs(value - median_value) for value in normalized)
+    mad = percentile(deviations, Decimal("0.50"))
+    return {
+        "count": count,
+        "median": median_value,
+        "mad": mad,
+    }
+
+
+def robust_z_score(current, history):
+    """Return robust z-score metadata for a current value against history.
+
+    History values define the baseline distribution. The returned z-score is a
+    float boundary value for ranking, while monetary baseline metadata stays as
+    Decimal values.
+    """
+    statistics = median_absolute_deviation(history)
+    if current in (None, ""):
+        return _build_robust_score_result(
+            "missing_current",
+            statistics["count"],
+            None,
+            statistics["median"],
+            statistics["mad"],
+        )
+
+    current_value = money_to_decimal(current)
+    history_count = statistics["count"]
+    median_value = statistics["median"]
+    mad = statistics["mad"]
+
+    if history_count == 0:
+        return _build_robust_score_result(
+            "empty_history",
+            history_count,
+            current_value,
+            median_value,
+            mad,
+        )
+
+    difference = current_value - median_value
+    if history_count < MIN_ROBUST_HISTORY_COUNT:
+        return _build_robust_score_result(
+            "insufficient_history",
+            history_count,
+            current_value,
+            median_value,
+            mad,
+            difference=difference,
+        )
+
+    if mad == 0:
+        if difference == 0:
+            z_score = Decimal("0")
+            scale = None
+            scale_source = "zero_mad"
+            status = "zero_mad"
+        else:
+            z_score = None
+            scale = None
+            scale_source = "zero_mad"
+            status = "zero_mad_nonzero_difference"
+    else:
+        z_score = (ROBUST_Z_SCORE_SCALE * difference) / mad
+        scale = mad
+        scale_source = "mad"
+        status = "ok"
+
+    return _build_robust_score_result(
+        status,
+        history_count,
+        current_value,
+        median_value,
+        mad,
+        difference=difference,
+        scale=scale,
+        scale_source=scale_source,
+        z_score=z_score,
+    )
+
+
+def robust_anomaly_score(current, history):
+    """Return robust anomaly score metadata for future insight ranking."""
+    result = robust_z_score(current, history)
+    z_score = result["z_score"]
+    score = abs(z_score) if z_score is not None else 0.0
+    return {
+        **result,
+        "score": score,
+        "threshold": ROBUST_ANOMALY_THRESHOLD,
+        "is_anomaly": score >= ROBUST_ANOMALY_THRESHOLD,
+    }
+
+
+def _build_robust_score_result(
+    status,
+    history_count,
+    current,
+    median,
+    mad,
+    *,
+    difference=None,
+    scale=None,
+    scale_source="none",
+    z_score=None,
+):
+    """Build the shared robust-score result payload."""
+    z_score_float = float(z_score) if z_score is not None else None
+    return {
+        "status": status,
+        "history_count": history_count,
+        "minimum_history_count": MIN_ROBUST_HISTORY_COUNT,
+        "current": current,
+        "median": median,
+        "mad": mad,
+        "difference": difference,
+        "direction": _anomaly_direction(difference),
+        "scale": scale,
+        "scale_source": scale_source,
+        "z_score": z_score_float,
+    }
+
+
+def _anomaly_direction(difference):
+    """Return the direction of a current value relative to its baseline."""
+    if difference is None:
+        return None
+    if difference == 0:
+        return "flat"
+    return "high" if difference > 0 else "low"
 
 
 def percentile(sorted_values, fraction):

@@ -105,12 +105,23 @@ def test_comparison_context_year_and_period_metrics(app, core_conn, monkeypatch)
     assert category_insight["tone"] == "danger"
     assert category_insight["icon"] == "bi-graph-up-arrow"
     assert category_insight["title"] == "Food"
+    assert category_insight["value"] == "Food +140.00 $ (+233.3%)"
+    assert category_insight["detail"] == "Prior: 60.00 $. Current: 200.00 $"
     assert category_insight["summary"] == "+140.00 $"
+    assert category_insight["badge"] == "+233.3%"
+    assert category_insight["previous_label"] == "60.00 $"
+    assert category_insight["current_label"] == "200.00 $"
     assert category_insight["previous_width"] == 30.0
     assert category_insight["current_width"] == 100.0
+    assert category_insight["insight_type"] == "category_increase"
+    assert category_insight["score"] == 140.00
+    assert category_insight["rank_reason"] == "largest absolute category increase"
     assert activity_insight["visual"] == "activity"
     assert activity_insight["tone"] == "accent"
+    assert activity_insight["value"] == "1 transaction"
+    assert activity_insight["detail"] == "0 versus prior period. Average transaction: 200.00 $"
     assert activity_insight["stat_items"][2]["label"] == "Average"
+    assert activity_insight["insight_type"] == "transaction_activity"
 
 
 def test_comparison_context_filters_year_and_period_by_tags(app, core_conn, monkeypatch):

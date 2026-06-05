@@ -339,20 +339,68 @@ def period_change_sentence(label, noun, change, percent, previous, current, prev
 def build_period_insights(category_rows, merchant_rows, current_summary, previous_summary):
     """Build period insights."""
     insights = []
+    insights.extend(period_change_insight_candidates(category_rows, merchant_rows))
+    insights.extend(new_dropped_spending_candidates(category_rows, merchant_rows))
+    insights.append(transaction_activity_candidate(current_summary, previous_summary))
+
+    return insights[:7]
+
+
+def period_change_insight_candidates(category_rows, merchant_rows):
+    """Build period-over-period category and merchant change insight candidates."""
+    insights = []
     category_increase = largest_change(category_rows, "up")
     category_decrease = largest_change(category_rows, "down")
     merchant_increase = largest_change(merchant_rows, "up")
     merchant_decrease = largest_change(merchant_rows, "down")
 
     if category_increase:
-        insights.append(change_insight("Largest category increase", category_increase, "category"))
+        insights.append(
+            change_insight(
+                "Largest category increase",
+                category_increase,
+                "category",
+                insight_type="category_increase",
+                rank_reason="largest absolute category increase",
+            )
+        )
     if category_decrease:
-        insights.append(change_insight("Largest category decrease", category_decrease, "category"))
+        insights.append(
+            change_insight(
+                "Largest category decrease",
+                category_decrease,
+                "category",
+                insight_type="category_decrease",
+                rank_reason="largest absolute category decrease",
+            )
+        )
     if merchant_increase:
-        insights.append(change_insight("Largest merchant increase", merchant_increase, "merchant"))
+        insights.append(
+            change_insight(
+                "Largest merchant increase",
+                merchant_increase,
+                "merchant",
+                insight_type="merchant_increase",
+                rank_reason="largest absolute merchant increase",
+            )
+        )
     if merchant_decrease:
-        insights.append(change_insight("Largest merchant decrease", merchant_decrease, "merchant"))
+        insights.append(
+            change_insight(
+                "Largest merchant decrease",
+                merchant_decrease,
+                "merchant",
+                insight_type="merchant_decrease",
+                rank_reason="largest absolute merchant decrease",
+            )
+        )
 
+    return insights
+
+
+def new_dropped_spending_candidates(category_rows, merchant_rows):
+    """Build insight candidates for new and dropped spending groups."""
+    insights = []
     new_merchants = [row for row in merchant_rows if row["state"] == "new"]
     new_categories = [row for row in category_rows if row["state"] == "new"]
     if new_merchants or new_categories:
@@ -365,94 +413,110 @@ def build_period_insights(category_rows, merchant_rows, current_summary, previou
             "{count} new category" if len(new_categories) == 1 else "{count} new categories",
             count=len(new_categories),
         )
-        insights.append({
-            "label": "New spending this period",
-            "value": f"{new_merchant_label}, {new_category_label}",
-            "detail": gettext(
-                "{amount} total new spending",
-                amount=format_money_text(total_new_spending),
-            ),
-            "visual": "aggregate",
-            "group": "spending",
-            "tone": "danger",
-            "icon": "bi-stars",
-            "title": gettext("New spending"),
-            "summary": format_money_text(total_new_spending),
-            "badge": gettext("New"),
-            "stat_items": [
-                {"label": "Merchants", "value": str(len(new_merchants))},
-                {"label": "Categories", "value": str(len(new_categories))},
-            ],
-        })
+        insights.append(
+            build_stat_insight_card(
+                label="New spending this period",
+                value=f"{new_merchant_label}, {new_category_label}",
+                detail=gettext(
+                    "{amount} total new spending",
+                    amount=format_money_text(total_new_spending),
+                ),
+                visual="aggregate",
+                group="spending",
+                tone="danger",
+                icon="bi-stars",
+                title=gettext("New spending"),
+                summary=format_money_text(total_new_spending),
+                badge=gettext("New"),
+                stat_items=[
+                    {"label": "Merchants", "value": str(len(new_merchants))},
+                    {"label": "Categories", "value": str(len(new_categories))},
+                ],
+                insight_type="new_spending",
+                score=total_new_spending,
+                rank_reason="new merchant spending total",
+            )
+        )
 
     dropped_merchants = [row for row in merchant_rows if row["state"] == "dropped"]
     dropped_categories = [row for row in category_rows if row["state"] == "dropped"]
     if dropped_merchants or dropped_categories:
         total_dropped_spending = sum(row["previous"] for row in dropped_merchants)
-        insights.append({
-            "label": "Dropped spending from prior period",
-            "value": gettext(
-                (
-                    "{count} merchant no longer appears"
-                    if len(dropped_merchants) == 1
-                    else "{count} merchants no longer appear"
+        insights.append(
+            build_stat_insight_card(
+                label="Dropped spending from prior period",
+                value=gettext(
+                    (
+                        "{count} merchant no longer appears"
+                        if len(dropped_merchants) == 1
+                        else "{count} merchants no longer appear"
+                    ),
+                    count=len(dropped_merchants),
                 ),
-                count=len(dropped_merchants),
-            ),
-            "detail": gettext(
-                (
-                    "{amount} less spending across {count} category"
-                    if len(dropped_categories) == 1
-                    else "{amount} less spending across {count} categories"
+                detail=gettext(
+                    (
+                        "{amount} less spending across {count} category"
+                        if len(dropped_categories) == 1
+                        else "{amount} less spending across {count} categories"
+                    ),
+                    amount=format_money_text(total_dropped_spending),
+                    count=len(dropped_categories),
                 ),
-                amount=format_money_text(total_dropped_spending),
-                count=len(dropped_categories),
-            ),
-            "visual": "aggregate",
-            "group": "spending",
-            "tone": "success",
-            "icon": "bi-dash-circle",
-            "title": gettext("Dropped spending"),
-            "summary": format_money_text(total_dropped_spending),
-            "badge": gettext("Lower"),
-            "stat_items": [
-                {"label": "Merchants", "value": str(len(dropped_merchants))},
-                {"label": "Categories", "value": str(len(dropped_categories))},
-            ],
-        })
+                visual="aggregate",
+                group="spending",
+                tone="success",
+                icon="bi-dash-circle",
+                title=gettext("Dropped spending"),
+                summary=format_money_text(total_dropped_spending),
+                badge=gettext("Lower"),
+                stat_items=[
+                    {"label": "Merchants", "value": str(len(dropped_merchants))},
+                    {"label": "Categories", "value": str(len(dropped_categories))},
+                ],
+                insight_type="dropped_spending",
+                score=total_dropped_spending,
+                rank_reason="dropped merchant spending total",
+            )
+        )
 
+    return insights
+
+
+def transaction_activity_candidate(current_summary, previous_summary):
+    """Build the transaction activity insight candidate."""
     current_count = current_summary["transaction_count"] or 0
     previous_count = previous_summary["transaction_count"] or 0
     count_change = current_count - previous_count
     average = money_to_float(current_summary["spending"]) / current_count if current_count else 0
-    insights.append({
-        "label": "Transaction activity",
-        "value": gettext(
+    return build_stat_insight_card(
+        label="Transaction activity",
+        value=gettext(
             "{count} transaction" if current_count == 1 else "{count} transactions",
             count=current_count,
         ),
-        "detail": gettext(
+        detail=gettext(
             "{change} versus prior period. Average transaction: {amount}",
             change=format_signed_count(count_change),
             amount=format_money_text(average),
         ),
-        "visual": "activity",
-        "group": "spending",
-        "tone": "accent",
-        "icon": "bi-activity",
-        "title": "Transactions",
-        "summary": f"{current_count}",
-        "badge": format_signed_count(count_change),
-        "current_width": comparison_bar_width(current_count, previous_count),
-        "previous_width": comparison_bar_width(previous_count, current_count),
-        "stat_items": [
+        visual="activity",
+        group="spending",
+        tone="accent",
+        icon="bi-activity",
+        title="Transactions",
+        summary=f"{current_count}",
+        badge=format_signed_count(count_change),
+        stat_items=[
             {"label": "Current", "value": f"{current_count}"},
             {"label": "Prior", "value": f"{previous_count}"},
             {"label": "Average", "value": format_money_text(average)},
         ],
-    })
-
-    return insights[:7]
+        insight_type="transaction_activity",
+        score=abs(count_change),
+        rank_reason="transaction count change",
+        current_width=comparison_bar_width(current_count, previous_count),
+        previous_width=comparison_bar_width(previous_count, current_count),
+    )
 
 
 
@@ -463,7 +527,76 @@ def largest_change(rows, direction):
 
 
 
-def change_insight(label, row, label_key):
+def build_insight_card(
+    *,
+    label,
+    value,
+    detail,
+    visual,
+    group,
+    tone,
+    icon,
+    title,
+    summary,
+    badge,
+    insight_type,
+    score,
+    rank_reason,
+    **extra_fields,
+):
+    """Build the common insight-card view model."""
+    card = {
+        "label": label,
+        "value": value,
+        "detail": detail,
+        "visual": visual,
+        "group": group,
+        "tone": tone,
+        "icon": icon,
+        "title": title,
+        "summary": summary,
+        "badge": badge,
+        "insight_type": insight_type,
+        "score": score,
+        "rank_reason": rank_reason,
+    }
+    card.update(extra_fields)
+    return card
+
+
+def build_comparison_insight_card(label, row, label_key, value, insight_type, rank_reason):
+    """Build an insight card that compares prior and current values."""
+    return build_insight_card(
+        label=label,
+        value=value,
+        detail=gettext(
+            "Prior: {prior}. Current: {current}",
+            prior=format_money_text(row["previous"]),
+            current=format_money_text(row["current"]),
+        ),
+        visual="comparison",
+        group="categories" if label_key == "category" else "merchants",
+        tone=change_insight_tone(row),
+        icon=change_insight_icon(row),
+        title=row[label_key],
+        summary=row["amount_label"],
+        badge=gettext(row["percent_label"]),
+        insight_type=insight_type,
+        score=row["abs_change"],
+        rank_reason=rank_reason,
+        previous_label=format_money_text(row["previous"]),
+        current_label=format_money_text(row["current"]),
+        previous_width=comparison_bar_width(row["previous"], row["current"]),
+        current_width=comparison_bar_width(row["current"], row["previous"]),
+    )
+
+
+def build_stat_insight_card(*, stat_items, **fields):
+    """Build an insight card whose body renders compact stat items."""
+    return build_insight_card(stat_items=stat_items, **fields)
+
+
+def change_insight(label, row, label_key, insight_type="", rank_reason=""):
     """Build insight."""
     name = row[label_key]
     if row["state"] == "new":
@@ -473,26 +606,7 @@ def change_insight(label, row, label_key):
     else:
         value = f"{name} {format_signed_money_text(row['change'])} ({row['percent_label']})"
 
-    return {
-        "label": label,
-        "value": value,
-        "detail": gettext(
-            "Prior: {prior}. Current: {current}",
-            prior=format_money_text(row["previous"]),
-            current=format_money_text(row["current"]),
-        ),
-        "visual": "comparison",
-        "group": "categories" if label_key == "category" else "merchants",
-        "tone": change_insight_tone(row),
-        "icon": change_insight_icon(row),
-        "title": name,
-        "summary": row["amount_label"],
-        "badge": gettext(row["percent_label"]),
-        "previous_label": format_money_text(row["previous"]),
-        "current_label": format_money_text(row["current"]),
-        "previous_width": comparison_bar_width(row["previous"], row["current"]),
-        "current_width": comparison_bar_width(row["current"], row["previous"]),
-    }
+    return build_comparison_insight_card(label, row, label_key, value, insight_type, rank_reason)
 
 
 

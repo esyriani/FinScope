@@ -626,6 +626,8 @@ def test_comparison_route_renders_visual_key_insights(client, core_conn, monkeyp
         "insight-current-value text-danger",
         "insight-bar-fill",
     )
+    assert_visible_text(response, "Key insights", "Largest category increase", "Food", "+140.00 $")
+    assert_not_markup(response, "insight_type", "rank_reason", "category_increase")
     assert_has_element(response, "button", attrs={"aria-label": "Previous insight group"})
     assert_has_element(response, "button", attrs={"aria-label": "Next insight group"})
 
