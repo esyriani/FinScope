@@ -1,4 +1,4 @@
-{% set page_stylesheets = ["css/home-dashboard.css", "css/tables.css", "css/exports.css"] %}
+{% set page_stylesheets = ["css/page-tabs.css", "css/home-dashboard.css", "css/tables.css", "css/exports.css"] %}
 {% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
 
@@ -64,8 +64,21 @@
     {% endif %}
 {% endwith %}
 
-<div class="row g-4 align-items-start">
-    <div class="col-xl-6">
+<div class="taxonomy-tabs page-tabs nav nav-tabs mb-4" role="tablist" aria-label="{{ _('Taxonomy') }}">
+    <button class="nav-link active" id="taxonomy-categories-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#taxonomy-categories-panel" aria-controls="taxonomy-categories-panel" aria-selected="true">
+        <i class="bi bi-folder" aria-hidden="true"></i>
+        <span>{{ _("Categories") }}</span>
+        <span class="badge text-bg-secondary">{{ categories | length }}</span>
+    </button>
+    <button class="nav-link" id="taxonomy-tags-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#taxonomy-tags-panel" aria-controls="taxonomy-tags-panel" aria-selected="false">
+        <i class="bi bi-tags" aria-hidden="true"></i>
+        <span>{{ _("Tags") }}</span>
+        <span class="badge text-bg-secondary">{{ tags | length }}</span>
+    </button>
+</div>
+
+<div class="tab-content taxonomy-tab-content page-tab-content">
+    <section id="taxonomy-categories-panel" class="tab-pane fade show active" role="tabpanel" aria-labelledby="taxonomy-categories-tab" tabindex="0">
         <div class="card">
             <div class="card-body border-bottom">
                 <div class="d-flex align-items-center justify-content-between gap-3">
@@ -162,9 +175,9 @@
                 {% endif %}
             </div>
         </div>
-    </div>
+    </section>
 
-    <div class="col-xl-6">
+    <section id="taxonomy-tags-panel" class="tab-pane fade" role="tabpanel" aria-labelledby="taxonomy-tags-tab" tabindex="0">
         <div class="card">
             <div class="card-body border-bottom">
                 <div class="d-flex align-items-center justify-content-between gap-3">
@@ -244,7 +257,7 @@
                 {% endif %}
             </div>
         </div>
-    </div>
+    </section>
 </div>
 
 <div class="modal fade" id="create-category-modal" tabindex="-1" aria-labelledby="create-category-title" aria-hidden="true">

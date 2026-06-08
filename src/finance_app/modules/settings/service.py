@@ -78,6 +78,10 @@ def build_settings_context():
             2,
             app_settings.default_comparison_max_years,
         ),
+        "comparison_insight_card_limit": current.get(
+            "comparison_insight_card_limit",
+            str(app_settings.default_comparison_insight_card_limit),
+        ),
         "home_top_category_limit": current.get("home_top_category_limit", str(app_settings.default_home_top_category_limit)),
         "merchant_table_limit": current.get("merchant_table_limit", str(app_settings.default_merchant_table_limit)),
         "rule_preview_limit": current.get("rule_preview_limit", str(app_settings.default_rule_preview_limit)),

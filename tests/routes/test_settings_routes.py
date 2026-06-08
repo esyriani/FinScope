@@ -24,6 +24,7 @@ def settings_form_data(conn, **overrides):
     data = {
         "default_table_page_size": "25",
         "comparison_max_years": "3",
+        "comparison_insight_card_limit": "5",
         "home_top_category_limit": "7",
         "merchant_table_limit": "11",
         "rule_preview_limit": "9",
@@ -66,7 +67,11 @@ def test_settings_page_uses_dark_theme_by_default(client):
 
     assert response.status_code == 200
     assert_has_element(response, "html", attrs={"data-bs-theme": "dark"})
+    assert_has_element(response, "button", attrs={"id": "settings-general-tab", "role": "tab"})
+    assert_has_element(response, "button", attrs={"id": "settings-categorization-tab", "role": "tab"})
+    assert_has_element(response, "section", attrs={"id": "settings-general", "role": "tabpanel"})
     assert_has_element(response, "input", attrs={"id": "theme_mode_dark", "checked": True})
+    assert_has_element(response, "input", attrs={"id": "comparison_insight_card_limit"})
     assert_has_element(
         response,
         "input",
@@ -105,6 +110,7 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert_visible_text(response, "Settings saved.")
     assert owner_settings["default_table_page_size"] == "25"
     assert owner_settings["comparison_max_years"] == "3"
+    assert owner_settings["comparison_insight_card_limit"] == "5"
     assert owner_settings["home_top_category_limit"] == "7"
     assert owner_settings["merchant_table_limit"] == "11"
     assert owner_settings["rule_preview_limit"] == "9"
@@ -258,6 +264,7 @@ def test_viewer_can_only_save_own_general_settings(app, core_conn):
     assert response.status_code == 200
     assert viewer_settings["theme_mode"] == "light"
     assert viewer_settings["ui_language"] == "fr"
+    assert viewer_settings["comparison_insight_card_limit"] == "5"
     assert global_settings["openai_model"] == original_global_settings["openai_model"]
     assert global_settings["recurrence_minimum_occurrences"] == original_global_settings["recurrence_minimum_occurrences"]
     assert validate_response.status_code == 403

@@ -15,15 +15,19 @@ from finance_app.modules.comparison.parsing import (
     clean_categories,
     clean_tags,
     parse_baseline_year,
+    parse_comparison_view,
     parse_period_comparison,
     parse_selected_years,
 )
 from finance_app.modules.comparison.presenter import (
     build_category_comparison,
+    build_period_category_history,
     build_period_category_rows,
     build_period_filter_context,
     build_period_insight_groups,
     build_period_insights,
+    build_period_merchant_activity_history,
+    build_period_merchant_history,
     build_period_merchant_rows,
     build_period_metric,
     build_period_unknown_warning,
@@ -37,6 +41,8 @@ from finance_app.modules.comparison.queries import (
     build_category_conditions,
     fetch_available_years,
     fetch_category_comparison,
+    fetch_historical_monthly_category_spending,
+    fetch_historical_monthly_merchant_transactions,
     fetch_monthly_spending,
     fetch_period_category_spending,
     fetch_period_merchant_transactions,
@@ -49,6 +55,7 @@ from finance_app.modules.settings.runtime import get_int_setting, get_unknown_ca
 
 def build_comparison_context(args):
     """Build comparison context."""
+    selected_comparison_view = parse_comparison_view(args.get("comparison_view"))
     selected_years = parse_selected_years(args.getlist("years"))
     selected_period_categories = clean_categories(args.getlist("period_categories"))
     selected_year_categories = clean_categories(args.getlist("year_categories"))
@@ -60,6 +67,11 @@ def build_comparison_context(args):
 
     with db_core_transaction() as conn:
         max_years = max(2, get_int_setting(conn, "comparison_max_years", settings.default_comparison_max_years))
+        insight_card_limit = get_int_setting(
+            conn,
+            "comparison_insight_card_limit",
+            settings.default_comparison_insight_card_limit,
+        )
         merchant_table_limit = get_int_setting(conn, "merchant_table_limit", settings.default_merchant_table_limit)
         available_years = fetch_available_years(conn)
         category_options = get_category_options(conn)
@@ -97,6 +109,8 @@ def build_comparison_context(args):
             selected_period_tags,
             unknown_category,
             merchant_table_limit,
+            ranked_insights=True,
+            insight_ranking_options={"max_count": insight_card_limit},
         )
 
     category_comparison = build_category_comparison(selected_years, category_rows, selected_baseline_year)
@@ -116,7 +130,9 @@ def build_comparison_context(args):
         selected_year_categories=selected_year_categories,
         selected_period_tags=selected_period_tags,
         selected_year_tags=selected_year_tags,
+        selected_comparison_view=selected_comparison_view,
         merchant_table_limit=merchant_table_limit,
+        comparison_insight_card_limit=insight_card_limit,
         period_filter_context=build_period_filter_context(
             PERIOD_COMPARISON_OPTIONS[selected_period_comparison],
             selected_period_categories,
@@ -129,12 +145,14 @@ def build_comparison_context(args):
             selected_year_tags,
         ),
         period_clear_url=build_comparison_url(
+            comparison_view="period",
             years=selected_years,
             baseline_year=selected_baseline_year,
             year_categories=selected_year_categories,
             year_tags=selected_year_tags,
         ),
         year_clear_url=build_comparison_url(
+            comparison_view="year",
             period_comparison=selected_period_comparison,
             period_categories=selected_period_categories,
             period_tags=selected_period_tags,
@@ -170,6 +188,9 @@ def build_period_comparison(
     selected_tags,
     unknown_category,
     merchant_table_limit,
+    *,
+    ranked_insights=False,
+    insight_ranking_options=None,
 ):
     """Build period comparison."""
     ranges = period_comparison_ranges(comparison_key, date.today())
@@ -266,12 +287,44 @@ def build_period_comparison(
         previous_summary["spending"],
         unknown_category,
     )
+    category_history = None
+    merchant_history = None
+    merchant_activity_history = None
+    if ranked_insights:
+        category_history = build_period_category_history(
+            fetch_historical_monthly_category_spending(
+                conn,
+                ranges["current_start"],
+                category_filters,
+                unknown_category,
+            )
+        )
+        historical_merchant_rows = fetch_historical_monthly_merchant_transactions(
+            conn,
+            ranges["current_start"],
+            category_filters,
+            unknown_category,
+        )
+        merchant_history = build_period_merchant_history(
+            historical_merchant_rows,
+            conn,
+        )
+        merchant_activity_history = build_period_merchant_activity_history(
+            historical_merchant_rows,
+            conn,
+            ranges["current_start"],
+        )
 
     insights = build_period_insights(
         category_rows,
         merchant_rows,
         current_summary,
         previous_summary,
+        category_history=category_history,
+        merchant_history=merchant_history,
+        merchant_activity_history=merchant_activity_history,
+        ranked=ranked_insights,
+        ranking_options=insight_ranking_options,
     )
 
     return {

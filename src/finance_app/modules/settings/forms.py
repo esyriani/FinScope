@@ -20,6 +20,11 @@ def parse_general_settings_form(form, app_settings):
             minimum=2,
             label="Comparison default years",
         ),
+        "comparison_insight_card_limit": parse_positive_int(
+            form.get("comparison_insight_card_limit"),
+            app_settings.default_comparison_insight_card_limit,
+            label="Comparison insight card limit",
+        ),
         "home_top_category_limit": parse_positive_int(
             form.get("home_top_category_limit"),
             app_settings.default_home_top_category_limit,

@@ -4,13 +4,7 @@
 }
 
 .settings-section {
-    border-bottom: 1px solid var(--app-border);
-    padding-bottom: 1.5rem;
-}
-
-.settings-section:last-of-type {
-    border-bottom: 0;
-    padding-bottom: 0.25rem;
+    padding-top: 0.25rem;
 }
 
 .settings-section-header {

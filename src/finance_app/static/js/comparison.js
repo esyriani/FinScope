@@ -44,6 +44,45 @@ function setupComparisonChangeFilters(root = document) {
     });
 }
 
+const comparisonTabViews = {
+    "comparison-period-tab": "period",
+    "comparison-year-tab": "year",
+};
+
+function comparisonViewForTab(tab) {
+    return comparisonTabViews[tab?.id] || "";
+}
+
+function updateComparisonViewQuery(tab) {
+    const view = comparisonViewForTab(tab);
+    if (!view || !window.history?.replaceState) return;
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("comparison_view") === view) return;
+
+    url.searchParams.set("comparison_view", view);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function setupComparisonTabs(root = document) {
+    const tabs = [
+        ...(root.matches?.("[data-bs-toggle='tab']") ? [root] : []),
+        ...Array.from(root.querySelectorAll("[data-bs-toggle='tab']")),
+    ].filter(comparisonViewForTab);
+
+    tabs.forEach((tab) => {
+        if (tab.dataset.comparisonTabReady === "true") {
+            return;
+        }
+
+        tab.dataset.comparisonTabReady = "true";
+        tab.addEventListener("shown.bs.tab", () => {
+            updateComparisonViewQuery(tab);
+            window.dispatchEvent(new CustomEvent("finance:layoutchange"));
+        });
+    });
+}
+
 function comparisonTableCellValue(row, column, type) {
     const cell = row.cells[column];
     if (!cell) return type === "number" ? 0 : "";
@@ -105,7 +144,9 @@ function setupComparisonTableSorting(root = document) {
 }
 
 window.financeApp?.registerInitializer("comparison.change-filters", setupComparisonChangeFilters);
+window.financeApp?.registerInitializer("comparison.tabs", setupComparisonTabs);
 window.financeApp?.registerInitializer("comparison.table-sorting", setupComparisonTableSorting);
 
 setupComparisonChangeFilters();
+setupComparisonTabs();
 setupComparisonTableSorting();

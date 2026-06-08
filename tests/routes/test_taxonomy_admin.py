@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.database.tables import categories as categories_table, tags as tags_table
+from tests.support.html import assert_has_element, assert_visible_text
 from tests.support.web import set_csrf_token
 
 
@@ -26,16 +27,59 @@ def test_taxonomy_admin_routes_are_registered_and_rules_category_routes_are_remo
 
 
 def test_taxonomy_page_exposes_yaml_import_and_export_controls(client):
-    """Verify taxonomy import and export controls are rendered."""
+    """Verify taxonomy import/export controls and category/tag tabs render."""
     response = client.get("/taxonomy")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Import taxonomy" in body
-    assert "Export YAML" in body
-    assert "/taxonomy/export.yml" in body
-    assert "import-taxonomy-modal" in body
-    assert "taxonomy_file" in body
+    assert_visible_text(response, "Import taxonomy", "Export YAML", "Categories", "Tags")
+    assert_has_element(response, "a", attrs={"href": "/taxonomy/export.yml"}, text="Export YAML")
+    assert_has_element(response, "div", attrs={"id": "import-taxonomy-modal"})
+    assert_has_element(response, "input", attrs={"name": "taxonomy_file"})
+    assert_has_element(response, "div", attrs={"class": "taxonomy-tabs", "role": "tablist", "aria-label": "Taxonomy"})
+    assert_has_element(
+        response,
+        "button",
+        attrs={
+            "id": "taxonomy-categories-tab",
+            "role": "tab",
+            "data-bs-toggle": "tab",
+            "data-bs-target": "#taxonomy-categories-panel",
+            "aria-controls": "taxonomy-categories-panel",
+            "aria-selected": "true",
+        },
+        text="Categories",
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={
+            "id": "taxonomy-tags-tab",
+            "role": "tab",
+            "data-bs-toggle": "tab",
+            "data-bs-target": "#taxonomy-tags-panel",
+            "aria-controls": "taxonomy-tags-panel",
+            "aria-selected": "false",
+        },
+        text="Tags",
+    )
+    assert_has_element(
+        response,
+        "section",
+        attrs={
+            "id": "taxonomy-categories-panel",
+            "role": "tabpanel",
+            "aria-labelledby": "taxonomy-categories-tab",
+        },
+    )
+    assert_has_element(
+        response,
+        "section",
+        attrs={
+            "id": "taxonomy-tags-panel",
+            "role": "tabpanel",
+            "aria-labelledby": "taxonomy-tags-tab",
+        },
+    )
 
 
 def test_taxonomy_export_route_returns_yaml(client):

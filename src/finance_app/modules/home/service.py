@@ -11,11 +11,14 @@ from finance_app.background.runner import list_background_jobs
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_AUTOMATIC,
+    FILTER_MODE_INCLUDE,
     NON_REPORTABLE_TRANSACTION_KINDS,
     STATEMENT_IMPORT_STATUS_FAILED,
     UNKNOWN_CATEGORY,
 )
+from finance_app.core.i18n import gettext
 from finance_app.core.money import rounded_money_float
+from finance_app.core.periods import PERIOD_CUSTOM
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -33,13 +36,19 @@ from finance_app.modules.auth.permissions import (
     PERMISSION_MANAGE_RULES,
     current_user_can,
 )
+from finance_app.modules.comparison.service import build_period_comparison
+from finance_app.modules.comparison.urls import build_comparison_url
+from finance_app.modules.dashboard.urls import dashboard_transactions_url
 from finance_app.modules.recurring.service import build_recurring_summary
 from finance_app.modules.review.service import review_groups, review_summary
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
+from finance_app.modules.transactions.constants import AMOUNT_TYPE_SPENDING, IGNORED_FILTER_ACTIVE
 
 
 RECENT_ACTIVITY_LIMIT = 5
 SUGGESTED_ACTION_LIMIT = 4
+HOME_QUICK_INSIGHT_LIMIT = 3
+HOME_QUICK_INSIGHT_COMPARISON = "month_previous"
 
 
 def current_year_start():
@@ -58,6 +67,7 @@ def build_home_context():
     with db_core_transaction() as conn:
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
         top_category_limit = get_int_setting(conn, "home_top_category_limit", settings.default_home_top_category_limit)
+        merchant_table_limit = get_int_setting(conn, "merchant_table_limit", settings.default_merchant_table_limit)
         start_date = current_year_start()
 
         overview = fetch_home_overview(conn, unknown_category, start_date)
@@ -72,6 +82,11 @@ def build_home_context():
         recent_reviewed = fetch_recent_reviewed_transactions(conn)
         recent_categorizations = fetch_recent_categorizations(conn)
         recent_rules = fetch_recent_rules(conn)
+        comparison_quick_insights = fetch_ranked_comparison_quick_insights(
+            conn,
+            unknown_category,
+            merchant_table_limit,
+        )
         sharing_context = build_user_sharing_context(conn)
 
     recurring_context = (
@@ -150,6 +165,7 @@ def build_home_context():
             top_categories,
             recurring_summary,
             permissions,
+            comparison_quick_insights,
         ),
         "recurring_summary": recurring_summary,
         "review_summary": review_work,
@@ -880,6 +896,136 @@ def build_primary_action(suggested_actions):
     return primary_actions[0] if primary_actions else suggested_actions[0]
 
 
+def fetch_ranked_comparison_quick_insights(conn, unknown_category, merchant_table_limit):
+    """Return ranked comparison insight candidates adapted for Home."""
+    period_context = build_period_comparison(
+        conn,
+        HOME_QUICK_INSIGHT_COMPARISON,
+        [],
+        [],
+        unknown_category,
+        merchant_table_limit,
+        ranked_insights=True,
+        insight_ranking_options={"max_count": HOME_QUICK_INSIGHT_LIMIT},
+    )
+    return [
+        home_quick_insight_from_comparison_card(
+            insight,
+            period_context,
+            HOME_QUICK_INSIGHT_COMPARISON,
+        )
+        for insight in period_context["insights"][:HOME_QUICK_INSIGHT_LIMIT]
+    ]
+
+
+def home_quick_insight_from_comparison_card(card, period_context, comparison_key):
+    """Adapt a comparison insight card to the compact Home quick-insight row."""
+    return {
+        **card,
+        "value": card.get("summary") or card.get("value") or "",
+        "value_type": "text",
+        "detail": home_quick_insight_detail(card),
+        "detail_is_user_data": True,
+        "href": home_quick_insight_href(card, period_context, comparison_key),
+    }
+
+
+def home_quick_insight_detail(card):
+    """Return a short detail line for a Home insight row."""
+    entity = insight_entity(card)
+    title = card.get("title") or ""
+    badge = card.get("badge") or ""
+    if comparison_card_has_entity(card):
+        if entity != title:
+            return f"{entity} \u00b7 {badge or gettext(title)}"
+        if badge:
+            return f"{entity} \u00b7 {badge}"
+        return entity
+    if title and badge:
+        return f"{gettext(title)} \u00b7 {badge}"
+    if title:
+        return gettext(title)
+    return card.get("detail") or ""
+
+
+def comparison_card_has_entity(card):
+    """Return whether a comparison card detail contains category or merchant user data."""
+    group = card.get("group")
+    insight_type = str(card.get("insight_type") or "")
+    return bool(insight_entity(card)) and (
+        group in ("categories", "merchants")
+        or insight_type.startswith(("category_", "merchant_"))
+    )
+
+
+def home_quick_insight_href(card, period_context, comparison_key):
+    """Return the most useful existing page link for a Home insight card."""
+    group = card.get("group")
+    insight_type = str(card.get("insight_type") or "")
+    entity = insight_entity(card)
+    if group == "merchants" or insight_type.startswith("merchant_"):
+        return current_period_transactions_url(
+            period_context,
+            merchant_key=entity,
+        )
+    if group == "categories" or insight_type.startswith("category_"):
+        return comparison_period_url(
+            comparison_key,
+            categories=[entity] if entity else None,
+        )
+    return comparison_period_url(comparison_key)
+
+
+def insight_entity(card):
+    """Return the category or merchant entity represented by a comparison card."""
+    metrics = card.get("selection_metrics") or {}
+    if metrics.get("entity_key"):
+        return metrics["entity_key"]
+    if card.get("merchant_behavior", {}).get("merchant"):
+        return card["merchant_behavior"]["merchant"]
+
+    title = str(card.get("title") or "")
+    if ":" in title:
+        return title.split(":", 1)[0].strip()
+    return title
+
+
+def comparison_period_url(comparison_key, categories=None):
+    """Return a comparison URL for the Home insight preview."""
+    params = {"period_comparison": comparison_key}
+    if categories:
+        params["period_categories"] = categories
+    if has_request_context():
+        return build_comparison_url(**params)
+    return query_url("/comparison", **params)
+
+
+def current_period_transactions_url(period_context, *, merchant_key=""):
+    """Return a current-period transactions URL for merchant insight drill-downs."""
+    date_from = period_context["current_start"]
+    date_to = period_context["current_end"]
+    if has_request_context():
+        return dashboard_transactions_url(
+            PERIOD_CUSTOM,
+            FILTER_MODE_INCLUDE,
+            [],
+            include_category_filter=False,
+            date_from=date_from,
+            date_to=date_to,
+            amount_type=AMOUNT_TYPE_SPENDING,
+            merchant_key=merchant_key,
+        )
+    return query_url(
+        "/transactions",
+        period=PERIOD_CUSTOM,
+        ignored=IGNORED_FILTER_ACTIVE,
+        date_from=date_from,
+        date_to=date_to,
+        amount_type=AMOUNT_TYPE_SPENDING,
+        merchant_key=merchant_key,
+    )
+
+
 def build_quick_insights(
     overview,
     latest_statement,
@@ -887,8 +1033,31 @@ def build_quick_insights(
     top_categories,
     recurring_summary,
     permissions,
+    comparison_quick_insights=None,
 ):
     """Return compact insight rows that avoid dashboard-style analytics."""
+    fallback_insights = build_operational_quick_insights(
+        overview,
+        latest_statement,
+        statement_count,
+        top_categories,
+        recurring_summary,
+        permissions,
+    )
+    insights = list(comparison_quick_insights or [])
+    insights.extend(fallback_insights)
+    return insights[:HOME_QUICK_INSIGHT_LIMIT]
+
+
+def build_operational_quick_insights(
+    overview,
+    latest_statement,
+    statement_count,
+    top_categories,
+    recurring_summary,
+    permissions,
+):
+    """Return fallback operational quick-insight rows for sparse ledgers."""
     insights = []
     insights.append(
         {
@@ -896,6 +1065,7 @@ def build_quick_insights(
             "value": overview["latest_tx_date"] or "",
             "value_type": "date" if overview["latest_tx_date"] else "empty",
             "detail": "Most recent active transaction.",
+            "detail_is_user_data": False,
             "href": "/transactions?period=all",
             "icon": "bi-receipt",
         }
@@ -906,6 +1076,7 @@ def build_quick_insights(
             "value": statement_count,
             "value_type": "count",
             "detail": latest_statement["filename"] if latest_statement else "No statements uploaded yet.",
+            "detail_is_user_data": bool(latest_statement),
             "href": "/upload" if permissions["can_import_statements"] else "/transactions?period=all",
             "icon": "bi-file-earmark-text",
         }
@@ -918,6 +1089,7 @@ def build_quick_insights(
                 "value": rounded_money_float(category["total"]),
                 "value_type": "money",
                 "detail": category["category"],
+                "detail_is_user_data": True,
                 "href": query_url("/transactions", period="ytd", categories=category["category"]),
                 "icon": "bi-compass",
             }
@@ -928,6 +1100,7 @@ def build_quick_insights(
             "value": recurring_summary["overdue_count"] + recurring_summary["amount_change_count"],
             "value_type": "count",
             "detail": "Overdue or changed this month.",
+            "detail_is_user_data": False,
             "href": "/recurring",
             "icon": "bi-arrow-repeat",
         }

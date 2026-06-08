@@ -36,6 +36,7 @@ from finance_app.modules.users import repository as user_repository
 SETTINGS_DEFAULTS = {
     "default_table_page_size": str(settings.default_table_page_size),
     "comparison_max_years": str(settings.default_comparison_max_years),
+    "comparison_insight_card_limit": str(settings.default_comparison_insight_card_limit),
     "home_top_category_limit": str(settings.default_home_top_category_limit),
     "merchant_table_limit": str(settings.default_merchant_table_limit),
     "rule_preview_limit": str(settings.default_rule_preview_limit),
@@ -58,6 +59,7 @@ SETTINGS_DEFAULTS = {
 GENERAL_SETTING_KEYS = (
     "default_table_page_size",
     "comparison_max_years",
+    "comparison_insight_card_limit",
     "home_top_category_limit",
     "merchant_table_limit",
     "rule_preview_limit",

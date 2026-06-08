@@ -35,6 +35,7 @@ class AppSettings:
     openai_api_key: str
     default_table_page_size: int
     default_comparison_max_years: int
+    default_comparison_insight_card_limit: int
     default_home_top_category_limit: int
     default_merchant_table_limit: int
     default_rule_preview_limit: int
@@ -114,6 +115,13 @@ def load_settings(config_path=CONFIG_PATH):
         default_comparison_max_years=parse_positive_int(
             env("FINANCE_DEFAULT_COMPARISON_MAX_YEARS", parser.get("setting_defaults", "comparison_max_years", fallback="2")),
             2,
+        ),
+        default_comparison_insight_card_limit=parse_positive_int(
+            env(
+                "FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT",
+                parser.get("setting_defaults", "comparison_insight_card_limit", fallback="7"),
+            ),
+            7,
         ),
         default_home_top_category_limit=parse_positive_int(
             env("FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT", parser.get("setting_defaults", "home_top_category_limit", fallback="5")),

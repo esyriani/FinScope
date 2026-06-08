@@ -7,10 +7,12 @@ import re
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.comparison import service as comparison_service
+from finance_app.modules.home import service as home_service
 from tests.support.html import (
     assert_asset_reference,
     assert_has_element,
     assert_markup,
+    assert_no_element,
     assert_no_asset_reference,
     assert_not_markup,
     assert_not_visible_text,
@@ -487,8 +489,76 @@ def test_comparison_route_renders_complete_unknown_warning(client, core_conn, mo
     assert "because accounts for %" not in visible_body
 
 
+def test_home_route_renders_quick_insight_cards(client, core_conn, monkeypatch):
+    """Verify Home renders ranked quick insights as linked compact cards."""
+    monkeypatch.setattr(home_service, "date", FixedDate)
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    rows = [
+        ("2026-04-02", "Alpha Store", 500.00, "Food", "home-route-alpha-prior"),
+        ("2026-04-03", "Charlie Store", 400.00, "Food", "home-route-charlie-prior"),
+        ("2026-04-04", "Delta Store", 300.00, "Food", "home-route-delta-prior"),
+        ("2026-04-05", "Echo Store", 200.00, "Food", "home-route-echo-prior"),
+        ("2026-04-06", "Bravo Store", 100.00, "Food", "home-route-bravo-prior"),
+        ("2026-04-07", "Foxtrot Utilities", 700.00, "Utilities", "home-route-foxtrot-prior"),
+        ("2026-05-02", "Bravo Store", 600.00, "Food", "home-route-bravo-current"),
+        ("2026-05-03", "Alpha Store", 500.00, "Food", "home-route-alpha-current"),
+        ("2026-05-04", "Charlie Store", 400.00, "Food", "home-route-charlie-current"),
+        ("2026-05-05", "Delta Store", 300.00, "Food", "home-route-delta-current"),
+        ("2026-05-06", "Echo Store", 200.00, "Food", "home-route-echo-current"),
+        ("2026-05-07", "Foxtrot Utilities", 50.00, "Utilities", "home-route-foxtrot-current"),
+    ]
+    core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+    core_conn.commit()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Quick insights", "Merchant moved up", "5 places", "BRAVO STORE")
+    assert_has_element(response, "section", attrs={"class": "home-insight-panel"})
+    assert_has_element(response, "a", attrs={"class": "home-insight-item"}, text="Merchant moved up")
+    assert_has_element(response, "i", attrs={"class": "bi-arrow-up-right-circle"})
+    assert_has_element(
+        response,
+        "a",
+        attrs={
+            "href": (
+                "/transactions?period=custom&ignored=active&date_from=2026-05-01"
+                "&date_to=2026-05-11&amount_type=spending&merchant_key=BRAVO+STORE"
+            )
+        },
+        text="BRAVO STORE",
+    )
+
+
+def test_home_quick_insights_escape_user_data(client, core_conn, monkeypatch):
+    """Verify Home quick insights escape category names from user data."""
+    monkeypatch.setattr(home_service, "date", FixedDate)
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    category = 'Food <img src="x" onerror="alert(1)">'
+    rows = [
+        ("2026-04-02", "Prior escaped store", 40.00, category, "home-escape-prior"),
+        ("2026-05-02", "Current escaped store", 220.00, category, "home-escape-current"),
+    ]
+    core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+    core_conn.commit()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Quick insights", category)
+    assert_has_element(response, "a", attrs={"class": "home-insight-item"}, text=category)
+    assert_no_element(response, "img", attrs={"src": "x"})
+
+
 def test_financial_reporting_pages_render_english_and_french_copy(client, core_conn, monkeypatch):
     """Verify reporting pages localize visible labels and explanatory text."""
+    monkeypatch.setattr(home_service, "date", FixedDate)
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     core_conn.execute(text("""
         INSERT INTO transactions (
@@ -509,13 +579,13 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     english_calendar_response = client.get("/calendar")
     english_recurring_response = client.get("/recurring")
 
-    assert_visible_text(english_home_response, "Needs attention")
+    assert_visible_text(english_home_response, "Needs attention", "Quick insights")
     assert_visible_text(english_dashboard_response, "Dashboard", "Merchant analytics")
     assert_visible_text(
         english_comparison_response,
-        "Year comparison",
+        "Year trends",
         "Monthly spending by year",
-        "Period comparison",
+        "Period changes",
         "Category comparison may be unreliable",
         "Category insights may be incomplete",
     )
@@ -543,7 +613,7 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     assert calendar_response.status_code == 200
     assert recurring_response.status_code == 200
 
-    assert_visible_text(home_response, "Ce qui demande une attention", "À traiter")
+    assert_visible_text(home_response, "Ce qui demande une attention", "À traiter", "Aperçus rapides")
     assert_not_visible_text(home_response, "Centre de commande financier", "Financial command center", "Needs attention")
 
     assert_visible_text(
@@ -562,9 +632,9 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
 
     assert_visible_text(
         comparison_response,
-        "Comparaison annuelle",
+        "Tendances annuelles",
         "Dépenses mensuelles par année",
-        "Comparaison de périodes",
+        "Changements de période",
         "La comparaison par catégorie peut être peu fiable",
         "Les constats par catégorie peuvent être incomplets",
     )
@@ -620,6 +690,7 @@ def test_comparison_route_renders_visual_key_insights(client, core_conn, monkeyp
     assert_markup(
         response,
         "comparisonInsightCarousel",
+        'data-insights-per-slide="3"',
         "insight-grid",
         "insight-card-danger",
         "insight-summary text-danger",
@@ -627,9 +698,51 @@ def test_comparison_route_renders_visual_key_insights(client, core_conn, monkeyp
         "insight-bar-fill",
     )
     assert_visible_text(response, "Key insights", "Largest category increase", "Food", "+140.00 $")
-    assert_not_markup(response, "insight_type", "rank_reason", "category_increase")
-    assert_has_element(response, "button", attrs={"aria-label": "Previous insight group"})
-    assert_has_element(response, "button", attrs={"aria-label": "Next insight group"})
+    assert_not_markup(
+        response,
+        "insight_type",
+        "rank_reason",
+        "selection_metrics",
+        "robust_anomaly",
+        "mix_shift",
+        "merchant_behavior",
+        "category_increase",
+    )
+    assert_has_element(
+        response,
+        "div",
+        attrs={"id": "comparisonInsightCarousel", "data-insights-per-slide": "3"},
+    )
+
+
+def test_comparison_route_renders_ranked_anomaly_insights(client, core_conn, monkeypatch):
+    """Verify comparison page opts into ranked historical insight candidates."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    rows = [
+        ("2025-12-02", "Metro Grocery", 48.00, "Food", "route-anomaly-history-1"),
+        ("2026-01-02", "Metro Grocery", 50.00, "Food", "route-anomaly-history-2"),
+        ("2026-02-02", "Metro Grocery", 52.00, "Food", "route-anomaly-history-3"),
+        ("2026-03-02", "Metro Grocery", 49.00, "Food", "route-anomaly-history-4"),
+        ("2026-04-02", "Metro Grocery", 51.00, "Food", "route-anomaly-history-5"),
+        ("2026-05-02", "Metro Grocery", 220.00, "Food", "route-anomaly-current"),
+    ]
+    core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+    core_conn.commit()
+
+    response = client.get("/comparison?period_comparison=month_previous")
+
+    assert response.status_code == 200
+    assert_visible_text(
+        response,
+        "Key insights",
+        "Unusually high category spending",
+        "Food: higher than usual",
+        "+170.00 $",
+    )
+    assert_not_markup(response, "robust_anomaly", "merchant_behavior", "rank_reason")
 
 
 def test_comparison_route_renders_year_chart_type_toggle(client, core_conn):

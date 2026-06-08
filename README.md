@@ -152,6 +152,7 @@ Common settings:
 | `server.debug` | `FINANCE_DEBUG` | Debug mode. Keep false outside development. |
 | `uploads.allowed_extensions` | `FINANCE_ALLOWED_EXTENSIONS` | Supported statement upload extensions. CSV is the only supported statement format for now. |
 | `api_keys.openai_api_key` | `OPENAI_API_KEY` | Enables optional LLM categorization. |
+| `setting_defaults.comparison_insight_card_limit` | `FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT` | Default number of ranked insight cards shown on the comparison page. |
 | `setting_defaults.categorization_model` | `FINANCE_DEFAULT_CATEGORIZATION_MODEL` | Default LLM model name. |
 | `setting_defaults.llm_confidence_threshold` | `FINANCE_DEFAULT_LLM_CONFIDENCE_THRESHOLD` | Minimum LLM confidence for automatic rule creation from a no-review result. |
 | `setting_defaults.llm_review_threshold` | `FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD` | Minimum LLM confidence for keeping a best-fit category as a review item instead of UNKNOWN. |

@@ -203,3 +203,48 @@ def fetch_period_merchant_transactions(conn, date_from, date_to, category_filter
             *category_filters,
         )
     ).mappings().fetchall()
+
+
+def fetch_historical_monthly_category_spending(conn, date_before, category_filters, unknown_category):
+    """Fetch monthly category spending before a comparison period."""
+    year = transaction_year()
+    month = transaction_month()
+    category = func.coalesce(transactions_table.c.category, unknown_category)
+    return conn.execute(
+        select(
+            year.label("year"),
+            month.label("month"),
+            category.label("category"),
+            func.coalesce(func.sum(transactions_table.c.amount), 0).label("spending"),
+        )
+        .where(
+            transactions_table.c.ignored == 0,
+            spending_impact_clause(),
+            transactions_table.c.tx_date < date_before,
+            *category_filters,
+        )
+        .group_by(year, month, category)
+        .order_by(year.desc(), month.desc(), func.lower(category), category)
+    ).mappings().fetchall()
+
+
+def fetch_historical_monthly_merchant_transactions(conn, date_before, category_filters, unknown_category):
+    """Fetch merchant transaction rows before a comparison period for monthly grouping."""
+    year = transaction_year()
+    month = transaction_month()
+    return conn.execute(
+        select(
+            year.label("year"),
+            month.label("month"),
+            transactions_table.c.description,
+            transactions_table.c.amount,
+            func.coalesce(transactions_table.c.category, unknown_category).label("category"),
+        )
+        .where(
+            transactions_table.c.ignored == 0,
+            spending_impact_clause(),
+            transactions_table.c.tx_date < date_before,
+            *category_filters,
+        )
+        .order_by(year.desc(), month.desc())
+    ).mappings().fetchall()

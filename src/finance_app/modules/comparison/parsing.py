@@ -2,6 +2,8 @@
 
 from finance_app.modules.comparison.constants import PERIOD_COMPARISON_OPTIONS
 
+COMPARISON_VIEW_OPTIONS = {"period", "year"}
+
 
 def parse_selected_years(values):
     """Parse selected years."""
@@ -43,6 +45,11 @@ def parse_period_comparison(value):
     value = str(value or "").strip()
     return value if value in PERIOD_COMPARISON_OPTIONS else "month_previous"
 
+
+def parse_comparison_view(value):
+    """Parse the active comparison page tab."""
+    value = str(value or "").strip()
+    return value if value in COMPARISON_VIEW_OPTIONS else "period"
 
 
 def parse_baseline_year(value, selected_years):

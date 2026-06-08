@@ -1,5 +1,6 @@
 {% set page_vendor_scripts = ["vendor/echarts/5.6.0/echarts.min.js"] %}
 {% set page_stylesheets = [
+    "css/page-tabs.css",
     "css/home-dashboard.css",
     "css/comparison.css",
     "css/tables.css",
@@ -23,216 +24,243 @@
 {% set selected_period_tags = selected_period_tags | default([]) %}
 {% set selected_year_tags = selected_year_tags | default([]) %}
 {% set tag_options = tag_options | default([]) %}
+{% set selected_comparison_view = selected_comparison_view | default("period") %}
 
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Comparison") }}</h2>
-        <p class="text-muted mb-0">{{ _("Compare current periods locally, or review spending, income, and category trends.") }}</p>
-        <div class="d-flex flex-wrap gap-2 mt-3">
-            <a class="btn btn-sm btn-outline-secondary" href="#year-comparison-section">{{ _("Year comparison") }}</a>
-            <a class="btn btn-sm btn-outline-secondary" href="#period-comparison-section">{{ _("Period comparison") }}</a>
-        </div>
+        <p class="text-muted mb-0">{{ _("Review recent spending changes and longer-term category trends.") }}</p>
     </div>
 </div>
 
 {% if comparison_has_data %}
-<section id="year-comparison-section" class="card mb-4">
+<div class="comparison-tabs page-tabs nav nav-tabs mb-4" role="tablist" aria-label="{{ _('Comparison views') }}">
+    <button class="nav-link {% if selected_comparison_view == 'period' %}active{% endif %}" id="comparison-period-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#period-comparison-section" aria-controls="period-comparison-section" aria-selected="{% if selected_comparison_view == 'period' %}true{% else %}false{% endif %}">
+        <i class="bi bi-lightning-charge" aria-hidden="true"></i>
+        <span>{{ _("Period changes") }}</span>
+    </button>
+    <button class="nav-link {% if selected_comparison_view == 'year' %}active{% endif %}" id="comparison-year-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#year-comparison-section" aria-controls="year-comparison-section" aria-selected="{% if selected_comparison_view == 'year' %}true{% else %}false{% endif %}">
+        <i class="bi bi-bar-chart-line" aria-hidden="true"></i>
+        <span>{{ _("Year trends") }}</span>
+    </button>
+</div>
+
+<div class="tab-content comparison-tab-content page-tab-content">
+<section id="year-comparison-section" class="card mb-4 tab-pane fade {% if selected_comparison_view == 'year' %}show active{% endif %}" role="tabpanel" aria-labelledby="comparison-year-tab" tabindex="0">
     <div class="card-body">
         <div class="section-title">
             <div>
-                <h5 class="card-title mb-1">{{ _("Year comparison") }}</h5>
+                <h5 class="card-title mb-1">{{ _("Year trends") }}</h5>
                 <div class="text-muted small">
-                    {{ _("Compares spending patterns across the selected years.") }}
+                    {{ _("Reviews spending patterns across the selected years.") }}
                     <br>
                     {{ year_filter_context }}
                 </div>
             </div>
         </div>
 
-        <form method="get" class="row g-3 align-items-end">
-            <input type="hidden" name="period_comparison" value="{{ selected_period_comparison }}">
-            {% for category in selected_period_categories %}
-                <input type="hidden" name="period_categories" value="{{ category }}">
-            {% endfor %}
-            {% for tag in selected_period_tags %}
-                <input type="hidden" name="period_tags" value="{{ tag }}">
-            {% endfor %}
+        <section id="comparison-year-filters-block" class="comparison-year-block page-block" aria-labelledby="comparison-year-filters-heading">
+            <div class="comparison-year-block-header page-block-header">
+                <h6 id="comparison-year-filters-heading" class="card-title mb-0">{{ _("Filters") }}</h6>
+            </div>
 
-            <div class="col-md-3">
-                <label class="form-label" id="years-label">{{ _("Years") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('Select years') }}">
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="years-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        {% for year in available_years %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="years"
-                                    value="{{ year }}"
-                                    {% if year in selected_years %}checked{% endif %}
-                                >
-                                <span>{{ year }}</span>
-                            </label>
-                        {% endfor %}
+            <form method="get" class="row g-3 align-items-end">
+                <input type="hidden" name="comparison_view" value="year">
+                <input type="hidden" name="period_comparison" value="{{ selected_period_comparison }}">
+                {% for category in selected_period_categories %}
+                    <input type="hidden" name="period_categories" value="{{ category }}">
+                {% endfor %}
+                {% for tag in selected_period_tags %}
+                    <input type="hidden" name="period_tags" value="{{ tag }}">
+                {% endfor %}
+
+                <div class="col-md-3">
+                    <label class="form-label" id="years-label">{{ _("Years") }}</label>
+                    <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('Select years') }}">
+                        <div
+                            class="tag-multiselect-control"
+                            role="button"
+                            tabindex="0"
+                            aria-labelledby="years-label"
+                            aria-expanded="false"
+                            data-tag-multiselect-toggle
+                        >
+                            <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                            <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                        </div>
+                        <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                            {% for year in available_years %}
+                                <label class="tag-multiselect-option">
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        name="years"
+                                        value="{{ year }}"
+                                        {% if year in selected_years %}checked{% endif %}
+                                    >
+                                    <span>{{ year }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="col-md-2">
-                <label class="form-label" for="baseline-year">{{ _("Baseline") }}</label>
-                <select id="baseline-year" class="form-select" name="baseline_year">
-                    <option value="">{{ _("Previous year") }}</option>
-                    {% for year in selected_years %}
-                        <option value="{{ year }}" {% if year == selected_baseline_year %}selected{% endif %}>{{ year }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label" id="year-categories-label">{{ _("Categories") }}</label>
-                <div
-                    class="tag-multiselect"
-                    data-tag-multiselect
-                    data-placeholder="{{ _('All categories') }}"
-                    data-select-all-label="{{ _('Select all categories') }}"
-                    data-select-preset-label="{{ _('Select analysis categories') }}"
-                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
-                >
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="year-categories-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        {% for option in category_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="year_categories"
-                                    value="{{ option }}"
-                                    {% if option in selected_year_categories %}checked{% endif %}
-                                >
-                                <span>{{ option }}</span>
-                            </label>
+                <div class="col-md-2">
+                    <label class="form-label" for="baseline-year">{{ _("Baseline") }}</label>
+                    <select id="baseline-year" class="form-select" name="baseline_year">
+                        <option value="">{{ _("Previous year") }}</option>
+                        {% for year in selected_years %}
+                            <option value="{{ year }}" {% if year == selected_baseline_year %}selected{% endif %}>{{ year }}</option>
                         {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label" id="year-categories-label">{{ _("Categories") }}</label>
+                    <div
+                        class="tag-multiselect"
+                        data-tag-multiselect
+                        data-placeholder="{{ _('All categories') }}"
+                        data-select-all-label="{{ _('Select all categories') }}"
+                        data-select-preset-label="{{ _('Select analysis categories') }}"
+                        data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
+                    >
+                        <div
+                            class="tag-multiselect-control"
+                            role="button"
+                            tabindex="0"
+                            aria-labelledby="year-categories-label"
+                            aria-expanded="false"
+                            data-tag-multiselect-toggle
+                        >
+                            <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                            <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                        </div>
+                        <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                            {% for option in category_options %}
+                                <label class="tag-multiselect-option">
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        name="year_categories"
+                                        value="{{ option }}"
+                                        {% if option in selected_year_categories %}checked{% endif %}
+                                    >
+                                    <span>{{ option }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="col-md-3">
-                <label class="form-label" id="year-tags-label">{{ _("Tags") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="year-tags-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        <label class="tag-multiselect-option">
-                            <input
-                                class="form-check-input"
-                                type="checkbox"
-                                name="year_tags"
-                                value="{{ untagged_tag_filter_value }}"
-                                {% if untagged_tag_filter_value in selected_year_tags %}checked{% endif %}
-                            >
-                            <span>{{ _("Untagged") }}</span>
-                        </label>
-                        {% for option in tag_options %}
+                <div class="col-md-3">
+                    <label class="form-label" id="year-tags-label">{{ _("Tags") }}</label>
+                    <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
+                        <div
+                            class="tag-multiselect-control"
+                            role="button"
+                            tabindex="0"
+                            aria-labelledby="year-tags-label"
+                            aria-expanded="false"
+                            data-tag-multiselect-toggle
+                        >
+                            <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                            <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+                        </div>
+                        <div class="tag-multiselect-menu" data-tag-multiselect-menu>
                             <label class="tag-multiselect-option">
                                 <input
                                     class="form-check-input"
                                     type="checkbox"
                                     name="year_tags"
-                                    value="{{ option.name }}"
-                                    {% if option.name in selected_year_tags %}checked{% endif %}
+                                    value="{{ untagged_tag_filter_value }}"
+                                    {% if untagged_tag_filter_value in selected_year_tags %}checked{% endif %}
                                 >
-                                <span>{{ option.name }}</span>
+                                <span>{{ _("Untagged") }}</span>
                             </label>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="w-100"></div>
-
-            <div class="col-md-3 ms-md-auto filter-actions">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                <a class="btn btn-outline-secondary" href="{{ year_clear_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
-            </div>
-        </form>
-
-        <div class="dashboard-grid mt-4">
-            <section class="chart-card dashboard-wide" data-chart-export-scope>
-                <div class="section-title">
-                    <div>
-                        <h5 class="card-title mb-1">{{ _("Monthly spending by year") }}</h5>
-                        <div class="text-muted small">{{ _("Compare monthly spending patterns across selected years.") }}</div>
-                    </div>
-                    <div class="chart-type-toggle" role="group" aria-label="{{ _('Monthly spending chart type') }}">
-                        <input class="btn-check" type="radio" name="comparison_chart_type" id="comparison_chart_line" value="line" autocomplete="off" checked>
-                        <label class="chart-type-option" for="comparison_chart_line">
-                            <i class="bi bi-graph-up" aria-hidden="true"></i>
-                            <span>{{ _("Line") }}</span>
-                        </label>
-
-                        <input class="btn-check" type="radio" name="comparison_chart_type" id="comparison_chart_bar" value="bar" autocomplete="off">
-                        <label class="chart-type-option" for="comparison_chart_bar">
-                            <i class="bi bi-bar-chart" aria-hidden="true"></i>
-                            <span>{{ _("Bar") }}</span>
-                        </label>
-                    </div>
-                </div>
-                <div id="comparisonChart" class="chart-viewport" data-chart-export></div>
-            </section>
-
-            <section class="chart-card dashboard-wide" data-chart-export-scope>
-                <div class="section-title">
-                    <div>
-                        <h5 class="card-title mb-1">{{ _("Monthly spending distribution") }}</h5>
-                        <div class="text-muted small">{{ _("Boxplot summarizes observed monthly totals for each selected year.") }}</div>
-                    </div>
-                </div>
-                <div id="comparisonBoxplotChart" class="chart-viewport" data-chart-export></div>
-            </section>
-
-            <section class="dashboard-wide" data-table-export-scope>
-                <div class="section-title">
-                <div>
-                        <h5 class="card-title mb-1">{{ _("Category spending by year") }}</h5>
-                        <div class="text-muted small">
-                            {% if selected_baseline_year %}
-                                {{ _("Each year is compared with {year}.", year=selected_baseline_year) }}
-                            {% else %}
-                                {{ _("Each year is compared with its previous selected calendar year when available.") }}
-                            {% endif %}
+                            {% for option in tag_options %}
+                                <label class="tag-multiselect-option">
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        name="year_tags"
+                                        value="{{ option.name }}"
+                                        {% if option.name in selected_year_tags %}checked{% endif %}
+                                    >
+                                    <span>{{ option.name }}</span>
+                                </label>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
+
+                <div class="w-100"></div>
+
+                <div class="col-md-3 ms-md-auto filter-actions">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
+                    <a class="btn btn-outline-secondary" href="{{ year_clear_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+                </div>
+            </form>
+        </section>
+
+        <section id="comparison-year-charts-block" class="comparison-year-block page-block" aria-labelledby="comparison-year-charts-heading">
+            <div class="comparison-year-block-header page-block-header">
+                <h6 id="comparison-year-charts-heading" class="card-title mb-0">{{ _("Charts") }}</h6>
+            </div>
+
+            <div class="dashboard-grid mt-3">
+                <section class="chart-card dashboard-wide" data-chart-export-scope>
+                    <div class="section-title">
+                        <div>
+                            <h5 class="card-title mb-1">{{ _("Monthly spending by year") }}</h5>
+                            <div class="text-muted small">{{ _("Compare monthly spending patterns across selected years.") }}</div>
+                        </div>
+                        <div class="chart-type-toggle" role="group" aria-label="{{ _('Monthly spending chart type') }}">
+                            <input class="btn-check" type="radio" name="comparison_chart_type" id="comparison_chart_line" value="line" autocomplete="off" checked>
+                            <label class="chart-type-option" for="comparison_chart_line">
+                                <i class="bi bi-graph-up" aria-hidden="true"></i>
+                                <span>{{ _("Line") }}</span>
+                            </label>
+
+                            <input class="btn-check" type="radio" name="comparison_chart_type" id="comparison_chart_bar" value="bar" autocomplete="off">
+                            <label class="chart-type-option" for="comparison_chart_bar">
+                                <i class="bi bi-bar-chart" aria-hidden="true"></i>
+                                <span>{{ _("Bar") }}</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="comparisonChart" class="chart-viewport" data-chart-export></div>
+                </section>
+
+                <section class="chart-card dashboard-wide" data-chart-export-scope>
+                    <div class="section-title">
+                        <div>
+                            <h5 class="card-title mb-1">{{ _("Monthly spending distribution") }}</h5>
+                            <div class="text-muted small">{{ _("Boxplot summarizes observed monthly totals for each selected year.") }}</div>
+                        </div>
+                    </div>
+                    <div id="comparisonBoxplotChart" class="chart-viewport" data-chart-export></div>
+                </section>
+            </div>
+        </section>
+
+        <section id="comparison-year-category-table-block" class="comparison-year-block page-block" aria-labelledby="comparison-year-category-table-heading" data-table-export-scope>
+            <div class="comparison-year-block-header page-block-header">
+                <h6 id="comparison-year-category-table-heading" class="card-title mb-0">{{ _("Category table") }}</h6>
+            </div>
+
+            <div class="section-title">
+                <div>
+                    <h5 class="card-title mb-1">{{ _("Category spending by year") }}</h5>
+                    <div class="text-muted small">
+                        {% if selected_baseline_year %}
+                            {{ _("Each year is compared with {year}.", year=selected_baseline_year) }}
+                        {% else %}
+                            {{ _("Each year is compared with its previous selected calendar year when available.") }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
                 {% if year_unknown_warning %}
                 <div class="alert alert-info py-2" role="alert">
                     {{ year_unknown_warning.text }}
@@ -284,18 +312,17 @@
                         </tbody>
                     </table>
                 </div>
-            </section>
-        </div>
+        </section>
     </div>
 </section>
 {% if period_comparison %}
-<section id="period-comparison-section" class="card mb-4">
+<section id="period-comparison-section" class="card mb-4 tab-pane fade {% if selected_comparison_view == 'period' %}show active{% endif %}" role="tabpanel" aria-labelledby="comparison-period-tab" tabindex="0">
     <div class="card-body">
         <div class="section-title">
             <div>
-                <h5 class="card-title mb-1">{{ _("Period comparison") }}</h5>
+                <h5 class="card-title mb-1">{{ _("Period changes") }}</h5>
                 <div class="text-muted small">
-                    {{ _("Compares the selected current period with the matching prior period.") }}
+                    {{ _("Highlights changes between the selected current period and the matching prior period.") }}
                     <br>
                     {{ period_filter_context }}
                 </div>
@@ -303,6 +330,7 @@
         </div>
 
         <form method="get" class="row g-3 align-items-end mb-4">
+            <input type="hidden" name="comparison_view" value="period">
             <div class="col-md-3">
                 <label class="form-label" for="period-comparison">{{ _("Period") }}</label>
                 <select id="period-comparison" class="form-select" name="period_comparison">
@@ -397,145 +425,170 @@
             </div>
         </form>
 
-        <div class="text-muted small mb-4">
-            {{ period_comparison.current_label }} ({{ period_comparison.current_start | datefmt }} {{ _("to") }} {{ period_comparison.current_end | datefmt }})
-            {{ _("versus") }} {{ period_comparison.previous_label }} ({{ period_comparison.previous_start | datefmt }} {{ _("to") }} {{ period_comparison.previous_end | datefmt }}).
-        </div>
-
-        <div class="metric-grid mb-4">
-            {% for total in period_comparison.totals %}
-            <div class="metric-card">
-                <div class="metric-label">{{ _(total.label) }}</div>
-                <div class="metric-value">
-                    {% if total.value_type == "count" %}
-                        {{ total.current | int }}
-                    {% else %}
-                        {{ total.current | moneyfmt }}
-                    {% endif %}
-                </div>
-                <div class="metric-detail">
-                    <span class="{% if total.direction == 'up' %}text-danger{% elif total.direction == 'down' %}text-success{% endif %}">
-                        {{ total.amount_label }} / {{ total.percent_label }}
-                    </span>
-                    {{ _("versus prior period") }}
-                </div>
-                <div class="text-muted small">
-                    {{ _("Prior") }}:
-                    {% if total.value_type == "count" %}
-                        {{ total.previous | int }}
-                    {% else %}
-                        {{ total.previous | moneyfmt }}
-                    {% endif %}
-                </div>
+        <section id="comparison-summary-block" class="comparison-period-block page-block" aria-labelledby="comparison-summary-heading">
+            <div class="comparison-period-block-header page-block-header">
+                <h6 id="comparison-summary-heading" class="card-title mb-0">{{ _("Summary") }}</h6>
             </div>
-            {% endfor %}
-        </div>
 
-        {% if period_comparison.unknown_warning %}
-        <div class="alert alert-info py-2" role="alert">
-            {{ period_comparison.unknown_warning.text }}
-        </div>
-        {% endif %}
-
-        {% if period_comparison.insight_groups %}
-        <div class="section-title">
-            <div>
-                <h6 class="card-title mb-1">{{ _("Key insights") }}</h6>
+            <div class="text-muted small mb-4">
+                {{ period_comparison.current_label }} ({{ period_comparison.current_start | datefmt }} {{ _("to") }} {{ period_comparison.current_end | datefmt }})
+                {{ _("versus") }} {{ period_comparison.previous_label }} ({{ period_comparison.previous_start | datefmt }} {{ _("to") }} {{ period_comparison.previous_end | datefmt }}).
             </div>
-        </div>
-        <div id="comparisonInsightCarousel" class="insight-carousel carousel slide mb-4" data-bs-interval="false" data-bs-touch="true">
-            {% if period_comparison.insight_groups | length > 1 %}
-            <button class="insight-carousel-control" type="button" data-bs-target="#comparisonInsightCarousel" data-bs-slide="prev" aria-label="{{ _('Previous insight group') }}">
-                <i class="bi bi-chevron-left" aria-hidden="true"></i>
-            </button>
-            {% endif %}
-            <div class="carousel-inner insight-carousel-inner">
-                {% for group in period_comparison.insight_groups %}
-                <div class="carousel-item {% if loop.first %}active{% endif %}" aria-label="{{ _(group.label) }}">
-                    <span class="visually-hidden">{{ _(group.label) }}</span>
-                    <div class="insight-grid">
-                        {% for insight in group.insights %}
-                        {% set explicit_tone = insight.tone | default('', true) %}
-                        {% set label_text = insight.label | lower %}
-                        {% if explicit_tone %}
-                            {% set insight_tone = explicit_tone %}
-                        {% elif 'decrease' in label_text or 'dropped' in label_text %}
-                            {% set insight_tone = 'success' %}
-                        {% elif 'increase' in label_text or 'new spending' in label_text %}
-                            {% set insight_tone = 'danger' %}
+
+            <div class="metric-grid mb-4">
+                {% for total in period_comparison.totals %}
+                <div class="metric-card">
+                    <div class="metric-label">{{ _(total.label) }}</div>
+                    <div class="metric-value">
+                        {% if total.value_type == "count" %}
+                            {{ total.current | int }}
                         {% else %}
-                            {% set insight_tone = 'accent' %}
+                            {{ total.current | moneyfmt }}
                         {% endif %}
-                        {% set result_text_class = 'text-danger' if insight_tone == 'danger' else 'text-success' if insight_tone == 'success' else '' %}
-                        <article class="insight-card insight-card-{{ insight_tone }}">
-                            <div class="insight-top">
-                                <div class="insight-heading">
-                                    <div class="metric-label">{{ _(insight.label) }}</div>
-                                    <div class="insight-title">{{ _(insight.title | default(insight.value)) }}</div>
-                                </div>
-                            </div>
-
-                            <div class="insight-focus">
-                                <span class="insight-summary {{ result_text_class }}">{{ _(insight.summary | default(insight.value)) }}</span>
-                                {% if insight.badge %}
-                                <span class="insight-badge">{{ _(insight.badge) }}</span>
-                                {% endif %}
-                            </div>
-
-                            {% if insight.visual == "comparison" %}
-                            <div class="insight-bars" aria-label="{{ insight.detail }}">
-                                <div class="insight-bar-row">
-                                    <span>{{ _("Prior") }}</span>
-                                    <div class="insight-bar-track">
-                                        <span class="insight-bar-fill insight-bar-fill-prior" style="width: {{ insight.previous_width }}%;"></span>
-                                    </div>
-                                    <strong class="insight-prior-value">{{ insight.previous_label }}</strong>
-                                </div>
-                                <div class="insight-bar-row">
-                                    <span>{{ _("Current") }}</span>
-                                    <div class="insight-bar-track">
-                                        <span class="insight-bar-fill" style="width: {{ insight.current_width }}%;"></span>
-                                    </div>
-                                    <strong class="insight-current-value {{ result_text_class }}">{{ insight.current_label }}</strong>
-                                </div>
-                            </div>
-                            {% elif insight.stat_items %}
-                            <div class="insight-stat-grid">
-                                {% for item in insight.stat_items %}
-                                <div class="insight-stat">
-                                    <span>{{ _(item.label) }}</span>
-                                    <strong>{{ item.value }}</strong>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            {% else %}
-                            <div class="insight-detail">{{ _(insight.detail) }}</div>
-                            {% endif %}
-                        </article>
-                        {% endfor %}
+                    </div>
+                    <div class="metric-detail">
+                        <span class="{% if total.direction == 'up' %}text-danger{% elif total.direction == 'down' %}text-success{% endif %}">
+                            {{ total.amount_label }} / {{ total.percent_label }}
+                        </span>
+                        {{ _("versus prior period") }}
+                    </div>
+                    <div class="text-muted small">
+                        {{ _("Prior") }}:
+                        {% if total.value_type == "count" %}
+                            {{ total.previous | int }}
+                        {% else %}
+                            {{ total.previous | moneyfmt }}
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
             </div>
-            {% if period_comparison.insight_groups | length > 1 %}
-            <button class="insight-carousel-control" type="button" data-bs-target="#comparisonInsightCarousel" data-bs-slide="next" aria-label="{{ _('Next insight group') }}">
-                <i class="bi bi-chevron-right" aria-hidden="true"></i>
-            </button>
+
+            {% if period_comparison.unknown_warning %}
+            <div class="alert alert-info py-2" role="alert">
+                {{ period_comparison.unknown_warning.text }}
+            </div>
             {% endif %}
-        </div>
+        </section>
+
+        {% if period_comparison.insights %}
+        {% set insight_slides = period_comparison.insights | batch(3) | list %}
+        <section id="comparison-insights-block" class="comparison-period-block page-block" aria-labelledby="comparison-insights-heading">
+            <div class="comparison-period-block-header page-block-header">
+                <h6 id="comparison-insights-heading" class="card-title mb-0">{{ _("Key insights") }}</h6>
+            </div>
+
+            <div id="comparisonInsightCarousel" class="insight-carousel carousel slide" data-bs-interval="false" data-bs-touch="true" data-insights-per-slide="3">
+                {% if insight_slides | length > 1 %}
+                <button class="insight-carousel-control" type="button" data-bs-target="#comparisonInsightCarousel" data-bs-slide="prev" aria-label="{{ _('Previous insight group') }}">
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                </button>
+                {% endif %}
+                <div class="carousel-inner insight-carousel-inner">
+                    {% for slide in insight_slides %}
+                    <div class="carousel-item {% if loop.first %}active{% endif %}" aria-label="{{ _('Key insights') }} {{ loop.index }}">
+                        <span class="visually-hidden">{{ _("Key insights") }} {{ loop.index }}</span>
+                        <div class="insight-grid">
+                            {% for insight in slide if insight %}
+                            {% set explicit_tone = insight.tone | default('', true) %}
+                            {% set label_text = insight.label | lower %}
+                            {% if explicit_tone %}
+                                {% set insight_tone = explicit_tone %}
+                            {% elif 'decrease' in label_text or 'dropped' in label_text %}
+                                {% set insight_tone = 'success' %}
+                            {% elif 'increase' in label_text or 'new spending' in label_text %}
+                                {% set insight_tone = 'danger' %}
+                            {% else %}
+                                {% set insight_tone = 'accent' %}
+                            {% endif %}
+                            {% set result_text_class = 'text-danger' if insight_tone == 'danger' else 'text-success' if insight_tone == 'success' else '' %}
+                            <article class="insight-card insight-card-{{ insight_tone }}">
+                                <div class="insight-top">
+                                    <div class="insight-heading">
+                                        <div class="metric-label">{{ _(insight.label) }}</div>
+                                        <div class="insight-title">{{ _(insight.title | default(insight.value)) }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="insight-focus">
+                                    <span class="insight-summary {{ result_text_class }}">{{ _(insight.summary | default(insight.value)) }}</span>
+                                    {% if insight.badge %}
+                                    <span class="insight-badge">{{ _(insight.badge) }}</span>
+                                    {% endif %}
+                                </div>
+
+                                {% if insight.visual == "comparison" %}
+                                <div class="insight-bars" aria-label="{{ insight.detail }}">
+                                    <div class="insight-bar-row">
+                                        <span>{{ _("Prior") }}</span>
+                                        <div class="insight-bar-track">
+                                            <span class="insight-bar-fill insight-bar-fill-prior" style="width: {{ insight.previous_width }}%;"></span>
+                                        </div>
+                                        <strong class="insight-prior-value">{{ insight.previous_label }}</strong>
+                                    </div>
+                                    <div class="insight-bar-row">
+                                        <span>{{ _("Current") }}</span>
+                                        <div class="insight-bar-track">
+                                            <span class="insight-bar-fill" style="width: {{ insight.current_width }}%;"></span>
+                                        </div>
+                                        <strong class="insight-current-value {{ result_text_class }}">{{ insight.current_label }}</strong>
+                                    </div>
+                                </div>
+                                {% elif insight.stat_items %}
+                                <div class="insight-stat-grid">
+                                    {% for item in insight.stat_items %}
+                                    <div class="insight-stat">
+                                        <span>{{ _(item.label) }}</span>
+                                        <strong>{{ item.value }}</strong>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <div class="insight-detail">{{ _(insight.detail) }}</div>
+                                {% endif %}
+                            </article>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if insight_slides | length > 1 %}
+                <button class="insight-carousel-control" type="button" data-bs-target="#comparisonInsightCarousel" data-bs-slide="next" aria-label="{{ _('Next insight group') }}">
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </button>
+                {% endif %}
+            </div>
+        </section>
         {% endif %}
 
-        <div class="d-flex flex-wrap gap-2 mb-3" data-comparison-change-filters>
-            <button class="btn btn-sm btn-primary" type="button" data-comparison-change-filter="all">{{ _("All") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-comparison-change-filter="increases">{{ _("Increases") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-comparison-change-filter="decreases">{{ _("Decreases") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-comparison-change-filter="new">{{ _("New") }}</button>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-comparison-change-filter="dropped">{{ _("Dropped") }}</button>
-        </div>
+        <section id="comparison-details-block" class="comparison-period-block page-block" aria-labelledby="comparison-details-heading">
+            <div class="comparison-period-block-header page-block-header">
+                <h6 id="comparison-details-heading" class="card-title mb-0">{{ _("Details") }}</h6>
+            </div>
 
-        <div data-comparison-change-tables>
-        <div class="row g-4">
-            <div class="col-lg-6" data-table-export-scope>
+            <div class="comparison-detail-header">
+                <div class="comparison-detail-tabs page-tabs nav nav-tabs" role="tablist" aria-label="{{ _('Period change details') }}">
+                    <button class="nav-link active" id="comparison-category-changes-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#comparison-category-changes" aria-controls="comparison-category-changes" aria-selected="true">
+                        <i class="bi bi-tags" aria-hidden="true"></i>
+                        <span>{{ _("Category changes") }}</span>
+                    </button>
+                    <button class="nav-link" id="comparison-merchant-changes-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#comparison-merchant-changes" aria-controls="comparison-merchant-changes" aria-selected="false">
+                        <i class="bi bi-shop" aria-hidden="true"></i>
+                        <span>{{ _("Merchant changes") }}</span>
+                    </button>
+                </div>
+
+                <div class="comparison-change-filters d-flex flex-wrap gap-2" data-comparison-change-filters>
+                    <button class="btn btn-sm btn-primary" type="button" data-comparison-change-filter="all">{{ _("All") }}</button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-comparison-change-filter="increases">{{ _("Increases") }}</button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-comparison-change-filter="decreases">{{ _("Decreases") }}</button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-comparison-change-filter="new">{{ _("New") }}</button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-comparison-change-filter="dropped">{{ _("Dropped") }}</button>
+                </div>
+            </div>
+
+            <div class="tab-content comparison-detail-tab-content page-tab-content" data-comparison-change-tables>
+                <section id="comparison-category-changes" class="tab-pane fade show active" role="tabpanel" aria-labelledby="comparison-category-changes-tab" tabindex="0" data-table-export-scope>
                 <div class="section-title mb-2">
                     <div>
                         <h6 class="card-title mb-1">{{ _("Category changes") }}</h6>
@@ -572,12 +625,12 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
+                </section>
 
-            <div class="col-lg-6" data-table-export-scope>
+                <section id="comparison-merchant-changes" class="tab-pane fade" role="tabpanel" aria-labelledby="comparison-merchant-changes-tab" tabindex="0" data-table-export-scope>
                 <div class="section-title mb-2">
                     <div>
-                        <h6 class="card-title mb-1">{{ _("Top merchant changes") }}</h6>
+                        <h6 class="card-title mb-1">{{ _("Merchant changes") }}</h6>
                         <div class="text-muted small">{{ _("Top {count} merchants by absolute spending change.", count=merchant_table_limit) }}</div>
                     </div>
                 </div>
@@ -613,12 +666,13 @@
                         </tbody>
                     </table>
                 </div>
+                </section>
             </div>
-        </div>
-        </div>
+        </section>
     </div>
 </section>
 {% endif %}
+</div>
 <script id="comparison-chart-data" type="application/json">
 {{ {
     "monthLabels": month_labels,

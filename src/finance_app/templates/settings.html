@@ -1,4 +1,4 @@
-{% set page_stylesheets = ["css/settings.css", "css/rules-list.css", "css/tables.css"] %}
+{% set page_stylesheets = ["css/page-tabs.css", "css/settings.css", "css/rules-list.css", "css/tables.css"] %}
 {% set page_scripts = ["js/settings.js"] %}
 {% extends "base.html" %}
 
@@ -25,7 +25,25 @@
         <form method="post" class="settings-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-            <section class="settings-section">
+            <div class="settings-tabs page-tabs nav nav-tabs" role="tablist" aria-label="{{ _('Settings sections') }}">
+                <button class="nav-link active" id="settings-general-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#settings-general" aria-controls="settings-general" aria-selected="true">
+                    {{ _("General") }}
+                </button>
+                {% if can_manage_global_settings %}
+                <button class="nav-link" id="settings-categorization-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#settings-categorization" aria-controls="settings-categorization" aria-selected="false">
+                    {{ _("Categorization") }}
+                </button>
+                <button class="nav-link" id="settings-recurrence-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#settings-recurrence" aria-controls="settings-recurrence" aria-selected="false">
+                    {{ _("Recurrence detection") }}
+                </button>
+                <button class="nav-link" id="settings-statements-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#settings-statements" aria-controls="settings-statements" aria-selected="false">
+                    {{ _("Statements") }}
+                </button>
+                {% endif %}
+            </div>
+
+            <div class="tab-content settings-tab-content page-tab-content">
+            <section id="settings-general" class="settings-section tab-pane fade show active" role="tabpanel" aria-labelledby="settings-general-tab" tabindex="0">
                 <div class="settings-section-header">
                     <h5 class="settings-section-title">{{ _("General") }}</h5>
                     <div class="settings-section-help">{{ _("Appearance and everyday interface defaults.") }}</div>
@@ -111,6 +129,12 @@
                         </div>
 
                         <div class="settings-field">
+                            <label for="comparison_insight_card_limit" class="form-label">{{ _("Comparison insight card limit") }}</label>
+                            <input id="comparison_insight_card_limit" class="form-control" type="number" min="1" name="comparison_insight_card_limit" value="{{ comparison_insight_card_limit }}">
+                            <div class="form-text">{{ _("Ranked insight cards shown on the comparison page.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
                             <label for="home_top_category_limit" class="form-label">{{ _("Home top category limit") }}</label>
                             <input id="home_top_category_limit" class="form-control" type="number" min="1" name="home_top_category_limit" value="{{ home_top_category_limit }}">
                             <div class="form-text">{{ _("Top spending categories shown on the home page.") }}</div>
@@ -138,7 +162,7 @@
             </section>
 
             {% if can_manage_global_settings %}
-            <section class="settings-section">
+            <section id="settings-categorization" class="settings-section tab-pane fade" role="tabpanel" aria-labelledby="settings-categorization-tab" tabindex="0">
                 <div class="settings-section-header">
                     <h5 class="settings-section-title">{{ _("Categorization") }}</h5>
                     <div class="settings-section-help">{{ _("Category defaults and automated categorization thresholds.") }}</div>
@@ -219,7 +243,7 @@
                 </div>
             </section>
 
-            <section class="settings-section">
+            <section id="settings-recurrence" class="settings-section tab-pane fade" role="tabpanel" aria-labelledby="settings-recurrence-tab" tabindex="0">
                 <div class="settings-section-header">
                     <h5 class="settings-section-title">{{ _("Recurrence detection") }}</h5>
                     <div class="settings-section-help">{{ _("Rules for identifying repeated transactions.") }}</div>
@@ -258,7 +282,7 @@
                 </div>
             </section>
 
-            <section class="settings-section">
+            <section id="settings-statements" class="settings-section tab-pane fade" role="tabpanel" aria-labelledby="settings-statements-tab" tabindex="0">
                 <div class="settings-section-header">
                     <h5 class="settings-section-title">{{ _("Statements") }}</h5>
                     <div class="settings-section-help">{{ _("Statement import type names and parser mappings.") }}</div>
@@ -325,6 +349,7 @@
                 </div>
             </section>
             {% endif %}
+            </div>
 
             <div class="settings-actions d-flex gap-2">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-save" aria-hidden="true"></i>{{ _("Save settings") }}</button>

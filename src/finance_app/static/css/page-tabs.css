@@ -1,0 +1,35 @@
+.page-tabs {
+    gap: 0.25rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0;
+}
+
+.page-tabs .nav-link {
+    align-items: center;
+    color: var(--app-muted);
+    display: inline-flex;
+    font-weight: 700;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.page-tabs .nav-link.active {
+    color: var(--app-heading);
+}
+
+.page-tab-content {
+    min-width: 0;
+}
+
+.page-block + .page-block {
+    margin-top: 1.75rem;
+}
+
+.page-block-header {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}

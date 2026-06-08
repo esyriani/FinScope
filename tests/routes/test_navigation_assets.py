@@ -75,6 +75,7 @@ def test_base_template_keeps_feature_assets_page_scoped(client):
         "js/exports.js",
         "js/tag-multiselect.js",
         "css/comparison.css",
+        "css/page-tabs.css",
         "css/calendar-recurring.css",
         "css/rules-list.css",
         "css/settings.css",
@@ -100,4 +101,30 @@ def test_dashboard_route_loads_dashboard_assets(client):
     assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
         response,
         r"/static/js/dashboard-charts\.js",
+    )
+
+
+def test_tabbed_pages_load_shared_tab_stylesheet(client):
+    """Verify tabbed pages opt into shared tab styles without loading them globally."""
+    comparison_response = client.get("/comparison")
+    settings_response = client.get("/settings")
+    taxonomy_response = client.get("/taxonomy")
+
+    assert comparison_response.status_code == 200
+    assert settings_response.status_code == 200
+    assert taxonomy_response.status_code == 200
+    assert_asset_reference(comparison_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(settings_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(taxonomy_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert asset_reference_index(comparison_response, r"/static/css/page-tabs\.css") < asset_reference_index(
+        comparison_response,
+        r"/static/css/comparison\.css",
+    )
+    assert asset_reference_index(settings_response, r"/static/css/page-tabs\.css") < asset_reference_index(
+        settings_response,
+        r"/static/css/settings\.css",
+    )
+    assert asset_reference_index(taxonomy_response, r"/static/css/page-tabs\.css") < asset_reference_index(
+        taxonomy_response,
+        r"/static/css/home-dashboard\.css",
     )

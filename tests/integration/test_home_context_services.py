@@ -1,15 +1,19 @@
 """Service-level context tests for the home page."""
 
 from sqlalchemy import text
-from finance_app.modules.home.service import build_home_context
-from tests.support.context_services import seed_reporting_data
+
+from finance_app.modules.comparison import service as comparison_service
+from finance_app.modules.home import service as home_service
+from tests.support.context_services import FixedDate, seed_reporting_data
 
 
-def test_home_context_summarizes_seeded_year_to_date_data(core_conn):
+def test_home_context_summarizes_seeded_year_to_date_data(core_conn, monkeypatch):
     """Verify home summary values against realistic seeded statement data."""
     seed_reporting_data(core_conn)
+    monkeypatch.setattr(home_service, "date", FixedDate)
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
 
-    context = build_home_context()
+    context = home_service.build_home_context()
 
     assert context["statement_count"] == 1
     assert context["latest_statement"]["filename"] == "latest.csv"
@@ -38,12 +42,16 @@ def test_home_context_summarizes_seeded_year_to_date_data(core_conn):
         ("Food", 340.00),
         ("Utilities", 120.00),
     ]
-    assert "Top YTD category" in [item["label"] for item in context["quick_insights"]]
+    assert len(context["quick_insights"]) == 3
+    assert all(item["href"].startswith(("/comparison", "/transactions")) for item in context["quick_insights"])
+    assert all("insight_type" in item for item in context["quick_insights"])
 
 
-def test_home_context_surfaces_command_center_activity(core_conn):
+def test_home_context_surfaces_command_center_activity(core_conn, monkeypatch):
     """Verify Home exposes failed imports, suggested rules, and recent actions."""
     seed_reporting_data(core_conn)
+    monkeypatch.setattr(home_service, "date", FixedDate)
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
     statement_type_id = core_conn.execute(text("""
         SELECT id
         FROM statement_types
@@ -86,7 +94,7 @@ def test_home_context_surfaces_command_center_activity(core_conn):
         """), [{"p0": "2026-05-06", "p1": "Reviewed Home Cafe", "p2": 22.00, "p3": "Food", "p4": "manual", "p5": 0, "p6": "2026-05-06T12:00:00Z", "p7": "2026-05-06T12:00:00Z", "p8": "home-reviewed-activity"}, {"p0": "2026-05-07", "p1": "Categorized Home Market", "p2": 44.00, "p3": "Food", "p4": "rule", "p5": 0, "p6": None, "p7": "2026-05-07T12:00:00Z", "p8": "home-categorized-activity"}])
     core_conn.commit()
 
-    context = build_home_context()
+    context = home_service.build_home_context()
     attention_titles = [item["title"] for item in context["attention_items"]]
     activity_labels = [item["label"] for item in context["recent_activity"]]
 
@@ -101,5 +109,65 @@ def test_home_context_surfaces_command_center_activity(core_conn):
     assert "Reviewed transaction" in activity_labels
     assert "Categorized transaction" in activity_labels
     assert "Created rule" in activity_labels
+
+
+def test_home_quick_insights_use_ranked_comparison_candidates(app, core_conn, monkeypatch):
+    """Verify Home quick insights reuse ranked comparison insight cards."""
+    monkeypatch.setattr(home_service, "date", FixedDate)
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    rows = [
+        ("2026-04-02", "Alpha Store", 500.00, "Food", "home-rank-alpha-prior"),
+        ("2026-04-03", "Charlie Store", 400.00, "Food", "home-rank-charlie-prior"),
+        ("2026-04-04", "Delta Store", 300.00, "Food", "home-rank-delta-prior"),
+        ("2026-04-05", "Echo Store", 200.00, "Food", "home-rank-echo-prior"),
+        ("2026-04-06", "Bravo Store", 100.00, "Food", "home-rank-bravo-prior"),
+        ("2026-04-07", "Foxtrot Utilities", 700.00, "Utilities", "home-rank-foxtrot-prior"),
+        ("2026-05-02", "Bravo Store", 600.00, "Food", "home-rank-bravo-current"),
+        ("2026-05-03", "Alpha Store", 500.00, "Food", "home-rank-alpha-current"),
+        ("2026-05-04", "Charlie Store", 400.00, "Food", "home-rank-charlie-current"),
+        ("2026-05-05", "Delta Store", 300.00, "Food", "home-rank-delta-current"),
+        ("2026-05-06", "Echo Store", 200.00, "Food", "home-rank-echo-current"),
+        ("2026-05-07", "Foxtrot Utilities", 50.00, "Utilities", "home-rank-foxtrot-current"),
+    ]
+    core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+    core_conn.commit()
+
+    with app.test_request_context("/"):
+        context = home_service.build_home_context()
+
+    insights = context["quick_insights"]
+    merchant_rank = next(
+        insight for insight in insights
+        if insight["insight_type"] == "merchant_rank_increase"
+    )
+
+    assert len(insights) == 3
+    assert [insight["score"] for insight in insights] == sorted(
+        [insight["score"] for insight in insights],
+        reverse=True,
+    )
+    assert all(insight["value_type"] == "text" for insight in insights)
+    expected_card_keys = {
+        "label",
+        "value",
+        "detail",
+        "visual",
+        "group",
+        "tone",
+        "icon",
+        "title",
+        "summary",
+    }
+    assert all(expected_card_keys <= insight.keys() for insight in insights)
+    assert merchant_rank["label"] == "Merchant moved up"
+    assert merchant_rank["value"] == "5 places"
+    assert merchant_rank["href"].startswith("/transactions?")
+    assert "period=custom" in merchant_rank["href"]
+    assert "date_from=2026-05-01" in merchant_rank["href"]
+    assert "date_to=2026-05-09" in merchant_rank["href"]
+    assert "merchant_key=BRAVO+STORE" in merchant_rank["href"]
 
 

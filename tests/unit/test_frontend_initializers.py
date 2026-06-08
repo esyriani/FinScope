@@ -6,6 +6,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC_JS = ROOT / "src" / "finance_app" / "static" / "js"
+STATIC_CSS = ROOT / "src" / "finance_app" / "static" / "css"
 TEMPLATES = ROOT / "src" / "finance_app" / "templates"
 SCRIPT_TAG_RE = re.compile(r"<script\b(?P<attrs>[^>]*)>", re.IGNORECASE)
 CLIENT_TRANSLATION_RE = re.compile(
@@ -16,6 +17,11 @@ CLIENT_TRANSLATION_RE = re.compile(
 def read_script(name):
     """Return the JavaScript source for a static app script."""
     return (STATIC_JS / name).read_text(encoding="utf-8")
+
+
+def read_style(name):
+    """Return the CSS source for a static app stylesheet."""
+    return (STATIC_CSS / name).read_text(encoding="utf-8")
 
 
 def test_ajax_refresh_uses_initializer_registry():
@@ -63,6 +69,27 @@ def test_interactive_table_rows_have_keyboard_semantics():
     assert 'row.setAttribute("role", "button")' in tables_js
     assert 'row.addEventListener("keydown"' in tables_js
     assert 'event.key !== "Enter" && event.key !== " "' in tables_js
+
+
+def test_comparison_tabs_preserve_active_view_in_url():
+    """Verify comparison top-level tab switches update the refreshable view query."""
+    comparison_js = read_script("comparison.js")
+
+    assert '"comparison-period-tab": "period"' in comparison_js
+    assert '"comparison-year-tab": "year"' in comparison_js
+    assert 'url.searchParams.set("comparison_view", view)' in comparison_js
+    assert "window.history.replaceState" in comparison_js
+    assert "updateComparisonViewQuery(tab)" in comparison_js
+
+
+def test_comparison_insight_carousel_uses_responsive_three_card_grid():
+    """Verify comparison insights show three cards on wide screens and adapt down."""
+    comparison_css = read_style("comparison.css")
+
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in comparison_css
+    assert "@media (max-width: 1100px)" in comparison_css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in comparison_css
+    assert "grid-template-columns: 1fr;" in comparison_css
 
 
 def test_dynamic_user_rows_avoid_inner_html_builders():

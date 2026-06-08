@@ -168,6 +168,48 @@
         </section>
     </div>
 
+    {% if quick_insights %}
+    <section class="card cockpit-panel home-insight-panel" aria-labelledby="homeQuickInsightsTitle">
+        <div class="card-body">
+            <div class="section-title">
+                <h5 id="homeQuickInsightsTitle" class="card-title">{{ _("Quick insights") }}</h5>
+            </div>
+
+            <div class="home-insight-list">
+                {% for insight in quick_insights %}
+                    {% set insight_tone = insight.tone if insight.tone in ["danger", "success", "warning", "accent"] else "muted" %}
+                    <a class="home-insight-item home-insight-{{ insight_tone }}" href="{{ insight.href }}">
+                        <span class="home-insight-icon"><i class="bi {{ insight.icon }}" aria-hidden="true"></i></span>
+                        <span class="home-insight-copy">
+                            <span class="home-insight-label">{{ _(insight.label) }}</span>
+                            <strong class="home-insight-value">
+                                {% if insight.value_type == "money" %}
+                                    {{ insight.value | moneyfmt }}
+                                {% elif insight.value_type == "date" %}
+                                    {{ insight.value | datefmt }}
+                                {% elif insight.value_type == "empty" %}
+                                    {{ _("No data") }}
+                                {% else %}
+                                    {{ insight.value }}
+                                {% endif %}
+                            </strong>
+                            {% if insight.detail %}
+                                <span class="home-insight-detail">
+                                    {% if insight.detail_is_user_data %}
+                                        {{ insight.detail }}
+                                    {% else %}
+                                        {{ _(insight.detail) }}
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                        </span>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
     <section class="shortcut-strip" aria-labelledby="homeShortcutsTitle">
         <div class="shortcut-heading">
             <h5 id="homeShortcutsTitle">{{ _("Shortcuts") }}</h5>

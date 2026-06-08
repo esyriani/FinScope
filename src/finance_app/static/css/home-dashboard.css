@@ -537,6 +537,111 @@
     white-space: nowrap;
 }
 
+.home-insight-list {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.home-insight-item {
+    align-items: start;
+    background: var(--app-surface);
+    border: 1px solid var(--app-border);
+    border-left: 4px solid var(--app-border);
+    border-radius: 8px;
+    color: var(--app-text);
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+    padding: 0.85rem;
+    text-decoration: none;
+}
+
+.home-insight-item:hover {
+    border-color: rgba(var(--app-accent-rgb), 0.48);
+    color: var(--app-text);
+}
+
+.home-insight-item:hover .home-insight-value {
+    color: var(--app-accent-strong);
+}
+
+.home-insight-success {
+    border-left-color: #16a34a;
+}
+
+.home-insight-danger {
+    border-left-color: var(--app-danger);
+}
+
+.home-insight-warning {
+    border-left-color: #d97706;
+}
+
+.home-insight-accent {
+    border-left-color: var(--app-accent);
+}
+
+.home-insight-icon {
+    align-items: center;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    color: var(--app-accent-strong);
+    display: inline-flex;
+    height: 2rem;
+    justify-content: center;
+    width: 2rem;
+}
+
+.home-insight-success .home-insight-icon {
+    color: #16a34a;
+}
+
+.home-insight-danger .home-insight-icon {
+    color: var(--app-danger);
+}
+
+.home-insight-warning .home-insight-icon {
+    color: #d97706;
+}
+
+.home-insight-copy {
+    display: grid;
+    gap: 0.18rem;
+    min-width: 0;
+}
+
+.home-insight-label {
+    color: var(--app-muted);
+    font-size: 0.74rem;
+    font-weight: 750;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.home-insight-value {
+    color: var(--app-heading);
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.home-insight-detail {
+    color: var(--app-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .shortcut-strip {
     align-items: center;
     display: grid;

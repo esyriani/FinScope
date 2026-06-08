@@ -66,11 +66,13 @@ def test_statement_upload_extensions_default_to_csv_only(monkeypatch, tmp_path):
 
 def test_setting_defaults_include_llm_review_and_single_transaction_ai(monkeypatch, tmp_path):
     """Verify LLM review and single-transaction AI defaults are configurable."""
+    monkeypatch.setenv("FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT", "9")
     monkeypatch.setenv("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", "0.62")
     monkeypatch.setenv("FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED", "false")
 
     settings = config_module.load_settings(tmp_path / "missing.ini")
 
+    assert settings.default_comparison_insight_card_limit == 9
     assert settings.default_llm_review_threshold == 0.62
     assert settings.default_transaction_ai_rerun_enabled is False
 

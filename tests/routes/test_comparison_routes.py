@@ -5,7 +5,7 @@ from datetime import date as real_date
 from sqlalchemy import text
 
 from finance_app.modules.comparison import service as comparison_service
-from tests.support.html import assert_markup, assert_not_visible_text, assert_visible_text
+from tests.support.html import assert_has_element, assert_markup, assert_not_visible_text, assert_visible_text
 
 
 class FixedDate(real_date):
@@ -75,4 +75,145 @@ def test_comparison_route_renders_monthly_spending_distribution(client, core_con
         "Les statistiques utilisent les totaux mensuels observ\u00e9s",
         "Mois observ\u00e9s",
         "Monthly spending statistics",
+    )
+
+
+def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypatch):
+    """Verify comparison separates period changes from yearly trends with tabs."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, 'Food', 'rule', :p3)
+        """), [
+            {"p0": "2025-01-02", "p1": "Prior grocery", "p2": 50.00, "p3": "comparison-tabs-2025"},
+            {"p0": "2026-05-02", "p1": "Current grocery", "p2": 120.00, "p3": "comparison-tabs-2026"},
+        ])
+    core_conn.commit()
+
+    response = client.get("/comparison")
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Period changes", "Year trends")
+    assert_has_element(
+        response,
+        "div",
+        attrs={"class": "comparison-tabs", "role": "tablist", "aria-label": "Comparison views"},
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={
+            "id": "comparison-period-tab",
+            "role": "tab",
+            "class": "active",
+            "aria-selected": "true",
+            "data-bs-target": "#period-comparison-section",
+        },
+        text="Period changes",
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={
+            "id": "comparison-year-tab",
+            "role": "tab",
+            "aria-selected": "false",
+            "data-bs-target": "#year-comparison-section",
+        },
+        text="Year trends",
+    )
+    assert_has_element(
+        response,
+        "section",
+        attrs={"id": "period-comparison-section", "role": "tabpanel", "class": "active"},
+    )
+    assert_has_element(
+        response,
+        "section",
+        attrs={"id": "comparison-summary-block", "aria-labelledby": "comparison-summary-heading"},
+        text="Summary",
+    )
+    assert_has_element(
+        response,
+        "section",
+        attrs={"id": "comparison-insights-block", "aria-labelledby": "comparison-insights-heading"},
+        text="Key insights",
+    )
+    assert_has_element(
+        response,
+        "section",
+        attrs={"id": "comparison-details-block", "aria-labelledby": "comparison-details-heading"},
+        text="Details",
+    )
+    assert_has_element(response, "input", attrs={"name": "comparison_view", "value": "period"})
+    assert_has_element(response, "input", attrs={"name": "comparison_view", "value": "year"})
+    assert_has_element(
+        response,
+        "div",
+        attrs={"class": "comparison-detail-tabs", "role": "tablist", "aria-label": "Period change details"},
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={
+            "id": "comparison-category-changes-tab",
+            "role": "tab",
+            "class": "active",
+            "aria-selected": "true",
+            "data-bs-target": "#comparison-category-changes",
+        },
+        text="Category changes",
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={
+            "id": "comparison-merchant-changes-tab",
+            "role": "tab",
+            "aria-selected": "false",
+            "data-bs-target": "#comparison-merchant-changes",
+        },
+        text="Merchant changes",
+    )
+    assert_has_element(
+        response,
+        "section",
+        attrs={"id": "comparison-category-changes", "role": "tabpanel", "class": "active"},
+    )
+    assert_has_element(
+        response,
+        "section",
+        attrs={"id": "comparison-merchant-changes", "role": "tabpanel"},
+    )
+
+    year_response = client.get("/comparison?comparison_view=year")
+
+    assert year_response.status_code == 200
+    assert_has_element(
+        year_response,
+        "button",
+        attrs={"id": "comparison-year-tab", "class": "active", "aria-selected": "true"},
+    )
+    assert_has_element(
+        year_response,
+        "section",
+        attrs={"id": "year-comparison-section", "role": "tabpanel", "class": "active"},
+    )
+    assert_has_element(
+        year_response,
+        "section",
+        attrs={"id": "comparison-year-filters-block", "aria-labelledby": "comparison-year-filters-heading"},
+        text="Filters",
+    )
+    assert_has_element(
+        year_response,
+        "section",
+        attrs={"id": "comparison-year-charts-block", "aria-labelledby": "comparison-year-charts-heading"},
+        text="Charts",
+    )
+    assert_has_element(
+        year_response,
+        "section",
+        attrs={"id": "comparison-year-category-table-block", "aria-labelledby": "comparison-year-category-table-heading"},
+        text="Category table",
     )
