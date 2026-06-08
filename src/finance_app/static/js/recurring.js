@@ -585,6 +585,13 @@ function setupRecurringAjaxNavigation() {
         });
     }
 
+    function destroyDynamicFlatpickr(dynamic) {
+        dynamic.querySelectorAll("[data-flatpickr-date], [data-flatpickr-month]").forEach((input) => {
+            input.financeFlatpickr?.destroy();
+            delete input.financeFlatpickr;
+        });
+    }
+
     function initializeRecurringDynamic(dynamic) {
         window.financeApp?.runInitializers(dynamic);
     }
@@ -636,6 +643,7 @@ function setupRecurringAjaxNavigation() {
             if (!nextDynamic) throw new Error("Recurring refresh returned no content.");
 
             closeOpenRecurringModals();
+            destroyDynamicFlatpickr(currentDynamic);
             currentDynamic.replaceWith(document.importNode(nextDynamic, true));
             if (pushState) {
                 window.history.pushState({ recurringAjax: true }, "", url.toString());

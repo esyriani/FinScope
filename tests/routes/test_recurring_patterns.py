@@ -162,6 +162,9 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
     assert 'data-recurring-dynamic' in body
     assert "recurring-summary-layout" in body
     assert "recurring-metric-carousel" in body
+    assert 'id="recurring-month"' in body
+    assert "data-flatpickr-month" in body
+    assert "data-flatpickr-submit-on-change" in body
     assert "Repeating merchants detected for the selected month." in body
     assert "No recurring activity detected for this month." in body
     assert 'data-sort-column="7" data-sort-type="number"' in body

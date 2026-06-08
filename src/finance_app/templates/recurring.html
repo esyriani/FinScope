@@ -205,7 +205,6 @@
 
 <div class="recurring-view-tools mb-3" data-table-export-scope>
     <div class="recurring-view-toolbar">
-        
         <form method="get" class="calendar-month-controls recurring-period-controls" aria-label="{{ _('Calendar month navigation') }}" data-recurring-ajax-form>
             <input type="hidden" name="view" value="{{ selected_recurring_view }}">
             {% for category in selected_categories %}
@@ -223,30 +222,31 @@
             <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-recurring-ajax-link><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
             <div class="calendar-month-field">
                 <label class="form-label" for="recurring-month">{{ _("Month") }}</label>
-                <input id="recurring-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month>
+                <input id="recurring-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month data-flatpickr-submit-on-change>
             </div>
             <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-recurring-ajax-link><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
             <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-recurring-ajax-link><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
         </form>
         <div class="section-title mb-0" aria-label="{{ _('Recurring view') }}">
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <span class="metric-label">{{ _("View") }}</span>
-            <a
-                class="btn btn-sm text-nowrap {% if selected_recurring_view == 'list' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                href="{{ list_view_url }}"
-                aria-pressed="{{ 'true' if selected_recurring_view == 'list' else 'false' }}"
-                data-recurring-ajax-link
-            >
-                {{ _("List") }}
-            </a>
-            <a
-                class="btn btn-sm text-nowrap {% if selected_recurring_view == 'calendar' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                href="{{ calendar_view_url }}"
-                aria-pressed="{{ 'true' if selected_recurring_view == 'calendar' else 'false' }}"
-                data-recurring-ajax-link
-            >
-                {{ _("Calendar") }}
-            </a>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="metric-label">{{ _("View") }}</span>
+                <a
+                    class="btn btn-sm text-nowrap {% if selected_recurring_view == 'list' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                    href="{{ list_view_url }}"
+                    aria-pressed="{{ 'true' if selected_recurring_view == 'list' else 'false' }}"
+                    data-recurring-ajax-link
+                >
+                    {{ _("List") }}
+                </a>
+                <a
+                    class="btn btn-sm text-nowrap {% if selected_recurring_view == 'calendar' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                    href="{{ calendar_view_url }}"
+                    aria-pressed="{{ 'true' if selected_recurring_view == 'calendar' else 'false' }}"
+                    data-recurring-ajax-link
+                >
+                    {{ _("Calendar") }}
+                </a>
+            </div>
         </div>
     </div>
     <div class="recurring-status-filter" aria-label="{{ _('Status filter') }}">

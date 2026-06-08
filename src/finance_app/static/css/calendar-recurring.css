@@ -24,12 +24,16 @@
 .calendar-month-controls {
     align-items: end;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.5rem;
     grid-area: navigation;
     justify-content: flex-start;
     max-width: 100%;
     width: max-content;
+}
+
+.calendar-month-controls .btn {
+    flex: 0 0 auto;
 }
 
 .calendar-month-field {
@@ -86,8 +90,13 @@
 }
 
 .recurring-period-controls {
-    justify-content: flex-end;
-    width: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    width: max-content;
+}
+
+.recurring-period-controls .btn {
+    flex: 0 0 auto;
 }
 
 .recurring-summary-layout {
@@ -105,6 +114,49 @@
 
 .recurring-secondary-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.insight-carousel {
+    align-items: center;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.insight-carousel-inner {
+    min-width: 0;
+}
+
+.insight-carousel-control {
+    align-items: center;
+    align-self: center;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    color: var(--app-text);
+    display: grid;
+    height: 2.5rem;
+    justify-content: center;
+    place-items: center;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    width: 2.5rem;
+}
+
+.insight-carousel-control:hover,
+.insight-carousel-control:focus {
+    background: var(--app-accent-soft);
+    border-color: var(--app-accent);
+    color: var(--app-heading);
+}
+
+.insight-carousel-control:focus-visible {
+    box-shadow: var(--focus-shadow);
+    outline: none;
+}
+
+.insight-carousel-control .bi {
+    font-size: 1.05rem;
+    line-height: 1;
 }
 
 .recurring-metric-carousel {
@@ -616,7 +668,13 @@
     }
 
     .recurring-period-controls {
+        flex-wrap: wrap;
         justify-content: flex-start;
+        width: 100%;
+    }
+
+    .calendar-control-row .calendar-month-controls {
+        flex-wrap: wrap;
         width: 100%;
     }
 }

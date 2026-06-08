@@ -71,6 +71,16 @@ def test_interactive_table_rows_have_keyboard_semantics():
     assert 'event.key !== "Enter" && event.key !== " "' in tables_js
 
 
+def test_flatpickr_initializers_use_document_and_cleanup_instances():
+    """Verify date controls initialize on DOM ready and are cleaned before AJAX swaps."""
+    dates_js = read_script("dates.js")
+    recurring_js = read_script("recurring.js")
+
+    assert 'document.addEventListener("DOMContentLoaded", () => setupFlatpickrInputs())' in dates_js
+    assert "input.financeFlatpickr = flatpickr(input" in dates_js
+    assert "destroyDynamicFlatpickr(currentDynamic)" in recurring_js
+
+
 def test_comparison_tabs_preserve_active_view_in_url():
     """Verify comparison top-level tab switches update the refreshable view query."""
     comparison_js = read_script("comparison.js")
