@@ -1,11 +1,6 @@
 """Route tests for authentication and authorization."""
 
 from sqlalchemy import text
-from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_OWNER, USER_ROLE_VIEWER
-from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.core.filters import format_datetime
-from finance_app.modules.auth import repository as auth_repository
-from finance_app.modules.auth.service import create_managed_user, hash_password, utc_now
 from tests.support.html import (
     assert_input,
     assert_no_element,
@@ -13,6 +8,12 @@ from tests.support.html import (
     assert_visible_text,
 )
 from tests.support.web import set_csrf_token
+
+from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_OWNER, USER_ROLE_VIEWER
+from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.core.filters import format_datetime
+from finance_app.modules.auth import repository as auth_repository
+from finance_app.modules.auth.service import create_managed_user, hash_password, utc_now
 
 VIEWER_PASSWORD = "ViewerPass123!"
 

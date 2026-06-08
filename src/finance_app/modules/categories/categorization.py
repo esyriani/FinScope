@@ -12,15 +12,15 @@ from finance_app.modules.categories.decision import (
     combine_confidence,
     evidence_decision_source,
 )
+from finance_app.modules.categories.history import (
+    retrieve_historical_decision,
+)
 from finance_app.modules.categories.llm import classify_unknowns_with_llm
 from finance_app.modules.categories.repository import (
     get_category_options,
     get_category_rules,
     normalize_category,
     resolve_category_id,
-)
-from finance_app.modules.categories.history import (
-    retrieve_historical_decision,
 )
 from finance_app.modules.categories.rules_matching import (
     merchant_category_cache_key,

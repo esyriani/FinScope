@@ -5,8 +5,9 @@ from datetime import date
 
 from finance_app.core.money import money_to_float, rounded_money_float
 from finance_app.modules.merchants.repository import merchant_identity_from_row
-from .urls import transactions_url
+
 from .constants import HEATMAP_OPTIONS, UNMATCHED_RECURRING_STATUSES
+from .urls import transactions_url
 
 
 def build_calendar_transactions(rows, conn=None):

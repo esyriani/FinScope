@@ -21,6 +21,8 @@ from finance_app.modules.comparison.parsing import (
 )
 from finance_app.modules.comparison.presenter import (
     build_category_comparison,
+    build_monthly_spending,
+    build_monthly_spending_statistics,
     build_period_category_history,
     build_period_category_rows,
     build_period_filter_context,
@@ -33,8 +35,6 @@ from finance_app.modules.comparison.presenter import (
     build_period_unknown_warning,
     build_year_filter_context,
     build_year_unknown_warning,
-    build_monthly_spending,
-    build_monthly_spending_statistics,
     period_comparison_ranges,
 )
 from finance_app.modules.comparison.queries import (

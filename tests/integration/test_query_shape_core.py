@@ -11,8 +11,8 @@ from werkzeug.datastructures import MultiDict
 
 from finance_app.database import engine as engine_module
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.calendar.queries import fetch_month_transactions
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.comparison.queries import fetch_period_summary
 from finance_app.modules.dashboard.queries import fetch_spending_by_category
 from finance_app.modules.review.queries import review_candidate_rows

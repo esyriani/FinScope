@@ -10,6 +10,8 @@ from sqlalchemy import func, insert, select, update
 from finance_app.core.constants import USER_ROLE_OWNER
 from finance_app.database.tables import (
     user_settings as user_settings_table,
+)
+from finance_app.database.tables import (
     users as users_table,
 )
 

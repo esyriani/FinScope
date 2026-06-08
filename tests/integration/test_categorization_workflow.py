@@ -2,9 +2,10 @@
 
 import json
 
+from tests.support.database import insert_rule, insert_transaction
+
 from finance_app.modules.categories import categorization
 from finance_app.modules.categories.categorization import categorize_transactions
-from tests.support.database import insert_rule, insert_transaction
 
 
 def insert_historical_transaction(

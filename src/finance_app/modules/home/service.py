@@ -22,13 +22,19 @@ from finance_app.core.periods import PERIOD_CUSTOM
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     statements as statements_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
-from finance_app.modules.calendar.service import build_recurring_activity_context
-from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.auth.permissions import (
     PERMISSION_EDIT_TRANSACTIONS,
     PERMISSION_IMPORT_STATEMENTS,
@@ -36,6 +42,7 @@ from finance_app.modules.auth.permissions import (
     PERMISSION_MANAGE_RULES,
     current_user_can,
 )
+from finance_app.modules.calendar.service import build_recurring_activity_context
 from finance_app.modules.comparison.service import build_period_comparison
 from finance_app.modules.comparison.urls import build_comparison_url
 from finance_app.modules.dashboard.urls import dashboard_transactions_url
@@ -43,6 +50,7 @@ from finance_app.modules.recurring.service import build_recurring_summary
 from finance_app.modules.review.service import review_groups, review_summary
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 from finance_app.modules.transactions.constants import AMOUNT_TYPE_SPENDING, IGNORED_FILTER_ACTIVE
+from finance_app.modules.users import repository as user_repository
 
 RECENT_ACTIVITY_LIMIT = 5
 SUGGESTED_ACTION_LIMIT = 4
@@ -186,7 +194,7 @@ def build_user_sharing_context(conn):
     if not has_request_context() or not getattr(current_user, "is_authenticated", False):
         return {"message": "", "params": {}}
 
-    users = [dict(row) for row in auth_repository.list_users(conn) if row["is_active"]]
+    users = [dict(row) for row in user_repository.list_users(conn) if row["is_active"]]
     owner = next((user for user in users if user["role"] == "owner"), None)
     current_user_id = int(current_user.id)
     others = [user for user in users if int(user["id"]) != current_user_id]

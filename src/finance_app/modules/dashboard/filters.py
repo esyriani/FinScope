@@ -7,20 +7,22 @@ from sqlalchemy import exists, func, or_, select
 from finance_app.core.constants import FILTER_MODE_INCLUDE, FILTER_MODES
 from finance_app.core.periods import DEFAULT_DATE_PERIOD, PERIOD_CUSTOM, normalize_date_period, parse_iso_date
 from finance_app.core.query import parse_sort_direction
-from finance_app.database.tables import merchants as merchants_table, transactions as transactions_table
+from finance_app.database.tables import merchants as merchants_table
+from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 
 from .constants import (
-    DASHBOARD_CATEGORY_SORTS,
+    DASHBOARD_BREAKDOWN_CATEGORY,
+    DASHBOARD_BREAKDOWN_OPTIONS,
+    DASHBOARD_BREAKDOWN_TAG,
     DASHBOARD_CATEGORY_SORT_CATEGORY,
     DASHBOARD_CATEGORY_SORT_SPENDING,
-    DASHBOARD_BREAKDOWN_CATEGORY,
-    DASHBOARD_BREAKDOWN_TAG,
-    DASHBOARD_BREAKDOWN_OPTIONS,
-    DASHBOARD_MERCHANT_SORTS,
+    DASHBOARD_CATEGORY_SORTS,
     DASHBOARD_MERCHANT_SORT_CATEGORY,
     DASHBOARD_MERCHANT_SORT_MERCHANT,
     DASHBOARD_MERCHANT_SORT_SPENDING,
+    DASHBOARD_MERCHANT_SORTS,
+    QUICK_VIEW_ALL,
     QUICK_VIEW_CATEGORIZED,
     QUICK_VIEW_CUSTOM,
     QUICK_VIEW_NEEDS_REVIEW,

@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from finance_app.core.constants import (
-    CATEGORY_SOURCES,
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
     CATEGORY_SOURCE_UNKNOWN,
+    CATEGORY_SOURCES,
 )
 from finance_app.modules.categories.decision import (
     DECISION_SOURCE_MANUAL,

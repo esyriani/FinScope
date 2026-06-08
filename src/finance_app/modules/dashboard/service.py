@@ -4,11 +4,6 @@ from dataclasses import dataclass
 
 from finance_app.core.constants import FILTER_MODE_INCLUDE, UNKNOWN_CATEGORY
 from finance_app.core.money import money_to_float, rounded_money_float
-from finance_app.modules.categories.service import get_category_options
-from finance_app.modules.categories.tag_filters import has_concrete_tag_filter
-from finance_app.modules.categories.taxonomy import get_tag_option_rows
-from finance_app.database.engine import db_core_transaction
-from finance_app.database.tables import transactions as transactions_table
 from finance_app.core.periods import (
     DATE_PERIOD_OPTIONS,
     PERIOD_CUSTOM,
@@ -16,31 +11,26 @@ from finance_app.core.periods import (
     get_period_label,
     period_start_date,
 )
+from finance_app.core.query import CoreFilters
+from finance_app.database.engine import db_core_transaction
+from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.categories.service import get_category_options
+from finance_app.modules.categories.tag_filters import has_concrete_tag_filter
+from finance_app.modules.categories.taxonomy import get_tag_option_rows
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 from finance_app.modules.transactions.constants import AMOUNT_TYPE_CREDIT, AMOUNT_TYPE_INCOME, AMOUNT_TYPE_SPENDING
-from finance_app.core.query import CoreFilters
-from .filters import (
-    apply_dashboard_dimension_filters,
-    apply_quick_view_core_filter,
-    parse_dashboard_request,
-)
-from .urls import dashboard_month_url, dashboard_table_sort_url, dashboard_url
-from .queries import (
-    fetch_merchant_analytics,
-    fetch_monthly_expenses,
-    fetch_monthly_income,
-    fetch_monthly_net,
-    fetch_quick_view_counts,
-    fetch_spending_by_category,
-    fetch_spending_by_tag,
-    fetch_summary,
-)
+
 from .constants import (
     DASHBOARD_BREAKDOWN_CATEGORY,
     DASHBOARD_BREAKDOWN_TAG,
     DASHBOARD_INCOME_CATEGORY,
     DASHBOARD_TABLE_CATEGORY,
     DASHBOARD_TABLE_MERCHANT,
+)
+from .filters import (
+    apply_dashboard_dimension_filters,
+    apply_quick_view_core_filter,
+    parse_dashboard_request,
 )
 from .presenter import (
     attach_data_quality_urls,
@@ -54,6 +44,17 @@ from .presenter import (
     sort_category_rows,
     sort_merchant_rows,
 )
+from .queries import (
+    fetch_merchant_analytics,
+    fetch_monthly_expenses,
+    fetch_monthly_income,
+    fetch_monthly_net,
+    fetch_quick_view_counts,
+    fetch_spending_by_category,
+    fetch_spending_by_tag,
+    fetch_summary,
+)
+from .urls import dashboard_month_url, dashboard_table_sort_url, dashboard_url
 
 
 @dataclass(frozen=True)

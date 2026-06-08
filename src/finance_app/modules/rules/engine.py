@@ -12,21 +12,12 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_TRANSFER,
     TRANSFER_CATEGORY,
 )
+from finance_app.core.filters import format_money
 from finance_app.core.money import money_to_float
-from finance_app.modules.categories.sources import (
-    CATEGORY_SOURCE_RULE,
-    TransactionCategoryChange,
-    TransactionCategorySnapshot,
-    TransactionCategoryState,
-    category_assignment,
-)
-from finance_app.modules.categories.decision import DECISION_SOURCE_RULE
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.taxonomy import (
-    get_transaction_tag_names,
-    set_transaction_tags,
-)
+from finance_app.modules.categories.decision import DECISION_SOURCE_RULE
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.service import (
     get_category_options,
     get_category_rules,
@@ -36,8 +27,17 @@ from finance_app.modules.categories.service import (
     normalize_merchant_description,
     rule_amount_matches,
 )
-from finance_app.modules.categories.repository import resolve_category_id
-from finance_app.core.filters import format_money
+from finance_app.modules.categories.sources import (
+    CATEGORY_SOURCE_RULE,
+    TransactionCategoryChange,
+    TransactionCategorySnapshot,
+    TransactionCategoryState,
+    category_assignment,
+)
+from finance_app.modules.categories.taxonomy import (
+    get_transaction_tag_names,
+    set_transaction_tags,
+)
 from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.merchants.repository import row_value
 from finance_app.modules.merchants.sql_filters import (

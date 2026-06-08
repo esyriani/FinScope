@@ -6,19 +6,20 @@ from sqlalchemy import case, select, update
 
 from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_MANUAL,
+    CATEGORY_SOURCE_UNKNOWN,
     TRANSACTION_KIND_EXPENSE,
     TRANSACTION_KIND_INCOME,
     TRANSACTION_KIND_REFUND,
     TRANSACTION_KIND_TRANSFER,
     TRANSFER_CATEGORY,
-    CATEGORY_SOURCE_UNKNOWN,
 )
 from finance_app.core.money import money_to_float, optional_money_to_float
-from finance_app.database.tables import accounts as accounts_table, transactions as transactions_table
+from finance_app.database.tables import accounts as accounts_table
+from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.repository import resolve_category_id
+from finance_app.modules.categories.service import save_category_rule
 from finance_app.modules.categories.sources import category_metadata_json, manual_category_assignment, utc_timestamp
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names, set_transaction_tags
-from finance_app.modules.categories.service import save_category_rule
 
 
 @dataclass(frozen=True)

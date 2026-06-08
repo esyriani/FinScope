@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from decimal import InvalidOperation
 from difflib import SequenceMatcher
 
-from finance_app.core.text import strip_accents
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTION_CREDIT,
@@ -13,6 +12,7 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_MANUAL,
 )
 from finance_app.core.money import money_to_float, quantize_money
+from finance_app.core.text import strip_accents
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
 

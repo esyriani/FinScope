@@ -1,13 +1,15 @@
 """Tests for recurring pattern routes and persistence helpers."""
 
-from sqlalchemy import text
 from datetime import date
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
+from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_HEADER_NAME
 from finance_app.modules.calendar.presenter import build_recurring_activity_json
+from finance_app.modules.merchants.repository import get_or_create_merchant_for_name
 from finance_app.modules.recurring.forms import parse_expected_day, recurring_pattern_payload
 from finance_app.modules.recurring.patterns import (
     get_recurring_pattern,
@@ -26,8 +28,6 @@ from finance_app.modules.recurring.service import (
     recurring_empty_state_message,
     recurring_status_detail,
 )
-from finance_app.modules.merchants.repository import get_or_create_merchant_for_name
-from tests.support.web import set_csrf_token
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

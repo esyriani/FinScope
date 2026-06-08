@@ -1,7 +1,9 @@
 """Shared context service test data builders."""
 
+from datetime import date as real_date
+from datetime import timedelta
+
 from sqlalchemy import text
-from datetime import date as real_date, timedelta
 
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 

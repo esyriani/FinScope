@@ -1,11 +1,8 @@
 """Integration tests for upload AI workflow handoffs."""
 
-from sqlalchemy import text
 import json
 
-from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.modules.categories.taxonomy import get_transaction_tag_names
-from finance_app.modules.upload import workflow as upload_workflow
+from sqlalchemy import text
 from tests.support.upload import (
     assert_llm_progress_log_entries,
     assert_llm_progress_updates,
@@ -15,6 +12,10 @@ from tests.support.upload import (
     set_auto_llm_categorization,
 )
 from tests.support.web import set_csrf_token
+
+from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.modules.categories.taxonomy import get_transaction_tag_names
+from finance_app.modules.upload import workflow as upload_workflow
 
 
 def test_import_statement_job_queues_llm_categorization_for_unknowns(app, core_conn, monkeypatch):

@@ -1,15 +1,20 @@
 """Tests for transaction list service context behavior."""
 
-from sqlalchemy import text
 import json
 
+from sqlalchemy import insert, select, text, update
 from werkzeug.datastructures import MultiDict
-from sqlalchemy import insert, select, update
 
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
+)
+from finance_app.database.tables import (
     user_settings as user_settings_table,
+)
+from finance_app.database.tables import (
     users as users_table,
 )
 from finance_app.modules.categories.repository import resolve_category_id

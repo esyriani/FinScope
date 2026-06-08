@@ -1,6 +1,7 @@
 """SQLAlchemy Core tests for category taxonomy helpers."""
 
 from sqlalchemy import text
+
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,

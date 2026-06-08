@@ -4,16 +4,15 @@ from flask import url_for
 
 from finance_app.core.i18n import gettext
 from finance_app.core.money import format_money_display, money_to_float, rounded_money_float
+from finance_app.modules.categories.service import (
+    normalize_merchant_description,
+    rule_amount_matches,
+)
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
-)
-from finance_app.modules.categories.service import (
-    get_category_rules,
-    normalize_merchant_description,
-    rule_amount_matches,
 )
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.transactions.constants import (
@@ -26,7 +25,7 @@ from finance_app.modules.transactions.constants import (
     REVIEW_FILTER_NEEDS_REVIEW,
     REVIEW_FILTER_VERIFIED,
 )
-from .urls import app_url, dashboard_transactions_url
+
 from .constants import (
     DASHBOARD_BREAKDOWN_TAG,
     DASHBOARD_CATEGORY_SORT_CATEGORY,
@@ -43,6 +42,7 @@ from .constants import (
     QUICK_VIEW_NEEDS_REVIEW,
     QUICK_VIEW_UNKNOWN,
 )
+from .urls import app_url, dashboard_transactions_url
 
 
 def build_quick_view_options(active_view, counts):

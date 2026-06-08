@@ -7,8 +7,12 @@ Callers own transaction boundaries through the central database helpers.
 from sqlalchemy import delete, insert, select
 
 from finance_app.database.tables import (
-    statements as statements_table,
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
+    statements as statements_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.statements.importer import get_file_extension, normalize_date_order

@@ -12,7 +12,6 @@ from sqlalchemy.exc import IntegrityError
 from finance_app.core.config import sqlite_database_url
 from finance_app.database import connection as connection_module
 from finance_app.database import engine as engine_module
-from finance_app.database.tables import categories as categories_table
 from finance_app.database.engine import (
     create_database_engine,
     db_core_transaction,
@@ -22,6 +21,7 @@ from finance_app.database.engine import (
     get_database_engine,
     register_core_db,
 )
+from finance_app.database.tables import categories as categories_table
 
 
 @pytest.fixture(autouse=True)

@@ -9,6 +9,8 @@ from sqlalchemy import delete, func, select, update
 from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
 from finance_app.database.tables import (
     statements as statements_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.repository import resolve_category_id

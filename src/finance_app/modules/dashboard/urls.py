@@ -13,18 +13,18 @@ from finance_app.modules.transactions.constants import (
     REVIEW_FILTER_NEEDS_REVIEW,
 )
 
-from .filters import dashboard_table_default_direction, parse_dashboard_table_sort
 from .constants import (
-    DASHBOARD_CATEGORY_SORTS,
     DASHBOARD_CATEGORY_SORT_SPENDING,
-    DASHBOARD_TABLE_MERCHANT,
-    DASHBOARD_MERCHANT_SORTS,
+    DASHBOARD_CATEGORY_SORTS,
     DASHBOARD_MERCHANT_SORT_SPENDING,
+    DASHBOARD_MERCHANT_SORTS,
+    DASHBOARD_TABLE_MERCHANT,
     QUICK_VIEW_ALL,
     QUICK_VIEW_CATEGORIZED,
     QUICK_VIEW_NEEDS_REVIEW,
     QUICK_VIEW_UNKNOWN,
 )
+from .filters import dashboard_table_default_direction, parse_dashboard_table_sort
 
 
 def app_url(endpoint, **params):

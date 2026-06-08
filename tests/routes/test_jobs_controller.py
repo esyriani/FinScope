@@ -1,12 +1,12 @@
 """Route tests for the background jobs feature."""
 
-from sqlalchemy import text
 import pytest
+from sqlalchemy import text
+from tests.support.web import set_csrf_token
 
 from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.core.filters import format_datetime
-from tests.support.web import set_csrf_token
 
 
 class CapturingExecutor:

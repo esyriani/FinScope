@@ -6,9 +6,9 @@ from math import log2, sqrt
 
 from finance_app.core.i18n import format_month_year, gettext
 from finance_app.core.money import format_money_display, money_to_float, rounded_money_float
+from finance_app.modules.comparison.constants import UNKNOWN_WARNING_THRESHOLD
 from finance_app.modules.comparison.statistics import build_descriptive_statistics, robust_anomaly_score
 from finance_app.modules.merchants.normalization import normalize_merchant
-from finance_app.modules.comparison.constants import UNKNOWN_WARNING_THRESHOLD
 
 DEFAULT_INSIGHT_CARD_LIMIT = 7
 DEFAULT_RANKED_INSIGHT_MIN_SCORE = 10.0

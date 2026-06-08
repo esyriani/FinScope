@@ -5,10 +5,17 @@ from pathlib import Path
 from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, url_for
 
 from finance_app.background.runner import submit_background_job
-from finance_app.core.i18n import gettext
-from finance_app.modules.auth.permissions import PERMISSION_MANAGE_RULES, permission_required
 from finance_app.core.config import settings
+from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
+from finance_app.modules.auth.permissions import PERMISSION_MANAGE_RULES, permission_required
+from finance_app.modules.rules.audit_presenter import (
+    build_rule_audit_context,
+    build_rule_change_preview_context,
+    build_rule_detail_context,
+    build_rule_import_preview_context,
+    build_rule_overlap_detail_context,
+)
 from finance_app.modules.rules.engine import (
     apply_all_rules_job,
     apply_rule_where_it_wins_to_transactions,
@@ -23,24 +30,19 @@ from finance_app.modules.rules.import_export import (
     import_rules_job,
     undo_import_rules_job,
 )
-from finance_app.modules.rules.audit_presenter import (
-    build_rule_audit_context,
-    build_rule_change_preview_context,
-    build_rule_import_preview_context,
-    build_rule_detail_context,
-    build_rule_overlap_detail_context,
-)
 from finance_app.modules.rules.listing import build_rules_context
-from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.modules.rules.service import (
     approve_automatic_rule,
     count_rule_transaction_references,
     create_rule_from_form,
-    delete_rule as delete_rule_record,
     get_rule_for_apply,
     preview_rule_from_form,
     update_rule_from_form,
 )
+from finance_app.modules.rules.service import (
+    delete_rule as delete_rule_record,
+)
+from finance_app.modules.settings.runtime import get_int_setting
 
 rules_bp = Blueprint("rules", __name__)
 

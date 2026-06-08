@@ -1,11 +1,12 @@
 """Route tests for transaction mutation endpoints."""
 
 from sqlalchemy import text
-from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
 from tests.support.database import insert_transaction as insert_test_transaction
 from tests.support.html import assert_visible_text
 from tests.support.web import set_csrf_token
+
+from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
 
 
 def insert_route_transaction(conn, fingerprint="route-tx", category="UNKNOWN", needs_review=1):

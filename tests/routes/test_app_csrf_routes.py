@@ -1,10 +1,11 @@
 """CSRF protection tests against real application routes."""
 
 from sqlalchemy import text
-from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_HEADER_NAME
-from finance_app.modules.recurring.patterns import get_recurring_pattern
 from tests.support.html import assert_visible_text
 from tests.support.web import set_csrf_token
+
+from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_HEADER_NAME
+from finance_app.modules.recurring.patterns import get_recurring_pattern
 
 
 def category_count(conn, name):

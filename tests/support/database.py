@@ -23,15 +23,32 @@ from finance_app.core.constants import (
 )
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
     statements as statements_table,
+)
+from finance_app.database.tables import (
     tags as tags_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
+)
+from finance_app.database.tables import (
     user_settings as user_settings_table,
+)
+from finance_app.database.tables import (
     users as users_table,
 )
+from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import (
     set_rule_tags,
@@ -39,7 +56,6 @@ from finance_app.modules.categories.taxonomy import (
     upsert_tag_metadata,
 )
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_description
-from finance_app.modules.auth import repository as auth_repository
 
 UNIQUE_COUNTER = count(1)
 

@@ -8,7 +8,11 @@ from finance_app.core.constants import NON_REPORTABLE_TRANSACTION_KINDS
 from finance_app.core.periods import shift_months
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.tag_filters import transaction_tag_condition

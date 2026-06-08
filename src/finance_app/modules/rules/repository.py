@@ -5,9 +5,17 @@ from sqlalchemy import and_, delete, func, insert, select
 from finance_app.core.money import optional_money_to_float
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     categories as categories_table,
+)
+from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.repository import (
@@ -16,8 +24,8 @@ from finance_app.modules.categories.repository import (
     normalize_rule_direction,
     resolve_category_id,
 )
-from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
 from finance_app.modules.categories.service import create_category
+from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
 from finance_app.modules.merchants.repository import find_merchant_by_name, get_or_create_merchant_for_name
 
 

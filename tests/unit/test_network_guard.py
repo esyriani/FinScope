@@ -7,7 +7,6 @@ external APIs such as LLM providers without an injected fake.
 import socket
 
 import pytest
-
 from tests.support.network import NetworkAccessBlockedError
 
 

@@ -1,16 +1,16 @@
 """Service-level tests for calendar page context behavior."""
 
-from sqlalchemy import text
 from datetime import date as real_date
 
+from sqlalchemy import text
 from werkzeug.datastructures import MultiDict
 
-from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
-from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.calendar import parsing as calendar_parsing
 from finance_app.modules.calendar import presenter as calendar_presenter
 from finance_app.modules.calendar import recurrence as calendar_recurrence
 from finance_app.modules.calendar import service as calendar_service
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
+from finance_app.modules.categories.taxonomy import set_transaction_tags
 
 
 class FixedDate(real_date):

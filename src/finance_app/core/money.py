@@ -5,7 +5,7 @@ uses decimal-compatible schema types, while read models can explicitly convert
 amounts to floats for JSON payloads and existing presentation code.
 """
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from finance_app.core.config import settings
 

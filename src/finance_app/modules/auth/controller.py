@@ -9,17 +9,19 @@ from finance_app.modules.auth.permissions import owner_required
 from finance_app.modules.auth.service import (
     authenticate_user,
     bootstrap_owner,
-    change_password as change_user_password,
     change_user_role,
     create_managed_user,
     get_user_account,
-    has_owner_account,
     hand_off_ownership,
+    has_owner_account,
     list_managed_users,
     load_login_user,
     reset_user_password,
     set_user_active,
     update_own_display_name,
+)
+from finance_app.modules.auth.service import (
+    change_password as change_user_password,
 )
 
 auth_bp = Blueprint("auth", __name__)

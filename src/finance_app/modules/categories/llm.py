@@ -15,11 +15,19 @@ from finance_app.core.constants import (
 )
 from finance_app.core.money import optional_money_to_float
 from finance_app.modules.categories.decision import (
-    FinalCategoryDecision,
     MEDIUM_CONFIDENCE_THRESHOLD,
+    FinalCategoryDecision,
     apply_review_policy,
     combine_confidence,
     evidence_decision_source,
+)
+from finance_app.modules.categories.llm_prompts import (
+    build_llm_prompt,
+    build_llm_system_prompt,
+)
+from finance_app.modules.categories.llm_taxonomy import (
+    prepare_llm_candidate_taxonomies,
+    taxonomy_ids_for_names,
 )
 from finance_app.modules.categories.repository import (
     get_category_options,
@@ -33,14 +41,6 @@ from finance_app.modules.categories.taxonomy import (
     get_category_rows,
     get_tag_options,
     get_tag_rows,
-)
-from finance_app.modules.categories.llm_prompts import (
-    build_llm_prompt,
-    build_llm_system_prompt,
-)
-from finance_app.modules.categories.llm_taxonomy import (
-    prepare_llm_candidate_taxonomies,
-    taxonomy_ids_for_names,
 )
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 from finance_app.modules.settings.runtime import get_float_setting, get_setting

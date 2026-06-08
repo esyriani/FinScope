@@ -1,12 +1,13 @@
 """SQLAlchemy Core tests for rules repository helpers."""
 
-from sqlalchemy import text
-from sqlalchemy import delete, insert
+from sqlalchemy import delete, insert, text
 
 from finance_app.database.dates import format_utc_datetime
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.repository import resolve_category_id

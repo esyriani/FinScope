@@ -1,6 +1,7 @@
 """Tests for transaction repository behavior."""
 
 import json
+
 import pytest
 from sqlalchemy import insert, select, update
 

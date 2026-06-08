@@ -10,15 +10,12 @@ from sqlalchemy import func, insert, select, update
 from finance_app.core.constants import USER_ROLE_OWNER
 from finance_app.database.tables import (
     audit_log as audit_log_table,
+)
+from finance_app.database.tables import (
     users as users_table,
 )
 from finance_app.modules.users.repository import (
     USER_COLUMNS,
-    get_first_active_owner,
-    get_user_setting,
-    get_user_settings,
-    list_users,
-    upsert_user_setting,
 )
 
 

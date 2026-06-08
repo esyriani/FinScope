@@ -1,15 +1,14 @@
 """Tests for parser-backed HTML assertion helpers."""
 
 import pytest
-
 from tests.support.html import (
     assert_asset_reference,
     assert_form,
     assert_has_element,
     assert_input,
     assert_link,
-    assert_no_element,
     assert_no_asset_reference,
+    assert_no_element,
     assert_not_visible_text,
     assert_option,
     assert_visible_text,

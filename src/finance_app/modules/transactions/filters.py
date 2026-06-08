@@ -13,11 +13,15 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_TRANSFER,
 )
 from finance_app.core.periods import DEFAULT_DATE_PERIOD, normalize_date_period, parse_iso_date, period_start_date
-from finance_app.core.reporting import spending_impact_clause
 from finance_app.core.query import CoreFilters, parse_page, parse_sort_direction, resolve_sort
+from finance_app.core.reporting import spending_impact_clause
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
@@ -28,8 +32,8 @@ from finance_app.modules.merchants.sql_filters import (
     merchant_identity_candidates,
 )
 from finance_app.modules.transactions.constants import (
-    AMOUNT_TYPE_FILTERS,
     AMOUNT_TYPE_CREDIT,
+    AMOUNT_TYPE_FILTERS,
     AMOUNT_TYPE_INCOME,
     AMOUNT_TYPE_PAYMENT,
     AMOUNT_TYPE_SPENDING,
@@ -43,8 +47,8 @@ from finance_app.modules.transactions.constants import (
     IGNORED_FILTERS,
     REVIEW_FILTER_NEEDS_REVIEW,
     REVIEW_FILTER_PENDING_APPROVAL,
-    REVIEW_FILTERS,
     REVIEW_FILTER_VERIFIED,
+    REVIEW_FILTERS,
     TRANSACTION_SORT_ACCOUNT,
     TRANSACTION_SORT_AMOUNT,
     TRANSACTION_SORT_CATEGORY,

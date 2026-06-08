@@ -1,17 +1,9 @@
 """Route tests for the rules feature."""
 
-from sqlalchemy import text
 import csv
 import io
 
-import pytest
-
-from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.core.filters import format_datetime
-from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
-from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
-from finance_app.modules.rules import controller as rules_controller
-from finance_app.modules.rules.import_export import import_rules_job, undo_import_rules_job
+from sqlalchemy import text
 from tests.support.database import insert_merchant, insert_rule
 from tests.support.html import (
     assert_form,
@@ -26,6 +18,13 @@ from tests.support.html import (
 from tests.support.jobs import capture_background_jobs
 from tests.support.rules import rule_by_id
 from tests.support.web import set_csrf_token
+
+from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.core.filters import format_datetime
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
+from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
+from finance_app.modules.rules import controller as rules_controller
+from finance_app.modules.rules.import_export import import_rules_job, undo_import_rules_job
 
 
 def test_rules_create_route_persists_rule_and_tags(client, core_conn):

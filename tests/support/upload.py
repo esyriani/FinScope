@@ -6,6 +6,7 @@ settings fixtures are present.
 """
 
 from sqlalchemy import text
+
 from finance_app.modules.upload import workflow as upload_workflow
 
 

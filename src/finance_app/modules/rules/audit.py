@@ -19,17 +19,21 @@ from finance_app.core.constants import (
 from finance_app.core.money import money_to_float
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
-from finance_app.modules.categories.service import get_category_rules
-from finance_app.modules.categories.taxonomy import get_transaction_tags_by_id
 from finance_app.modules.categories.rules_matching import (
     ScoredRuleMatch,
     rule_specificity,
     score_category_rule_matches,
     select_winning_rule_match,
 )
+from finance_app.modules.categories.service import get_category_rules
+from finance_app.modules.categories.taxonomy import get_transaction_tags_by_id
 from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.settings.runtime import get_unknown_category
 

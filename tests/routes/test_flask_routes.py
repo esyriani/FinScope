@@ -1,17 +1,15 @@
 """Route-level tests for the Flask application."""
 
-from sqlalchemy import text
-from datetime import date as real_date
 import re
+from datetime import date as real_date
 
-from finance_app.modules.comparison import service as comparison_service
-from finance_app.modules.home import service as home_service
+from sqlalchemy import text
 from tests.support.html import (
     assert_asset_reference,
     assert_has_element,
     assert_markup,
-    assert_no_element,
     assert_no_asset_reference,
+    assert_no_element,
     assert_not_markup,
     assert_not_visible_text,
     assert_visible_text,
@@ -19,6 +17,9 @@ from tests.support.html import (
     response_html,
     visible_html,
 )
+
+from finance_app.modules.comparison import service as comparison_service
+from finance_app.modules.home import service as home_service
 
 
 class FixedDate(real_date):

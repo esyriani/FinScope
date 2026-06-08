@@ -5,7 +5,11 @@ from sqlalchemy import case, select
 from finance_app.core.constants import CATEGORY_RULE_DIRECTION_ANY, CATEGORY_RULE_SOURCE_MANUAL
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id

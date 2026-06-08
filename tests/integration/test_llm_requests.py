@@ -6,12 +6,13 @@ avoid network calls and focus on parsing, error handling, and log sanitization.
 
 import logging
 
-from finance_app.modules.categories import llm
 from tests.support.llm import (
     openai_error_response,
     openai_invalid_json_response,
     openai_json_response,
 )
+
+from finance_app.modules.categories import llm
 
 
 def test_request_llm_categories_parses_mocked_openai_json():

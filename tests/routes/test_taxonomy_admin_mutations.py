@@ -1,10 +1,10 @@
 """Route and service tests for taxonomy admin mutations."""
 
 from sqlalchemy import text
-
-from finance_app.core.csrf import CSRF_FIELD_NAME
 from tests.support.html import assert_not_markup, assert_not_visible_text, assert_visible_text
 from tests.support.web import set_csrf_token
+
+from finance_app.core.csrf import CSRF_FIELD_NAME
 
 
 def insert_category(conn, name):

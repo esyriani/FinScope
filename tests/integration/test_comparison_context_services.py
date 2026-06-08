@@ -1,15 +1,15 @@
 """Service-level context tests for comparison pages."""
 
 from sqlalchemy import text
-from werkzeug.datastructures import MultiDict
-
-from finance_app.modules.comparison import service as comparison_service
 from tests.support.context_services import (
     FixedDate,
     seed_comparison_unknown_warning_data,
     seed_reimbursable_comparison_data,
     seed_reporting_data,
 )
+from werkzeug.datastructures import MultiDict
+
+from finance_app.modules.comparison import service as comparison_service
 
 
 def test_comparison_context_year_and_period_metrics(app, core_conn, monkeypatch):

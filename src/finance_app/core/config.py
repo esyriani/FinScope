@@ -1,8 +1,8 @@
 """Configuration loading helpers."""
 
+import os
 from configparser import ConfigParser
 from dataclasses import dataclass
-import os
 from pathlib import Path
 from urllib.parse import quote, unquote
 

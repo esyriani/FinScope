@@ -6,8 +6,8 @@ this module; runtime code loads and renders it with taxonomy rows, rule
 metadata, and settings.
 """
 
-from functools import lru_cache
 import json
+from functools import lru_cache
 from pathlib import Path
 from string import Template
 
@@ -18,9 +18,9 @@ from finance_app.core.constants import (
 )
 from finance_app.core.money import money_to_decimal
 from finance_app.modules.categories.decision import HIGH_CONFIDENCE_THRESHOLD
+from finance_app.modules.categories.llm_taxonomy import semantic_tokens
 from finance_app.modules.categories.repository import normalize_category
 from finance_app.modules.categories.taxonomy import normalize_tag_names
-from finance_app.modules.categories.llm_taxonomy import semantic_tokens
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
 MAX_PROMPT_MANUAL_RULES = 50

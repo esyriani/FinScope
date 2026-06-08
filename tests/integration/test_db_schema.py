@@ -26,14 +26,30 @@ from finance_app.database import connection as connection_module
 from finance_app.database.seeds import seed_category_taxonomy_defaults
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     allowed_values_check_sql,
-    categories as categories_table,
-    category_rules as category_rules_table,
-    merchants as merchants_table,
     metadata,
+)
+from finance_app.database.tables import (
+    categories as categories_table,
+)
+from finance_app.database.tables import (
+    category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
+    merchants as merchants_table,
+)
+from finance_app.database.tables import (
     recurring_patterns as recurring_patterns_table,
+)
+from finance_app.database.tables import (
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
+)
+from finance_app.database.tables import (
     users as users_table,
 )
 from finance_app.modules.categories.service import rename_category

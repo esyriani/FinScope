@@ -4,9 +4,9 @@ Coordinates password hashing, login state, lockout handling, owner bootstrap,
 and owner-managed user changes on top of SQLAlchemy Core repositories.
 """
 
-from datetime import datetime, timedelta, timezone
 import secrets
 import string
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
@@ -22,6 +22,7 @@ from finance_app.database.dates import coerce_utc_datetime
 from finance_app.database.engine import db_core_connection, db_core_transaction
 from finance_app.modules.auth import repository
 from finance_app.modules.auth.models import AuthenticatedUser
+from finance_app.modules.users import repository as user_repository
 
 AUTH_OPERATIONAL_ERRORS = (SqlAlchemyOperationalError,)
 AUTH_INTEGRITY_ERRORS = (SqlAlchemyIntegrityError,)
@@ -334,7 +335,7 @@ def change_password(user_id, current_password, new_password, confirm_password, i
 def list_managed_users():
     """Return all users for the owner user-management page."""
     with db_core_connection() as conn:
-        return [display_user_row(row) for row in repository.list_users(conn)]
+        return [display_user_row(row) for row in user_repository.list_users(conn)]
 
 
 def update_own_display_name(user_id, display_name, actor=None, ip_address=None):

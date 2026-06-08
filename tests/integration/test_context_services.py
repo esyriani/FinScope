@@ -1,10 +1,6 @@
 """Service-level context tests for dashboard pages."""
 
 from sqlalchemy import text
-from werkzeug.datastructures import MultiDict
-
-from finance_app.modules.categories.taxonomy import set_transaction_tags
-from finance_app.modules.dashboard.service import build_dashboard_context
 from tests.support.context_services import (
     category_totals,
     merchant_totals,
@@ -16,6 +12,10 @@ from tests.support.context_services import (
     seed_reimbursable_dashboard_data,
     seed_reporting_data,
 )
+from werkzeug.datastructures import MultiDict
+
+from finance_app.modules.categories.taxonomy import set_transaction_tags
+from finance_app.modules.dashboard.service import build_dashboard_context
 
 
 def test_dashboard_context_totals_filters_custom_dates_and_sorting(app, core_conn):

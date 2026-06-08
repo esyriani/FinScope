@@ -14,10 +14,10 @@ from finance_app.core.constants import (
     DATE_ORDERS,
     DEBIT_COLUMNS,
     DESCRIPTION_COLUMNS,
-    INTERAC_DIRECTIONS,
     INTERAC_DIRECTION_AUTO,
     INTERAC_DIRECTION_RECEIVED,
     INTERAC_DIRECTION_SENT,
+    INTERAC_DIRECTIONS,
     STATEMENT_IMPORT_MODES,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
     STATEMENT_TYPE_PARSER_TYPES,
@@ -28,8 +28,14 @@ from finance_app.core.text import normalize_header
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
-    statements as statements_table,
+)
+from finance_app.database.tables import (
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
+    statements as statements_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.settings.runtime import get_int_setting, get_statement_type_options

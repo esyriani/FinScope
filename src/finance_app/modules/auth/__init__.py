@@ -6,7 +6,7 @@ blueprint for login, logout, bootstrap, password, and user-management routes.
 
 from flask_login import LoginManager
 
-from finance_app.modules.auth.controller import auth_bp
+from finance_app.modules.auth.controller import auth_bp as auth_bp
 from finance_app.modules.auth.permissions import register_authorization_guards
 from finance_app.modules.auth.service import has_owner_account, load_login_user
 

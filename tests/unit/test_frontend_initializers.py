@@ -1,7 +1,7 @@
 """Static regression checks for frontend initializer wiring."""
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC_JS = ROOT / "src" / "finance_app" / "static" / "js"

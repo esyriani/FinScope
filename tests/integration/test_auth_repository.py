@@ -5,6 +5,7 @@ import pytest
 from finance_app.core.constants import USER_ROLE_EDITOR
 from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.auth.service import hash_password, utc_now
+from finance_app.modules.users import repository as user_repository
 
 
 def test_auth_repository_creates_users_and_user_settings(core_conn):
@@ -17,11 +18,11 @@ def test_auth_repository_creates_users_and_user_settings(core_conn):
         must_change_password=True,
         now=utc_now(),
     )
-    auth_repository.upsert_user_setting(core_conn, user_id, "theme_mode", "light", utc_now())
-    auth_repository.upsert_user_setting(core_conn, user_id, "theme_mode", "dark", utc_now())
+    user_repository.upsert_user_setting(core_conn, user_id, "theme_mode", "light", utc_now())
+    user_repository.upsert_user_setting(core_conn, user_id, "theme_mode", "dark", utc_now())
 
     user = auth_repository.get_user_by_username(core_conn, "RepoEditor")
-    settings = auth_repository.get_user_settings(core_conn, user_id)
+    settings = user_repository.get_user_settings(core_conn, user_id)
 
     assert user["id"] == user_id
     assert user["display_name"] == "repoeditor"

@@ -5,33 +5,37 @@ from urllib.parse import urlencode
 from flask import url_for
 from sqlalchemy import String, case, cast, func, literal, or_, select
 
+from finance_app.core.config import settings
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTION_LABELS,
     CATEGORY_RULE_DIRECTIONS,
-    CATEGORY_RULE_SOURCES,
     CATEGORY_RULE_SOURCE_AUTOMATIC,
     CATEGORY_RULE_SOURCE_MANUAL,
+    CATEGORY_RULE_SOURCES,
 )
 from finance_app.core.money import money_to_float
+from finance_app.core.query import parse_page, parse_sort_direction
+from finance_app.database.engine import db_core_transaction
+from finance_app.database.tables import (
+    accounts as accounts_table,
+)
+from finance_app.database.tables import (
+    category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
+    merchants as merchants_table,
+)
+from finance_app.modules.categories.service import get_category_options
+from finance_app.modules.categories.tag_filters import rule_tag_condition
 from finance_app.modules.categories.taxonomy import (
     get_category_description_map,
     get_rule_tags_by_rule_id,
     get_tag_color_map,
     get_tag_option_rows,
 )
-from finance_app.modules.categories.tag_filters import rule_tag_condition
-from finance_app.modules.categories.service import get_category_options
-from finance_app.core.config import settings
-from finance_app.database.engine import db_core_transaction
-from finance_app.database.tables import (
-    accounts as accounts_table,
-    category_rules as category_rules_table,
-    merchants as merchants_table,
-)
-from finance_app.modules.settings.runtime import get_int_setting
-from finance_app.core.query import parse_page, parse_sort_direction
 from finance_app.modules.rules.service import count_rule_transaction_references_by_rule_id
+from finance_app.modules.settings.runtime import get_int_setting
 
 RULE_APPROVAL_FILTER_APPROVED = "approved"
 RULE_APPROVAL_FILTER_SUGGESTED = "suggested"

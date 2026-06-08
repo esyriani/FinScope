@@ -1,14 +1,15 @@
 """Route tests for the settings feature."""
 
 from sqlalchemy import text
-from finance_app.core.csrf import CSRF_FIELD_NAME
+from tests.support.html import assert_has_element, assert_visible_text
+from tests.support.web import set_csrf_token
+
 from finance_app.core.constants import USER_ROLE_VIEWER
+from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.auth.service import hash_password, utc_now
 from finance_app.modules.settings import service as settings_service
 from finance_app.modules.settings.runtime import get_all_settings, get_statement_type_options, get_unknown_category
-from tests.support.html import assert_has_element, assert_visible_text
-from tests.support.web import set_csrf_token
 
 
 def login_session(client, user_id):

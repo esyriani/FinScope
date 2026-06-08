@@ -4,6 +4,8 @@ from sqlalchemy import func, select
 
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 

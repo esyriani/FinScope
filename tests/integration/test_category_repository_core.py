@@ -6,8 +6,14 @@ from finance_app.core.constants import CATEGORY_RULE_SOURCE_AUTOMATIC
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     categories as categories_table,
+)
+from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.repository import (

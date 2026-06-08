@@ -6,7 +6,6 @@ pages.
 """
 
 import pytest
-
 from tests.support.html import (
     assert_asset_reference,
     assert_no_asset_reference,

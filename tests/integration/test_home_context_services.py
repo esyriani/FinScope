@@ -1,10 +1,10 @@
 """Service-level context tests for the home page."""
 
 from sqlalchemy import text
+from tests.support.context_services import FixedDate, seed_reporting_data
 
 from finance_app.modules.comparison import service as comparison_service
 from finance_app.modules.home import service as home_service
-from tests.support.context_services import FixedDate, seed_reporting_data
 
 
 def test_home_context_summarizes_seeded_year_to_date_data(core_conn, monkeypatch):

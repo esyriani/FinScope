@@ -14,8 +14,8 @@ from finance_app.background.runner import (
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
     ACCOUNT_TYPE_SAVINGS,
-    INTERAC_DIRECTION_AUTO,
     DATE_ORDER_AUTO,
+    INTERAC_DIRECTION_AUTO,
     STATEMENT_IMPORT_MODE_ENRICHMENT,
     STATEMENT_IMPORT_STATUS_COMPLETED,
     STATEMENT_IMPORT_STATUS_FAILED,
@@ -23,24 +23,27 @@ from finance_app.core.constants import (
     STATEMENT_IMPORT_STATUS_RUNNING,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
     TRANSACTION_KIND_EXPENSE,
-    TRANSACTION_KIND_PAYMENT,
     UNKNOWN_CATEGORY,
 )
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     statements as statements_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
+from finance_app.modules.categories import llm as llm_module
+from finance_app.modules.categories.repository import resolve_category_id
+from finance_app.modules.categories.service import categorize_transactions
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_UNKNOWN,
     category_metadata_json,
     utc_timestamp,
 )
-from finance_app.modules.categories import llm as llm_module
-from finance_app.modules.categories.repository import resolve_category_id
-from finance_app.modules.categories.service import categorize_transactions
 from finance_app.modules.categories.taxonomy import (
     set_transaction_tags,
 )

@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import text
 
 from finance_app.database.engine import db_core_transaction
+from finance_app.modules.categories.service import rename_category
 from finance_app.modules.settings.runtime import (
     get_all_settings,
     get_setting_with_fallback,
@@ -18,7 +19,6 @@ from finance_app.modules.settings.runtime import (
     sync_statement_types,
     upsert_setting,
 )
-from finance_app.modules.categories.service import rename_category
 
 
 def test_seeded_runtime_settings_default_to_dark_theme(core_conn):

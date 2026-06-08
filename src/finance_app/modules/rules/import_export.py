@@ -18,21 +18,28 @@ from finance_app.core.money import money_to_float
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
-from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, normalize_tag_names
 from finance_app.modules.categories.service import clean_category_name, normalize_merchant_description
+from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, normalize_tag_names
+
 from .repository import (
     category_rule_exists,
     ensure_import_category,
     existing_category_names,
     insert_imported_rule,
     remove_imported_categories,
-    restore_category_rules,
     resolve_rule_account_id,
     resolve_rule_merchant_id,
+    restore_category_rules,
     rule_reference_count,
     rule_snapshots_equal,
     snapshot_category_rules,

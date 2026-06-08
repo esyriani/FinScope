@@ -1,7 +1,7 @@
 """SQLAlchemy Core tests for rules listing context queries."""
 
-from sqlalchemy import text
 from flask import request
+from sqlalchemy import text
 
 from finance_app.modules.categories.taxonomy import set_rule_tags
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_name

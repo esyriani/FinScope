@@ -3,24 +3,24 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from finance_app.core.i18n import gettext
-from finance_app.modules.categories.taxonomy import (
-    get_tag_options,
-    normalize_tag_names,
-)
+from finance_app.database.engine import db_core_transaction
 from finance_app.modules.auth.permissions import PERMISSION_EDIT_TRANSACTIONS, permission_required
 from finance_app.modules.categories.service import (
     get_category_options,
     normalize_category,
 )
-from finance_app.database.engine import db_core_transaction
+from finance_app.modules.categories.taxonomy import (
+    get_tag_options,
+    normalize_tag_names,
+)
+from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword, parse_amount_bounds
+from finance_app.modules.transactions import service as transactions_service
 from finance_app.modules.transactions.repository import (
     assign_manual_category,
     get_transaction_for_category_update,
     mark_transaction_verified,
     set_transaction_ignored,
 )
-from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword, parse_amount_bounds
-from finance_app.modules.transactions import service as transactions_service
 from finance_app.modules.transactions.urls import transactions_redirect_target, transactions_redirect_with_ignored
 
 transactions_bp = Blueprint("transactions", __name__)

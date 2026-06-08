@@ -2,11 +2,12 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import func, insert, select, update
-from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 from flask import has_request_context
 from flask_login import current_user
+from sqlalchemy import func, insert, select, update
+from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 
+from finance_app.core.config import settings
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -21,11 +22,12 @@ from finance_app.core.constants import (
     THEME_MODE_DARK,
     UNKNOWN_CATEGORY,
 )
-from finance_app.core.config import settings
 from finance_app.core.i18n import normalize_language
 from finance_app.database.engine import db_core_connection
 from finance_app.database.tables import (
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
     user_settings as user_settings_table,
 )
 from finance_app.database.upsert import insert_or_select_unique_row

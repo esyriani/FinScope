@@ -1,9 +1,8 @@
 """Tests for LLM-assisted categorization internals."""
 
-from sqlalchemy import text
 import json
 
-from finance_app.modules.categories import llm
+from sqlalchemy import text
 from tests.support.database import set_owner_setting
 from tests.support.llm import (
     LLMRequestStub,
@@ -16,6 +15,8 @@ from tests.support.llm import (
     taxonomy_id,
     unknown_transaction,
 )
+
+from finance_app.modules.categories import llm
 
 """
 These tests are designed to verify the internal logic of the LLM categorization adapter, not the behavior of a specific model. They use deterministic mocked responses to ensure consistent test results and avoid external dependencies. If these tests are failing, focus on the adapter's handling of LLM results, integration with rules and retrieval, and metadata recording rather than the content of the mocked LLM responses.

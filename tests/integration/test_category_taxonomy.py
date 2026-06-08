@@ -1,13 +1,14 @@
 """Tests for category taxonomy behavior."""
 
-from sqlalchemy import text
 from unittest.mock import patch
 
-from sqlalchemy import delete, select, func
+from sqlalchemy import delete, func, select, text
 
 from finance_app.core import constants
 from finance_app.database.tables import (
     categories as categories_table,
+)
+from finance_app.database.tables import (
     tags as tags_table,
 )
 from finance_app.modules.categories import llm as llm_module

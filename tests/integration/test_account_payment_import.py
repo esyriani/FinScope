@@ -7,8 +7,12 @@ from sqlalchemy import insert, select
 from finance_app.core.query import CoreFilters
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
-    statements as statements_table,
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
+    statements as statements_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.accounts.repository import get_or_create_account

@@ -1,15 +1,18 @@
 """Integration tests for read-only rule audit analysis."""
 
-from sqlalchemy import text
 from types import SimpleNamespace
+
+from sqlalchemy import text
+from tests.support.database import insert_rule
+from tests.support.database import insert_transaction as insert_test_transaction
 
 from finance_app.modules.rules.audit import (
     OVERLAP_CATEGORY_CONFLICT,
     OVERLAP_CRITICAL_CONFLICT,
     OVERLAP_HARMLESS,
     OVERLAP_TAG_DIFFERENCE,
-    RuleAuditData,
     STALE_UNUSED,
+    RuleAuditData,
     TransactionRuleAudit,
     analyze_rule_overlaps,
     analyze_shadowed_rules,
@@ -20,7 +23,6 @@ from finance_app.modules.rules.audit import (
     preview_rule_change,
     shared_rule_pair_audits,
 )
-from tests.support.database import insert_rule, insert_transaction as insert_test_transaction
 
 
 def insert_audit_transaction(

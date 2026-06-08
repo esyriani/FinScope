@@ -1,16 +1,25 @@
 """Tests for upload transaction import workflow edge cases."""
 
-from sqlalchemy import text
 import pytest
-from sqlalchemy import event, insert, select
+from sqlalchemy import event, insert, select, text
 
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     categories as categories_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
-    statements as statements_table,
+)
+from finance_app.database.tables import (
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
+    statements as statements_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.repository import rename_category, resolve_category_id

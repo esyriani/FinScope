@@ -26,6 +26,8 @@ from finance_app.core.constants import (
 from finance_app.database.dates import coerce_date
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.decision import DECISION_SOURCE_RULE

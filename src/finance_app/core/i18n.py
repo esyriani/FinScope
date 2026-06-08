@@ -5,8 +5,8 @@ helpers for Flask templates, Python routes, and browser-side scripts.
 English source text is the canonical message id.
 """
 
-from functools import lru_cache
 import json
+from functools import cache
 from pathlib import Path
 from string import Formatter
 
@@ -159,7 +159,7 @@ def translate(message, language=None, **variables):
     return _format_message(template, source, variables)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _load_catalog(language):
     """Load a translation catalog from disk."""
     if normalize_language(language) == DEFAULT_LANGUAGE:

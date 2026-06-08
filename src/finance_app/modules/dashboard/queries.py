@@ -3,37 +3,44 @@
 from sqlalchemy import case, exists, func, select
 
 from finance_app.core.periods import previous_period_date_range
+from finance_app.core.query import CoreFilters
 from finance_app.core.reporting import (
     income_or_tagged_transfer_credit_clause,
     reportable_or_tagged_transfer_credit_clause,
     reportable_transaction_clause,
     spending_impact_clause,
 )
-from finance_app.core.query import CoreFilters
 from finance_app.database.dates import date_month, date_month_identity, date_year, month_label
 from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     tags as tags_table,
+)
+from finance_app.database.tables import (
     transaction_tags as transaction_tags_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
+from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
-from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.transactions.constants import AMOUNT_TYPE_SPENDING
-from .filters import apply_dashboard_dimension_filters, apply_quick_view_core_filter
-from .urls import dashboard_transactions_url
+
 from .constants import DASHBOARD_INCOME_CATEGORY, QUICK_VIEW_ALL
+from .filters import apply_dashboard_dimension_filters, apply_quick_view_core_filter
 from .presenter import (
     build_merchant_aggregates,
     merchant_matching_rules,
     merchant_period_change,
     merchant_primary_category,
 )
+from .urls import dashboard_transactions_url
 
 
 def non_transfer_clause():

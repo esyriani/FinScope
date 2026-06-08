@@ -4,22 +4,15 @@ from calendar import monthrange
 from datetime import date
 
 from finance_app.core.config import settings
+from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.i18n import format_month_year, weekday_abbreviation_labels
+from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.service import get_category_options
 from finance_app.modules.categories.taxonomy import get_tag_option_rows
-from finance_app.core.constants import UNKNOWN_CATEGORY
-from finance_app.database.engine import db_core_transaction
 from finance_app.modules.recurring.patterns import get_recurring_pattern_metadata
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
-from .urls import calendar_url, transactions_url
+
 from .parsing import clean_categories, clean_tags, default_month, parse_heatmap_metric, parse_month, shift_month
-from .queries import (
-    build_category_filter,
-    fetch_month_transactions,
-    fetch_recurring_source_rows,
-    get_recurrence_detection_settings,
-)
-from .recurrence import infer_recurring_items
 from .presenter import (
     apply_heatmap,
     build_calendar_day_json,
@@ -27,8 +20,15 @@ from .presenter import (
     build_calendar_summary,
     build_calendar_transactions,
     build_recurring_activity_json,
-    recurring_amount_change_cashflow_impact,
 )
+from .queries import (
+    build_category_filter,
+    fetch_month_transactions,
+    fetch_recurring_source_rows,
+    get_recurrence_detection_settings,
+)
+from .recurrence import infer_recurring_items
+from .urls import calendar_url, transactions_url
 
 
 def build_calendar_context(args):
@@ -40,7 +40,6 @@ def build_calendar_context(args):
     recurring_context = build_recurring_activity_context(selected_month, selected_categories, selected_tags)
     month_start = recurring_context["month_start"]
     month_end = recurring_context["month_end"]
-    recurring_items = recurring_context["recurring_items"]
     days = build_calendar_days(month_start, recurring_context["transactions"])
     apply_heatmap(days, heatmap_metric)
     navigation_params = {

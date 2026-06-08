@@ -1,11 +1,6 @@
 """Route tests for the review feature."""
 
 from sqlalchemy import text
-
-from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.modules.categories.taxonomy import set_transaction_tags
-from finance_app.modules.review import controller as review_controller
-from finance_app.modules.review.service import apply_review_group_job, undo_review_group_job
 from tests.support.html import (
     assert_has_element,
     assert_input,
@@ -15,6 +10,11 @@ from tests.support.html import (
 )
 from tests.support.jobs import capture_background_jobs
 from tests.support.web import set_csrf_token
+
+from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.modules.categories.taxonomy import set_transaction_tags
+from finance_app.modules.review import controller as review_controller
+from finance_app.modules.review.service import apply_review_group_job, undo_review_group_job
 
 
 def insert_review_transaction(

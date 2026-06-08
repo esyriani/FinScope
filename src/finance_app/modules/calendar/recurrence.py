@@ -7,12 +7,12 @@ from decimal import Decimal
 from statistics import median
 
 from finance_app.core.money import money_to_decimal, rounded_money_decimal, rounded_money_float
-from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
-from finance_app.modules.recurring.patterns import recurring_pattern_key
 from finance_app.modules.merchants.repository import merchant_identity_from_row
-from .urls import transactions_url
+from finance_app.modules.recurring.patterns import recurring_pattern_key
+from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
+
 from .parsing import month_number
-from .constants import UNMATCHED_RECURRING_STATUSES
+from .urls import transactions_url
 
 
 def infer_recurring_items(

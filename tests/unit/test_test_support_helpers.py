@@ -7,20 +7,32 @@ connections.
 from types import SimpleNamespace
 
 from sqlalchemy import select
+from tests.support.database import insert_rule, insert_transaction, set_owner_setting
+from tests.support.jobs import capture_background_jobs
 
 from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_HEADER_NAME
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     statements as statements_table,
+)
+from finance_app.database.tables import (
     tags as tags_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
+)
+from finance_app.database.tables import (
     user_settings as user_settings_table,
+)
+from finance_app.database.tables import (
     users as users_table,
 )
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
-from tests.support.database import insert_rule, insert_transaction, set_owner_setting
-from tests.support.jobs import capture_background_jobs
 
 
 def test_shared_database_helpers_accept_core_connection(core_conn):

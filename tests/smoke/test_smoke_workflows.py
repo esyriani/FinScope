@@ -1,19 +1,18 @@
 """Smoke tests for high-value application workflows."""
 
-from sqlalchemy import text
 import io
 import time
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
+from tests.support.database import insert_rule, insert_transaction
+from tests.support.web import set_csrf_token
 
 from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.database.tables import (
     statement_types as statement_types_table,
 )
-from tests.support.database import insert_rule, insert_transaction
-from tests.support.web import set_csrf_token
 
 
 @pytest.fixture(autouse=True)

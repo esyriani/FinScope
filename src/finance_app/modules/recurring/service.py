@@ -8,6 +8,7 @@ from flask import url_for
 
 from finance_app.core.i18n import format_month_year, gettext, weekday_abbreviation_labels
 from finance_app.core.money import format_money_display
+from finance_app.modules.calendar.presenter import recurring_amount_change_cashflow_impact
 from finance_app.modules.calendar.service import (
     build_recurring_activity_context,
     build_recurring_activity_json,
@@ -15,7 +16,6 @@ from finance_app.modules.calendar.service import (
     clean_tags,
     default_month,
     parse_month,
-    recurring_amount_change_cashflow_impact,
     shift_month,
 )
 

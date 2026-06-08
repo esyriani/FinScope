@@ -5,6 +5,7 @@ templates. The presenter does not mutate rules or transactions.
 """
 
 from finance_app.core.config import settings
+from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.rules.audit import (
     OVERLAP_CATEGORY_CONFLICT,
     OVERLAP_CRITICAL_CONFLICT,
@@ -28,13 +29,6 @@ from finance_app.modules.rules.audit import (
     preview_rule_set_change,
     shared_matching_transaction_audits,
 )
-from finance_app.modules.categories.service import get_category_rules
-from finance_app.modules.settings.runtime import get_int_setting
-from finance_app.modules.rules.import_export import (
-    RULE_IMPORT_MODE_ADD,
-    preview_rules_import,
-)
-from finance_app.modules.rules.service import count_rule_transaction_references_by_rule_id
 from finance_app.modules.rules.audit_formatting import (
     attach_rule_action_flags,
     build_rule_assessment,
@@ -47,8 +41,8 @@ from finance_app.modules.rules.audit_formatting import (
     present_rule,
     present_rule_interactions,
     present_rule_with_specificity_comparison,
-    present_shared_transaction,
     present_shadowed_rule,
+    present_shared_transaction,
     present_specificity_warning,
     present_stale_rule,
     recommended_next_step,
@@ -74,6 +68,12 @@ from finance_app.modules.rules.audit_tables import (
     stale_rule_sort_options,
     tag_difference_sort_options,
 )
+from finance_app.modules.rules.import_export import (
+    RULE_IMPORT_MODE_ADD,
+    preview_rules_import,
+)
+from finance_app.modules.rules.service import count_rule_transaction_references_by_rule_id
+from finance_app.modules.settings.runtime import get_int_setting
 
 PREVIEW_ACTION_LABELS = {
     PREVIEW_REMOVE_RULE: "Preview removal impact",

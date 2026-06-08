@@ -1,10 +1,11 @@
 """Route tests for applying category rules."""
 
 from sqlalchemy import text
-from finance_app.modules.rules import controller as rules_controller
-from finance_app.modules.rules.engine import apply_all_rules_job, undo_apply_all_rules_job
 from tests.support.html import assert_visible_text
 from tests.support.jobs import capture_background_jobs
+
+from finance_app.modules.rules import controller as rules_controller
+from finance_app.modules.rules.engine import apply_all_rules_job, undo_apply_all_rules_job
 
 
 def test_apply_single_rule_route_requires_preview_confirmation(csrf_client, core_conn, data_factory):
@@ -33,7 +34,7 @@ def test_apply_single_rule_route_requires_preview_confirmation(csrf_client, core
 def test_apply_single_rule_route_updates_only_transactions_where_rule_wins(csrf_client, core_conn, data_factory):
     """Verify confirmed default apply skips transactions won by another rule."""
     broad_rule_id = data_factory.rules.create(keyword="METRO", category="Food")
-    specific_rule_id = data_factory.rules.create(keyword="METRO GROCERY", category="Utilities")
+    data_factory.rules.create(keyword="METRO GROCERY", category="Utilities")
     winning_tx_id = data_factory.transactions.create(description="Metro Pharmacy")
     losing_tx_id = data_factory.transactions.create(description="Metro Grocery #123")
 

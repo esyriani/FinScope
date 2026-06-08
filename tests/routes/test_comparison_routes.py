@@ -3,9 +3,9 @@
 from datetime import date as real_date
 
 from sqlalchemy import text
+from tests.support.html import assert_has_element, assert_markup, assert_not_visible_text, assert_visible_text
 
 from finance_app.modules.comparison import service as comparison_service
-from tests.support.html import assert_has_element, assert_markup, assert_not_visible_text, assert_visible_text
 
 
 class FixedDate(real_date):

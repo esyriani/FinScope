@@ -11,13 +11,13 @@ from finance_app.background.runner import (
     list_background_jobs,
     undo_background_job,
 )
-from finance_app.modules.auth.permissions import PERMISSION_MANAGE_JOBS, permission_required
 from finance_app.core.config import settings
 from finance_app.core.filters import format_datetime
 from finance_app.core.i18n import gettext
-from finance_app.database.engine import db_core_transaction
-from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.core.query import parse_page
+from finance_app.database.engine import db_core_transaction
+from finance_app.modules.auth.permissions import PERMISSION_MANAGE_JOBS, permission_required
+from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.modules.upload import workflow as upload_workflow
 
 jobs_bp = Blueprint("jobs", __name__)

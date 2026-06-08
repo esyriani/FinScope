@@ -1,15 +1,7 @@
 """Route tests for the rules audit feature."""
 
 from sqlalchemy import text
-from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
 from tests.support.database import insert_rule
-from tests.support.rules import (
-    html_fragment_after,
-    rule_by_id,
-    set_default_table_page_size,
-    set_rule_audit_transaction_limit,
-)
 from tests.support.html import (
     assert_form,
     assert_has_element,
@@ -21,7 +13,16 @@ from tests.support.html import (
     parse_html,
     visible_html,
 )
+from tests.support.rules import (
+    html_fragment_after,
+    rule_by_id,
+    set_default_table_page_size,
+    set_rule_audit_transaction_limit,
+)
 from tests.support.web import set_csrf_token
+
+from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
 
 
 def test_rules_audit_route_renders_summary_and_findings(client, core_conn):

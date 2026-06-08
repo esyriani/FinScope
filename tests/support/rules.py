@@ -6,6 +6,7 @@ and seeded owner settings are available.
 """
 
 from sqlalchemy import text
+
 from tests.support.database import set_owner_setting
 
 

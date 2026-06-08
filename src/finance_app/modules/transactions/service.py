@@ -31,6 +31,7 @@ from finance_app.modules.categories.taxonomy import (
     get_transaction_tag_names,
     get_transaction_tags_by_id,
 )
+from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword
 from finance_app.modules.settings.runtime import get_bool_setting, get_int_setting, get_setting, get_unknown_category
 from finance_app.modules.transactions.constants import (
     CATEGORY_SOURCE_FILTER_OPTIONS,
@@ -58,7 +59,6 @@ from finance_app.modules.transactions.repository import (
     set_transactions_ignored,
     update_recategorized_transaction,
 )
-from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword
 from finance_app.modules.transactions.urls import transactions_sort_url, transactions_url
 
 RUN_TRANSACTION_AI_SETTING_KEY = "transaction_ai_rerun_enabled"

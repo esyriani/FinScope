@@ -3,7 +3,6 @@
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
 from finance_app.background.runner import submit_background_job
-from finance_app.modules.auth.permissions import PERMISSION_IMPORT_STATEMENTS, permission_required
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -15,6 +14,7 @@ from finance_app.core.constants import (
 from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.accounts.repository import get_or_create_account, normalize_account_type
+from finance_app.modules.auth.permissions import PERMISSION_IMPORT_STATEMENTS, permission_required
 from finance_app.modules.categories.service import categorize_transactions
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.settings.runtime import get_statement_type_by_id

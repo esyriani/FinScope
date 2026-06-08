@@ -8,7 +8,11 @@ from sqlalchemy import func, insert, select
 
 from finance_app.database.tables import (
     categories as categories_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     tags as tags_table,
 )
 from finance_app.modules.categories import taxonomy as category_taxonomy

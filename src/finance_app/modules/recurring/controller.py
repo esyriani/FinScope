@@ -2,8 +2,8 @@
 
 from flask import Blueprint, jsonify, render_template, request
 
-from finance_app.modules.auth.permissions import PERMISSION_EDIT_RECURRING, permission_required
 from finance_app.database.engine import db_core_transaction
+from finance_app.modules.auth.permissions import PERMISSION_EDIT_RECURRING, permission_required
 from finance_app.modules.recurring.forms import parse_expected_day, recurring_pattern_payload
 from finance_app.modules.recurring.patterns import normalize_active, upsert_recurring_pattern
 from finance_app.modules.recurring.service import build_recurring_page_context

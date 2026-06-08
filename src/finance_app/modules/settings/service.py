@@ -12,6 +12,7 @@ from finance_app.core.constants import (
 )
 from finance_app.core.i18n import SUPPORTED_LANGUAGES, normalize_language
 from finance_app.database.engine import db_core_transaction
+from finance_app.modules.auth.permissions import PERMISSION_MANAGE_GLOBAL_SETTINGS, current_user_can
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 from finance_app.modules.settings.forms import (
     clean_openai_model,
@@ -22,7 +23,6 @@ from finance_app.modules.settings.forms import (
     parse_general_settings_form,
     parse_global_settings_form,
 )
-from finance_app.modules.auth.permissions import current_user_can, PERMISSION_MANAGE_GLOBAL_SETTINGS
 from finance_app.modules.settings.runtime import (
     GENERAL_SETTING_KEYS,
     get_all_settings,

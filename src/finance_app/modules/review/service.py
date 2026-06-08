@@ -23,11 +23,11 @@ from finance_app.modules.review.presenter import (
     with_ungroup_key,
     without_ungroup_key,
 )
+from finance_app.modules.review.queries import find_review_rule, review_candidate_rows, rule_snapshot
 from finance_app.modules.review.repository import (
     review_candidates_with_tags,
     review_group_rows,
 )
-from finance_app.modules.review.queries import find_review_rule, review_candidate_rows, rule_snapshot
 from finance_app.modules.review.urls import build_review_sort_url, build_review_url, parse_review_sort
 from finance_app.modules.review.workflow import (
     apply_review_group_job,

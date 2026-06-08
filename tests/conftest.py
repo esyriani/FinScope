@@ -1,20 +1,20 @@
 """Shared pytest fixtures for application and database tests."""
 
-import sys
 import shutil
+import sys
 from dataclasses import replace
 from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-import pytest
+import pytest  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import finance_app as app_package  # noqa: E402
-from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_VIEWER  # noqa: E402
 from finance_app.core import config as config_module  # noqa: E402
+from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_VIEWER  # noqa: E402
 from finance_app.database import connection as connection_module  # noqa: E402
 from finance_app.database import engine as engine_module  # noqa: E402
 from finance_app.modules.auth import repository as auth_repository  # noqa: E402

@@ -1,7 +1,7 @@
 """Form parsing helpers for category rule editors."""
 
-from finance_app.modules.categories.service import normalize_merchant_description
 from finance_app.modules.categories.repository import normalize_optional_account_id, normalize_rule_direction
+from finance_app.modules.categories.service import normalize_merchant_description
 
 
 def parse_amount_bounds(min_value, max_value):

@@ -9,8 +9,8 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     Computed,
-    ForeignKey,
     Float,
+    ForeignKey,
     Index,
     Integer,
     MetaData,
@@ -25,7 +25,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import mysql
 
-from finance_app.database.dates import ISODate, UTCDateTime
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
     ACCOUNT_TYPES,
@@ -37,8 +36,8 @@ from finance_app.core.constants import (
     CATEGORY_SOURCES,
     DATE_ORDER_AUTO,
     DATE_ORDERS,
-    INTERAC_DIRECTIONS,
     INTERAC_DIRECTION_AUTO,
+    INTERAC_DIRECTIONS,
     RECURRING_PATTERN_TYPES,
     RECURRING_USER_STATUS_DETECTED,
     RECURRING_USER_STATUSES,
@@ -54,6 +53,7 @@ from finance_app.core.constants import (
     USER_ROLE_OWNER,
     USER_ROLES,
 )
+from finance_app.database.dates import ISODate, UTCDateTime
 
 CONSTRAINT_NAMING_CONVENTION = {
     "ix": "idx_%(table_name)s_%(column_0_name)s",

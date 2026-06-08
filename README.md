@@ -325,17 +325,12 @@ Run code-quality checks after installing `requirements-dev.txt`:
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m black --check .
-.\.venv\Scripts\python.exe -B -m ruff check `
-  sitecustomize.py `
-  src\finance_app\core\query.py `
-  src\finance_app\modules\merchants\normalization.py
+.\.venv\Scripts\python.exe -B -m ruff check .
 .\.venv\Scripts\python.exe -B -m mypy
 ```
 
 Type checking is intentionally gradual. The current mypy target list lives in
 `pyproject.toml`; expand it as modules gain annotations and clean boundaries.
-Ruff is still applied first to the pilot files while the lint baseline is
-cleaned up.
 
 ## Development guidelines
 

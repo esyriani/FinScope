@@ -7,12 +7,12 @@ transaction lifecycle helpers live in `finance_app.database.engine`.
 
 from sqlalchemy import inspect
 
+from finance_app.database.engine import get_database_engine
 from finance_app.database.seeds import (
     seed_category_taxonomy_defaults,
     seed_runtime_settings_defaults,
     seed_statement_type_defaults,
 )
-from finance_app.database.engine import get_database_engine
 from finance_app.database.tables import metadata
 
 RETIRED_SCHEMA_TABLES = {

@@ -3,11 +3,12 @@
 import io
 
 from sqlalchemy import select
-
-from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.database.tables import categories as categories_table, tags as tags_table
 from tests.support.html import assert_has_element, assert_visible_text
 from tests.support.web import set_csrf_token
+
+from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.database.tables import categories as categories_table
+from finance_app.database.tables import tags as tags_table
 
 
 def test_taxonomy_admin_routes_are_registered_and_rules_category_routes_are_removed(app):

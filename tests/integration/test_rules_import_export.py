@@ -1,20 +1,20 @@
 """Tests for category rule form parsing and CSV import/export."""
 
-from sqlalchemy import text
 import csv
 import io
 
 import pytest
+from sqlalchemy import text
 
-from finance_app.modules.categories.service import normalize_merchant_description
 from finance_app.modules.categories.repository import rename_category, resolve_category_id
+from finance_app.modules.categories.service import normalize_merchant_description
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id
 from finance_app.modules.rules.forms import amount_bounds_label, parse_amount_bounds
 from finance_app.modules.rules.import_export import (
     export_rules_csv,
+    import_rules_add,
     import_rules_job,
     import_rules_override,
-    import_rules_add,
     parse_rules_csv,
     preview_rules_import,
     undo_import_rules_job,

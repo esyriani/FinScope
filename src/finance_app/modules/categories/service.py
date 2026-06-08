@@ -19,8 +19,8 @@ from finance_app.modules.categories.llm_prompts import (
 from finance_app.modules.categories.repository import (
     clean_category_name,
     create_category,
-    get_builtin_category_names,
     fetch_category_names,
+    get_builtin_category_names,
     get_category_options,
     get_category_rules,
     normalize_category,

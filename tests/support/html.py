@@ -5,9 +5,9 @@ structural markup checks. Script and style blocks are ignored for copy
 assertions so embedded catalogs or assets do not create false positives.
 """
 
+import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-import re
 
 INVISIBLE_TEXT_TAGS = {"script", "style"}
 VOID_TAGS = {

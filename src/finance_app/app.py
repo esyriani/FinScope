@@ -8,9 +8,9 @@ sys.dont_write_bytecode = True
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from finance_app import create_app
-from finance_app.core.config import settings
-from finance_app.database.connection import init_db
+from finance_app import create_app  # noqa: E402
+from finance_app.core.config import settings  # noqa: E402
+from finance_app.database.connection import init_db  # noqa: E402
 
 app = create_app()
 

@@ -17,8 +17,14 @@ from finance_app.core.money import money_to_float
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     categories as categories_table,
+)
+from finance_app.database.tables import (
     category_rules as category_rules_table,
+)
+from finance_app.database.tables import (
     merchants as merchants_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.database.upsert import insert_or_select_unique_row

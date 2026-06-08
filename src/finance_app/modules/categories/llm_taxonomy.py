@@ -11,7 +11,11 @@ from sqlalchemy import func, select
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.database.tables import (
     tags as tags_table,
+)
+from finance_app.database.tables import (
     transaction_tags as transaction_tags_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.repository import normalize_category

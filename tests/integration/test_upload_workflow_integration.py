@@ -1,14 +1,15 @@
 """Integration tests for upload background workflow handoffs."""
 
-from sqlalchemy import text
 import io
+
+from sqlalchemy import text
+from tests.support.html import assert_visible_text
+from tests.support.upload import create_account_statement, first_statement_type_id, statement_type_id
+from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.upload import controller as upload_controller
 from finance_app.modules.upload import workflow as upload_workflow
-from tests.support.html import assert_visible_text
-from tests.support.upload import create_account_statement, first_statement_type_id, statement_type_id
-from tests.support.web import set_csrf_token
 
 
 def test_upload_route_submits_background_import_job(client, core_conn, monkeypatch):
@@ -151,7 +152,7 @@ def test_upload_preview_requires_choice_for_ambiguous_slash_dates(client, core_c
 def test_upload_preview_prioritizes_ambiguous_date_samples(client, core_conn):
     """Verify preview samples show ambiguous date rows when available."""
     clear_rows = "\n".join(f"12/{day}/2025,CLEAR SAMPLE {day},1.00,," for day in range(13, 25))
-    raw_csv = f"{clear_rows}\n05/12/2026,AMBIGUOUS SAMPLE,2.00,,\n".encode("utf-8")
+    raw_csv = f"{clear_rows}\n05/12/2026,AMBIGUOUS SAMPLE,2.00,,\n".encode()
 
     response = client.post(
         "/upload/preview",

@@ -1,7 +1,8 @@
 """Tests for review workflow application and undo behavior."""
 
-from sqlalchemy import text
 import json
+
+from sqlalchemy import text
 
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
 from finance_app.modules.review.workflow import (
