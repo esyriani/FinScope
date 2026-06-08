@@ -5,21 +5,23 @@ Callers build SQLAlchemy Core expressions directly and pass them into
 repository/query functions.
 """
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
 class CoreFilters:
     """Collect SQLAlchemy Core filter criteria for query composition."""
 
-    conditions: list = field(default_factory=list)
+    conditions: list[Any] = field(default_factory=list)
 
-    def add(self, condition):
+    def add(self, condition: Any | None) -> None:
         """Add a SQLAlchemy condition when one is present."""
         if condition is not None:
             self.conditions.append(condition)
 
-    def add_in(self, column, values, include=True):
+    def add_in(self, column: Any, values: Iterable[Any], include: bool = True) -> None:
         """Add an IN or NOT IN condition for non-empty values."""
         values = [value for value in values if value not in (None, "")]
         if not values:
@@ -28,22 +30,22 @@ class CoreFilters:
         condition = column.in_(values)
         self.add(condition if include else ~condition)
 
-    def clone(self):
+    def clone(self) -> "CoreFilters":
         """Return a copy of the current filter set."""
         return CoreFilters(conditions=list(self.conditions))
 
-    def criteria(self):
+    def criteria(self) -> tuple[Any, ...]:
         """Return filter criteria as a tuple suitable for query.where()."""
         return tuple(self.conditions)
 
 
-def parse_sort_direction(value, default="asc"):
+def parse_sort_direction(value: object, default: str = "asc") -> str:
     """Return a supported sort direction."""
     direction = str(value or default).strip().lower()
     return direction if direction in {"asc", "desc"} else default
 
 
-def parse_page(value):
+def parse_page(value: Any) -> int:
     """Return a positive one-based page number."""
     try:
         page = int(value)
@@ -53,7 +55,7 @@ def parse_page(value):
     return max(1, page)
 
 
-def resolve_sort(sort, allowed_columns, default_sort):
+def resolve_sort(sort: object, allowed_columns: Mapping[str, Any], default_sort: str) -> tuple[str, Any]:
     """Return a sort key and SQLAlchemy expression from an allow-list."""
     sort = str(sort or default_sort).strip()
     if sort not in allowed_columns:

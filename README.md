@@ -115,6 +115,12 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
+For local development and code-quality checks, install the developer tools:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+```
+
 cmd.exe:
 
 ```bat
@@ -314,6 +320,26 @@ Run a layer during local iteration:
 ```
 
 See [testing](docs/testing.md) and [tests/README.md](tests/README.md) for marker details and suite structure.
+
+Run the current incremental code-quality checks after installing
+`requirements-dev.txt`:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m black --check `
+  sitecustomize.py `
+  src\finance_app\core\query.py `
+  src\finance_app\modules\merchants\normalization.py
+.\.venv\Scripts\python.exe -B -m ruff check `
+  sitecustomize.py `
+  src\finance_app\core\query.py `
+  src\finance_app\modules\merchants\normalization.py
+.\.venv\Scripts\python.exe -B -m mypy
+```
+
+Type checking is intentionally gradual. The current mypy target list lives in
+`pyproject.toml`; expand it as modules gain annotations and clean boundaries.
+Black and Ruff are likewise applied first to the same pilot files before being
+promoted to a repository-wide gate.
 
 ## Development guidelines
 

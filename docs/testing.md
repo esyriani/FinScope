@@ -41,6 +41,34 @@ Warnings are always test failures. Run coverage deliberately when needed:
 .\.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
 ```
 
+## Code quality checks
+
+Install the developer tools before running formatter, linter, or type-checker
+commands:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+Run the current incremental quality checks from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m black --check `
+  sitecustomize.py `
+  src\finance_app\core\query.py `
+  src\finance_app\modules\merchants\normalization.py
+.\.venv\Scripts\python.exe -B -m ruff check `
+  sitecustomize.py `
+  src\finance_app\core\query.py `
+  src\finance_app\modules\merchants\normalization.py
+.\.venv\Scripts\python.exe -B -m mypy
+```
+
+Mypy is configured as a gradual allowlist in `pyproject.toml`. Add modules to
+that list only after their public helpers have useful annotations and the
+reported errors are actionable. Black and Ruff use the same first pilot targets
+until the existing formatting and lint baseline is cleaned up.
+
 ## Markers
 
 - `unit`: isolated helper, parser, presenter, and domain tests.

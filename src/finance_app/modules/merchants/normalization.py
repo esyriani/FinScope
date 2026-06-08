@@ -1,4 +1,9 @@
-"""Merchant normalization helpers."""
+"""Normalize imported merchant descriptions into deterministic merchant keys.
+
+The helpers strip statement-specific artifacts without consulting runtime
+merchant aliases. Repository and workflow code can therefore use them for stable
+fallback keys before database-backed merchant matching is available.
+"""
 
 import re
 from dataclasses import dataclass
@@ -13,7 +18,8 @@ MERCHANT_CLEANUP_SOURCE_RULE = "rule"
 
 @dataclass(frozen=True)
 class CleanedMerchant:
-    """Represent cleaned merchant."""
+    """Represent a merchant string after statement artifacts are removed."""
+
     cleaned_key: str
     location_code: str | None = None
     removed_tokens: tuple[str, ...] = ()
@@ -23,6 +29,7 @@ class CleanedMerchant:
 @dataclass(frozen=True)
 class NormalizedMerchant:
     """Represent a deterministic merchant key derived from a description."""
+
     raw_description: str
     merchant_key: str
     normalization_source: str
@@ -31,7 +38,7 @@ class NormalizedMerchant:
     removed_tokens: tuple[str, ...] = ()
 
     @property
-    def cleaned_key(self):
+    def cleaned_key(self) -> str:
         """Return the deterministic merchant key for legacy callers."""
         return self.merchant_key
 
@@ -40,14 +47,14 @@ ARTIFACT_SUFFIXES = {"FAC", "PAI", "DIV", "ASS", "REN"}
 BUSINESS_SUFFIXES = {"INC"}
 
 
-def clean_merchant_description(raw_description: str) -> CleanedMerchant:
-    """Clean merchant description."""
+def clean_merchant_description(raw_description: object) -> CleanedMerchant:
+    """Remove card, processor, location, and reference artifacts from a description."""
     raw_text = str(raw_description or "").strip()
     text = strip_accents(raw_text).upper()
     text = text.replace("\u00a0", " ")
     text = normalize_spaces(text)
     removed_tokens: list[str] = []
-    location_code = None
+    location_code: str | None = None
 
     text = re.sub(r"\b(RECEPT|ENVOI)\s*-\s*VFC\b", r"\1 VFC", text)
     text = re.sub(r"\b(RECEPT|ENVOI)-VFC\b", r"\1 VFC", text)
@@ -84,12 +91,12 @@ def clean_merchant_description(raw_description: str) -> CleanedMerchant:
     )
 
 
-def normalize_merchant_description(description):
-    """Normalize merchant description."""
+def normalize_merchant_description(description: object) -> str:
+    """Return only the cleaned key for call sites that do not need metadata."""
     return clean_merchant_description(description).cleaned_key
 
 
-def normalize_merchant(raw_description: str, conn=None) -> NormalizedMerchant:
+def normalize_merchant(raw_description: object, conn: object | None = None) -> NormalizedMerchant:
     """Return a deterministic merchant key for a raw transaction description."""
     del conn
     raw_text = str(raw_description or "")
@@ -110,15 +117,15 @@ def normalize_merchant(raw_description: str, conn=None) -> NormalizedMerchant:
     )
 
 
-def canonicalize_merchant_key(value: str, conn=None) -> str:
+def canonicalize_merchant_key(value: object, conn: object | None = None) -> str:
     """Return the deterministic merchant key for a filter or rule value."""
     del conn
     return normalize_merchant(value).merchant_key
 
 
-def extract_location_code(text, removed_tokens):
-    """Extract location code."""
-    location_code = None
+def extract_location_code(text: str, removed_tokens: list[str]) -> tuple[str, str | None]:
+    """Split a known trailing store/location code from merchant text."""
+    location_code: str | None = None
 
     match = re.search(r"#\s*(\d{2,6})\s*$", text)
     if match:
@@ -137,8 +144,8 @@ def extract_location_code(text, removed_tokens):
     return text, None
 
 
-def remove_trailing_reference_tokens(text, removed_tokens):
-    """Remove trailing reference tokens."""
+def remove_trailing_reference_tokens(text: str, removed_tokens: list[str]) -> str:
+    """Strip trailing mixed or numeric reference tokens until none remain."""
     text = normalize_spaces(text)
     while True:
         match = re.search(r"\b(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)[A-Z0-9]{5,12}\b\s*$", text)
@@ -153,8 +160,8 @@ def remove_trailing_reference_tokens(text, removed_tokens):
     return text
 
 
-def remove_trailing_suffixes(text, removed_tokens, suffixes):
-    """Remove trailing suffixes."""
+def remove_trailing_suffixes(text: str, removed_tokens: list[str], suffixes: set[str]) -> str:
+    """Remove known bank artifact suffixes from the end of the merchant text."""
     text = normalize_spaces(text)
     while True:
         words = text.split()
@@ -165,10 +172,11 @@ def remove_trailing_suffixes(text, removed_tokens, suffixes):
         text = " ".join(words[:-1])
 
 
-def remove_pattern(text, pattern, removed_tokens):
-    """Remove pattern."""
-    def replace(match):
-        """Handle replace."""
+def remove_pattern(text: str, pattern: str, removed_tokens: list[str]) -> str:
+    """Replace pattern matches with spaces while recording removed tokens."""
+
+    def replace(match: re.Match[str]) -> str:
+        """Record a removed regex match for normalization diagnostics."""
         token = normalize_spaces(match.group(0)).strip()
         if token:
             removed_tokens.append(token)
@@ -177,7 +185,7 @@ def remove_pattern(text, pattern, removed_tokens):
     return re.sub(pattern, replace, text)
 
 
-def preserve_starred_processor_merchant(text, removed_tokens):
+def preserve_starred_processor_merchant(text: str, removed_tokens: list[str]) -> str:
     """Preserve merchant names from payment-processor star descriptors.
 
     Some payment processors prefix the true merchant with a short processor
@@ -201,6 +209,6 @@ def preserve_starred_processor_merchant(text, removed_tokens):
     return merchant
 
 
-def normalize_spaces(value):
-    """Normalize spaces."""
+def normalize_spaces(value: object) -> str:
+    """Collapse any whitespace run to a single ASCII space."""
     return re.sub(r"\s+", " ", str(value or "")).strip()
