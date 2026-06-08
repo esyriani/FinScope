@@ -245,11 +245,14 @@ def test_rule_audit_preview_remove_rule_is_read_only(core_conn):
     )
 
     preview = preview_rule_change(core_conn, {"type": "delete_rule", "rule_id": specific_id})
-    stored = core_conn.execute(text("""
+    stored = core_conn.execute(
+        text("""
         SELECT category, category_rule_id
         FROM transactions
         WHERE id = :p0
-        """), {"p0": transaction_id}).fetchone()
+        """),
+        {"p0": transaction_id},
+    ).fetchone()
 
     assert preview.rule["id"] == specific_id
     assert preview.summary["total_affected_transactions"] == 1
@@ -289,10 +292,7 @@ def test_rule_audit_preview_apply_modes_distinguish_wins_from_force(core_conn):
     assert where_wins.impacts[0].transaction["description"] == "Metro Pharmacy"
     assert force_apply.summary["total_affected_transactions"] == 2
     assert force_apply.summary["category_changes"] == 2
-    assert any(
-        impact.transaction["description"] == "Metro Grocery #123"
-        for impact in force_apply.impacts
-    )
+    assert any(impact.transaction["description"] == "Metro Grocery #123" for impact in force_apply.impacts)
 
 
 def test_rule_audit_preview_create_rule_is_read_only(core_conn):
@@ -340,11 +340,14 @@ def test_rule_audit_preview_approve_rule_is_read_only(core_conn):
         core_conn,
         {"type": "approve_rule", "rule_id": rule_id},
     )
-    stored_rule = core_conn.execute(text("""
+    stored_rule = core_conn.execute(
+        text("""
         SELECT source, ai_approved
         FROM category_rules
         WHERE id = :p0
-        """), {"p0": rule_id}).fetchone()
+        """),
+        {"p0": rule_id},
+    ).fetchone()
 
     assert preview.rule["id"] == rule_id
     assert preview.summary["total_affected_transactions"] == 0
@@ -388,11 +391,14 @@ def test_rule_audit_preview_edit_rule_is_read_only(core_conn):
         core_conn,
         {"type": "edit_rule", "rule_id": rule_id, "proposed_rule": proposed_rule},
     )
-    stored_rule = core_conn.execute(text("""
+    stored_rule = core_conn.execute(
+        text("""
         SELECT category, amount_min, amount_max
         FROM category_rules
         WHERE id = :p0
-        """), {"p0": rule_id}).fetchone()
+        """),
+        {"p0": rule_id},
+    ).fetchone()
 
     assert preview.rule["category"] == "Food"
     assert preview.proposed_rule["category"] == "Utilities"
@@ -426,11 +432,14 @@ def test_rule_audit_preview_apply_all_rules_is_read_only(core_conn):
     )
 
     preview = preview_rule_change(core_conn, {"type": "apply_all_rules"})
-    stored = core_conn.execute(text("""
+    stored = core_conn.execute(
+        text("""
         SELECT category, category_rule_id
         FROM transactions
         WHERE id = :p0
-        """), {"p0": transaction_id}).fetchone()
+        """),
+        {"p0": transaction_id},
+    ).fetchone()
 
     assert preview.rule == {}
     assert preview.summary["total_affected_transactions"] == 1

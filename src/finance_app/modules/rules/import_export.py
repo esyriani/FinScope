@@ -40,7 +40,6 @@ from .repository import (
     snapshot_transaction_rule_refs,
 )
 
-
 RULE_IMPORT_MODE_ADD = "add"
 RULE_IMPORT_MODE_OVERRIDE = "override"
 RULE_IMPORT_MODES = {RULE_IMPORT_MODE_ADD, RULE_IMPORT_MODE_OVERRIDE}
@@ -101,18 +100,20 @@ def export_rules_csv(conn=None):
     writer = csv.DictWriter(output, fieldnames=RULE_EXPORT_COLUMNS)
     writer.writeheader()
     for row in rows:
-        writer.writerow({
-            "keyword": row["keyword"],
-            "account_name": row["account_name"] or "",
-            "merchant_name": row["merchant_name"] or "",
-            "category": row["category"],
-            "tags": "; ".join(row["tags"]),
-            "amount_min": format_export_amount(row["amount_min"]),
-            "amount_max": format_export_amount(row["amount_max"]),
-            "direction": row["direction"] or CATEGORY_RULE_DIRECTION_ANY,
-            "source": row["source"],
-            "created_at": row["created_at"],
-        })
+        writer.writerow(
+            {
+                "keyword": row["keyword"],
+                "account_name": row["account_name"] or "",
+                "merchant_name": row["merchant_name"] or "",
+                "category": row["category"],
+                "tags": "; ".join(row["tags"]),
+                "amount_min": format_export_amount(row["amount_min"]),
+                "amount_max": format_export_amount(row["amount_max"]),
+                "direction": row["direction"] or CATEGORY_RULE_DIRECTION_ANY,
+                "source": row["source"],
+                "created_at": row["created_at"],
+            }
+        )
     return output.getvalue()
 
 
@@ -123,44 +124,46 @@ def format_export_amount(value):
 
 def export_rule_rows(conn):
     """Return rule rows formatted for CSV export."""
-    rows = conn.execute(
-        select(
-            category_rules_table.c.id,
-            category_rules_table.c.keyword,
-            category_rules_table.c.direction,
-            accounts_table.c.name.label("account_name"),
-            merchants_table.c.merchant_key.label("merchant_name"),
-            category_rules_table.c.category,
-            category_rules_table.c.amount_min,
-            category_rules_table.c.amount_max,
-            category_rules_table.c.source,
-            category_rules_table.c.created_at,
-        )
-        .select_from(
-            category_rules_table
-            .outerjoin(
-                accounts_table,
-                accounts_table.c.id == category_rules_table.c.account_id,
+    rows = (
+        conn.execute(
+            select(
+                category_rules_table.c.id,
+                category_rules_table.c.keyword,
+                category_rules_table.c.direction,
+                accounts_table.c.name.label("account_name"),
+                merchants_table.c.merchant_key.label("merchant_name"),
+                category_rules_table.c.category,
+                category_rules_table.c.amount_min,
+                category_rules_table.c.amount_max,
+                category_rules_table.c.source,
+                category_rules_table.c.created_at,
             )
-            .outerjoin(
-                merchants_table,
-                merchants_table.c.id == category_rules_table.c.merchant_id,
+            .select_from(
+                category_rules_table.outerjoin(
+                    accounts_table,
+                    accounts_table.c.id == category_rules_table.c.account_id,
+                ).outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == category_rules_table.c.merchant_id,
+                )
+            )
+            .order_by(
+                case(
+                    (category_rules_table.c.source == CATEGORY_RULE_SOURCE_MANUAL, 0),
+                    (category_rules_table.c.source == CATEGORY_RULE_SOURCE_AUTOMATIC, 1),
+                    else_=2,
+                ),
+                func.lower(category_rules_table.c.category),
+                category_rules_table.c.category,
+                func.lower(category_rules_table.c.keyword),
+                category_rules_table.c.keyword,
+                category_rules_table.c.amount_min,
+                category_rules_table.c.amount_max,
             )
         )
-        .order_by(
-            case(
-                (category_rules_table.c.source == CATEGORY_RULE_SOURCE_MANUAL, 0),
-                (category_rules_table.c.source == CATEGORY_RULE_SOURCE_AUTOMATIC, 1),
-                else_=2,
-            ),
-            func.lower(category_rules_table.c.category),
-            category_rules_table.c.category,
-            func.lower(category_rules_table.c.keyword),
-            category_rules_table.c.keyword,
-            category_rules_table.c.amount_min,
-            category_rules_table.c.amount_max,
-        )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [dict(row) for row in rows]
 
 
@@ -249,13 +252,9 @@ def preview_rules_import_override(conn, imported_rules):
         seen_keys.add(key)
         proposed_rules.append(preview_imported_rule(conn, rule, -index))
 
-    replaced_rules = conn.execute(
-        select(func.count()).select_from(category_rules_table)
-    ).scalar_one()
+    replaced_rules = conn.execute(select(func.count()).select_from(category_rules_table)).scalar_one()
     cleared_refs = conn.execute(
-        select(func.count())
-        .select_from(transactions_table)
-        .where(transactions_table.c.category_rule_id.is_not(None))
+        select(func.count()).select_from(transactions_table).where(transactions_table.c.category_rule_id.is_not(None))
     ).scalar_one()
     return RuleImportPreview(
         mode=RULE_IMPORT_MODE_OVERRIDE,
@@ -420,9 +419,7 @@ def undo_rules_add_import(undo_state):
                 skipped_count += 1
                 continue
 
-            conn.execute(
-                delete(category_rules_table).where(category_rules_table.c.id == rule["id"])
-            )
+            conn.execute(delete(category_rules_table).where(category_rules_table.c.id == rule["id"]))
             deleted_count += 1
 
         removed_categories = remove_imported_categories(
@@ -487,10 +484,7 @@ def undo_rules_override_import(undo_state):
 
     message = f"Restored {len(before_rules)} rule{'' if len(before_rules) == 1 else 's'} from before import."
     if restored_refs:
-        message += (
-            f" Restored rule references on {restored_refs} transaction"
-            f"{'' if restored_refs == 1 else 's'}."
-        )
+        message += f" Restored rule references on {restored_refs} transaction" f"{'' if restored_refs == 1 else 's'}."
     if skipped_refs:
         message += (
             f" Skipped {skipped_refs} transaction reference"
@@ -519,14 +513,8 @@ def parse_rules_csv(raw_text):
 
 def parse_rules_csv_row(row, line_number):
     """Parse rules CSV row."""
-    normalized_row = {
-        normalize_import_header(key): value
-        for key, value in row.items()
-        if key is not None
-    }
-    keyword = normalize_merchant_description(
-        rule_import_value(normalized_row, "keyword", "merchant", "rule_keyword")
-    )
+    normalized_row = {normalize_import_header(key): value for key, value in row.items() if key is not None}
+    keyword = normalize_merchant_description(rule_import_value(normalized_row, "keyword", "merchant", "rule_keyword"))
     merchant_name = str(
         rule_import_value(
             normalized_row,
@@ -570,28 +558,21 @@ def parse_rules_csv_row(row, line_number):
     if amount_min is not None and amount_max is not None and amount_min > amount_max:
         raise ValueError(f"Row {line_number}: minimum amount cannot be greater than maximum amount.")
 
-    source = str(
-        rule_import_value(normalized_row, "source") or CATEGORY_RULE_SOURCE_MANUAL
-    ).strip().lower()
+    source = str(rule_import_value(normalized_row, "source") or CATEGORY_RULE_SOURCE_MANUAL).strip().lower()
     if source not in RULE_SOURCE_VALUES:
         allowed_sources = ", ".join(sorted(RULE_SOURCE_VALUES))
-        raise ValueError(
-            f"Row {line_number}: source must be one of {allowed_sources}."
-        )
+        raise ValueError(f"Row {line_number}: source must be one of {allowed_sources}.")
 
-    direction = str(
-        rule_import_value(normalized_row, "direction", "transaction_direction")
-        or CATEGORY_RULE_DIRECTION_ANY
-    ).strip().lower()
+    direction = (
+        str(rule_import_value(normalized_row, "direction", "transaction_direction") or CATEGORY_RULE_DIRECTION_ANY)
+        .strip()
+        .lower()
+    )
     if direction not in CATEGORY_RULE_DIRECTIONS:
         allowed_directions = ", ".join(sorted(CATEGORY_RULE_DIRECTIONS))
-        raise ValueError(
-            f"Row {line_number}: direction must be one of {allowed_directions}."
-        )
+        raise ValueError(f"Row {line_number}: direction must be one of {allowed_directions}.")
 
-    created_at = str(
-        rule_import_value(normalized_row, "created_at", "created") or ""
-    ).strip() or None
+    created_at = str(rule_import_value(normalized_row, "created_at", "created") or "").strip() or None
 
     return {
         "keyword": keyword,
@@ -626,12 +607,7 @@ def parse_optional_rule_amount(value):
     if not text or text.casefold() in {"any", "none", "null"}:
         return None
 
-    normalized = (
-        text.replace("$", "")
-        .replace("\u00a0", "")
-        .replace(" ", "")
-        .replace(",", "")
-    )
+    normalized = text.replace("$", "").replace("\u00a0", "").replace(" ", "").replace(",", "")
     try:
         return float(normalized)
     except ValueError as exc:

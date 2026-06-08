@@ -67,7 +67,7 @@ def update_transaction_category(transaction_id):
                 amount_min, amount_max = parse_amount_bounds(
                     request.form.get("amount_min", ""),
                     request.form.get("amount_max", ""),
-            )
+                )
             except ValueError as exc:
                 flash(gettext(str(exc)))
                 return redirect(next_url or url_for("transactions.transactions"))
@@ -153,24 +153,12 @@ def batch_transactions():
 
     if action == "approve":
         updated = transactions_service.approve_selected_transactions(transaction_ids)
-        flash(
-            gettext(
-                "Approved selected transaction."
-                if updated == 1
-                else "Approved selected transactions."
-            )
-        )
+        flash(gettext("Approved selected transaction." if updated == 1 else "Approved selected transactions."))
         return redirect(redirect_url)
 
     if action == "ignore":
         updated = transactions_service.ignore_selected_transactions(transaction_ids)
-        flash(
-            gettext(
-                "Ignored selected transaction."
-                if updated == 1
-                else "Ignored selected transactions."
-            )
-        )
+        flash(gettext("Ignored selected transaction." if updated == 1 else "Ignored selected transactions."))
         return redirect(transactions_redirect_with_ignored(redirect_url, "all"))
 
     if action == "recategorize":
@@ -239,7 +227,7 @@ def apply_transaction_ai_suggestion(transaction_id):
             amount_min, amount_max = parse_amount_bounds(
                 request.form.get("amount_min", ""),
                 request.form.get("amount_max", ""),
-        )
+            )
         except ValueError as exc:
             flash(gettext(str(exc)))
             return redirect(next_url or url_for("transactions.transactions"))
@@ -256,4 +244,3 @@ def apply_transaction_ai_suggestion(transaction_id):
         session.pop("transaction_ai_suggestion", None)
     flash(gettext(result.get("message") or "AI suggestion cannot be applied."))
     return redirect(next_url or url_for("transactions.transactions"))
-

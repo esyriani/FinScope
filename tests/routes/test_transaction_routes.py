@@ -23,12 +23,19 @@ def insert_route_transaction(conn, fingerprint="route-tx", category="UNKNOWN", n
 
 def transaction_state(conn, tx_id):
     """Return selected transaction state."""
-    return conn.execute(text("""
+    return (
+        conn.execute(
+            text("""
         SELECT category, needs_review, category_source, category_confidence,
                category_rule_id, categorized_at, reviewed_at, ignored
         FROM transactions
         WHERE id = :p0
-        """), {"p0": tx_id}).mappings().fetchone()
+        """),
+            {"p0": tx_id},
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def test_update_transaction_category_route_saves_manual_category_rule_and_tags(client, core_conn):

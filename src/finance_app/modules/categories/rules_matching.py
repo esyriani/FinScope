@@ -349,10 +349,9 @@ def rule_specificity(rule):
     has_merchant = rule["merchant_id"] if "merchant_id" in rule.keys() else rule.get("merchant_id")
     has_account = rule_account_id(rule) is not None
     has_direction = rule_direction(rule) != CATEGORY_RULE_DIRECTION_ANY
-    has_amount = (
-        (rule["amount_min"] if "amount_min" in rule.keys() else None) is not None
-        or (rule["amount_max"] if "amount_max" in rule.keys() else None) is not None
-    )
+    has_amount = (rule["amount_min"] if "amount_min" in rule.keys() else None) is not None or (
+        rule["amount_max"] if "amount_max" in rule.keys() else None
+    ) is not None
     return (
         1 if has_merchant else 0,
         1 if has_account else 0,
@@ -439,5 +438,3 @@ def amount_cache_key(amount):
     except (InvalidOperation, TypeError, ValueError):
         return None
     return str(normalized) if normalized is not None else None
-
-

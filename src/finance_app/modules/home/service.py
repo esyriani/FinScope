@@ -44,7 +44,6 @@ from finance_app.modules.review.service import review_groups, review_summary
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 from finance_app.modules.transactions.constants import AMOUNT_TYPE_SPENDING, IGNORED_FILTER_ACTIVE
 
-
 RECENT_ACTIVITY_LIMIT = 5
 SUGGESTED_ACTION_LIMIT = 4
 HOME_QUICK_INSIGHT_LIMIT = 3
@@ -89,18 +88,10 @@ def build_home_context():
         )
         sharing_context = build_user_sharing_context(conn)
 
-    recurring_context = (
-        build_recurring_activity_context()
-        if has_request_context()
-        else {"recurring_items": []}
-    )
+    recurring_context = build_recurring_activity_context() if has_request_context() else {"recurring_items": []}
     recurring_items = recurring_context["recurring_items"]
     recurring_summary = build_recurring_summary(recurring_items)
-    failed_jobs = [
-        job
-        for job in list_background_jobs(limit=None)
-        if job.get("status") == "failed"
-    ]
+    failed_jobs = [job for job in list_background_jobs(limit=None) if job.get("status") == "failed"]
     ytd_spending = rounded_money_float(overview["ytd_spending"])
     ytd_income = rounded_money_float(overview["ytd_income"])
     ytd_cashflow = rounded_money_float(ytd_income - ytd_spending)
@@ -284,72 +275,79 @@ def fetch_home_overview(conn, unknown_category, start_date):
         A mapping with transaction counts, YTD spending, income, unknown count,
         and the latest active reportable transaction date.
     """
-    return conn.execute(
-        select(
-            func.count().label("transaction_count"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            (transactions_table.c.amount > 0)
-                            & (transactions_table.c.transaction_kind == "expense"),
-                            transactions_table.c.amount,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("ytd_spending"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            (transactions_table.c.amount < 0)
-                            & (transactions_table.c.transaction_kind == "income"),
-                            -transactions_table.c.amount,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("ytd_income"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            func.coalesce(transactions_table.c.category, unknown_category) == unknown_category,
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("uncategorized_count"),
-            func.max(transactions_table.c.tx_date).label("latest_tx_date"),
+    return (
+        conn.execute(
+            select(
+                func.count().label("transaction_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                (transactions_table.c.amount > 0)
+                                & (transactions_table.c.transaction_kind == "expense"),
+                                transactions_table.c.amount,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("ytd_spending"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                (transactions_table.c.amount < 0) & (transactions_table.c.transaction_kind == "income"),
+                                -transactions_table.c.amount,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("ytd_income"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                func.coalesce(transactions_table.c.category, unknown_category) == unknown_category,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("uncategorized_count"),
+                func.max(transactions_table.c.tx_date).label("latest_tx_date"),
+            ).where(
+                transactions_table.c.ignored == 0,
+                transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS),
+                transactions_table.c.tx_date >= start_date,
+            )
         )
-        .where(
-            transactions_table.c.ignored == 0,
-            transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS),
-            transactions_table.c.tx_date >= start_date,
-        )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
 
 
 def fetch_attention_summary(conn, unknown_category):
     """Return active ledger counts that should remain visible until resolved."""
     category_value = func.coalesce(transactions_table.c.category, unknown_category)
-    return conn.execute(
-        select(
-            func.coalesce(func.sum(case((category_value == unknown_category, 1), else_=0)), 0).label("unknown_count"),
-            func.coalesce(func.sum(case((transactions_table.c.needs_review == 1, 1), else_=0)), 0).label(
-                "needs_review_count"
-            ),
+    return (
+        conn.execute(
+            select(
+                func.coalesce(func.sum(case((category_value == unknown_category, 1), else_=0)), 0).label(
+                    "unknown_count"
+                ),
+                func.coalesce(func.sum(case((transactions_table.c.needs_review == 1, 1), else_=0)), 0).label(
+                    "needs_review_count"
+                ),
+            ).where(
+                transactions_table.c.ignored == 0,
+                transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS),
+            )
         )
-        .where(
-            transactions_table.c.ignored == 0,
-            transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS),
-        )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
 
 
 def fetch_statement_count(conn):
@@ -394,11 +392,15 @@ def fetch_failed_imports(conn, limit=3):
         .select_from(statements_table)
         .where(statements_table.c.import_status == STATEMENT_IMPORT_STATUS_FAILED)
     ).scalar_one()
-    rows = conn.execute(
-        latest_statement_query()
-        .where(statements_table.c.import_status == STATEMENT_IMPORT_STATUS_FAILED)
-        .limit(limit)
-    ).mappings().fetchall()
+    rows = (
+        conn.execute(
+            latest_statement_query()
+            .where(statements_table.c.import_status == STATEMENT_IMPORT_STATUS_FAILED)
+            .limit(limit)
+        )
+        .mappings()
+        .fetchall()
+    )
     return {
         "count": count,
         "latest": rows,
@@ -425,85 +427,101 @@ def build_review_work_summary(conn, unknown_category):
 
 def fetch_top_categories(conn, unknown_category, start_date, limit):
     """Return top current-year spending categories for compact Home insights."""
-    return conn.execute(
-        select(
-            func.coalesce(transactions_table.c.category, unknown_category).label("category"),
-            func.sum(transactions_table.c.amount).label("total"),
+    return (
+        conn.execute(
+            select(
+                func.coalesce(transactions_table.c.category, unknown_category).label("category"),
+                func.sum(transactions_table.c.amount).label("total"),
+            )
+            .where(
+                transactions_table.c.amount > 0,
+                transactions_table.c.transaction_kind == "expense",
+                transactions_table.c.ignored == 0,
+                transactions_table.c.tx_date >= start_date,
+            )
+            .group_by(transactions_table.c.category)
+            .order_by(func.sum(transactions_table.c.amount).desc())
+            .limit(limit)
         )
-        .where(
-            transactions_table.c.amount > 0,
-            transactions_table.c.transaction_kind == "expense",
-            transactions_table.c.ignored == 0,
-            transactions_table.c.tx_date >= start_date,
-        )
-        .group_by(transactions_table.c.category)
-        .order_by(func.sum(transactions_table.c.amount).desc())
-        .limit(limit)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def fetch_recent_reviewed_transactions(conn, limit=2):
     """Return recently reviewed transactions for the activity feed."""
-    return conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.tx_date,
-            transactions_table.c.description,
-            transactions_table.c.amount,
-            transactions_table.c.category,
-            transactions_table.c.reviewed_at,
+    return (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.tx_date,
+                transactions_table.c.description,
+                transactions_table.c.amount,
+                transactions_table.c.category,
+                transactions_table.c.reviewed_at,
+            )
+            .where(
+                transactions_table.c.ignored == 0,
+                transactions_table.c.reviewed_at.is_not(None),
+            )
+            .order_by(transactions_table.c.reviewed_at.desc(), transactions_table.c.id.desc())
+            .limit(limit)
         )
-        .where(
-            transactions_table.c.ignored == 0,
-            transactions_table.c.reviewed_at.is_not(None),
-        )
-        .order_by(transactions_table.c.reviewed_at.desc(), transactions_table.c.id.desc())
-        .limit(limit)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def fetch_recent_categorizations(conn, limit=2):
     """Return recent categorization events that were not already reviewed."""
-    return conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.tx_date,
-            transactions_table.c.description,
-            transactions_table.c.amount,
-            transactions_table.c.category,
-            transactions_table.c.category_source,
-            transactions_table.c.categorized_at,
+    return (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.tx_date,
+                transactions_table.c.description,
+                transactions_table.c.amount,
+                transactions_table.c.category,
+                transactions_table.c.category_source,
+                transactions_table.c.categorized_at,
+            )
+            .where(
+                transactions_table.c.ignored == 0,
+                transactions_table.c.categorized_at.is_not(None),
+                transactions_table.c.reviewed_at.is_(None),
+            )
+            .order_by(transactions_table.c.categorized_at.desc(), transactions_table.c.id.desc())
+            .limit(limit)
         )
-        .where(
-            transactions_table.c.ignored == 0,
-            transactions_table.c.categorized_at.is_not(None),
-            transactions_table.c.reviewed_at.is_(None),
-        )
-        .order_by(transactions_table.c.categorized_at.desc(), transactions_table.c.id.desc())
-        .limit(limit)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def fetch_recent_rules(conn, limit=2):
     """Return recently created category rules for the activity feed."""
-    return conn.execute(
-        select(
-            category_rules_table.c.id,
-            category_rules_table.c.keyword,
-            category_rules_table.c.category,
-            category_rules_table.c.source,
-            category_rules_table.c.created_at,
-            merchants_table.c.merchant_key.label("merchant_name"),
-        )
-        .select_from(
-            category_rules_table.outerjoin(
-                merchants_table,
-                merchants_table.c.id == category_rules_table.c.merchant_id,
+    return (
+        conn.execute(
+            select(
+                category_rules_table.c.id,
+                category_rules_table.c.keyword,
+                category_rules_table.c.category,
+                category_rules_table.c.source,
+                category_rules_table.c.created_at,
+                merchants_table.c.merchant_key.label("merchant_name"),
             )
+            .select_from(
+                category_rules_table.outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == category_rules_table.c.merchant_id,
+                )
+            )
+            .order_by(category_rules_table.c.created_at.desc(), category_rules_table.c.id.desc())
+            .limit(limit)
         )
-        .order_by(category_rules_table.c.created_at.desc(), category_rules_table.c.id.desc())
-        .limit(limit)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def build_financial_pulse(overview, ytd_income, ytd_spending, ytd_cashflow, attention_counts):
@@ -572,7 +590,11 @@ def build_pulse_kpis(ytd_spending, ytd_cashflow, attention_counts, permissions):
 
 def open_attention_href(attention_counts, permissions):
     """Return an allowed destination for the Home open-attention KPI."""
-    if attention_counts["unknown_transactions"] or attention_counts["needs_review"] or attention_counts["review_groups"]:
+    if (
+        attention_counts["unknown_transactions"]
+        or attention_counts["needs_review"]
+        or attention_counts["review_groups"]
+    ):
         if permissions["can_edit_transactions"]:
             return "/review"
         return "/transactions?period=all&ignored=active&category_status=unknown"
@@ -809,11 +831,7 @@ def recurring_activity_items(recurring_items, limit=2):
         "likely_occurred": 4,
         "matched": 5,
     }
-    candidates = [
-        item
-        for item in recurring_items
-        if item["status"] in priority
-    ]
+    candidates = [item for item in recurring_items if item["status"] in priority]
     candidates.sort(key=lambda item: (priority[item["status"]], item["date"], item["merchant"]))
     return [
         {
@@ -837,9 +855,7 @@ def build_suggested_actions(attention_counts, permissions):
     actions = [
         {
             "label": (
-                "Review unknown transactions"
-                if permissions["can_edit_transactions"]
-                else "Unknown transactions"
+                "Review unknown transactions" if permissions["can_edit_transactions"] else "Unknown transactions"
             ),
             "detail": (
                 "Clear the highest-risk categorization work."
@@ -953,8 +969,7 @@ def comparison_card_has_entity(card):
     group = card.get("group")
     insight_type = str(card.get("insight_type") or "")
     return bool(insight_entity(card)) and (
-        group in ("categories", "merchants")
-        or insight_type.startswith(("category_", "merchant_"))
+        group in ("categories", "merchants") or insight_type.startswith(("category_", "merchant_"))
     )
 
 

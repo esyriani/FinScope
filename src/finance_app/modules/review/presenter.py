@@ -85,11 +85,7 @@ def build_review_groups(rows, transaction_tags, unknown_category):
 
 def selected_review_category(categories, unknown_category):
     """Return the category that should prefill the review modal."""
-    known_categories = {
-        category
-        for category in categories
-        if not is_unknown_category(category, unknown_category)
-    }
+    known_categories = {category for category in categories if not is_unknown_category(category, unknown_category)}
     if len(known_categories) == 1:
         return next(iter(known_categories))
     return unknown_category
@@ -108,11 +104,7 @@ def selected_review_tags(transactions):
     for tx in transactions[1:]:
         common_tags &= set(tx.get("tags", []))
 
-    return [
-        tag
-        for tag in transactions[0].get("tags", [])
-        if tag in common_tags
-    ]
+    return [tag for tag in transactions[0].get("tags", []) if tag in common_tags]
 
 
 def review_display_rows(groups, ungrouped_keys, unknown_category):
@@ -122,10 +114,7 @@ def review_display_rows(groups, ungrouped_keys, unknown_category):
 
     for group in groups:
         if group["merchant_key"] in ungrouped and group["count"] > 1:
-            rows.extend(
-                review_transaction_display_row(group, tx, unknown_category)
-                for tx in group["transactions"]
-            )
+            rows.extend(review_transaction_display_row(group, tx, unknown_category) for tx in group["transactions"])
             continue
 
         rows.append(review_group_display_row(group))
@@ -182,10 +171,7 @@ def review_transaction_row(row, tags=None):
 
 def review_group_display_row(group):
     """Render group display row."""
-    row = {
-        key: value
-        for key, value in group.items()
-    }
+    row = {key: value for key, value in group.items()}
     row.update(
         {
             "is_ungrouped": False,
@@ -282,11 +268,7 @@ def selected_ungroup_keys(values):
 
 def active_ungroup_keys(ungrouped_keys, groups):
     """Handle active ungroup keys."""
-    splitable_keys = {
-        group["merchant_key"]
-        for group in groups
-        if group["count"] > 1
-    }
+    splitable_keys = {group["merchant_key"] for group in groups if group["count"] > 1}
     return [key for key in ungrouped_keys if key in splitable_keys]
 
 
@@ -325,4 +307,4 @@ def short_label(value, limit=48):
     text = str(value or "").strip()
     if len(text) <= limit:
         return text
-    return text[:limit - 3].rstrip() + "..."
+    return text[: limit - 3].rstrip() + "..."

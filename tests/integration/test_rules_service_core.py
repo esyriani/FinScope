@@ -72,11 +72,18 @@ def test_rules_service_mutations_support_core_connections(app, core_conn):
         FROM category_rules
         WHERE keyword = 'METRO GROCERY UPDATED'
         """)).fetchone()
-    auto_count = core_conn.execute(text("""
+    auto_count = (
+        core_conn.execute(
+            text("""
         SELECT COUNT(*) AS count
         FROM category_rules
         WHERE id = :p0
-        """), {"p0": auto_rule_id}).fetchone()._mapping["count"]
+        """),
+            {"p0": auto_rule_id},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
 
     assert tuple(updated_rule) == ("METRO GROCERY UPDATED", "Utilities", 25.0, 50.0, "manual", 0)
     assert get_rule_tags_by_rule_id(core_conn, [rule_id])[rule_id] == ["Government"]

@@ -78,7 +78,6 @@ from finance_app.modules.upload.undo import (
     statement_transaction_count,
 )
 
-
 INTERAC_MATCH_DATE_TOLERANCE_DAYS = 5
 INTERAC_DESCRIPTION_MARKERS = {
     "sent": ("ENVOI", "SENT E-TRANSFER"),
@@ -223,9 +222,7 @@ def insert_imported_transaction(conn, statement_id, account_id, tx):
         "amount": tx["amount"],
         "category": tx["category"],
         "category_id": (
-            tx.get("category_id")
-            if tx.get("category_id") is not None
-            else resolve_category_id(conn, tx["category"])
+            tx.get("category_id") if tx.get("category_id") is not None else resolve_category_id(conn, tx["category"])
         ),
         "needs_review": int(tx.get("needs_review", 0)),
         "category_source": tx.get("category_source", CATEGORY_SOURCE_UNKNOWN),
@@ -350,11 +347,7 @@ def update_enriched_transaction(conn, transaction_id, merchant_id, description, 
         "reviewed_at": enriched.get("reviewed_at"),
         "transaction_kind": transaction_kind,
     }
-    conn.execute(
-        update(transactions_table)
-        .where(transactions_table.c.id == transaction_id)
-        .values(**values)
-    )
+    conn.execute(update(transactions_table).where(transactions_table.c.id == transaction_id).values(**values))
 
 
 def should_preserve_existing_category(conn, transaction):
@@ -380,11 +373,14 @@ def find_interac_match(conn, account_id, transfer, merchant_id):
 
 def account_has_transactions(conn, account_id):
     """Return whether the selected account already contains ledger transactions."""
-    return conn.execute(
-        select(func.count().label("count"))
-        .select_from(transactions_table)
-        .where(transactions_table.c.account_id == account_id)
-    ).scalar_one() > 0
+    return (
+        conn.execute(
+            select(func.count().label("count"))
+            .select_from(transactions_table)
+            .where(transactions_table.c.account_id == account_id)
+        ).scalar_one()
+        > 0
+    )
 
 
 def find_interac_match_for_account(conn, account_id, transfer, merchant_id):
@@ -451,9 +447,11 @@ def find_interac_match_core(
         )
         conditions.append(accounts_table.c.account_type.in_((ACCOUNT_TYPE_CHECKING, ACCOUNT_TYPE_SAVINGS)))
 
-    rows = conn.execute(
-        statement.where(*conditions).order_by(transactions_table.c.tx_date, transactions_table.c.id)
-    ).mappings().fetchall()
+    rows = (
+        conn.execute(statement.where(*conditions).order_by(transactions_table.c.tx_date, transactions_table.c.id))
+        .mappings()
+        .fetchall()
+    )
     return nearest_unique_match(rows, transfer["tx_date"])
 
 
@@ -461,10 +459,7 @@ def interac_counterparty_condition(transfer, merchant_id):
     """Return the Core condition that matches an Interac counterparty."""
     markers = INTERAC_DESCRIPTION_MARKERS.get(transfer.get("interac_direction"), ())
     conditions = [transactions_table.c.merchant_id == merchant_id]
-    conditions.extend(
-        func.upper(transactions_table.c.description).like(f"%{marker}%")
-        for marker in markers
-    )
+    conditions.extend(func.upper(transactions_table.c.description).like(f"%{marker}%") for marker in markers)
     return or_(*conditions)
 
 
@@ -508,11 +503,7 @@ def import_statement_transactions_job(
                 interac_direction=interac_direction,
                 date_order=date_order,
             )
-            if (
-                extension == "csv"
-                and inserted_count
-                and statement_type != STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER
-            ):
+            if extension == "csv" and inserted_count and statement_type != STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
                 llm_candidate_count = count_statement_unknown_transactions(conn, statement_id)
             update_statement_import_state(
                 conn,
@@ -609,9 +600,7 @@ def update_statement_import_state(conn, statement_id, status, **fields):
             raise ValueError(f"Unsupported statement import field: {field}")
 
     conn.execute(
-        update(statements_table)
-        .where(statements_table.c.id == statement_id)
-        .values(import_status=status, **fields)
+        update(statements_table).where(statements_table.c.id == statement_id).values(import_status=status, **fields)
     )
 
 
@@ -634,10 +623,7 @@ def unknown_transaction_conditions(unknown_category, statement_id=None, excluded
     """Return Core predicates for active transactions eligible for AI reruns."""
     conditions = [
         transactions_table.c.ignored == 0,
-        (
-            transactions_table.c.category.is_(None)
-            | (transactions_table.c.category == unknown_category)
-        ),
+        (transactions_table.c.category.is_(None) | (transactions_table.c.category == unknown_category)),
     ]
     if statement_id is not None:
         conditions.append(transactions_table.c.statement_id == statement_id)
@@ -991,9 +977,7 @@ def unknown_transaction_rows(conn, unknown_category, statement_id=None, excluded
     if limit is not None:
         statement = statement.limit(limit)
 
-    return conn.execute(
-        statement
-    ).mappings().fetchall()
+    return conn.execute(statement).mappings().fetchall()
 
 
 def update_unknown_transaction_category(conn, tx, unknown_category):
@@ -1001,9 +985,7 @@ def update_unknown_transaction_category(conn, tx, unknown_category):
     values = {
         "category": tx["category"],
         "category_id": (
-            tx.get("category_id")
-            if tx.get("category_id") is not None
-            else resolve_category_id(conn, tx["category"])
+            tx.get("category_id") if tx.get("category_id") is not None else resolve_category_id(conn, tx["category"])
         ),
         "needs_review": int(tx.get("needs_review", 0)),
         "category_source": tx.get("category_source", CATEGORY_SOURCE_UNKNOWN),
@@ -1017,10 +999,7 @@ def update_unknown_transaction_category(conn, tx, unknown_category):
         update(transactions_table)
         .where(
             transactions_table.c.id == tx["id"],
-            (
-                transactions_table.c.category.is_(None)
-                | (transactions_table.c.category == unknown_category)
-            ),
+            (transactions_table.c.category.is_(None) | (transactions_table.c.category == unknown_category)),
         )
         .values(**values)
     )

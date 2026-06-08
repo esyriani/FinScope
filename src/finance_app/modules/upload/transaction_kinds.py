@@ -38,7 +38,6 @@ from finance_app.modules.categories.sources import (
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names
 from finance_app.modules.settings.runtime import get_unknown_category
 
-
 PAYMENT_MATCH_DATE_TOLERANCE_DAYS = 5
 PAYMENT_DESCRIPTION_MARKERS = (
     "PAYMENT THANK YOU",
@@ -104,14 +103,18 @@ def account_row(conn, account_id):
     """Return account metadata for import classification."""
     if account_id is None:
         return None
-    return conn.execute(
-        select(
-            accounts_table.c.id,
-            accounts_table.c.name,
-            accounts_table.c.account_type,
-            accounts_table.c.paid_from_account_id,
-        ).where(accounts_table.c.id == account_id)
-    ).mappings().fetchone()
+    return (
+        conn.execute(
+            select(
+                accounts_table.c.id,
+                accounts_table.c.name,
+                accounts_table.c.account_type,
+                accounts_table.c.paid_from_account_id,
+            ).where(accounts_table.c.id == account_id)
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def is_payment_description(description):
@@ -126,19 +129,19 @@ def is_payment_to_linked_credit_account(conn, paid_from_account_id, description)
     if not normalized_description:
         return False
 
-    linked_accounts = conn.execute(
-        select(accounts_table.c.name).where(
-            accounts_table.c.paid_from_account_id == paid_from_account_id,
-            accounts_table.c.account_type == ACCOUNT_TYPE_CREDIT_CARD,
+    linked_accounts = (
+        conn.execute(
+            select(accounts_table.c.name).where(
+                accounts_table.c.paid_from_account_id == paid_from_account_id,
+                accounts_table.c.account_type == ACCOUNT_TYPE_CREDIT_CARD,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
     for account in linked_accounts:
-        account_tokens = [
-            token
-            for token in " ".join(account["name"].upper().split()).split()
-            if len(token) >= 4
-        ]
+        account_tokens = [token for token in " ".join(account["name"].upper().split()).split() if len(token) >= 4]
         if account_tokens and any(token in normalized_description for token in account_tokens):
             return True
 
@@ -178,25 +181,26 @@ def mark_linked_account_payments(conn, account_id, imported_transactions, undo_s
 
 def find_linked_payment_match(conn, credit_account, amount, tx_date):
     """Return the unique funding-account row that matches a card payment."""
-    rows = conn.execute(
-        transaction_snapshot_select()
-        .where(
-            transactions_table.c.account_id == credit_account["paid_from_account_id"],
-            transactions_table.c.ignored == 0,
-            transactions_table.c.amount > 0,
-            transactions_table.c.amount > amount - 0.005,
-            transactions_table.c.amount < amount + 0.005,
-            transactions_table.c.tx_date >= date_window_start(tx_date, PAYMENT_MATCH_DATE_TOLERANCE_DAYS),
-            transactions_table.c.tx_date <= date_window_end(tx_date, PAYMENT_MATCH_DATE_TOLERANCE_DAYS),
-            transactions_table.c.transaction_kind != TRANSACTION_KIND_PAYMENT,
+    rows = (
+        conn.execute(
+            transaction_snapshot_select()
+            .where(
+                transactions_table.c.account_id == credit_account["paid_from_account_id"],
+                transactions_table.c.ignored == 0,
+                transactions_table.c.amount > 0,
+                transactions_table.c.amount > amount - 0.005,
+                transactions_table.c.amount < amount + 0.005,
+                transactions_table.c.tx_date >= date_window_start(tx_date, PAYMENT_MATCH_DATE_TOLERANCE_DAYS),
+                transactions_table.c.tx_date <= date_window_end(tx_date, PAYMENT_MATCH_DATE_TOLERANCE_DAYS),
+                transactions_table.c.transaction_kind != TRANSACTION_KIND_PAYMENT,
+            )
+            .order_by(transactions_table.c.tx_date, transactions_table.c.id)
         )
-        .order_by(transactions_table.c.tx_date, transactions_table.c.id)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return nearest_unique_match(
-        [
-            row for row in rows
-            if is_linked_payment_description(row["description"], credit_account["name"])
-        ],
+        [row for row in rows if is_linked_payment_description(row["description"], credit_account["name"])],
         tx_date,
     )
 
@@ -231,11 +235,7 @@ def nearest_unique_match(rows, target_date):
         return None
 
     nearest_delta = min(abs_date_delta(row["tx_date"], target_date) for row in rows)
-    nearest_rows = [
-        row
-        for row in rows
-        if abs_date_delta(row["tx_date"], target_date) == nearest_delta
-    ]
+    nearest_rows = [row for row in rows if abs_date_delta(row["tx_date"], target_date) == nearest_delta]
     if len(nearest_rows) != 1:
         return "ambiguous"
     return nearest_rows[0]

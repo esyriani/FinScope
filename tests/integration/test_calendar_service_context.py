@@ -38,7 +38,8 @@ def seed_calendar_transactions(conn):
         ("2026-05-05", "NETFLIX", 18.99, "Entertainment", 0, "expense", "calendar-netflix-may"),
         ("2026-05-06", "Ignored Store", 999.00, "Food", 1, "expense", "calendar-ignored"),
     ]
-    conn.execute(text("""
+    conn.execute(
+        text("""
         INSERT INTO transactions (
             account_id,
             tx_date,
@@ -50,21 +51,34 @@ def seed_calendar_transactions(conn):
             fingerprint
         )
         VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7)
-        """), [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"), row)) for row in [
-            (account_id, tx_date, description, amount, category, ignored, transaction_kind, fingerprint)
-            for tx_date, description, amount, category, ignored, transaction_kind, fingerprint in rows
-        ]])
+        """),
+        [
+            dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"), row))
+            for row in [
+                (account_id, tx_date, description, amount, category, ignored, transaction_kind, fingerprint)
+                for tx_date, description, amount, category, ignored, transaction_kind, fingerprint in rows
+            ]
+        ],
+    )
     for fingerprint, tags in (
         ("calendar-metro", ["Tax"]),
         ("calendar-netflix-may", ["Subscription"]),
     ):
-        transaction_id = conn.execute(text("""
+        transaction_id = (
+            conn.execute(
+                text("""
             SELECT id
             FROM transactions
             WHERE fingerprint = :p0
-            """), {"p0": fingerprint}).fetchone()._mapping["id"]
+            """),
+                {"p0": fingerprint},
+            )
+            .fetchone()
+            ._mapping["id"]
+        )
         set_transaction_tags(conn, transaction_id, tags, source="rule")
-    conn.execute(text("""
+    conn.execute(
+        text("""
         INSERT INTO transactions (
             account_id,
             tx_date,
@@ -75,7 +89,9 @@ def seed_calendar_transactions(conn):
             fingerprint
         )
         VALUES (:p0, '2026-05-07', 'Savings transfer', 500.00, 'Transfers', 'transfer', 'calendar-transfer')
-        """), {"p0": account_id})
+        """),
+        {"p0": account_id},
+    )
     conn.commit()
 
 

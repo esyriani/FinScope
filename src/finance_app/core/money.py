@@ -9,7 +9,6 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from finance_app.core.config import settings
 
-
 MONEY_QUANTUM = Decimal("0.01")
 
 

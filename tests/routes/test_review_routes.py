@@ -27,7 +27,8 @@ def insert_review_transaction(
     tags=None,
 ):
     """Insert a transaction that can be reviewed."""
-    tx_id = conn.execute(text("""
+    tx_id = conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -39,7 +40,9 @@ def insert_review_transaction(
             fingerprint
         )
         VALUES ('2026-01-02', :p0, 12.34, :p1, :p2, :p3, 1, :p4)
-        """), {"p0": description, "p1": category, "p2": source, "p3": confidence, "p4": fingerprint}).lastrowid
+        """),
+        {"p0": description, "p1": category, "p2": source, "p3": confidence, "p4": fingerprint},
+    ).lastrowid
     if tags:
         set_transaction_tags(conn, tx_id, tags, source=source)
     conn.commit()
@@ -186,10 +189,7 @@ def test_review_page_renders_group_transaction_selector(client, core_conn):
         response,
         "label",
         attrs={
-            "title": (
-                "Marks transactions that may be useful for tax preparation, accounting, "
-                "or year-end review."
-            )
+            "title": ("Marks transactions that may be useful for tax preparation, accounting, " "or year-end review.")
         },
     )
 

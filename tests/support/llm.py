@@ -7,7 +7,6 @@ exercise LLM categorization behavior without calling external services.
 import json
 from types import SimpleNamespace
 
-
 AUTO_REQUEST_ID = object()
 
 

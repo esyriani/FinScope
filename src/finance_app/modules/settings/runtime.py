@@ -32,7 +32,6 @@ from finance_app.database.upsert import insert_or_select_unique_row
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 from finance_app.modules.users import repository as user_repository
 
-
 SETTINGS_DEFAULTS = {
     "default_table_page_size": str(settings.default_table_page_size),
     "comparison_max_years": str(settings.default_comparison_max_years),
@@ -154,40 +153,48 @@ def get_statement_type_by_id(conn, statement_type_id):
     except (TypeError, ValueError):
         return None
 
-    return conn.execute(
-        select(
-            statement_types_table.c.id,
-            statement_types_table.c.name,
-            statement_types_table.c.parser_type,
-            statement_types_table.c.import_mode,
-            statement_types_table.c.default_account_type,
-            statement_types_table.c.active,
-        ).where(
-            statement_types_table.c.id == parsed_id,
-            statement_types_table.c.active == 1,
+    return (
+        conn.execute(
+            select(
+                statement_types_table.c.id,
+                statement_types_table.c.name,
+                statement_types_table.c.parser_type,
+                statement_types_table.c.import_mode,
+                statement_types_table.c.default_account_type,
+                statement_types_table.c.active,
+            ).where(
+                statement_types_table.c.id == parsed_id,
+                statement_types_table.c.active == 1,
+            )
         )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
 
 
 def get_statement_type_by_parser_type(conn, parser_type):
     """Return statement type by parser type."""
     normalized_parser_type = normalize_statement_parser_type(parser_type)
-    return conn.execute(
-        select(
-            statement_types_table.c.id,
-            statement_types_table.c.name,
-            statement_types_table.c.parser_type,
-            statement_types_table.c.import_mode,
-            statement_types_table.c.default_account_type,
-            statement_types_table.c.active,
+    return (
+        conn.execute(
+            select(
+                statement_types_table.c.id,
+                statement_types_table.c.name,
+                statement_types_table.c.parser_type,
+                statement_types_table.c.import_mode,
+                statement_types_table.c.default_account_type,
+                statement_types_table.c.active,
+            )
+            .where(
+                statement_types_table.c.parser_type == normalized_parser_type,
+                statement_types_table.c.active == 1,
+            )
+            .order_by(statement_types_table.c.id)
+            .limit(1)
         )
-        .where(
-            statement_types_table.c.parser_type == normalized_parser_type,
-            statement_types_table.c.active == 1,
-        )
-        .order_by(statement_types_table.c.id)
-        .limit(1)
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
 
 
 def sync_statement_types(conn, rows):
@@ -228,9 +235,9 @@ def sync_statement_types(conn, rows):
 
     existing_ids = {
         row["id"]
-        for row in conn.execute(
-            select(statement_types_table.c.id).where(statement_types_table.c.active == 1)
-        ).mappings().fetchall()
+        for row in conn.execute(select(statement_types_table.c.id).where(statement_types_table.c.active == 1))
+        .mappings()
+        .fetchall()
     }
     kept_ids = set()
 
@@ -279,11 +286,7 @@ def sync_statement_types(conn, rows):
 
     retired_ids = existing_ids - kept_ids
     if retired_ids:
-        conn.execute(
-            update(statement_types_table)
-            .where(statement_types_table.c.id.in_(retired_ids))
-            .values(active=0)
-        )
+        conn.execute(update(statement_types_table).where(statement_types_table.c.id.in_(retired_ids)).values(active=0))
 
 
 def normalize_statement_parser_type(value):
@@ -464,5 +467,3 @@ def current_user_id(explicit_user_id=None):
     if not has_request_context() or not current_user.is_authenticated:
         return None
     return int(current_user.id)
-
-

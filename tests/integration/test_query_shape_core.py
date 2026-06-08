@@ -110,11 +110,7 @@ def test_review_merchant_filter_executes_sql_candidate_predicate(core_conn):
     with captured_sql() as statements:
         review_candidate_rows(core_conn, "UNKNOWN", merchant_candidate="hydro")
 
-    review_sql = "\n".join(
-        statement.lower()
-        for statement in statements
-        if "from transactions" in statement.lower()
-    )
+    review_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
     assert "transactions.ignored" in review_sql
     assert "upper(transactions.description) like" in review_sql
 
@@ -124,11 +120,7 @@ def test_dashboard_category_aggregation_uses_sql_grouping(core_conn):
     with captured_sql() as statements:
         fetch_spending_by_category(core_conn, [transactions_table.c.ignored == 0], "UNKNOWN")
 
-    dashboard_sql = "\n".join(
-        statement.lower()
-        for statement in statements
-        if "from transactions" in statement.lower()
-    )
+    dashboard_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
     assert "sum(" in dashboard_sql
     assert "group by" in dashboard_sql
 
@@ -145,9 +137,7 @@ def test_comparison_period_summary_aggregates_with_sql_date_filters(core_conn):
         )
 
     comparison_sql = "\n".join(
-        statement.lower()
-        for statement in statements
-        if "from transactions" in statement.lower()
+        statement.lower() for statement in statements if "from transactions" in statement.lower()
     )
     assert "sum(" in comparison_sql
     assert "case" in comparison_sql
@@ -167,11 +157,7 @@ def test_calendar_month_transactions_apply_sql_filters_before_presenting_rows(co
             (transactions_table.c.category == "Food",),
         )
 
-    calendar_sql = "\n".join(
-        statement.lower()
-        for statement in statements
-        if "from transactions" in statement.lower()
-    )
+    calendar_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
     assert "transactions.tx_date >=" in calendar_sql
     assert "transactions.tx_date <=" in calendar_sql
     assert "transactions.category =" in calendar_sql

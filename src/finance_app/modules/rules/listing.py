@@ -33,7 +33,6 @@ from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.core.query import parse_page, parse_sort_direction
 from finance_app.modules.rules.service import count_rule_transaction_references_by_rule_id
 
-
 RULE_APPROVAL_FILTER_APPROVED = "approved"
 RULE_APPROVAL_FILTER_SUGGESTED = "suggested"
 RULE_APPROVAL_FILTERS = (
@@ -56,22 +55,14 @@ RULE_SOURCE_FILTER_OPTIONS = (
 def build_rules_context(args):
     """Build rules context."""
     search = args.get("search", "").strip()
-    selected_categories = [
-        category.strip()
-        for category in args.getlist("categories")
-        if category.strip()
-    ]
+    selected_categories = [category.strip() for category in args.getlist("categories") if category.strip()]
     legacy_category = args.get("category", "").strip()
     if legacy_category and legacy_category not in selected_categories:
         selected_categories.append(legacy_category)
     selected_source = args.get("source", "").strip()
     if selected_source not in CATEGORY_RULE_SOURCES:
         selected_source = ""
-    selected_tags = [
-        tag.strip()
-        for tag in args.getlist("tags")
-        if tag.strip()
-    ]
+    selected_tags = [tag.strip() for tag in args.getlist("tags") if tag.strip()]
     approval = args.get("approval", "").strip()
     if approval not in RULE_APPROVAL_FILTERS:
         approval = ""
@@ -84,10 +75,7 @@ def build_rules_context(args):
         category_options = get_category_options(conn)
         account_options = account_option_rows(conn)
         category_descriptions = get_category_description_map(conn)
-        selected_categories = [
-            category for category in selected_categories
-            if category in category_options
-        ]
+        selected_categories = [category for category in selected_categories if category in category_options]
         selected_category = selected_categories[0] if len(selected_categories) == 1 else ""
 
         sort, sort_expression = resolve_rules_sort(sort)
@@ -111,8 +99,7 @@ def build_rules_context(args):
         "rules": rows,
         "account_options": account_options,
         "direction_options": [
-            (direction, CATEGORY_RULE_DIRECTION_LABELS[direction])
-            for direction in CATEGORY_RULE_DIRECTIONS
+            (direction, CATEGORY_RULE_DIRECTION_LABELS[direction]) for direction in CATEGORY_RULE_DIRECTIONS
         ],
         "category_options": category_options,
         "category_descriptions": category_descriptions,
@@ -159,12 +146,10 @@ def build_rules_context(args):
 def rules_select_base(*columns):
     """Return the base rule listing selectable with merchant labels joined."""
     return select(*columns).select_from(
-        category_rules_table
-        .outerjoin(
+        category_rules_table.outerjoin(
             accounts_table,
             accounts_table.c.id == category_rules_table.c.account_id,
-        )
-        .outerjoin(
+        ).outerjoin(
             merchants_table,
             merchants_table.c.id == category_rules_table.c.merchant_id,
         )
@@ -269,13 +254,17 @@ def rule_rows(conn, filters, sort_expression, direction, page_size, offset):
         category_rules_table.c.created_at,
     )
     query = apply_rule_filters(query, filters)
-    query = query.order_by(
-        sort_expression.desc() if direction == "desc" else sort_expression.asc(),
-        func.lower(category_rules_table.c.category),
-        category_rules_table.c.category,
-        func.lower(category_rules_table.c.keyword),
-        category_rules_table.c.keyword,
-    ).limit(page_size).offset(offset)
+    query = (
+        query.order_by(
+            sort_expression.desc() if direction == "desc" else sort_expression.asc(),
+            func.lower(category_rules_table.c.category),
+            category_rules_table.c.category,
+            func.lower(category_rules_table.c.keyword),
+            category_rules_table.c.keyword,
+        )
+        .limit(page_size)
+        .offset(offset)
+    )
 
     rows = [dict(row) for row in conn.execute(query).mappings().fetchall()]
     for row in rows:
@@ -312,10 +301,7 @@ def decorate_rule_rows(conn, rows):
         row["source_label"] = rule_source_label(row["source"])
         row["source_badge_class"] = rule_source_badge_class(row["source"])
         row["direction_label"] = rule_direction_label(row["direction"])
-        row["requires_approval"] = (
-            row["source"] == CATEGORY_RULE_SOURCE_AUTOMATIC
-            and row["ai_approved"] == 0
-        )
+        row["requires_approval"] = row["source"] == CATEGORY_RULE_SOURCE_AUTOMATIC and row["ai_approved"] == 0
         row["approval_label"] = "Approved" if row["ai_approved"] else "Suggested"
         row["approval_badge_class"] = "text-bg-success" if row["ai_approved"] else "text-bg-warning"
         row["transaction_reference_count"] = transaction_reference_counts.get(row["id"], 0)
@@ -376,7 +362,10 @@ def account_option_rows(conn):
     return [
         dict(row)
         for row in conn.execute(
-            select(accounts_table.c.id, accounts_table.c.name)
-            .order_by(func.lower(accounts_table.c.name), accounts_table.c.name)
-        ).mappings().fetchall()
+            select(accounts_table.c.id, accounts_table.c.name).order_by(
+                func.lower(accounts_table.c.name), accounts_table.c.name
+            )
+        )
+        .mappings()
+        .fetchall()
     ]

@@ -13,7 +13,12 @@ from finance_app.modules.recurring.patterns import get_recurring_pattern_metadat
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 from .urls import calendar_url, transactions_url
 from .parsing import clean_categories, clean_tags, default_month, parse_heatmap_metric, parse_month, shift_month
-from .queries import build_category_filter, fetch_month_transactions, fetch_recurring_source_rows, get_recurrence_detection_settings
+from .queries import (
+    build_category_filter,
+    fetch_month_transactions,
+    fetch_recurring_source_rows,
+    get_recurrence_detection_settings,
+)
 from .recurrence import infer_recurring_items
 from .presenter import (
     apply_heatmap,

@@ -19,10 +19,13 @@ from finance_app.modules.upload import workflow as upload_workflow
 
 def create_statement(conn, filename="workflow.csv", account_name="Personal"):
     """Create an account and statement for upload workflow tests."""
-    account_id = conn.execute(text("""
+    account_id = conn.execute(
+        text("""
         INSERT INTO accounts (name)
         VALUES (:p0)
-        """), {"p0": account_name}).lastrowid
+        """),
+        {"p0": account_name},
+    ).lastrowid
     statement_type_id = conn.execute(text("""
         SELECT id
         FROM statement_types
@@ -30,10 +33,13 @@ def create_statement(conn, filename="workflow.csv", account_name="Personal"):
         ORDER BY id
         LIMIT 1
         """)).fetchone()._mapping["id"]
-    statement_id = conn.execute(text("""
+    statement_id = conn.execute(
+        text("""
         INSERT INTO statements (account_id, statement_type_id, filename, checksum, raw_text)
         VALUES (:p0, :p1, :p2, :p3, '')
-        """), {"p0": account_id, "p1": statement_type_id, "p2": filename, "p3": f"checksum-{filename}"}).lastrowid
+        """),
+        {"p0": account_id, "p1": statement_type_id, "p2": filename, "p3": f"checksum-{filename}"},
+    ).lastrowid
     conn.commit()
     return account_id, statement_id
 
@@ -387,11 +393,14 @@ def test_import_statement_job_records_failed_statement_status(core_conn, monkeyp
             "raw",
         )
 
-    statement = core_conn.execute(text("""
+    statement = core_conn.execute(
+        text("""
         SELECT import_status, import_error, imported_count
         FROM statements
         WHERE id = :p0
-        """), {"p0": statement_id}).fetchone()
+        """),
+        {"p0": statement_id},
+    ).fetchone()
     assert statement._mapping["import_status"] == "failed"
     assert statement._mapping["import_error"] == "RuntimeError: parser broke"
     assert statement._mapping["imported_count"] == 0
@@ -415,16 +424,26 @@ def test_import_statement_job_rolls_back_inserted_rows_when_finalization_fails(c
             "Date,Description,Amount\n2026-01-02,UNKNOWN SHOP,12.34\n",
         )
 
-    statement = core_conn.execute(text("""
+    statement = core_conn.execute(
+        text("""
         SELECT import_status, import_error, imported_count
         FROM statements
         WHERE id = :p0
-        """), {"p0": statement_id}).fetchone()
-    transaction_count = core_conn.execute(text("""
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+    transaction_count = (
+        core_conn.execute(
+            text("""
         SELECT COUNT(*) AS count
         FROM transactions
         WHERE statement_id = :p0
-        """), {"p0": statement_id}).fetchone()._mapping["count"]
+        """),
+            {"p0": statement_id},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
 
     assert statement._mapping["import_status"] == "failed"
     assert statement._mapping["import_error"] == "RuntimeError: counter broke"
@@ -462,16 +481,26 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(core_conn, monke
             raw_csv,
         )
 
-    failed_count = core_conn.execute(text("""
+    failed_count = (
+        core_conn.execute(
+            text("""
         SELECT COUNT(*) AS count
         FROM transactions
         WHERE statement_id = :p0
-        """), {"p0": statement_id}).fetchone()._mapping["count"]
-    failed_statement = core_conn.execute(text("""
+        """),
+            {"p0": statement_id},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
+    failed_statement = core_conn.execute(
+        text("""
         SELECT import_status, imported_count
         FROM statements
         WHERE id = :p0
-        """), {"p0": statement_id}).fetchone()
+        """),
+        {"p0": statement_id},
+    ).fetchone()
 
     message = upload_workflow.import_statement_transactions_job(
         statement_id,
@@ -481,16 +510,22 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(core_conn, monke
         raw_csv,
     )
 
-    rows = core_conn.execute(text("""
+    rows = core_conn.execute(
+        text("""
         SELECT description, amount
         FROM transactions
         WHERE statement_id = :p0
-        """), {"p0": statement_id}).fetchall()
-    completed_statement = core_conn.execute(text("""
+        """),
+        {"p0": statement_id},
+    ).fetchall()
+    completed_statement = core_conn.execute(
+        text("""
         SELECT import_status, import_error, imported_count, skipped_count, ignored_count
         FROM statements
         WHERE id = :p0
-        """), {"p0": statement_id}).fetchone()
+        """),
+        {"p0": statement_id},
+    ).fetchone()
 
     assert failed_count == 0
     assert tuple(failed_statement) == ("failed", 0)

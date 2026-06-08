@@ -65,19 +65,23 @@ def test_assign_manual_category_updates_transaction_tags_and_optional_rule(core_
         rule_merchant_id=merchant_id,
     )
 
-    tx = core_conn.execute(
-        select(
-            transactions_table.c.category,
-            transactions_table.c.category_id,
-            transactions_table.c.needs_review,
-            transactions_table.c.category_source,
-            transactions_table.c.category_confidence,
-            transactions_table.c.category_rule_id,
-            transactions_table.c.category_metadata,
-            transactions_table.c.categorized_at,
-            transactions_table.c.reviewed_at,
-        ).where(transactions_table.c.id == transaction_id)
-    ).mappings().fetchone()
+    tx = (
+        core_conn.execute(
+            select(
+                transactions_table.c.category,
+                transactions_table.c.category_id,
+                transactions_table.c.needs_review,
+                transactions_table.c.category_source,
+                transactions_table.c.category_confidence,
+                transactions_table.c.category_rule_id,
+                transactions_table.c.category_metadata,
+                transactions_table.c.categorized_at,
+                transactions_table.c.reviewed_at,
+            ).where(transactions_table.c.id == transaction_id)
+        )
+        .mappings()
+        .fetchone()
+    )
 
     assert result.updated is True
     assert result.saved_rule_id is not None
@@ -131,14 +135,18 @@ def test_assign_manual_category_saves_rule_and_approves_unchanged_transaction(co
         rule_merchant_id=merchant_id,
     )
 
-    tx = core_conn.execute(
-        select(
-            transactions_table.c.category,
-            transactions_table.c.category_source,
-            transactions_table.c.needs_review,
-            transactions_table.c.reviewed_at,
-        ).where(transactions_table.c.id == transaction_id)
-    ).mappings().fetchone()
+    tx = (
+        core_conn.execute(
+            select(
+                transactions_table.c.category,
+                transactions_table.c.category_source,
+                transactions_table.c.needs_review,
+                transactions_table.c.reviewed_at,
+            ).where(transactions_table.c.id == transaction_id)
+        )
+        .mappings()
+        .fetchone()
+    )
 
     assert result.updated is True
     assert result.transaction_changed is False
@@ -160,12 +168,16 @@ def test_mark_transaction_verified_updates_review_status(core_conn, repository_t
         reviewed_at="2026-05-08T00:00:00Z",
     )
 
-    tx = core_conn.execute(
-        select(
-            transactions_table.c.needs_review,
-            transactions_table.c.reviewed_at,
-        ).where(transactions_table.c.id == transaction_id)
-    ).mappings().fetchone()
+    tx = (
+        core_conn.execute(
+            select(
+                transactions_table.c.needs_review,
+                transactions_table.c.reviewed_at,
+            ).where(transactions_table.c.id == transaction_id)
+        )
+        .mappings()
+        .fetchone()
+    )
     assert updated is True
     assert tx["needs_review"] == 0
     assert tx["reviewed_at"] == "2026-05-08T00:00:00Z"
@@ -177,12 +189,16 @@ def test_set_transaction_ignored_marks_review_complete_when_ignored(core_conn, r
 
     updated = set_transaction_ignored(core_conn, transaction_id, True)
 
-    tx = core_conn.execute(
-        select(
-            transactions_table.c.ignored,
-            transactions_table.c.needs_review,
-        ).where(transactions_table.c.id == transaction_id)
-    ).mappings().fetchone()
+    tx = (
+        core_conn.execute(
+            select(
+                transactions_table.c.ignored,
+                transactions_table.c.needs_review,
+            ).where(transactions_table.c.id == transaction_id)
+        )
+        .mappings()
+        .fetchone()
+    )
     assert updated is True
     assert tx["ignored"] == 1
     assert tx["needs_review"] == 0
@@ -199,14 +215,18 @@ def get_transaction_rule(conn, rule_id):
     """Return persisted rule fields for repository assertions."""
     from finance_app.database.tables import category_rules as category_rules_table
 
-    row = conn.execute(
-        select(
-            category_rules_table.c.merchant_id,
-            category_rules_table.c.keyword,
-            category_rules_table.c.category,
-            category_rules_table.c.amount_min,
-            category_rules_table.c.amount_max,
-            category_rules_table.c.source,
-        ).where(category_rules_table.c.id == rule_id)
-    ).mappings().fetchone()
+    row = (
+        conn.execute(
+            select(
+                category_rules_table.c.merchant_id,
+                category_rules_table.c.keyword,
+                category_rules_table.c.category,
+                category_rules_table.c.amount_min,
+                category_rules_table.c.amount_max,
+                category_rules_table.c.source,
+            ).where(category_rules_table.c.id == rule_id)
+        )
+        .mappings()
+        .fetchone()
+    )
     return dict(row)

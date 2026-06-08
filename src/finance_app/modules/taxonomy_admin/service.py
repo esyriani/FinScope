@@ -30,7 +30,6 @@ from finance_app.modules.taxonomy_admin.forms import (
     parse_tag_form,
 )
 
-
 TAXONOMY_YAML_SECTIONS = ("categories", "tags")
 
 
@@ -60,21 +59,25 @@ def export_taxonomy_yaml(conn=None):
 
     lines = ["categories:"]
     for category in fetch_category_export_rows(conn):
-        lines.extend([
-            f"  - name: {yaml_scalar(category['name'])}",
-            f"    description: {yaml_scalar(category['description'])}",
-            f"    instruction: {yaml_scalar(category['instruction'])}",
-            f"    builtin_key: {yaml_scalar(category['builtin_key'])}",
-        ])
+        lines.extend(
+            [
+                f"  - name: {yaml_scalar(category['name'])}",
+                f"    description: {yaml_scalar(category['description'])}",
+                f"    instruction: {yaml_scalar(category['instruction'])}",
+                f"    builtin_key: {yaml_scalar(category['builtin_key'])}",
+            ]
+        )
 
     lines.append("tags:")
     for tag in fetch_tag_export_rows(conn):
-        lines.extend([
-            f"  - name: {yaml_scalar(tag['name'])}",
-            f"    description: {yaml_scalar(tag['description'])}",
-            f"    instruction: {yaml_scalar(tag['instruction'])}",
-            f"    color: {yaml_scalar(tag['color'])}",
-        ])
+        lines.extend(
+            [
+                f"  - name: {yaml_scalar(tag['name'])}",
+                f"    description: {yaml_scalar(tag['description'])}",
+                f"    instruction: {yaml_scalar(tag['instruction'])}",
+                f"    color: {yaml_scalar(tag['color'])}",
+            ]
+        )
 
     return "\n".join(lines) + "\n"
 
@@ -257,35 +260,43 @@ def validate_unique_taxonomy_names(rows, label):
 
 def fetch_category_export_rows(conn):
     """Return categories with all persisted metadata fields for YAML export."""
-    rows = conn.execute(
-        select(
-            categories_table.c.name,
-            func.coalesce(categories_table.c.description, "").label("description"),
-            func.coalesce(categories_table.c.instruction, "").label("instruction"),
-            func.coalesce(categories_table.c.builtin_key, "").label("builtin_key"),
-        ).order_by(
-            case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
-            func.lower(categories_table.c.name),
-            categories_table.c.name,
+    rows = (
+        conn.execute(
+            select(
+                categories_table.c.name,
+                func.coalesce(categories_table.c.description, "").label("description"),
+                func.coalesce(categories_table.c.instruction, "").label("instruction"),
+                func.coalesce(categories_table.c.builtin_key, "").label("builtin_key"),
+            ).order_by(
+                case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
+                func.lower(categories_table.c.name),
+                categories_table.c.name,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [dict(row) for row in rows]
 
 
 def fetch_tag_export_rows(conn):
     """Return tags with all persisted metadata fields for YAML export."""
-    rows = conn.execute(
-        select(
-            tags_table.c.name,
-            func.coalesce(tags_table.c.description, "").label("description"),
-            func.coalesce(tags_table.c.instruction, "").label("instruction"),
-            tags_table.c.color,
-        ).order_by(
-            builtin_tag_order_expression(),
-            func.lower(tags_table.c.name),
-            tags_table.c.name,
+    rows = (
+        conn.execute(
+            select(
+                tags_table.c.name,
+                func.coalesce(tags_table.c.description, "").label("description"),
+                func.coalesce(tags_table.c.instruction, "").label("instruction"),
+                tags_table.c.color,
+            ).order_by(
+                builtin_tag_order_expression(),
+                func.lower(tags_table.c.name),
+                tags_table.c.name,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [
         {
             **dict(row),
@@ -448,21 +459,25 @@ def fetch_category_rows(conn):
         .correlate(categories_table)
         .scalar_subquery()
     )
-    rows = conn.execute(
-        select(
-            categories_table.c.id,
-            categories_table.c.name,
-            categories_table.c.builtin_key,
-            func.coalesce(categories_table.c.description, "").label("description"),
-            func.coalesce(categories_table.c.instruction, "").label("instruction"),
-            transaction_count.label("transaction_count"),
-            rule_count.label("rule_count"),
-        ).order_by(
-            case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
-            func.lower(categories_table.c.name),
-            categories_table.c.name,
+    rows = (
+        conn.execute(
+            select(
+                categories_table.c.id,
+                categories_table.c.name,
+                categories_table.c.builtin_key,
+                func.coalesce(categories_table.c.description, "").label("description"),
+                func.coalesce(categories_table.c.instruction, "").label("instruction"),
+                transaction_count.label("transaction_count"),
+                rule_count.label("rule_count"),
+            ).order_by(
+                case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
+                func.lower(categories_table.c.name),
+                categories_table.c.name,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [
         {
             **dict(row),
@@ -488,21 +503,25 @@ def fetch_tag_rows(conn):
         .correlate(tags_table)
         .scalar_subquery()
     )
-    rows = conn.execute(
-        select(
-            tags_table.c.id,
-            tags_table.c.name,
-            func.coalesce(tags_table.c.description, "").label("description"),
-            func.coalesce(tags_table.c.instruction, "").label("instruction"),
-            tags_table.c.color,
-            transaction_count.label("transaction_count"),
-            rule_count.label("rule_count"),
-        ).order_by(
-            builtin_tag_order_expression(),
-            func.lower(tags_table.c.name),
-            tags_table.c.name,
+    rows = (
+        conn.execute(
+            select(
+                tags_table.c.id,
+                tags_table.c.name,
+                func.coalesce(tags_table.c.description, "").label("description"),
+                func.coalesce(tags_table.c.instruction, "").label("instruction"),
+                tags_table.c.color,
+                transaction_count.label("transaction_count"),
+                rule_count.label("rule_count"),
+            ).order_by(
+                builtin_tag_order_expression(),
+                func.lower(tags_table.c.name),
+                tags_table.c.name,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
     return [
         {
@@ -516,37 +535,43 @@ def fetch_tag_rows(conn):
 
 def fetch_category_by_id(conn, category_id):
     """Fetch category by ID."""
-    return conn.execute(
-        select(
-            categories_table.c.id,
-            categories_table.c.name,
-            categories_table.c.builtin_key,
-            categories_table.c.description,
-            categories_table.c.instruction,
-        ).where(categories_table.c.id == category_id)
-    ).mappings().fetchone()
+    return (
+        conn.execute(
+            select(
+                categories_table.c.id,
+                categories_table.c.name,
+                categories_table.c.builtin_key,
+                categories_table.c.description,
+                categories_table.c.instruction,
+            ).where(categories_table.c.id == category_id)
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def fetch_tag_by_id(conn, tag_id):
     """Fetch tag by ID."""
-    return conn.execute(
-        select(
-            tags_table.c.id,
-            tags_table.c.name,
-            tags_table.c.description,
-            tags_table.c.instruction,
-            tags_table.c.color,
-        ).where(tags_table.c.id == tag_id)
-    ).mappings().fetchone()
+    return (
+        conn.execute(
+            select(
+                tags_table.c.id,
+                tags_table.c.name,
+                tags_table.c.description,
+                tags_table.c.instruction,
+                tags_table.c.color,
+            ).where(tags_table.c.id == tag_id)
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def fetch_tag_usage(conn, tag_id):
     """Fetch tag usage."""
     return {
         "transaction_count": conn.execute(
-            select(func.count())
-            .select_from(transaction_tags_table)
-            .where(transaction_tags_table.c.tag_id == tag_id)
+            select(func.count()).select_from(transaction_tags_table).where(transaction_tags_table.c.tag_id == tag_id)
         ).scalar_one(),
         "rule_count": conn.execute(
             select(func.count())

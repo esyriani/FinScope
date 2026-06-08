@@ -6,7 +6,6 @@ import warnings
 
 from finance_app.modules.categories.sources import category_metadata_json, category_source_label, utc_timestamp
 
-
 UTC_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 

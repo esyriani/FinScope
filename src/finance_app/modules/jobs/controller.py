@@ -20,7 +20,6 @@ from finance_app.modules.settings.runtime import get_int_setting
 from finance_app.core.query import parse_page
 from finance_app.modules.upload import workflow as upload_workflow
 
-
 jobs_bp = Blueprint("jobs", __name__)
 
 
@@ -131,11 +130,7 @@ def cancel_queued_ai_jobs():
     cancelled_count = cancel_queued_background_jobs(queue=AI_JOB_QUEUE)
     flash(
         gettext(
-            (
-                "Cancelled {count} queued AI job."
-                if cancelled_count == 1
-                else "Cancelled {count} queued AI jobs."
-            ),
+            ("Cancelled {count} queued AI job." if cancelled_count == 1 else "Cancelled {count} queued AI jobs."),
             count=cancelled_count,
         )
     )

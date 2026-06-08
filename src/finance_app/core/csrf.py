@@ -5,7 +5,6 @@ import secrets
 
 from flask import abort, jsonify, request, session
 
-
 CSRF_SESSION_KEY = "_csrf_token"
 CSRF_FIELD_NAME = "csrf_token"
 CSRF_HEADER_NAME = "X-CSRF-Token"
@@ -29,11 +28,7 @@ def validate_csrf():
     if not submitted:
         submitted = request.form.get(CSRF_FIELD_NAME)
 
-    return bool(
-        expected
-        and submitted
-        and hmac.compare_digest(str(expected), str(submitted))
-    )
+    return bool(expected and submitted and hmac.compare_digest(str(expected), str(submitted)))
 
 
 def register_csrf(app):

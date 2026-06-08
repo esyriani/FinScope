@@ -14,7 +14,6 @@ from finance_app.modules.merchants.repository import (
     merchant_identity_key,
 )
 
-
 VALID_RECURRING_USER_STATUSES = set(RECURRING_USER_STATUSES)
 VALID_RECURRING_FREQUENCIES = {
     "Weekly",
@@ -64,9 +63,11 @@ def get_recurring_pattern_metadata(conn):
 
 def get_recurring_pattern(conn, pattern_key):
     """Return recurring pattern."""
-    row = conn.execute(
-        recurring_pattern_select().where(recurring_patterns_table.c.pattern_key == pattern_key)
-    ).mappings().fetchone()
+    row = (
+        conn.execute(recurring_pattern_select().where(recurring_patterns_table.c.pattern_key == pattern_key))
+        .mappings()
+        .fetchone()
+    )
     if not row:
         return None
     return recurring_pattern_from_row(row)
@@ -74,12 +75,16 @@ def get_recurring_pattern(conn, pattern_key):
 
 def get_recurring_pattern_by_merchant_type(conn, merchant_id, tx_type):
     """Return recurring pattern by durable merchant and cash-flow type."""
-    row = conn.execute(
-        recurring_pattern_select().where(
-            recurring_patterns_table.c.merchant_id == merchant_id,
-            recurring_patterns_table.c.type == tx_type,
+    row = (
+        conn.execute(
+            recurring_pattern_select().where(
+                recurring_patterns_table.c.merchant_id == merchant_id,
+                recurring_patterns_table.c.type == tx_type,
+            )
         )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
     if not row:
         return None
     return recurring_pattern_from_row(row)
@@ -100,10 +105,15 @@ def upsert_recurring_pattern(conn, pattern_key, merchant, tx_type, merchant_id=N
     """Insert or update recurring pattern."""
     identity = recurring_pattern_identity(conn, pattern_key, merchant, tx_type, merchant_id)
     current = (
-        get_recurring_pattern_by_merchant_type(conn, identity["merchant_id"], tx_type)
-        if identity["merchant_id"]
-        else None
-    ) or get_recurring_pattern(conn, identity["pattern_key"]) or get_recurring_pattern(conn, pattern_key) or {}
+        (
+            get_recurring_pattern_by_merchant_type(conn, identity["merchant_id"], tx_type)
+            if identity["merchant_id"]
+            else None
+        )
+        or get_recurring_pattern(conn, identity["pattern_key"])
+        or get_recurring_pattern(conn, pattern_key)
+        or {}
+    )
     stored_pattern_key = current.get("pattern_key") or identity["pattern_key"]
     user_status = normalize_user_status(
         values.get("user_status", current.get("user_status", RECURRING_USER_STATUS_DETECTED))

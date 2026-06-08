@@ -125,10 +125,7 @@ def date_formats_for_order(date_order):
     else:
         return DATE_FORMATS
 
-    return preferred_formats + tuple(
-        fmt for fmt in DATE_FORMATS
-        if fmt not in preferred_formats
-    )
+    return preferred_formats + tuple(fmt for fmt in DATE_FORMATS if fmt not in preferred_formats)
 
 
 def infer_slash_date_order(values):
@@ -265,11 +262,7 @@ def csv_rows(raw_text):
 
     reader = csv.reader(io.StringIO(raw_text), delimiter=delimiter)
 
-    return [
-        row
-        for row in reader
-        if any(cell.strip() for cell in row)
-    ]
+    return [row for row in reader if any(cell.strip() for cell in row)]
 
 
 def detect_csv_delimiter_from_header(raw_text):
@@ -288,11 +281,7 @@ def detect_csv_delimiter_from_header(raw_text):
 
 def is_transaction_header_row(row):
     """Return whether a parsed row contains transaction CSV header columns."""
-    header_map = {
-        normalize_header(cell): cell
-        for cell in row
-        if normalize_header(cell)
-    }
+    header_map = {normalize_header(cell): cell for cell in row if normalize_header(cell)}
     has_date = find_column(header_map, DATE_COLUMNS)
     has_description = find_column(header_map, DESCRIPTION_COLUMNS)
     has_amount = (
@@ -402,8 +391,7 @@ def build_interac_transfer(
     if not tx_date or not description or amount is None or abs(amount) <= 0.004:
         return None
     if require_deposited_status and not (
-        normalized_status.startswith("deposited")
-        or normalized_status.startswith("autodeposited")
+        normalized_status.startswith("deposited") or normalized_status.startswith("autodeposited")
     ):
         return None
 
@@ -444,11 +432,7 @@ def parse_interac_transactions(
         }
 
     header = rows[0]
-    header_map = {
-        normalize_header(cell): cell
-        for cell in header
-        if normalize_header(cell)
-    }
+    header_map = {normalize_header(cell): cell for cell in header if normalize_header(cell)}
     sent_date_col = find_column(header_map, {"datesent"})
     deposited_date_col = find_column(header_map, {"datedeposited"})
     recipient_col = find_column(header_map, {"recipient"})
@@ -462,9 +446,7 @@ def parse_interac_transactions(
         direction = interac_direction
         date_col = sent_date_col or deposited_date_col or find_column(header_map, DATE_COLUMNS)
         counterparty_col = (
-            recipient_col
-            or received_from_col
-            or find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
+            recipient_col or received_from_col or find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
         )
     elif sent_date_col and recipient_col:
         direction = INTERAC_DIRECTION_SENT
@@ -540,11 +522,7 @@ def parse_csv_transactions(
     if header is not None:
         # Header-based imports are preferred because bank and card exports use
         # different debit/credit conventions and column names.
-        header_map = {
-            normalize_header(cell): cell
-            for cell in header
-            if normalize_header(cell)
-        }
+        header_map = {normalize_header(cell): cell for cell in header if normalize_header(cell)}
         date_col = find_column(header_map, DATE_COLUMNS)
         description_col = find_column(header_map, DESCRIPTION_COLUMNS)
         debit_col = find_column(header_map, DEBIT_COLUMNS)
@@ -552,7 +530,7 @@ def parse_csv_transactions(
         amount_col = find_column(header_map, AMOUNT_COLUMNS)
 
         records = []
-        for row in rows[header_index + 1:]:
+        for row in rows[header_index + 1 :]:
             padded_row = row + [""] * max(0, len(header) - len(row))
             records.append(dict(zip(header, padded_row)))
 

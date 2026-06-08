@@ -19,7 +19,6 @@ from finance_app.modules.rules.audit import (
     overlap_severity_rank,
 )
 
-
 AUDIT_TABLE_OPEN_SECTIONS = {
     "overlap": "rule-overlap-findings",
     "conflict": "rule-overlap-findings",
@@ -58,7 +57,7 @@ def build_audit_table_context(args, table_name, rows, page_size, sort_options, d
     total_pages = max(1, (total_count + page_size - 1) // page_size)
     page = min(parse_page(request_arg(args, page_param)), total_pages)
     offset = (page - 1) * page_size
-    visible_rows = ordered_rows[offset:offset + page_size]
+    visible_rows = ordered_rows[offset : offset + page_size]
 
     return {
         "rows": visible_rows,
@@ -99,7 +98,7 @@ def build_overlap_transaction_table_context(args, rule_a_id, rule_b_id, rows, pa
     total_pages = max(1, (total_count + page_size - 1) // page_size)
     page = min(parse_page(request_arg(args, "shared_page")), total_pages)
     offset = (page - 1) * page_size
-    visible_rows = ordered_rows[offset:offset + page_size]
+    visible_rows = ordered_rows[offset : offset + page_size]
 
     return {
         "rows": visible_rows,
@@ -212,11 +211,7 @@ def search_audit_rows(rows, query, text_builder):
     terms = [term.casefold() for term in clean_overlap_search_query(query).split()]
     if not terms:
         return rows
-    return [
-        row
-        for row in rows
-        if all(term in text_builder(row) for term in terms)
-    ]
+    return [row for row in rows if all(term in text_builder(row) for term in terms)]
 
 
 def overlap_search_text(row):
@@ -323,11 +318,7 @@ def filter_overlap_rows(rows, overlap_filter):
     if overlap_filter == "all":
         return rows
     if overlap_filter == OVERLAP_CATEGORY_CONFLICT:
-        return [
-            row
-            for row in rows
-            if row["severity"] in {OVERLAP_CATEGORY_CONFLICT, OVERLAP_CRITICAL_CONFLICT}
-        ]
+        return [row for row in rows if row["severity"] in {OVERLAP_CATEGORY_CONFLICT, OVERLAP_CRITICAL_CONFLICT}]
     return [row for row in rows if row["severity"] == overlap_filter]
 
 
@@ -343,9 +334,7 @@ def overlap_filter_options(args, rows):
     for row in rows:
         if row["severity"] in counts:
             counts[row["severity"]] += 1
-    category_conflict_count = (
-        counts[OVERLAP_CATEGORY_CONFLICT] + counts[OVERLAP_CRITICAL_CONFLICT]
-    )
+    category_conflict_count = counts[OVERLAP_CATEGORY_CONFLICT] + counts[OVERLAP_CRITICAL_CONFLICT]
     return [
         {
             "value": "all",
@@ -482,8 +471,7 @@ def overlap_transaction_sort_options():
         "date": lambda row: sortable_text(row["transaction"].get("tx_date")),
         "account": lambda row: sortable_text(row["transaction"].get("account_name")),
         "merchant": lambda row: sortable_text(
-            row["transaction"].get("merchant_name")
-            or row["transaction"].get("merchant_key"),
+            row["transaction"].get("merchant_name") or row["transaction"].get("merchant_key"),
         ),
         "description": lambda row: sortable_text(row["transaction"].get("description")),
         "amount": lambda row: float(row["transaction"].get("amount") or 0),
@@ -513,9 +501,7 @@ def shadowed_rule_sort_options():
         "wins": lambda row: sortable_number(row["total_wins"]),
         "losses": lambda row: sortable_number(row["total_losses"]),
         "shadowing_rule": lambda row: sortable_text(
-            row["most_common_shadowing_rule"]["label"]
-            if row["most_common_shadowing_rule"]
-            else "",
+            row["most_common_shadowing_rule"]["label"] if row["most_common_shadowing_rule"] else "",
         ),
         "conflicts": lambda row: sortable_number(row["conflicting_loss_count"]),
         "suggested": lambda row: sortable_text(row["suggested_action"]),

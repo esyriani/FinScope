@@ -14,7 +14,6 @@ from tests.support.html import (
 )
 from tests.support.web import set_csrf_token
 
-
 VIEWER_PASSWORD = "ViewerPass123!"
 
 
@@ -32,11 +31,18 @@ def create_test_user(conn, username, role, password):
 
 def user_by_username(conn, username):
     """Return one user row by username for route assertions."""
-    return conn.execute(text("""
+    return (
+        conn.execute(
+            text("""
         SELECT *
         FROM users
         WHERE username = :p0
-        """), {"p0": username}).mappings().fetchone()
+        """),
+            {"p0": username},
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def test_anonymous_routes_redirect_to_login(anonymous_client):
@@ -174,7 +180,11 @@ def test_owner_editor_and_viewer_authorization(client, editor_client, viewer_cli
         f"/transactions/{tx_id}/ignored",
         data={CSRF_FIELD_NAME: set_csrf_token(viewer_client), "ignored": "1"},
     )
-    ignored = core_conn.execute(text("SELECT ignored FROM transactions WHERE id = :p0"), {"p0": tx_id}).fetchone()._mapping["ignored"]
+    ignored = (
+        core_conn.execute(text("SELECT ignored FROM transactions WHERE id = :p0"), {"p0": tx_id})
+        .fetchone()
+        ._mapping["ignored"]
+    )
     assert blocked.status_code == 403
     assert ignored == 0
 
@@ -217,7 +227,10 @@ def test_owner_user_management_and_last_owner_guard(client, core_conn):
         follow_redirects=True,
     )
     managed = user_by_username(core_conn, "managed")
-    core_conn.execute(text("UPDATE users SET last_login_at = :p0 WHERE username = :p1"), {"p0": "2026-05-17T14:42:11Z", "p1": "managed"})
+    core_conn.execute(
+        text("UPDATE users SET last_login_at = :p0 WHERE username = :p1"),
+        {"p0": "2026-05-17T14:42:11Z", "p1": "managed"},
+    )
     core_conn.commit()
     assert_visible_text(create_response, "Temporary password", "Managed Person")
     assert_not_visible_text(create_response, f"Temporary password for user {managed['id']}")

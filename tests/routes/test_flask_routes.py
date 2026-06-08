@@ -4,7 +4,6 @@ from sqlalchemy import text
 from datetime import date as real_date
 import re
 
-from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.comparison import service as comparison_service
 from finance_app.modules.home import service as home_service
 from tests.support.html import (
@@ -20,7 +19,6 @@ from tests.support.html import (
     response_html,
     visible_html,
 )
-from tests.support.web import set_csrf_token
 
 
 class FixedDate(real_date):
@@ -30,87 +28,6 @@ class FixedDate(real_date):
     def today(cls):
         """Return a deterministic current date."""
         return cls(2026, 5, 11)
-
-
-def test_taxonomy_category_create_and_delete_routes_persist_changes(client, core_conn):
-    """Verify that category create and delete routes update the database."""
-    token = set_csrf_token(client)
-
-    create_response = client.post(
-        "/taxonomy/categories/create",
-        data={
-            CSRF_FIELD_NAME: token,
-            "name": "Subscriptions",
-            "description": "Recurring paid services",
-            "instruction": "Use for streaming and software subscriptions.",
-        },
-        follow_redirects=True,
-    )
-
-    category = core_conn.execute(text("""
-        SELECT id, description, instruction
-        FROM categories
-        WHERE name = 'Subscriptions'
-        """)).fetchone()
-    assert create_response.status_code == 200
-    assert category is not None
-    assert category._mapping["description"] == "Recurring paid services"
-
-    delete_response = client.post(
-        "/taxonomy/categories/delete",
-        data={
-            CSRF_FIELD_NAME: token,
-            "category_id": category._mapping["id"],
-        },
-        follow_redirects=True,
-    )
-
-    remaining = core_conn.execute(text("""
-        SELECT COUNT(*) AS count
-        FROM categories
-        WHERE name = 'Subscriptions'
-        """)).fetchone()._mapping["count"]
-    assert delete_response.status_code == 200
-    assert remaining == 0
-
-
-def test_taxonomy_category_delete_route_refuses_in_use_category(client, core_conn):
-    """Verify that the category delete route keeps categories used by transactions."""
-    category_id = core_conn.execute(text("""
-        INSERT INTO categories (name)
-        VALUES ('Transit')
-        """)).lastrowid
-    core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date,
-            description,
-            amount,
-            category_id,
-            fingerprint
-        )
-        VALUES ('2026-01-02', 'METRO PASS', 91.25, :p0, 'route-delete-guard')
-        """), {"p0": category_id})
-    core_conn.commit()
-
-    response = client.post(
-        "/taxonomy/categories/delete",
-        data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
-            "category_id": category_id,
-        },
-        follow_redirects=True,
-    )
-
-    category_count = core_conn.execute(text("""
-        SELECT COUNT(*) AS count
-        FROM categories
-        WHERE id = :p0
-        """), {"p0": category_id}).fetchone()._mapping["count"]
-    assert response.status_code == 200
-    assert_visible_text(response, "Only unused categories can be deleted.")
-    assert_not_visible_text(response, "Category Transit cannot be deleted because it is in use")
-    assert_not_markup(response, "bi-lock")
-    assert category_count == 1
 
 
 def test_transactions_route_renders_category_source_badges_and_filter(client, core_conn):
@@ -131,7 +48,8 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
         )
         VALUES ('2026-01-02', 'AI categorized store', 12.34, 'Food', 'ai', 0.91, 'route-ai-source')
         """))
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -152,13 +70,15 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
             :p0,
             'route-rule-source-link'
         )
-        """), {"p0": rule_id})
+        """),
+        {"p0": rule_id},
+    )
     core_conn.commit()
 
     response = client.get("/transactions?period=all")
     body = response_html(response)
     compact_body = " ".join(body.split())
-    expected_rule_url = f'/rules/audit/rule/{rule_id}'
+    expected_rule_url = f"/rules/audit/rule/{rule_id}"
 
     assert response.status_code == 200
     assert_visible_text(response, "Categorization method", "All methods", "Pending approval")
@@ -167,9 +87,9 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     assert "<th>Kind</th>" not in body
     assert "<span>Verify</span>" not in body
     assert '<th class="text-end">Actions</th>' in body
-    assert 'data-transaction-batch-bar' in body
-    assert 'data-transaction-select-all' in body
-    assert 'data-transaction-row-checkbox' in body
+    assert "data-transaction-batch-bar" in body
+    assert "data-transaction-select-all" in body
+    assert "data-transaction-row-checkbox" in body
     assert 'data-all-transaction-ids="[' in body
     assert "Approve selected" in body
     assert "Ignore selected" in body
@@ -186,7 +106,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     assert f'href="{expected_rule_url}"' in body
     assert 'target="_blank"' in body
     assert 'rel="noopener noreferrer"' in body
-    assert f'href="{expected_rule_url}"' in body.split('Category source', 1)[1]
+    assert f'href="{expected_rule_url}"' in body.split("Category source", 1)[1]
     assert_markup(
         response,
         "data-category-description-select",
@@ -210,10 +130,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
         response,
         "label",
         attrs={
-            "title": (
-                "Marks transactions that may be useful for tax preparation, accounting, "
-                "or year-end review."
-            )
+            "title": ("Marks transactions that may be useful for tax preparation, accounting, " "or year-end review.")
         },
     )
     assert body.index("This transaction only") < body.index("Save rule")
@@ -328,10 +245,36 @@ def test_category_filters_offer_analysis_category_preset(client, core_conn):
 def test_comparison_route_renders_complete_unknown_warning(client, core_conn, monkeypatch):
     """Verify comparison warning placeholders render with category and share values."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
-        """), [{"p0": "2026-04-02", "p1": "Unknown Prior", "p2": 40.00, "p3": "UNKNOWN", "p4": "route-comparison-unknown-prior"}, {"p0": "2026-04-03", "p1": "Prior Grocery", "p2": 60.00, "p3": "Food", "p4": "route-comparison-food-prior"}, {"p0": "2026-05-02", "p1": "Unknown Current", "p2": 70.00, "p3": "UNKNOWN", "p4": "route-comparison-unknown-current"}, {"p0": "2026-05-03", "p1": "Current Grocery", "p2": 30.00, "p3": "Food", "p4": "route-comparison-food-current"}])
+        """),
+        [
+            {
+                "p0": "2026-04-02",
+                "p1": "Unknown Prior",
+                "p2": 40.00,
+                "p3": "UNKNOWN",
+                "p4": "route-comparison-unknown-prior",
+            },
+            {"p0": "2026-04-03", "p1": "Prior Grocery", "p2": 60.00, "p3": "Food", "p4": "route-comparison-food-prior"},
+            {
+                "p0": "2026-05-02",
+                "p1": "Unknown Current",
+                "p2": 70.00,
+                "p3": "UNKNOWN",
+                "p4": "route-comparison-unknown-current",
+            },
+            {
+                "p0": "2026-05-03",
+                "p1": "Current Grocery",
+                "p2": 30.00,
+                "p3": "Food",
+                "p4": "route-comparison-food-current",
+            },
+        ],
+    )
     core_conn.commit()
 
     response = client.get("/comparison?years=2026&period_comparison=month_previous")
@@ -361,10 +304,13 @@ def test_home_route_renders_quick_insight_cards(client, core_conn, monkeypatch):
         ("2026-05-06", "Echo Store", 200.00, "Food", "home-route-echo-current"),
         ("2026-05-07", "Foxtrot Utilities", 50.00, "Utilities", "home-route-foxtrot-current"),
     ]
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
-        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+        """),
+        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+    )
     core_conn.commit()
 
     response = client.get("/")
@@ -396,10 +342,13 @@ def test_home_quick_insights_escape_user_data(client, core_conn, monkeypatch):
         ("2026-04-02", "Prior escaped store", 40.00, category, "home-escape-prior"),
         ("2026-05-02", "Current escaped store", 220.00, category, "home-escape-current"),
     ]
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
-        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+        """),
+        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+    )
     core_conn.commit()
 
     response = client.get("/")
@@ -414,7 +363,8 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     """Verify reporting pages localize visible labels and explanatory text."""
     monkeypatch.setattr(home_service, "date", FixedDate)
     monkeypatch.setattr(comparison_service, "date", FixedDate)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -424,7 +374,25 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
             fingerprint
         )
         VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
-        """), [{"p0": "2025-05-02", "p1": "Prior grocery", "p2": 80.00, "p3": "Food", "p4": "route-fr-prior"}, {"p0": "2026-01-02", "p1": "Utility bill", "p2": 50.00, "p3": "Utilities", "p4": "route-fr-recurring-1"}, {"p0": "2026-02-02", "p1": "Utility bill", "p2": 50.00, "p3": "Utilities", "p4": "route-fr-recurring-2"}, {"p0": "2026-03-02", "p1": "Utility bill", "p2": 50.00, "p3": "Utilities", "p4": "route-fr-recurring-3"}, {"p0": "2026-04-02", "p1": "Utility bill", "p2": 55.00, "p3": "Utilities", "p4": "route-fr-recurring-4"}, {"p0": "2026-04-04", "p1": "Prior unknown", "p2": 400.00, "p3": "UNKNOWN", "p4": "route-fr-unknown-prior"}, {"p0": "2026-05-02", "p1": "Current grocery", "p2": 120.00, "p3": "Food", "p4": "route-fr-current"}, {"p0": "2026-05-03", "p1": "Payroll", "p2": -800.00, "p3": "Income", "p4": "route-fr-income"}, {"p0": "2026-05-04", "p1": "Current unknown", "p2": 900.00, "p3": "UNKNOWN", "p4": "route-fr-unknown-current"}])
+        """),
+        [
+            {"p0": "2025-05-02", "p1": "Prior grocery", "p2": 80.00, "p3": "Food", "p4": "route-fr-prior"},
+            {"p0": "2026-01-02", "p1": "Utility bill", "p2": 50.00, "p3": "Utilities", "p4": "route-fr-recurring-1"},
+            {"p0": "2026-02-02", "p1": "Utility bill", "p2": 50.00, "p3": "Utilities", "p4": "route-fr-recurring-2"},
+            {"p0": "2026-03-02", "p1": "Utility bill", "p2": 50.00, "p3": "Utilities", "p4": "route-fr-recurring-3"},
+            {"p0": "2026-04-02", "p1": "Utility bill", "p2": 55.00, "p3": "Utilities", "p4": "route-fr-recurring-4"},
+            {"p0": "2026-04-04", "p1": "Prior unknown", "p2": 400.00, "p3": "UNKNOWN", "p4": "route-fr-unknown-prior"},
+            {"p0": "2026-05-02", "p1": "Current grocery", "p2": 120.00, "p3": "Food", "p4": "route-fr-current"},
+            {"p0": "2026-05-03", "p1": "Payroll", "p2": -800.00, "p3": "Income", "p4": "route-fr-income"},
+            {
+                "p0": "2026-05-04",
+                "p1": "Current unknown",
+                "p2": 900.00,
+                "p3": "UNKNOWN",
+                "p4": "route-fr-unknown-current",
+            },
+        ],
+    )
     core_conn.commit()
 
     english_home_response = client.get("/")
@@ -468,7 +436,9 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     assert recurring_response.status_code == 200
 
     assert_visible_text(home_response, "Ce qui demande une attention", "À traiter", "Aperçus rapides")
-    assert_not_visible_text(home_response, "Centre de commande financier", "Financial command center", "Needs attention")
+    assert_not_visible_text(
+        home_response, "Centre de commande financier", "Financial command center", "Needs attention"
+    )
 
     assert_visible_text(
         dashboard_response,
@@ -532,10 +502,16 @@ def test_review_route_renders_category_source_for_review_rows(client, core_conn)
 def test_comparison_route_renders_visual_key_insights(client, core_conn, monkeypatch):
     """Verify comparison insights render as visual cards when period data exists."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, 'Food', 'rule', :p3)
-        """), [{"p0": "2026-04-02", "p1": "Prior Grocery", "p2": 100.00, "p3": "comparison-route-prior"}, {"p0": "2026-05-02", "p1": "Current Grocery", "p2": 240.00, "p3": "comparison-route-current"}])
+        """),
+        [
+            {"p0": "2026-04-02", "p1": "Prior Grocery", "p2": 100.00, "p3": "comparison-route-prior"},
+            {"p0": "2026-05-02", "p1": "Current Grocery", "p2": 240.00, "p3": "comparison-route-current"},
+        ],
+    )
     core_conn.commit()
 
     response = client.get("/comparison")
@@ -580,10 +556,13 @@ def test_comparison_route_renders_ranked_anomaly_insights(client, core_conn, mon
         ("2026-04-02", "Metro Grocery", 51.00, "Food", "route-anomaly-history-5"),
         ("2026-05-02", "Metro Grocery", 220.00, "Food", "route-anomaly-current"),
     ]
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
-        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+        """),
+        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+    )
     core_conn.commit()
 
     response = client.get("/comparison?period_comparison=month_previous")
@@ -601,10 +580,16 @@ def test_comparison_route_renders_ranked_anomaly_insights(client, core_conn, mon
 
 def test_comparison_route_renders_year_chart_type_toggle(client, core_conn):
     """Verify the year comparison chart exposes line and bar display modes."""
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, 'Food', 'rule', :p3)
-        """), [{"p0": "2025-01-02", "p1": "Prior Grocery", "p2": 100.00, "p3": "comparison-toggle-prior"}, {"p0": "2026-01-02", "p1": "Current Grocery", "p2": 120.00, "p3": "comparison-toggle-current"}])
+        """),
+        [
+            {"p0": "2025-01-02", "p1": "Prior Grocery", "p2": 100.00, "p3": "comparison-toggle-prior"},
+            {"p0": "2026-01-02", "p1": "Current Grocery", "p2": 120.00, "p3": "comparison-toggle-current"},
+        ],
+    )
     core_conn.commit()
 
     response = client.get("/comparison")

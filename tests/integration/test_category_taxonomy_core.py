@@ -49,11 +49,14 @@ def test_taxonomy_helpers_support_core_connections(app, core_conn):
         FROM tags
         WHERE name = 'Audit'
         """)).fetchone()
-    transaction_tag = core_conn.execute(text("""
+    transaction_tag = core_conn.execute(
+        text("""
         SELECT source, rule_id
         FROM transaction_tags
         WHERE transaction_id = :p0
-        """), {"p0": transaction_id}).fetchone()
+        """),
+        {"p0": transaction_id},
+    ).fetchone()
 
     assert tuple(category) == ("City travel", "Use for transit.")
     assert tuple(tag) == ("Reviewed", "Already reviewed.", "#123abc")

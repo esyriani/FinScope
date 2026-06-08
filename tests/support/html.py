@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 import re
 
-
 INVISIBLE_TEXT_TAGS = {"script", "style"}
 VOID_TAGS = {
     "area",
@@ -89,11 +88,7 @@ class ParsedHTML(HTMLParser):
 
     def find_all(self, tag=None, attrs=None, text=None):
         """Return parsed elements matching tag, attributes, and contained text."""
-        return [
-            element
-            for element in self.elements
-            if element_matches(element, tag=tag, attrs=attrs, text=text)
-        ]
+        return [element for element in self.elements if element_matches(element, tag=tag, attrs=attrs, text=text)]
 
     def has_element(self, tag=None, attrs=None, text=None):
         """Return whether a matching element exists."""

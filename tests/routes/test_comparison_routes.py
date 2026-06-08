@@ -20,14 +20,17 @@ class FixedDate(real_date):
 def test_comparison_route_renders_monthly_spending_distribution(client, core_conn, monkeypatch):
     """Verify comparison renders yearly monthly-spending distribution in both languages."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, 'Food', 'rule', :p3)
-        """), [
+        """),
+        [
             {"p0": "2025-01-02", "p1": "Prior grocery", "p2": 50.00, "p3": "comparison-stats-2025-jan"},
             {"p0": "2025-02-02", "p1": "Prior grocery", "p2": 150.00, "p3": "comparison-stats-2025-feb"},
             {"p0": "2026-01-02", "p1": "Current grocery", "p2": 120.00, "p3": "comparison-stats-2026-jan"},
-        ])
+        ],
+    )
     core_conn.commit()
 
     response = client.get("/comparison?years=2025&years=2026")
@@ -81,13 +84,16 @@ def test_comparison_route_renders_monthly_spending_distribution(client, core_con
 def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypatch):
     """Verify comparison separates period changes from yearly trends with tabs."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, 'Food', 'rule', :p3)
-        """), [
+        """),
+        [
             {"p0": "2025-01-02", "p1": "Prior grocery", "p2": 50.00, "p3": "comparison-tabs-2025"},
             {"p0": "2026-05-02", "p1": "Current grocery", "p2": 120.00, "p3": "comparison-tabs-2026"},
-        ])
+        ],
+    )
     core_conn.commit()
 
     response = client.get("/comparison")
@@ -214,6 +220,9 @@ def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypat
     assert_has_element(
         year_response,
         "section",
-        attrs={"id": "comparison-year-category-table-block", "aria-labelledby": "comparison-year-category-table-heading"},
+        attrs={
+            "id": "comparison-year-category-table-block",
+            "aria-labelledby": "comparison-year-category-table-heading",
+        },
         text="Category table",
     )

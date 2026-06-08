@@ -227,7 +227,7 @@ def recategorize_selected_transactions_job(transaction_ids):
             )
         raise_if_cancel_requested("Selected transaction recategorization cancelled after the current batch.")
 
-        batch = rows[index:index + llm_module.LLM_BATCH_SIZE]
+        batch = rows[index : index + llm_module.LLM_BATCH_SIZE]
         batch_start = processed_count + 1
         batch_end = processed_count + len(batch)
         append_selected_recategorization_log(

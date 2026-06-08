@@ -9,7 +9,6 @@ from decimal import Decimal
 
 from finance_app.core.money import money_to_decimal, rounded_money_float
 
-
 MIN_ROBUST_HISTORY_COUNT = 3
 ROBUST_Z_SCORE_SCALE = Decimal("0.6745")
 ROBUST_ANOMALY_THRESHOLD = 3.5
@@ -76,11 +75,7 @@ def empty_descriptive_statistics():
 
 def normalize_statistics_values(values):
     """Return non-null input values as Decimals for stable calculations."""
-    return [
-        money_to_decimal(value)
-        for value in values
-        if value is not None
-    ]
+    return [money_to_decimal(value) for value in values if value is not None]
 
 
 def median_absolute_deviation(values):

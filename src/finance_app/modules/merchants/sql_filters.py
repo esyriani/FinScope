@@ -21,15 +21,18 @@ def merchant_identity_candidates(conn, merchant_key):
     if conn is None or not normalized_key:
         return merchant_ids, description_candidates
 
-    rows = conn.execute(
-        select(
-            merchants_table.c.id,
-            merchants_table.c.merchant_key,
+    rows = (
+        conn.execute(
+            select(
+                merchants_table.c.id,
+                merchants_table.c.merchant_key,
+            ).where(
+                func.lower(merchants_table.c.merchant_key) == normalized_key.lower(),
+            )
         )
-        .where(
-            func.lower(merchants_table.c.merchant_key) == normalized_key.lower(),
-        )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
     for row in rows:
         merchant_ids.add(row["id"])
@@ -52,10 +55,7 @@ def add_description_candidate(candidates, value):
 
 def description_matches_any_candidate(column, candidates):
     """Return a SQL predicate matching any normalized description candidate."""
-    conditions = [
-        description_contains_candidate(column, candidate)
-        for candidate in sorted(candidates)
-    ]
+    conditions = [description_contains_candidate(column, candidate) for candidate in sorted(candidates)]
     conditions = [condition for condition in conditions if condition is not None]
     if not conditions:
         return false()
@@ -74,19 +74,9 @@ def description_contains_candidate(column, candidate):
         return None
 
     upper_description = func.upper(column)
-    return and_(
-        *[
-            upper_description.like(f"%{escape_like_token(token)}%", escape="\\")
-            for token in tokens
-        ]
-    )
+    return and_(*[upper_description.like(f"%{escape_like_token(token)}%", escape="\\") for token in tokens])
 
 
 def escape_like_token(token):
     """Escape wildcard characters in a SQL LIKE token."""
-    return (
-        str(token)
-        .replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
+    return str(token).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

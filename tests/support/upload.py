@@ -30,14 +30,21 @@ def statement_type_id(conn, parser_type):
     Returns:
         Matching statement type id.
     """
-    return conn.execute(text("""
+    return (
+        conn.execute(
+            text("""
         SELECT id
         FROM statement_types
         WHERE active = 1
         AND parser_type = :p0
         ORDER BY id
         LIMIT 1
-        """), {"p0": parser_type}).fetchone()._mapping["id"]
+        """),
+            {"p0": parser_type},
+        )
+        .fetchone()
+        ._mapping["id"]
+    )
 
 
 def create_account_statement(conn, filename="statement.csv"):
@@ -54,28 +61,35 @@ def create_account_statement(conn, filename="statement.csv"):
         INSERT INTO accounts (name)
         VALUES ('Personal')
         """)).lastrowid
-    statement_id = conn.execute(text("""
+    statement_id = conn.execute(
+        text("""
         INSERT INTO statements (account_id, statement_type_id, filename, checksum, raw_text)
         VALUES (:p0, :p1, :p2, :p3, '')
-        """), {"p0": account_id, "p1": first_statement_type_id(conn), "p2": filename, "p3": f"checksum-{filename}"}).lastrowid
+        """),
+        {"p0": account_id, "p1": first_statement_type_id(conn), "p2": filename, "p3": f"checksum-{filename}"},
+    ).lastrowid
     conn.commit()
     return account_id, statement_id
 
 
 def set_auto_llm_categorization(conn, enabled):
     """Persist the automatic AI queueing toggle for the seeded owner."""
-    conn.execute(text("""
+    conn.execute(
+        text("""
         UPDATE user_settings
         SET value = :p0
         WHERE key = 'auto_llm_categorization_enabled'
           AND user_id = (SELECT id FROM users WHERE username = 'owner')
-        """), {"p0": "1" if enabled else "0"})
+        """),
+        {"p0": "1" if enabled else "0"},
+    )
     conn.commit()
 
 
 def insert_llm_progress_transactions(conn, statement_id, account_id):
     """Insert unknown transactions that exercise success, unresolved, and request-error batches."""
-    conn.execute(text("""
+    conn.execute(
+        text("""
         INSERT INTO transactions (
             statement_id,
             account_id,
@@ -87,7 +101,34 @@ def insert_llm_progress_transactions(conn, statement_id, account_id):
             fingerprint
         )
         VALUES (:p0, :p1, :p2, :p3, :p4, 'UNKNOWN', 1, :p5)
-        """), [{"p0": statement_id, "p1": account_id, "p2": "2026-01-02", "p3": "UNKNOWN GOOD", "p4": 12.34, "p5": "llm-progress-good"}, {"p0": statement_id, "p1": account_id, "p2": "2026-01-03", "p3": "UNKNOWN UNRESOLVED", "p4": 23.45, "p5": "llm-progress-unresolved"}, {"p0": statement_id, "p1": account_id, "p2": "2026-01-04", "p3": "UNKNOWN TIMEOUT", "p4": 34.56, "p5": "llm-progress-timeout"}])
+        """),
+        [
+            {
+                "p0": statement_id,
+                "p1": account_id,
+                "p2": "2026-01-02",
+                "p3": "UNKNOWN GOOD",
+                "p4": 12.34,
+                "p5": "llm-progress-good",
+            },
+            {
+                "p0": statement_id,
+                "p1": account_id,
+                "p2": "2026-01-03",
+                "p3": "UNKNOWN UNRESOLVED",
+                "p4": 23.45,
+                "p5": "llm-progress-unresolved",
+            },
+            {
+                "p0": statement_id,
+                "p1": account_id,
+                "p2": "2026-01-04",
+                "p3": "UNKNOWN TIMEOUT",
+                "p4": 34.56,
+                "p5": "llm-progress-timeout",
+            },
+        ],
+    )
     conn.commit()
 
 

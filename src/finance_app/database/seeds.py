@@ -1,5 +1,6 @@
 """Database seed orchestration helpers."""
 
+
 def seed_runtime_settings_defaults(conn):
     """Seed runtime settings defaults."""
     from finance_app.modules.settings.runtime import seed_runtime_settings

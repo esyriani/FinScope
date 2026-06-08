@@ -4,7 +4,6 @@ from flask import Blueprint, render_template, request
 
 from finance_app.modules.comparison.service import build_comparison_context
 
-
 comparison_bp = Blueprint("comparison", __name__)
 
 

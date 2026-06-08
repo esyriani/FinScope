@@ -19,7 +19,6 @@ from finance_app.modules.calendar.service import (
     shift_month,
 )
 
-
 RECURRING_VIEWS = {"list", "calendar"}
 RECURRING_CALENDAR_VISIBLE_COUNT = 3
 RECURRING_STATUS_PRIORITY = {
@@ -50,12 +49,7 @@ def build_recurring_page_context(args):
     selected_recurring_view = parse_recurring_view(args.get("view"))
     selected_statuses = clean_statuses(args.getlist("statuses"))
     selected_confidence = parse_confidence(args.get("confidence"))
-    has_applied_filters = bool(
-        selected_categories
-        or selected_tags
-        or selected_statuses
-        or selected_confidence
-    )
+    has_applied_filters = bool(selected_categories or selected_tags or selected_statuses or selected_confidence)
     recurring_context = build_recurring_activity_context(
         selected_month,
         selected_categories,
@@ -159,11 +153,7 @@ def parse_recurring_view(value):
 def clean_statuses(values):
     """Clean statuses."""
     valid_statuses = {option["value"] for option in STATUS_OPTIONS}
-    return [
-        status
-        for status in (str(value or "").strip() for value in values)
-        if status in valid_statuses
-    ]
+    return [status for status in (str(value or "").strip() for value in values) if status in valid_statuses]
 
 
 def parse_confidence(value):
@@ -262,34 +252,34 @@ def build_recurring_summary(recurring_items):
     active_statuses = {"occurred", "amount_changed", "likely_occurred", "expected", "overdue", "matched"}
     expected_statuses = {"expected"}
     occurred_statuses = {"occurred", "amount_changed", "likely_occurred", "matched"}
-    needs_attention_items = {
-        item["id"]
-        for item in recurring_items
-        if item["status"] in {"overdue", "amount_changed"}
-    }
+    needs_attention_items = {item["id"] for item in recurring_items if item["status"] in {"overdue", "amount_changed"}}
     needs_attention_items.update(item["id"] for item in low_confidence_detected_items)
     return {
         "needs_attention_count": len(needs_attention_items),
-        "active_count": len([
-            item
-            for item in recurring_items
-            if item.get("active", 1) and item["status"] in active_statuses
-        ]),
+        "active_count": len(
+            [item for item in recurring_items if item.get("active", 1) and item["status"] in active_statuses]
+        ),
         "expected_count": len([item for item in recurring_items if item["status"] in expected_statuses]),
         "occurred_count": len([item for item in recurring_items if item["status"] in occurred_statuses]),
         "overdue_count": len([item for item in recurring_items if item["status"] == "overdue"]),
         "possibly_inactive_count": len([item for item in recurring_items if item["status"] == "possibly_inactive"]),
         "low_confidence_detected_count": len(low_confidence_detected_items),
-        "recurring_spending": round(sum(
-            item["amount"]
-            for item in recurring_items
-            if item["type"] == "spending" and item["status"] != "possibly_inactive"
-        ), 2),
-        "recurring_income": round(sum(
-            item["amount"]
-            for item in recurring_items
-            if item["type"] == "income" and item["status"] != "possibly_inactive"
-        ), 2),
+        "recurring_spending": round(
+            sum(
+                item["amount"]
+                for item in recurring_items
+                if item["type"] == "spending" and item["status"] != "possibly_inactive"
+            ),
+            2,
+        ),
+        "recurring_income": round(
+            sum(
+                item["amount"]
+                for item in recurring_items
+                if item["type"] == "income" and item["status"] != "possibly_inactive"
+            ),
+            2,
+        ),
         "amount_change_count": len(amount_changed_items),
         "amount_change_total_impact": round(
             sum(recurring_amount_change_cashflow_impact(item) for item in amount_changed_items),

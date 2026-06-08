@@ -31,7 +31,8 @@ def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
     insert_rule(core_conn, keyword="UNUSED SHOP", category="Food")
     insert_rule(core_conn, keyword="AI SUGGESTED SHOP", category="Food", source="automatic")
     insert_rule(core_conn, keyword="AI APPROVED SHOP", category="Food", source="automatic", ai_approved=1)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -40,7 +41,9 @@ def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
             '2026-01-02', 'Metro Grocery #123', 14.25, 'Food', 'rule',
             :p0, 0, 'audit-route-match'
         )
-        """), {"p0": specific_rule_id})
+        """),
+        {"p0": specific_rule_id},
+    )
     core_conn.commit()
 
     response = client.get("/rules/audit")
@@ -97,10 +100,9 @@ def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
         "Review category conflict",
     )
     assert "Rule A" in visible_html(response) or "Rule B" in visible_html(response)
-    assert (
-        document.has_element("a", attrs={"href": f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}"})
-        or document.has_element("a", attrs={"href": f"/rules/audit/overlap/{specific_rule_id}/{broad_rule_id}"})
-    )
+    assert document.has_element(
+        "a", attrs={"href": f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}"}
+    ) or document.has_element("a", attrs={"href": f"/rules/audit/overlap/{specific_rule_id}/{broad_rule_id}"})
     assert_link(response, f"/rules/audit/rule/{broad_rule_id}")
     assert_visible_text(response, "These rules assign different categories:")
     assert broad_rule_id is not None
@@ -124,9 +126,7 @@ def test_rules_audit_route_paginates_and_sorts_overlap_table(client, core_conn):
         """))
     core_conn.commit()
 
-    response = client.get(
-        "/rules/audit?overlap_sort=rule_a&overlap_direction=asc&overlap_page=2"
-    )
+    response = client.get("/rules/audit?overlap_sort=rule_a&overlap_direction=asc&overlap_page=2")
     body = response.get_data(as_text=True)
     overlap_section = body.split("Rule overlap findings", 1)[1].split(
         "Specificity and precedence warnings",
@@ -183,8 +183,8 @@ def test_rules_audit_route_filters_overlap_findings(client, core_conn):
     assert 'class="btn-check"' in body
     assert 'type="radio"' in body
     assert 'data-ajax-refresh-target="rule-audit"' in body
-    assert 'data-ajax-refresh-form' in body
-    assert 'data-ajax-refresh-link' in overlap_section
+    assert "data-ajax-refresh-form" in body
+    assert "data-ajax-refresh-link" in overlap_section
 
     search_response = client.get("/rules/audit?overlap_q=cafe&overlap_filter=all")
     search_body = search_response.get_data(as_text=True)
@@ -245,7 +245,8 @@ def test_rules_audit_overlap_route_renders_shared_transactions(client, core_conn
         source="automatic",
         ai_approved=1,
     )
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -254,7 +255,9 @@ def test_rules_audit_overlap_route_renders_shared_transactions(client, core_conn
             '2026-01-02', 'Metro Grocery #123', 14.25, 'Food', 'rule',
             :p0, 0, 'audit-overlap-detail'
         )
-        """), {"p0": broad_rule_id})
+        """),
+        {"p0": broad_rule_id},
+    )
     core_conn.commit()
 
     response = client.get(f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}")
@@ -299,7 +302,8 @@ def test_rules_audit_overlap_route_paginates_and_sorts_shared_transactions(clien
     set_default_table_page_size(core_conn, 1)
     broad_rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
     specific_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Utilities")
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -307,7 +311,9 @@ def test_rules_audit_overlap_route_paginates_and_sorts_shared_transactions(clien
         VALUES
             ('2026-01-02', 'Metro Grocery A', 14.25, 'Food', 'rule', :p0, 0, 'audit-overlap-page-a'),
             ('2026-01-03', 'Metro Grocery Z', 16.25, 'Food', 'rule', :p1, 0, 'audit-overlap-page-z')
-        """), {"p0": broad_rule_id, "p1": broad_rule_id})
+        """),
+        {"p0": broad_rule_id, "p1": broad_rule_id},
+    )
     core_conn.commit()
 
     response = client.get(
@@ -334,7 +340,8 @@ def test_rules_audit_route_renders_specificity_warnings(client, core_conn):
     """Verify the audit page shows broad winners over more constrained rules."""
     broad_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Food")
     specific_rule_id = insert_rule(core_conn, keyword="METRO", category="Utilities", amount_min=10)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -343,7 +350,9 @@ def test_rules_audit_route_renders_specificity_warnings(client, core_conn):
             '2026-01-02', 'Metro Grocery', 12.34, 'Food', 'rule',
             :p0, 0, 'audit-route-specificity'
         )
-        """), {"p0": broad_rule_id})
+        """),
+        {"p0": broad_rule_id},
+    )
     core_conn.commit()
 
     response = client.get("/rules/audit")
@@ -366,7 +375,8 @@ def test_rules_audit_preview_route_renders_remove_rule_impact(client, core_conn)
     specific_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Utilities")
     set_rule_tags(core_conn, broad_rule_id, ["Grocery"])
     set_rule_tags(core_conn, specific_rule_id, ["Tax"])
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -375,7 +385,9 @@ def test_rules_audit_preview_route_renders_remove_rule_impact(client, core_conn)
             '2026-01-02', 'Metro Grocery #123', 12.34, 'Utilities', 'rule',
             :p0, 0, 'audit-route-preview'
         )
-        """), {"p0": specific_rule_id})
+        """),
+        {"p0": specific_rule_id},
+    )
     core_conn.commit()
 
     response = client.post(
@@ -439,7 +451,8 @@ def test_rules_audit_preview_route_renders_no_material_change_state(client, core
     specific_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Food")
     set_rule_tags(core_conn, broad_rule_id, ["Tax"])
     set_rule_tags(core_conn, specific_rule_id, ["Tax"])
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -448,7 +461,9 @@ def test_rules_audit_preview_route_renders_no_material_change_state(client, core
             '2026-01-02', 'Metro Grocery #123', 12.34, 'Food', 'rule',
             :p0, 0, 'audit-route-preview-no-material'
         )
-        """), {"p0": specific_rule_id})
+        """),
+        {"p0": specific_rule_id},
+    )
     core_conn.commit()
 
     response = client.post(
@@ -533,7 +548,8 @@ def test_rules_audit_preview_route_renders_edit_rule_impact(client, core_conn):
     """Verify edit preview renders a confirm form without mutating the rule."""
     rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
     set_rule_tags(core_conn, rule_id, ["Grocery"])
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -542,7 +558,9 @@ def test_rules_audit_preview_route_renders_edit_rule_impact(client, core_conn):
             '2026-01-02', 'Metro Pharmacy', 12.34, 'Food', 'rule',
             :p0, 0, 'audit-route-preview-edit'
         )
-        """), {"p0": rule_id})
+        """),
+        {"p0": rule_id},
+    )
     core_conn.commit()
 
     response = client.post(
@@ -618,7 +636,8 @@ def test_rules_audit_preview_route_marks_impact_tables_paginated_and_sortable(cl
     set_default_table_page_size(core_conn, 1)
     rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
     set_rule_tags(core_conn, rule_id, ["Grocery"])
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -626,7 +645,9 @@ def test_rules_audit_preview_route_marks_impact_tables_paginated_and_sortable(cl
         VALUES
             ('2026-01-02', 'Metro Pharmacy B', 12.34, 'Food', 'rule', :p0, 0, 'audit-preview-table-b'),
             ('2026-01-03', 'Metro Pharmacy A', 8.50, 'Food', 'rule', :p1, 0, 'audit-preview-table-a')
-        """), {"p0": rule_id, "p1": rule_id})
+        """),
+        {"p0": rule_id, "p1": rule_id},
+    )
     core_conn.commit()
 
     response = client.post(
@@ -657,7 +678,8 @@ def test_rules_audit_rule_route_renders_rule_diagnostics(client, core_conn):
     set_default_table_page_size(core_conn, 1)
     broad_rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
     specific_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Utilities")
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -666,7 +688,9 @@ def test_rules_audit_rule_route_renders_rule_diagnostics(client, core_conn):
             '2026-01-02', 'Metro Grocery #123', 14.25, 'Utilities', 'rule',
             :p0, 0, 'audit-rule-detail'
         )
-        """), {"p0": specific_rule_id})
+        """),
+        {"p0": specific_rule_id},
+    )
     core_conn.commit()
 
     response = client.get(f"/rules/audit/rule/{broad_rule_id}")
@@ -700,10 +724,9 @@ def test_rules_audit_rule_route_renders_rule_diagnostics(client, core_conn):
     )
     assert_has_element(response, None, attrs={"data-sort-column": "1", "data-sort-type": "number"})
     document = parse_html(response)
-    assert (
-        document.has_element("a", attrs={"href": f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}"})
-        or document.has_element("a", attrs={"href": f"/rules/audit/overlap/{specific_rule_id}/{broad_rule_id}"})
-    )
+    assert document.has_element(
+        "a", attrs={"href": f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}"}
+    ) or document.has_element("a", attrs={"href": f"/rules/audit/overlap/{specific_rule_id}/{broad_rule_id}"})
 
 
 def test_rules_audit_rule_route_renders_automatic_approval_status(client, core_conn):
@@ -730,5 +753,3 @@ def test_rules_audit_rule_route_renders_automatic_approval_status(client, core_c
     assert approved_response.status_code == 200
     assert_visible_text(suggested_response, "Suggested")
     assert_visible_text(approved_response, "Approved")
-
-

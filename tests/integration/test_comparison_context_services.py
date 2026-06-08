@@ -30,14 +30,8 @@ def test_comparison_context_year_and_period_metrics(app, core_conn, monkeypatch)
     with app.test_request_context("/comparison"):
         context = comparison_service.build_comparison_context(args)
 
-    food_comparison = next(
-        row for row in context["category_comparison"]
-        if row["category"] == "Food"
-    )
-    period_totals = {
-        metric["label"]: metric
-        for metric in context["period_comparison"]["totals"]
-    }
+    food_comparison = next(row for row in context["category_comparison"] if row["category"] == "Food")
+    period_totals = {metric["label"]: metric for metric in context["period_comparison"]["totals"]}
 
     assert context["comparison_has_data"] is True
     assert context["available_years"] == [2026, 2025]
@@ -116,8 +110,7 @@ def test_comparison_context_year_and_period_metrics(app, core_conn, monkeypatch)
     assert category_insight["insight_type"] == "category_increase"
     assert category_insight["score"] == 59.04
     assert category_insight["rank_reason"] == (
-        "largest absolute category increase; "
-        "abs=70.0%; percent=100.0%; importance=100.0%; confidence=44.0%"
+        "largest absolute category increase; " "abs=70.0%; percent=100.0%; importance=100.0%; confidence=44.0%"
     )
     assert all(insight["score"] >= 10.0 for insight in context["period_comparison"]["insights"])
 
@@ -133,10 +126,13 @@ def test_period_comparison_ranked_insights_include_robust_anomaly_candidates(app
         ("2026-04-02", "Metro Grocery", 51.00, "Food", "comparison-anomaly-history-5"),
         ("2026-05-02", "Metro Grocery", 220.00, "Food", "comparison-anomaly-current"),
     ]
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
-        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+        """),
+        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+    )
     core_conn.commit()
 
     with app.test_request_context("/comparison"):
@@ -154,17 +150,12 @@ def test_period_comparison_ranked_insights_include_robust_anomaly_candidates(app
             },
         )
 
-    insight_types = [
-        insight["insight_type"]
-        for insight in period_context["insights"]
-    ]
+    insight_types = [insight["insight_type"] for insight in period_context["insights"]]
     category_anomaly = next(
-        insight for insight in period_context["insights"]
-        if insight["insight_type"] == "category_spending_high_anomaly"
+        insight for insight in period_context["insights"] if insight["insight_type"] == "category_spending_high_anomaly"
     )
     merchant_anomaly = next(
-        insight for insight in period_context["insights"]
-        if insight["insight_type"] == "merchant_spending_high_anomaly"
+        insight for insight in period_context["insights"] if insight["insight_type"] == "merchant_spending_high_anomaly"
     )
 
     assert "category_spending_high_anomaly" in insight_types
@@ -220,14 +211,8 @@ def test_comparison_context_filters_year_and_period_by_tags(app, core_conn, monk
     with app.test_request_context("/comparison"):
         context = comparison_service.build_comparison_context(args)
 
-    food_comparison = next(
-        row for row in context["category_comparison"]
-        if row["category"] == "Food"
-    )
-    period_totals = {
-        metric["label"]: metric
-        for metric in context["period_comparison"]["totals"]
-    }
+    food_comparison = next(row for row in context["category_comparison"] if row["category"] == "Food")
+    period_totals = {metric["label"]: metric for metric in context["period_comparison"]["totals"]}
 
     assert context["selected_year_tags"] == ["Tax"]
     assert context["selected_period_tags"] == ["Tax"]
@@ -252,10 +237,7 @@ def test_comparison_tag_cashflow_includes_tagged_transfer_credits(app, core_conn
     with app.test_request_context("/comparison"):
         context = comparison_service.build_comparison_context(args)
 
-    period_totals = {
-        metric["label"]: metric
-        for metric in context["period_comparison"]["totals"]
-    }
+    period_totals = {metric["label"]: metric for metric in context["period_comparison"]["totals"]}
 
     assert context["selected_period_tags"] == ["Reimbursable"]
     assert period_totals["Spending"]["current"] == 200.00
@@ -274,9 +256,7 @@ def test_comparison_period_transaction_count_excludes_transfers(app, core_conn, 
     monkeypatch.setattr(comparison_service, "date", FixedDate)
 
     with app.test_request_context("/comparison"):
-        context = comparison_service.build_comparison_context(
-            MultiDict([("period_comparison", "month_last_year")])
-        )
+        context = comparison_service.build_comparison_context(MultiDict([("period_comparison", "month_last_year")]))
 
     assert context["period_comparison"]["current_transaction_count"] == 3
     assert context["period_comparison"]["previous_transaction_count"] == 3
@@ -340,10 +320,7 @@ def test_comparison_context_filters_invalid_years_and_falls_back_baseline(app, c
             )
         )
 
-    food_comparison = next(
-        row for row in fallback_context["category_comparison"]
-        if row["category"] == "Food"
-    )
+    food_comparison = next(row for row in fallback_context["category_comparison"] if row["category"] == "Food")
     assert invalid_year_context["selected_years"] == [2026]
     assert invalid_year_context["selected_baseline_year"] is None
     assert fallback_context["selected_years"] == [2025, 2026]

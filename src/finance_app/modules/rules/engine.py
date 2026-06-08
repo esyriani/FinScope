@@ -53,10 +53,7 @@ def apply_all_rules_job(undo_state):
         updated_count, undo_changes = apply_all_rules_to_transactions(conn, capture_undo=True)
         undo_state["changes"] = undo_changes
 
-    return (
-        f"Rules applied to {updated_count} existing transaction"
-        f"{'' if updated_count == 1 else 's'}."
-    )
+    return f"Rules applied to {updated_count} existing transaction" f"{'' if updated_count == 1 else 's'}."
 
 
 def undo_apply_all_rules_job(undo_state):
@@ -91,8 +88,7 @@ def undo_apply_all_rules_job(undo_state):
 
     if skipped_count:
         message += (
-            f" Skipped {skipped_count} transaction"
-            f"{'' if skipped_count == 1 else 's'} that changed after the job."
+            f" Skipped {skipped_count} transaction" f"{'' if skipped_count == 1 else 's'} that changed after the job."
         )
 
     return message
@@ -109,18 +105,22 @@ def preview_rule_matches(conn, rule, limit):
 
 def preview_rule_matches_core(conn, rule, keyword, limit):
     """Return rule preview matches using portable Core row filtering."""
-    rows = conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.merchant_id,
-            transactions_table.c.tx_date,
-            transactions_table.c.description,
-            transactions_table.c.amount,
-            transactions_table.c.category,
+    rows = (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.merchant_id,
+                transactions_table.c.tx_date,
+                transactions_table.c.description,
+                transactions_table.c.amount,
+                transactions_table.c.category,
+            )
+            .where(rule_sql_candidate_condition(conn, rule, keyword))
+            .order_by(transactions_table.c.tx_date.desc(), transactions_table.c.id.desc())
         )
-        .where(rule_sql_candidate_condition(conn, rule, keyword))
-        .order_by(transactions_table.c.tx_date.desc(), transactions_table.c.id.desc())
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     match_count = 0
     sample = []
 
@@ -511,7 +511,9 @@ def rule_account_matches_transaction(rule, transaction):
     rule_account_id = rule["account_id"] if "account_id" in rule.keys() else rule.get("account_id")
     if rule_account_id is None:
         return True
-    transaction_account_id = transaction["account_id"] if "account_id" in transaction.keys() else transaction.get("account_id")
+    transaction_account_id = (
+        transaction["account_id"] if "account_id" in transaction.keys() else transaction.get("account_id")
+    )
     if transaction_account_id is None:
         return False
     return int(rule_account_id) == int(transaction_account_id)
@@ -577,9 +579,7 @@ def update_transaction_state(conn, transaction_id, state, transaction_kind):
         .values(
             category=state.category,
             category_id=(
-                state.category_id
-                if state.category_id is not None
-                else resolve_category_id(conn, state.category)
+                state.category_id if state.category_id is not None else resolve_category_id(conn, state.category)
             ),
             needs_review=0,
             category_source=state.assignment.category_source,

@@ -109,8 +109,7 @@ def test_build_period_insights_preserves_card_order_and_public_fields():
     assert insights[0]["insight_type"] == "category_increase"
     assert insights[0]["score"] == 59.04
     assert insights[0]["rank_reason"] == (
-        "largest absolute category increase; "
-        "abs=70.0%; percent=100.0%; importance=100.0%; confidence=44.0%"
+        "largest absolute category increase; " "abs=70.0%; percent=100.0%; importance=100.0%; confidence=44.0%"
     )
 
     assert public_fields(insights[2]) == {
@@ -133,8 +132,7 @@ def test_build_period_insights_preserves_card_order_and_public_fields():
     assert insights[2]["insight_type"] == "transaction_activity"
     assert insights[2]["score"] == 0.0
     assert insights[2]["rank_reason"] == (
-        "transaction count change; "
-        "abs=0.0%; percent=0.0%; importance=100.0%; confidence=44.0%"
+        "transaction count change; " "abs=0.0%; percent=0.0%; importance=100.0%; confidence=44.0%"
     )
 
 
@@ -271,8 +269,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
 
     assert insights[0]["score"] == 65.58
     assert insights[0]["rank_reason"] == (
-        "largest absolute category increase; "
-        "abs=53.8%; percent=100.0%; importance=76.9%; confidence=92.5%"
+        "largest absolute category increase; " "abs=53.8%; percent=100.0%; importance=76.9%; confidence=92.5%"
     )
     assert insights[4]["rank_reason"].startswith("new merchant spending total;")
     assert insights[5]["rank_reason"].startswith("dropped merchant spending total;")
@@ -382,14 +379,8 @@ def test_build_period_insights_only_includes_anomalies_in_ranked_mode():
         ranking_options={"min_score": 0.0, "min_money_change": 0.0, "deduplicate": False},
     )
 
-    assert "category_spending_high_anomaly" not in [
-        insight["insight_type"]
-        for insight in default_insights
-    ]
-    assert "category_spending_high_anomaly" in [
-        insight["insight_type"]
-        for insight in ranked_insights
-    ]
+    assert "category_spending_high_anomaly" not in [insight["insight_type"] for insight in default_insights]
+    assert "category_spending_high_anomaly" in [insight["insight_type"] for insight in ranked_insights]
 
 
 def test_spending_mix_shift_candidate_detects_large_mix_shift():

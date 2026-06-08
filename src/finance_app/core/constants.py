@@ -39,6 +39,7 @@ def normalize_user_role(role):
     """Return a normalized role value for persisted or submitted input."""
     return str(role or "").strip().lower()
 
+
 ACCOUNT_TYPE_CHECKING = "checking"
 ACCOUNT_TYPE_SAVINGS = "savings"
 ACCOUNT_TYPE_CREDIT_CARD = "credit_card"

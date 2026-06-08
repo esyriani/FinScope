@@ -61,9 +61,7 @@ def build_comparison_context(args):
     selected_year_categories = clean_categories(args.getlist("year_categories"))
     selected_period_tags = clean_tags(args.getlist("period_tags"))
     selected_year_tags = clean_tags(args.getlist("year_tags"))
-    selected_period_comparison = parse_period_comparison(
-        args.get("period_comparison")
-    )
+    selected_period_comparison = parse_period_comparison(args.get("period_comparison"))
 
     with db_core_transaction() as conn:
         max_years = max(2, get_int_setting(conn, "comparison_max_years", settings.default_comparison_max_years))
@@ -81,9 +79,7 @@ def build_comparison_context(args):
         if not selected_years:
             selected_years = available_years[:max_years]
         else:
-            selected_years = [
-                year for year in selected_years if year in available_years
-            ]
+            selected_years = [year for year in selected_years if year in available_years]
 
         if not selected_years:
             selected_years = [date.today().year]
@@ -158,8 +154,7 @@ def build_comparison_context(args):
             period_tags=selected_period_tags,
         ),
         period_comparison_options=[
-            {"value": value, "label": label}
-            for value, label in PERIOD_COMPARISON_OPTIONS.items()
+            {"value": value, "label": label} for value, label in PERIOD_COMPARISON_OPTIONS.items()
         ],
         selected_period_comparison=selected_period_comparison,
         period_comparison=period_comparison,
@@ -177,8 +172,6 @@ def build_comparison_context(args):
         ],
         monthly_spending_statistics_json=monthly_spending_statistics,
     )
-
-
 
 
 def build_period_comparison(
@@ -339,5 +332,3 @@ def build_period_comparison(
         "current_transaction_count": current_summary["transaction_count"],
         "previous_transaction_count": previous_summary["transaction_count"],
     }
-
-

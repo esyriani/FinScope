@@ -57,10 +57,7 @@ def schema_conn():
 
 def column_names(conn, table_name):
     """Return reflected column names for a created table."""
-    return {
-        column["name"]
-        for column in inspect(conn).get_columns(table_name)
-    }
+    return {column["name"] for column in inspect(conn).get_columns(table_name)}
 
 
 def foreign_key_triplets(conn, table_name):
@@ -77,18 +74,14 @@ def foreign_key_triplets(conn, table_name):
 
 def category_id(conn, name):
     """Return the category ID for a seeded category."""
-    found = conn.execute(
-        select(categories_table.c.id).where(categories_table.c.name == name)
-    ).scalar_one_or_none()
+    found = conn.execute(select(categories_table.c.id).where(categories_table.c.name == name)).scalar_one_or_none()
     assert found is not None
     return found
 
 
 def create_legacy_statements_table_without_date_order(conn):
     """Create the statements table shape used before date_order was added."""
-    conn.execute(
-        text(
-            """
+    conn.execute(text("""
             CREATE TABLE statements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 account_id INTEGER,
@@ -108,9 +101,7 @@ def create_legacy_statements_table_without_date_order(conn):
                 llm_candidate_count INTEGER NOT NULL DEFAULT 0,
                 uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
-    )
+            """))
 
 
 def assert_table_uses_allowed_values(table_name, column_name, values):
@@ -283,9 +274,7 @@ def test_core_schema_tracks_account_roles_and_transaction_kinds(schema_conn):
     assert {"import_mode", "default_account_type"}.issubset(statement_type_columns)
     assert "transaction_kind" in transaction_columns
 
-    schema_conn.execute(
-        insert(accounts_table).values(name="Visa", account_type="credit_card")
-    )
+    schema_conn.execute(insert(accounts_table).values(name="Visa", account_type="credit_card"))
     schema_conn.execute(
         insert(statement_types_table).values(
             name="Card import",
@@ -315,8 +304,7 @@ def test_core_schema_accepts_interac_statement_parser_type(schema_conn):
     )
 
     found = schema_conn.execute(
-        select(statement_types_table.c.parser_type)
-        .where(statement_types_table.c.name == "Interac test")
+        select(statement_types_table.c.parser_type).where(statement_types_table.c.name == "Interac test")
     ).scalar_one()
     assert found == "interac_etransfer"
 
@@ -386,9 +374,7 @@ def test_category_rules_enforce_keyword_and_merchant_uniqueness(schema_conn):
             merchant_key="SECOND",
         )
     ).inserted_primary_key[0]
-    schema_conn.execute(
-        insert(category_rules_table).values(keyword="MARKET", category="Food")
-    )
+    schema_conn.execute(insert(category_rules_table).values(keyword="MARKET", category="Food"))
     schema_conn.execute(
         insert(category_rules_table).values(
             keyword="MARKET",
@@ -506,18 +492,31 @@ def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
 
     assert rename_category(schema_conn, "Income", "Earnings") == "Earnings"
 
-    category = schema_conn.execute(
-        select(categories_table.c.id, categories_table.c.name)
-        .where(categories_table.c.id == income_id)
-    ).mappings().one()
-    transaction = schema_conn.execute(
-        select(transactions_table.c.category_id, transactions_table.c.category)
-        .where(transactions_table.c.fingerprint == "tx-income")
-    ).mappings().one()
-    rule = schema_conn.execute(
-        select(category_rules_table.c.category_id, category_rules_table.c.category)
-        .where(category_rules_table.c.keyword == "PAYROLL")
-    ).mappings().one()
+    category = (
+        schema_conn.execute(
+            select(categories_table.c.id, categories_table.c.name).where(categories_table.c.id == income_id)
+        )
+        .mappings()
+        .one()
+    )
+    transaction = (
+        schema_conn.execute(
+            select(transactions_table.c.category_id, transactions_table.c.category).where(
+                transactions_table.c.fingerprint == "tx-income"
+            )
+        )
+        .mappings()
+        .one()
+    )
+    rule = (
+        schema_conn.execute(
+            select(category_rules_table.c.category_id, category_rules_table.c.category).where(
+                category_rules_table.c.keyword == "PAYROLL"
+            )
+        )
+        .mappings()
+        .one()
+    )
     assert (category["id"], category["name"]) == (income_id, "Earnings")
     assert (transaction["category_id"], transaction["category"]) == (income_id, "Earnings")
     assert (rule["category_id"], rule["category"]) == (income_id, "Earnings")

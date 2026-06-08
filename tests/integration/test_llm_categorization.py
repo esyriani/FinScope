@@ -155,9 +155,7 @@ def test_classify_unknowns_with_llm_can_skip_automatic_rule_creation(core_conn):
         unknown_transaction("Metro Grocery 1", "METRO", 12.34),
     ]
 
-    request_stub = LLMRequestStub(
-        llm_response_scenario(llm_result("Food", 0.95, tags=["Tax"], needs_review=False))
-    )
+    request_stub = LLMRequestStub(llm_response_scenario(llm_result("Food", 0.95, tags=["Tax"], needs_review=False)))
 
     llm.classify_unknowns_with_llm(
         core_conn,
@@ -258,8 +256,7 @@ def test_classify_unknowns_with_llm_deduplicates_and_skips_non_candidates(core_c
     )
 
     assert [
-        [(tx["description"], tx["llm_request_id"]) for tx in call["unknown_chunk"]]
-        for call in request_stub.calls
+        [(tx["description"], tx["llm_request_id"]) for tx in call["unknown_chunk"]] for call in request_stub.calls
     ] == [[("Metro Grocery one", "0"), ("Metro Refund", "1")]]
     assert transactions[0]["category"] == "Food"
     assert transactions[0]["category_source"] == "ai"
@@ -598,9 +595,7 @@ def test_classify_unknowns_with_llm_records_missing_results_as_unknown(core_conn
         unknown_transaction("Merchant B", "MERCHANT B", 2.00),
     ]
 
-    request_stub = LLMRequestStub(
-        llm_response_scenario(llm_result("Food", 0.96, needs_review=False))
-    )
+    request_stub = LLMRequestStub(llm_response_scenario(llm_result("Food", 0.96, needs_review=False)))
 
     llm.classify_unknowns_with_llm(
         core_conn,
@@ -631,9 +626,7 @@ def test_classify_unknowns_with_llm_keeps_custom_unknown_category_on_unknown_res
         }
     ]
 
-    request_stub = LLMRequestStub(
-        llm_response_scenario(llm_result("UNKNOWN", 0.99, needs_review=True))
-    )
+    request_stub = LLMRequestStub(llm_response_scenario(llm_result("UNKNOWN", 0.99, needs_review=True)))
 
     llm.classify_unknowns_with_llm(
         core_conn,
@@ -723,9 +716,7 @@ def test_classify_unknowns_with_llm_keeps_medium_confidence_full_taxonomy_catego
         }
     ]
 
-    request_stub = LLMRequestStub(
-        llm_response_scenario(llm_result("Travel", 0.94, needs_review=True))
-    )
+    request_stub = LLMRequestStub(llm_response_scenario(llm_result("Travel", 0.94, needs_review=True)))
 
     llm.classify_unknowns_with_llm(
         core_conn,
@@ -795,9 +786,7 @@ def test_classify_unknowns_with_llm_drops_invalid_tag_ids_without_losing_categor
         }
     ]
 
-    request_stub = LLMRequestStub(
-        llm_response_scenario(invalid_tag_result("Food", 0.99, needs_review=False))
-    )
+    request_stub = LLMRequestStub(llm_response_scenario(invalid_tag_result("Food", 0.99, needs_review=False)))
 
     llm.classify_unknowns_with_llm(
         core_conn,
@@ -831,9 +820,7 @@ def test_classify_unknowns_with_llm_rejects_confidence_outside_probability_range
         }
     ]
 
-    request_stub = LLMRequestStub(
-        llm_response_scenario(llm_result("Food", 1.20, tags=["Tax"], needs_review=False))
-    )
+    request_stub = LLMRequestStub(llm_response_scenario(llm_result("Food", 1.20, tags=["Tax"], needs_review=False)))
 
     llm.classify_unknowns_with_llm(
         core_conn,

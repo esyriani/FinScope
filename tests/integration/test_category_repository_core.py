@@ -99,9 +99,11 @@ def test_category_repository_category_helpers_support_core_connections(app, core
         assert rename_category(conn, "Pet care", "Pet supplies") == "Pet supplies"
         assert "Pet supplies" in get_category_options(conn)
 
-    category = core_conn.execute(
-        select(categories_table.c.name).where(categories_table.c.name == "Pet supplies")
-    ).mappings().fetchone()
+    category = (
+        core_conn.execute(select(categories_table.c.name).where(categories_table.c.name == "Pet supplies"))
+        .mappings()
+        .fetchone()
+    )
     assert category["name"] == "Pet supplies"
     assert "Pet supplies" in get_category_options()
 

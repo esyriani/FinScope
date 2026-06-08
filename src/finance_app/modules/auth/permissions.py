@@ -17,7 +17,6 @@ from finance_app.core.constants import (
     normalize_user_role,
 )
 
-
 PERMISSION_MANAGE_USERS = "manage_users"
 PERMISSION_MANAGE_GLOBAL_SETTINGS = "manage_global_settings"
 PERMISSION_IMPORT_STATEMENTS = "import_statements"

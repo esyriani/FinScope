@@ -42,8 +42,7 @@ def test_insert_or_select_unique_row_reselects_duplicate_and_keeps_transaction_u
                 conn.execute(insert(table).values(value="after-conflict"))
 
             values = [
-                row._mapping["value"]
-                for row in conn.execute(select(table.c.value).order_by(table.c.value)).fetchall()
+                row._mapping["value"] for row in conn.execute(select(table.c.value).order_by(table.c.value)).fetchall()
             ]
 
         assert first_inserted is True
@@ -72,8 +71,7 @@ def test_insert_or_select_unique_row_reraises_unexpected_integrity_errors(tmp_pa
                 conn.execute(insert(table).values(value="after-error"))
 
             values = [
-                row._mapping["value"]
-                for row in conn.execute(select(table.c.value).order_by(table.c.value)).fetchall()
+                row._mapping["value"] for row in conn.execute(select(table.c.value).order_by(table.c.value)).fetchall()
             ]
 
         assert values == ["after-error", "duplicate"]

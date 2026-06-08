@@ -6,7 +6,6 @@ from sqlalchemy.engine import create_mock_engine
 from finance_app.database.dates import ISODate, UTCDateTime
 from finance_app.database.tables import metadata
 
-
 EXPECTED_TABLE_COLUMNS = {
     "users": [
         "id",
@@ -219,11 +218,7 @@ def test_core_metadata_creates_current_tables_and_columns():
 
 def test_core_metadata_defines_current_explicit_indexes():
     """Verify Core metadata defines the current explicit index surface."""
-    core_indexes = {
-        index.name
-        for table in metadata.tables.values()
-        for index in table.indexes
-    }
+    core_indexes = {index.name for table in metadata.tables.values() for index in table.indexes}
 
     assert core_indexes == EXPECTED_EXPLICIT_INDEXES
 

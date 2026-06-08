@@ -72,16 +72,16 @@ def get_or_create_account(conn, name, account_type=ACCOUNT_TYPE_CHECKING, paid_f
     if update_paid_from:
         values["paid_from_account_id"] = paid_from_id
 
-    conn.execute(
-        update(accounts_table)
-        .where(accounts_table.c.name == account_name)
-        .values(**values)
+    conn.execute(update(accounts_table).where(accounts_table.c.name == account_name).values(**values))
+    return (
+        conn.execute(
+            select(
+                accounts_table.c.id,
+                accounts_table.c.name,
+                accounts_table.c.account_type,
+                accounts_table.c.paid_from_account_id,
+            ).where(accounts_table.c.name == account_name)
+        )
+        .mappings()
+        .fetchone()
     )
-    return conn.execute(
-        select(
-            accounts_table.c.id,
-            accounts_table.c.name,
-            accounts_table.c.account_type,
-            accounts_table.c.paid_from_account_id,
-        ).where(accounts_table.c.name == account_name)
-    ).mappings().fetchone()

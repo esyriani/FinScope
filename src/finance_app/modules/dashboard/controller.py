@@ -4,7 +4,6 @@ from flask import Blueprint, render_template, request
 
 from finance_app.modules.dashboard.service import build_dashboard_context
 
-
 dashboard_bp = Blueprint("dashboard", __name__)
 
 

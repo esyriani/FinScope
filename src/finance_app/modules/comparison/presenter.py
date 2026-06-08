@@ -10,7 +10,6 @@ from finance_app.modules.comparison.statistics import build_descriptive_statisti
 from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.comparison.constants import UNKNOWN_WARNING_THRESHOLD
 
-
 DEFAULT_INSIGHT_CARD_LIMIT = 7
 DEFAULT_RANKED_INSIGHT_MIN_SCORE = 10.0
 DEFAULT_RANKED_INSIGHT_MIN_MONEY_CHANGE = 5.0
@@ -26,10 +25,7 @@ MERCHANT_RANK_INCREASE_MIN_PLACES = 3
 
 def build_monthly_spending(years, rows):
     """Build monthly spending."""
-    by_year = {
-        year: [0 for _ in range(12)]
-        for year in years
-    }
+    by_year = {year: [0 for _ in range(12)] for year in years}
     for row in rows:
         if row["year"] in by_year and 1 <= row["month"] <= 12:
             by_year[row["year"]][row["month"] - 1] = rounded_money_float(row["spending"])
@@ -44,10 +40,7 @@ def build_monthly_spending_statistics(years, rows):
     the imported data, especially future months in the current year, are not
     treated as real zero-spending periods.
     """
-    values_by_year = {
-        year: []
-        for year in years
-    }
+    values_by_year = {year: [] for year in years}
     for row in rows:
         year = row["year"]
         if year in values_by_year:
@@ -66,7 +59,6 @@ def build_monthly_spending_statistics(years, rows):
     return result
 
 
-
 def build_category_comparison(years, rows, baseline_year=None):
     """Build category comparison."""
     categories = {}
@@ -78,15 +70,16 @@ def build_category_comparison(years, rows, baseline_year=None):
 
     result = []
     for category, totals in categories.items():
-        result.append({
-            "category": category,
-            "totals": totals,
-            "changes": build_year_changes(years, totals, baseline_year),
-            "total": rounded_money_float(sum(totals.values())),
-        })
+        result.append(
+            {
+                "category": category,
+                "totals": totals,
+                "changes": build_year_changes(years, totals, baseline_year),
+                "total": rounded_money_float(sum(totals.values())),
+            }
+        )
 
     return sorted(result, key=lambda row: row["total"], reverse=True)
-
 
 
 def build_year_changes(years, totals, baseline_year=None):
@@ -118,7 +111,6 @@ def build_year_changes(years, totals, baseline_year=None):
         }
 
     return changes
-
 
 
 def period_comparison_ranges(comparison_key, today):
@@ -165,11 +157,9 @@ def period_comparison_ranges(comparison_key, today):
     }
 
 
-
 def safe_date(year, month, day):
     """Return a safe date."""
     return date(year, month, min(day, monthrange(year, month)[1]))
-
 
 
 def build_period_category_rows(current_rows, previous_rows):
@@ -177,7 +167,6 @@ def build_period_category_rows(current_rows, previous_rows):
     current = {row["category"]: money_to_float(row["spending"]) for row in current_rows}
     previous = {row["category"]: money_to_float(row["spending"]) for row in previous_rows}
     return build_period_rows("category", sorted(set(current) | set(previous)), current, previous)
-
 
 
 def build_period_merchant_rows(current_rows, previous_rows, conn):
@@ -193,7 +182,6 @@ def build_period_merchant_rows(current_rows, previous_rows, conn):
     return rows
 
 
-
 def build_merchant_period_totals(rows, conn):
     """Build merchant period totals."""
     totals = {}
@@ -203,7 +191,6 @@ def build_merchant_period_totals(rows, conn):
             continue
         totals[merchant] = totals.get(merchant, 0) + money_to_float(row["amount"])
     return totals
-
 
 
 def build_merchant_primary_categories(conn, *row_groups):
@@ -221,7 +208,6 @@ def build_merchant_primary_categories(conn, *row_groups):
     for merchant, totals in category_totals.items():
         result[merchant] = max(totals, key=lambda category: (totals[category], category))
     return result
-
 
 
 def build_period_category_history(rows):
@@ -307,14 +293,15 @@ def build_period_rows(label_key, labels, current, previous):
             "spending",
             "",
         )
-        rows.append({
-            label_key: label,
-            **metric,
-        })
+        rows.append(
+            {
+                label_key: label,
+                **metric,
+            }
+        )
 
     rows.sort(key=lambda row: abs(row["change"]), reverse=True)
     return rows
-
 
 
 def build_period_metric(label, current, previous, noun, previous_label, value_type="money"):
@@ -346,13 +333,11 @@ def build_period_metric(label, current, previous, noun, previous_label, value_ty
     }
 
 
-
 def percentage_change(current, previous):
     """Handle percentage change."""
     if previous == 0:
         return None
     return round(((current - previous) / previous) * 100, 1)
-
 
 
 def change_state(current, previous):
@@ -368,7 +353,6 @@ def change_state(current, previous):
     return "changed"
 
 
-
 def format_change_label(current, previous, percent):
     """Format change label."""
     state = change_state(current, previous)
@@ -381,7 +365,6 @@ def format_change_label(current, previous, percent):
     if state in labels:
         return gettext(labels[state])
     return f"{percent:+.1f}%" if percent is not None else "n/a"
-
 
 
 def period_change_sentence(label, noun, change, percent, previous, current, previous_label):
@@ -419,7 +402,6 @@ def period_change_sentence(label, noun, change, percent, previous, current, prev
         percent=abs(percent),
         period=previous_label,
     )
-
 
 
 def build_period_insights(
@@ -807,16 +789,10 @@ def spending_mix_shift(category_rows):
 
 def spending_share_distribution(category_rows, categories, value_key, total):
     """Return category spending shares in a stable category order."""
-    values_by_category = {
-        row["category"]: positive_money_float(row[value_key])
-        for row in category_rows
-    }
+    values_by_category = {row["category"]: positive_money_float(row[value_key]) for row in category_rows}
     if total <= 0:
         return [0.0 for _category in categories]
-    return [
-        values_by_category.get(category, 0.0) / total
-        for category in categories
-    ]
+    return [values_by_category.get(category, 0.0) / total for category in categories]
 
 
 def jensen_shannon_distance(current_distribution, previous_distribution):
@@ -824,10 +800,7 @@ def jensen_shannon_distance(current_distribution, previous_distribution):
     if not current_distribution or not previous_distribution:
         return 0.0
 
-    midpoint = [
-        (current + previous) / 2
-        for current, previous in zip(current_distribution, previous_distribution)
-    ]
+    midpoint = [(current + previous) / 2 for current, previous in zip(current_distribution, previous_distribution)]
     divergence = (
         kullback_leibler_divergence(current_distribution, midpoint)
         + kullback_leibler_divergence(previous_distribution, midpoint)
@@ -863,7 +836,9 @@ def merchant_behavior_insight_candidates(
     )
     resurrected_merchant = resurrected["merchant"] if resurrected else None
     if resurrected:
-        insights.append(build_resurrected_merchant_candidate(resurrected, merchant_activity_history[resurrected_merchant]))
+        insights.append(
+            build_resurrected_merchant_candidate(resurrected, merchant_activity_history[resurrected_merchant])
+        )
 
     new_merchant = largest_new_merchant(
         merchant_rows,
@@ -892,7 +867,8 @@ def merchant_behavior_insight_candidates(
 def largest_new_merchant(merchant_rows, merchant_activity_history, min_spending, *, exclude_merchant=None):
     """Return the largest current-period merchant that is new to the available history."""
     candidates = [
-        row for row in merchant_rows
+        row
+        for row in merchant_rows
         if row["state"] == "new"
         and row["current"] >= min_spending
         and row["merchant"] != exclude_merchant
@@ -903,11 +879,7 @@ def largest_new_merchant(merchant_rows, merchant_activity_history, min_spending,
 
 def largest_dropped_merchant(merchant_rows, min_spending):
     """Return the largest prior-period merchant missing from the current period."""
-    candidates = [
-        row for row in merchant_rows
-        if row["state"] == "dropped"
-        and row["previous"] >= min_spending
-    ]
+    candidates = [row for row in merchant_rows if row["state"] == "dropped" and row["previous"] >= min_spending]
     return max(candidates, key=lambda row: (row["previous"], row["merchant"]), default=None)
 
 
@@ -919,7 +891,8 @@ def largest_resurrected_merchant(
 ):
     """Return the largest current merchant that returned after a long absence."""
     candidates = [
-        row for row in merchant_rows
+        row
+        for row in merchant_rows
         if row["state"] == "new"
         and row["current"] >= min_spending
         and merchant_absence_months(merchant_activity_history.get(row["merchant"])) >= resurrection_min_absence_months
@@ -954,16 +927,10 @@ def largest_merchant_rank_increase(merchant_rows, min_spending, rank_increase_mi
 def merchant_spending_ranks(merchant_rows, value_key):
     """Return 1-based merchant ranks by spending for the selected value key."""
     ranked = sorted(
-        [
-            row for row in merchant_rows
-            if row[value_key] > 0
-        ],
+        [row for row in merchant_rows if row[value_key] > 0],
         key=lambda row: (-row[value_key], row["merchant"].casefold()),
     )
-    return {
-        row["merchant"]: index
-        for index, row in enumerate(ranked, start=1)
-    }
+    return {row["merchant"]: index for index, row in enumerate(ranked, start=1)}
 
 
 def merchant_has_history(activity):
@@ -1045,9 +1012,11 @@ def build_resurrected_merchant_candidate(row, activity):
         label="Merchant returned",
         value=gettext("{merchant}: returned after a gap", merchant=merchant),
         detail=gettext(
-            "{merchant} returned with {amount} after {count} month without spending."
-            if months_ago == 1
-            else "{merchant} returned with {amount} after {count} months without spending.",
+            (
+                "{merchant} returned with {amount} after {count} month without spending."
+                if months_ago == 1
+                else "{merchant} returned with {amount} after {count} months without spending."
+            ),
             merchant=merchant,
             amount=format_money_text(row["current"]),
             count=months_ago,
@@ -1367,11 +1336,7 @@ def insight_candidate_dedupe_key(candidate):
         metrics.get("direction") or insight_direction_family(candidate.get("insight_type"))
     )
     title = str(
-        metrics.get("entity_key")
-        or candidate.get("title")
-        or candidate.get("value")
-        or candidate.get("label")
-        or ""
+        metrics.get("entity_key") or candidate.get("title") or candidate.get("value") or candidate.get("label") or ""
     )
     return (direction, title.casefold())
 
@@ -1579,12 +1544,10 @@ def capped_ratio(value, baseline):
     return min(value / baseline, 1.0)
 
 
-
 def largest_change(rows, direction):
     """Handle largest change."""
     candidates = [row for row in rows if row["direction"] == direction]
     return max(candidates, key=lambda row: row["abs_change"], default=None)
-
 
 
 def build_insight_card(
@@ -1688,11 +1651,9 @@ def change_insight(label, row, label_key, insight_type="", score=0.0, rank_reaso
     )
 
 
-
 def change_insight_tone(row):
     """Return the visual tone for a period insight row."""
     return "danger" if row["direction"] == "up" else "success" if row["direction"] == "down" else "muted"
-
 
 
 def change_insight_icon(row):
@@ -1706,14 +1667,12 @@ def change_insight_icon(row):
     return "bi-graph-up-arrow"
 
 
-
 def comparison_bar_width(value, comparison_value):
     """Return a percent width for comparing two non-negative visual bars."""
     maximum = max(abs(value or 0), abs(comparison_value or 0))
     if maximum == 0:
         return 0
     return round((abs(value or 0) / maximum) * 100, 1)
-
 
 
 def build_period_insight_groups(insights):
@@ -1745,7 +1704,6 @@ def build_period_insight_groups(insights):
     return [group for group in grouped.values() if group["insights"]]
 
 
-
 def build_period_unknown_warning(category_rows, current_spending, previous_spending, unknown_category):
     """Build period unknown warning."""
     unknown = next((row for row in category_rows if row["category"] == unknown_category), None)
@@ -1763,7 +1721,6 @@ def build_period_unknown_warning(category_rows, current_spending, previous_spend
         unknown_category,
         largest_share,
     )
-
 
 
 def build_year_unknown_warning(category_comparison, unknown_category):
@@ -1785,7 +1742,6 @@ def build_year_unknown_warning(category_comparison, unknown_category):
     )
 
 
-
 def build_unknown_warning_message(source, category, share):
     """Build a translatable warning message with its interpolation values."""
     values = {
@@ -1799,13 +1755,11 @@ def build_unknown_warning_message(source, category, share):
     }
 
 
-
 def percentage_share(value, total):
     """Handle percentage share."""
     value = money_to_float(value)
     total = money_to_float(total)
     return round((value / total) * 100, 1) if total else 0
-
 
 
 def format_signed_count(value):
@@ -1837,11 +1791,9 @@ def positive_money_float(value):
     return max(money_to_float(value), 0.0)
 
 
-
 def format_money_text(value):
     """Format money text."""
     return format_money_display(value)
-
 
 
 def format_signed_money_text(value):
@@ -1849,6 +1801,7 @@ def format_signed_money_text(value):
     value = rounded_money_float(value)
     prefix = "+" if value > 0 else "-" if value < 0 else ""
     return f"{prefix}{format_money_text(abs(value))}"
+
 
 def build_category_context(categories):
     """Build category context."""
@@ -1858,7 +1811,6 @@ def build_category_context(categories):
 def build_tag_context(tags):
     """Build tag context."""
     return ", ".join(tags) if tags else gettext("All tags")
-
 
 
 def build_period_filter_context(option_label, categories, tags=None):
@@ -1871,7 +1823,6 @@ def build_period_filter_context(option_label, categories, tags=None):
     )
 
 
-
 def build_year_filter_context(years, baseline_year, categories, tags=None):
     """Build year filter context."""
     baseline_label = str(baseline_year) if baseline_year else gettext("previous year")
@@ -1882,5 +1833,3 @@ def build_year_filter_context(years, baseline_year, categories, tags=None):
         categories=build_category_context(categories),
         tags=build_tag_context(tags or []),
     )
-
-

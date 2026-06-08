@@ -7,7 +7,6 @@ import pytest
 
 from finance_app.background import runner
 
-
 UTC_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 

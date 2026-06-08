@@ -55,7 +55,6 @@ from finance_app.core.constants import (
     USER_ROLES,
 )
 
-
 CONSTRAINT_NAMING_CONVENTION = {
     "ix": "idx_%(table_name)s_%(column_0_name)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -376,10 +375,19 @@ recurring_patterns = Table(
     allowed_values_constraint("type", RECURRING_PATTERN_TYPES, "recurring_patterns_type_allowed"),
     allowed_values_constraint("user_status", RECURRING_USER_STATUSES, "recurring_patterns_user_status_allowed"),
     CheckConstraint("active IN (0, 1)", name="recurring_patterns_active_bool"),
-    CheckConstraint("expected_day IS NULL OR (expected_day >= 1 AND expected_day <= 31)", name="recurring_patterns_expected_day_range"),
-    CheckConstraint("date_tolerance_days IS NULL OR date_tolerance_days >= 0", name="recurring_patterns_date_tolerance_non_negative"),
-    CheckConstraint("amount_tolerance IS NULL OR amount_tolerance >= 0", name="recurring_patterns_amount_tolerance_non_negative"),
-    CheckConstraint("typical_amount IS NULL OR typical_amount >= 0", name="recurring_patterns_typical_amount_non_negative"),
+    CheckConstraint(
+        "expected_day IS NULL OR (expected_day >= 1 AND expected_day <= 31)",
+        name="recurring_patterns_expected_day_range",
+    ),
+    CheckConstraint(
+        "date_tolerance_days IS NULL OR date_tolerance_days >= 0", name="recurring_patterns_date_tolerance_non_negative"
+    ),
+    CheckConstraint(
+        "amount_tolerance IS NULL OR amount_tolerance >= 0", name="recurring_patterns_amount_tolerance_non_negative"
+    ),
+    CheckConstraint(
+        "typical_amount IS NULL OR typical_amount >= 0", name="recurring_patterns_typical_amount_non_negative"
+    ),
     UniqueConstraint("merchant_id", "type", name="uq_recurring_patterns_merchant_type"),
     **MYSQL_TABLE_OPTIONS,
 )

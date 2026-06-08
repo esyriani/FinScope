@@ -48,18 +48,18 @@ def test_parse_rules_csv_normalizes_headers_tags_and_amount_range():
     rules = parse_rules_csv(raw_text)
 
     assert rules == [
-            {
-                "keyword": normalize_merchant_description("Hydro Quebec"),
-                "account_name": "",
-                "merchant_name": "",
-                "category": "Utilities",
-                "tags": ["Tax", "Government"],
-                "amount_min": 10.0,
-                "amount_max": 25.0,
-                "direction": "any",
-                "source": "manual",
-                "created_at": "2026-01-02T00:00:00Z",
-            }
+        {
+            "keyword": normalize_merchant_description("Hydro Quebec"),
+            "account_name": "",
+            "merchant_name": "",
+            "category": "Utilities",
+            "tags": ["Tax", "Government"],
+            "amount_min": 10.0,
+            "amount_max": 25.0,
+            "direction": "any",
+            "source": "manual",
+            "created_at": "2026-01-02T00:00:00Z",
+        }
     ]
 
 
@@ -95,11 +95,14 @@ def test_import_rules_add_skips_duplicates_and_persists_tags(core_conn):
     message = import_rules_add(core_conn, imported_rules, undo_state)
     core_conn.commit()
 
-    row = core_conn.execute(text("""
+    row = core_conn.execute(
+        text("""
         SELECT id, keyword, category, amount_min, amount_max
         FROM category_rules
         WHERE keyword = :p0
-        """), {"p0": normalize_merchant_description("Hydro Quebec")}).fetchone()
+        """),
+        {"p0": normalize_merchant_description("Hydro Quebec")},
+    ).fetchone()
     assert "Imported 1 new rule." in message
     assert "Skipped 1 duplicate row in the file." in message
     assert row is not None
@@ -150,18 +153,20 @@ def test_import_rules_add_persists_account_and_direction_scope(core_conn):
     """Verify imported rules can be constrained to an existing account and direction."""
     account_id = core_conn.execute(text("INSERT INTO accounts (name) VALUES ('Scoped Checking')")).lastrowid
     imported_rules = parse_rules_csv(
-        "keyword,account_name,category,direction\n"
-        "Metro Grocery,Scoped Checking,Food,debit\n"
+        "keyword,account_name,category,direction\n" "Metro Grocery,Scoped Checking,Food,debit\n"
     )
 
     message = import_rules_add(core_conn, imported_rules, {})
     core_conn.commit()
 
-    row = core_conn.execute(text("""
+    row = core_conn.execute(
+        text("""
         SELECT account_id, direction
         FROM category_rules
         WHERE keyword = :p0
-        """), {"p0": normalize_merchant_description("Metro Grocery")}).fetchone()
+        """),
+        {"p0": normalize_merchant_description("Metro Grocery")},
+    ).fetchone()
     assert message == "Imported 1 new rule."
     assert tuple(row) == (account_id, "debit")
 
@@ -169,8 +174,7 @@ def test_import_rules_add_persists_account_and_direction_scope(core_conn):
 def test_import_rules_add_rejects_unknown_account_scope(core_conn):
     """Verify misspelled account-scoped imports do not become broad rules."""
     imported_rules = parse_rules_csv(
-        "keyword,account_name,category,direction\n"
-        "Metro Grocery,Missing Account,Food,debit\n"
+        "keyword,account_name,category,direction\n" "Metro Grocery,Missing Account,Food,debit\n"
     )
 
     with pytest.raises(ValueError, match="Account 'Missing Account' was not found"):
@@ -204,8 +208,7 @@ def test_export_rules_csv_includes_tags_and_amount_bounds(core_conn):
     import_rules_add(
         core_conn,
         parse_rules_csv(
-            "keyword,category,tags,amount_min,amount_max\n"
-            "Hydro Quebec,Utilities,Tax; Government,10,25\n"
+            "keyword,category,tags,amount_min,amount_max\n" "Hydro Quebec,Utilities,Tax; Government,10,25\n"
         ),
         {},
     )
@@ -296,7 +299,8 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
         INSERT INTO category_rules (keyword, category, source)
         VALUES ('OLD STORE', 'Utilities', 'manual')
         """)).lastrowid
-    tx_id = core_conn.execute(text("""
+    tx_id = core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -306,7 +310,9 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
             fingerprint
         )
         VALUES ('2026-01-02', 'OLD STORE', 12.34, 'Utilities', :p0, 'override-ref')
-        """), {"p0": original_rule_id}).lastrowid
+        """),
+        {"p0": original_rule_id},
+    ).lastrowid
     core_conn.commit()
     undo_state = {}
     imported_rules = parse_rules_csv(
@@ -327,7 +333,9 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
         FROM category_rules
         ORDER BY keyword
         """)).fetchall()
-    tx_after_import = core_conn.execute(text("SELECT category_rule_id FROM transactions WHERE id = :p0"), {"p0": tx_id}).fetchone()
+    tx_after_import = core_conn.execute(
+        text("SELECT category_rule_id FROM transactions WHERE id = :p0"), {"p0": tx_id}
+    ).fetchone()
     assert message == (
         "Replaced rules with 1 imported rule. "
         "Cleared rule references on 1 transaction. "
@@ -344,11 +352,10 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
         FROM category_rules
         ORDER BY id
         """)).fetchall()
-    restored_tx = core_conn.execute(text("SELECT category_rule_id FROM transactions WHERE id = :p0"), {"p0": tx_id}).fetchone()
-    assert undo_message == (
-        "Restored 1 rule from before import. "
-        "Restored rule references on 1 transaction."
-    )
+    restored_tx = core_conn.execute(
+        text("SELECT category_rule_id FROM transactions WHERE id = :p0"), {"p0": tx_id}
+    ).fetchone()
+    assert undo_message == ("Restored 1 rule from before import. " "Restored rule references on 1 transaction.")
     assert [tuple(row) for row in restored_rules] == [(original_rule_id, "OLD STORE", "Utilities")]
     assert restored_tx._mapping["category_rule_id"] == original_rule_id
 
@@ -363,7 +370,8 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
         INSERT INTO category_rules (keyword, category, source)
         VALUES ('OTHER STORE', 'Food', 'manual')
         """))
-    tx_id = core_conn.execute(text("""
+    tx_id = core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -373,7 +381,9 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
             fingerprint
         )
         VALUES ('2026-01-02', 'OLD STORE', 12.34, 'Utilities', :p0, 'preview-override-ref')
-        """), {"p0": first_rule_id}).lastrowid
+        """),
+        {"p0": first_rule_id},
+    ).lastrowid
     core_conn.commit()
 
     preview = preview_rules_import(
@@ -387,10 +397,12 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
         ),
         "override",
     )
-    rules_after_preview = core_conn.execute(
-        text("SELECT keyword FROM category_rules ORDER BY keyword")
-    ).mappings().fetchall()
-    tx_after_preview = core_conn.execute(text("SELECT category_rule_id FROM transactions WHERE id = :p0"), {"p0": tx_id}).fetchone()
+    rules_after_preview = (
+        core_conn.execute(text("SELECT keyword FROM category_rules ORDER BY keyword")).mappings().fetchall()
+    )
+    tx_after_preview = core_conn.execute(
+        text("SELECT category_rule_id FROM transactions WHERE id = :p0"), {"p0": tx_id}
+    ).fetchone()
 
     assert preview.total_rows == 2
     assert preview.skipped_duplicate == 1
@@ -444,8 +456,14 @@ def test_undo_rules_override_import_rejects_imported_rule_references(core_conn):
         undo_state,
     )
     core_conn.commit()
-    imported_rule_id = core_conn.execute(text("SELECT id FROM category_rules WHERE keyword = 'METRO GROCERY'")).fetchone()._mapping["id"]
-    core_conn.execute(text("UPDATE transactions SET category_rule_id = :p0 WHERE id = :p1"), {"p0": imported_rule_id, "p1": tx_id})
+    imported_rule_id = (
+        core_conn.execute(text("SELECT id FROM category_rules WHERE keyword = 'METRO GROCERY'"))
+        .fetchone()
+        ._mapping["id"]
+    )
+    core_conn.execute(
+        text("UPDATE transactions SET category_rule_id = :p0 WHERE id = :p1"), {"p0": imported_rule_id, "p1": tx_id}
+    )
     core_conn.commit()
 
     with pytest.raises(ValueError, match="transactions now reference imported rules"):

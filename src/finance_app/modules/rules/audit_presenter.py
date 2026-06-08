@@ -75,7 +75,6 @@ from finance_app.modules.rules.audit_tables import (
     tag_difference_sort_options,
 )
 
-
 PREVIEW_ACTION_LABELS = {
     PREVIEW_REMOVE_RULE: "Preview removal impact",
     PREVIEW_CREATE_RULE: "Preview creating rule",
@@ -109,10 +108,7 @@ def build_rule_audit_context(conn, args=None, transaction_limit=None):
     stale_rules = analyze_stale_rules(audit_data)
     specificity_warnings = analyze_specificity_warnings(audit_data)
     overlap_rows = [present_overlap(overlap, audit_data.rule_by_id) for overlap in overlaps]
-    shadowed_rows = [
-        present_shadowed_rule(finding, audit_data.rule_by_id)
-        for finding in shadowed_rules
-    ]
+    shadowed_rows = [present_shadowed_rule(finding, audit_data.rule_by_id) for finding in shadowed_rules]
     stale_rows = [present_stale_rule(finding) for finding in stale_rules]
     transaction_reference_counts = count_rule_transaction_references_by_rule_id(
         conn,
@@ -122,10 +118,7 @@ def build_rule_audit_context(conn, args=None, transaction_limit=None):
         [row["rule"] for row in shadowed_rows] + [row["rule"] for row in stale_rows],
         transaction_reference_counts,
     )
-    specificity_warning_rows = [
-        present_specificity_warning(warning)
-        for warning in specificity_warnings
-    ]
+    specificity_warning_rows = [present_specificity_warning(warning) for warning in specificity_warnings]
     overlap_filter = parse_overlap_filter(request_arg(args, "overlap_filter"))
     open_section = parse_audit_open_section(request_arg(args, "open"))
     overlap_query = clean_overlap_search_query(request_arg(args, "overlap_q"))
@@ -142,11 +135,7 @@ def build_rule_audit_context(conn, args=None, transaction_limit=None):
         for row in searched_overlap_rows
         if row["severity"] in {OVERLAP_CATEGORY_CONFLICT, OVERLAP_CRITICAL_CONFLICT}
     ]
-    tag_difference_rows = [
-        row
-        for row in searched_overlap_rows
-        if row["severity"] == OVERLAP_TAG_DIFFERENCE
-    ]
+    tag_difference_rows = [row for row in searched_overlap_rows if row["severity"] == OVERLAP_TAG_DIFFERENCE]
     summary = get_rule_audit_summary(audit_data)
     summary["critical_conflict_overlaps"] = sum(
         1 for row in overlap_rows if row["severity"] == OVERLAP_CRITICAL_CONFLICT
@@ -293,19 +282,11 @@ def build_rule_detail_context(conn, rule_id, transaction_limit=None):
         if rule_id in {overlap.rule_a["id"], overlap.rule_b["id"]}
     ]
     shadowed_finding = next(
-        (
-            finding
-            for finding in analyze_shadowed_rules(audit_data)
-            if finding.rule["id"] == rule_id
-        ),
+        (finding for finding in analyze_shadowed_rules(audit_data) if finding.rule["id"] == rule_id),
         None,
     )
     stale_finding = next(
-        (
-            finding
-            for finding in analyze_stale_rules(audit_data)
-            if finding.rule["id"] == rule_id
-        ),
+        (finding for finding in analyze_stale_rules(audit_data) if finding.rule["id"] == rule_id),
         None,
     )
     matches = audit_data.matches_by_rule_id.get(rule_id, ())
@@ -349,9 +330,7 @@ def build_rule_detail_context(conn, rule_id, transaction_limit=None):
             audit_data.rule_by_id,
         ),
         "shadowed_finding": (
-            present_shadowed_rule(shadowed_finding, audit_data.rule_by_id)
-            if shadowed_finding
-            else None
+            present_shadowed_rule(shadowed_finding, audit_data.rule_by_id) if shadowed_finding else None
         ),
         "stale_finding": present_stale_rule(stale_finding) if stale_finding else None,
         "assessment": build_rule_assessment(
@@ -392,9 +371,7 @@ def build_rule_change_preview_context(conn, action, rule_id, proposed_rule=None,
             "has_category_or_tag_changes": has_category_or_tag_changes,
         },
         "impact_groups": [
-            present_impact_group(key, impacts)
-            for key, impacts in preview.grouped_impacts.items()
-            if impacts
+            present_impact_group(key, impacts) for key, impacts in preview.grouped_impacts.items() if impacts
         ],
         "preview_page_size": page_size,
         "limited": preview.limited,
@@ -448,14 +425,10 @@ def build_rule_import_preview_context(conn, raw_text, mode, filename, transactio
         "preview": {
             "summary": summary,
             "has_transaction_impacts": summary["total_affected_transactions"] > 0,
-            "has_category_or_tag_changes": (
-                summary["category_changes"] > 0 or summary["tag_changes"] > 0
-            ),
+            "has_category_or_tag_changes": (summary["category_changes"] > 0 or summary["tag_changes"] > 0),
         },
         "impact_groups": [
-            present_impact_group(key, impacts)
-            for key, impacts in impact_preview.grouped_impacts.items()
-            if impacts
+            present_impact_group(key, impacts) for key, impacts in impact_preview.grouped_impacts.items() if impacts
         ],
         "preview_page_size": page_size,
         "limited": impact_preview.limited,

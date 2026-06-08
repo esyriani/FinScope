@@ -12,7 +12,6 @@ from finance_app.core.money import format_money_display
 from finance_app.core.i18n import month_abbreviation
 from finance_app.database.dates import coerce_utc_datetime
 
-
 LOCAL_TIMEZONE_FALLBACKS = {"local", "system"}
 EASTERN_TIMEZONE_FALLBACKS = {
     "America/Toronto",

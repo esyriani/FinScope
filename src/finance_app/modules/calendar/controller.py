@@ -4,7 +4,6 @@ from flask import Blueprint, render_template, request
 
 from finance_app.modules.calendar.service import build_calendar_context
 
-
 calendar_bp = Blueprint("calendar_page", __name__)
 
 

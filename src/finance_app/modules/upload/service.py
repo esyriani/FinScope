@@ -63,14 +63,18 @@ def build_upload_context(args):
     with db_core_transaction() as conn:
         page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
         statement_types = get_statement_type_options(conn)
-        accounts = conn.execute(
-            select(
-                accounts_table.c.id,
-                accounts_table.c.name,
-                accounts_table.c.account_type,
-                accounts_table.c.paid_from_account_id,
-            ).order_by(func.lower(accounts_table.c.name), accounts_table.c.name)
-        ).mappings().fetchall()
+        accounts = (
+            conn.execute(
+                select(
+                    accounts_table.c.id,
+                    accounts_table.c.name,
+                    accounts_table.c.account_type,
+                    accounts_table.c.paid_from_account_id,
+                ).order_by(func.lower(accounts_table.c.name), accounts_table.c.name)
+            )
+            .mappings()
+            .fetchall()
+        )
         total_count = conn.execute(select(func.count()).select_from(statements_table)).scalar_one()
         total_pages = max(1, (total_count + page_size - 1) // page_size)
         page = min(page, total_pages)
@@ -89,10 +93,7 @@ def build_upload_context(args):
             .where(
                 transactions_table.c.statement_id == statements_table.c.id,
                 transactions_table.c.ignored == 0,
-                (
-                    transactions_table.c.category.is_(None)
-                    | (transactions_table.c.category == UNKNOWN_CATEGORY)
-                ),
+                (transactions_table.c.category.is_(None) | (transactions_table.c.category == UNKNOWN_CATEGORY)),
             )
             .scalar_subquery()
         )
@@ -110,42 +111,46 @@ def build_upload_context(args):
                 statement_types_table.c.id == statements_table.c.statement_type_id,
             )
         )
-        statements = conn.execute(
-            select(
-                statements_table.c.id,
-                statements_table.c.filename,
-                statements_table.c.extension,
-                statements_table.c.interac_direction,
-                statements_table.c.date_order,
-                statement_types_table.c.name.label("statement_type_name"),
-                statement_types_table.c.parser_type,
-                statement_types_table.c.import_mode,
-                statements_table.c.uploaded_at,
-                statements_table.c.import_status,
-                statements_table.c.import_error,
-                statements_table.c.import_started_at,
-                statements_table.c.import_finished_at,
-                statements_table.c.imported_count,
-                statements_table.c.skipped_count,
-                statements_table.c.ignored_count,
-                statements_table.c.llm_candidate_count,
-                func.substr(
-                    func.coalesce(statements_table.c.raw_text, ""),
-                    1,
-                    STATEMENT_TEXT_PREVIEW_CHARS,
-                ).label("raw_text_preview"),
-                func.length(func.coalesce(statements_table.c.raw_text, "")).label("raw_text_size"),
-                transaction_count.label("transaction_count"),
-                unknown_transaction_count.label("unknown_transaction_count"),
-                accounts_table.c.name.label("account_name"),
-                accounts_table.c.account_type.label("account_type"),
-                paid_from_accounts.c.name.label("paid_from_account_name"),
+        statements = (
+            conn.execute(
+                select(
+                    statements_table.c.id,
+                    statements_table.c.filename,
+                    statements_table.c.extension,
+                    statements_table.c.interac_direction,
+                    statements_table.c.date_order,
+                    statement_types_table.c.name.label("statement_type_name"),
+                    statement_types_table.c.parser_type,
+                    statement_types_table.c.import_mode,
+                    statements_table.c.uploaded_at,
+                    statements_table.c.import_status,
+                    statements_table.c.import_error,
+                    statements_table.c.import_started_at,
+                    statements_table.c.import_finished_at,
+                    statements_table.c.imported_count,
+                    statements_table.c.skipped_count,
+                    statements_table.c.ignored_count,
+                    statements_table.c.llm_candidate_count,
+                    func.substr(
+                        func.coalesce(statements_table.c.raw_text, ""),
+                        1,
+                        STATEMENT_TEXT_PREVIEW_CHARS,
+                    ).label("raw_text_preview"),
+                    func.length(func.coalesce(statements_table.c.raw_text, "")).label("raw_text_size"),
+                    transaction_count.label("transaction_count"),
+                    unknown_transaction_count.label("unknown_transaction_count"),
+                    accounts_table.c.name.label("account_name"),
+                    accounts_table.c.account_type.label("account_type"),
+                    paid_from_accounts.c.name.label("paid_from_account_name"),
+                )
+                .select_from(statements_join)
+                .order_by(statements_table.c.uploaded_at.desc())
+                .limit(page_size)
+                .offset(offset)
             )
-            .select_from(statements_join)
-            .order_by(statements_table.c.uploaded_at.desc())
-            .limit(page_size)
-            .offset(offset)
-        ).mappings().fetchall()
+            .mappings()
+            .fetchall()
+        )
 
     return {
         "statements": [present_statement(statement) for statement in statements],
@@ -222,10 +227,7 @@ def build_statement_preview(
         interac_direction=interac_direction,
         date_order=date_order,
     )
-    parsed_dates = [
-        tx["tx_date"]
-        for tx in parse_result["transactions"]
-    ]
+    parsed_dates = [tx["tx_date"] for tx in parse_result["transactions"]]
     date_range = preview_date_range(parsed_dates)
     date_ranges = {}
     if date_analysis["has_slash_dates"]:
@@ -275,12 +277,7 @@ def preview_date_range_for_order(raw_text, statement_type, interac_direction, da
         interac_direction=interac_direction,
         date_order=date_order,
     )
-    return preview_date_range(
-        [
-            tx["tx_date"]
-            for tx in parse_result["transactions"]
-        ]
-    )
+    return preview_date_range([tx["tx_date"] for tx in parse_result["transactions"]])
 
 
 def preview_date_format_payload(date_analysis):
@@ -292,10 +289,7 @@ def preview_date_format_payload(date_analysis):
     return {
         **date_analysis,
         "effective_order": effective_order,
-        "options": [
-            {"value": value, "label": label}
-            for value, label in DATE_ORDER_OPTION_LABELS.items()
-        ],
+        "options": [{"value": value, "label": label} for value, label in DATE_ORDER_OPTION_LABELS.items()],
     }
 
 
@@ -311,18 +305,14 @@ def ledger_preview_records(raw_text):
     rows = csv_rows(raw_text)
     header_index, header = detect_csv_header(rows)
     if header is not None:
-        header_map = {
-            normalize_header(cell): cell
-            for cell in header
-            if normalize_header(cell)
-        }
+        header_map = {normalize_header(cell): cell for cell in header if normalize_header(cell)}
         date_col = find_column(header_map, DATE_COLUMNS)
         description_col = find_column(header_map, DESCRIPTION_COLUMNS)
         debit_col = find_column(header_map, DEBIT_COLUMNS)
         credit_col = find_column(header_map, CREDIT_COLUMNS)
         amount_col = find_column(header_map, AMOUNT_COLUMNS)
         records = []
-        for row in rows[header_index + 1:]:
+        for row in rows[header_index + 1 :]:
             padded_row = row + [""] * max(0, len(header) - len(row))
             record = dict(zip(header, padded_row))
             records.append(
@@ -359,11 +349,7 @@ def interac_preview_records(raw_text, interac_direction=INTERAC_DIRECTION_AUTO):
         return []
 
     header = rows[0]
-    header_map = {
-        normalize_header(cell): cell
-        for cell in header
-        if normalize_header(cell)
-    }
+    header_map = {normalize_header(cell): cell for cell in header if normalize_header(cell)}
     sent_date_col = find_column(header_map, {"datesent"})
     deposited_date_col = find_column(header_map, {"datedeposited"})
     recipient_col = find_column(header_map, {"recipient"})
@@ -376,9 +362,7 @@ def interac_preview_records(raw_text, interac_direction=INTERAC_DIRECTION_AUTO):
     if direction in {INTERAC_DIRECTION_SENT, INTERAC_DIRECTION_RECEIVED}:
         date_col = sent_date_col or deposited_date_col or find_column(header_map, DATE_COLUMNS)
         counterparty_col = (
-            recipient_col
-            or received_from_col
-            or find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
+            recipient_col or received_from_col or find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
         )
     elif sent_date_col and recipient_col:
         date_col = sent_date_col
@@ -451,7 +435,7 @@ def preview_rows_for_records(
             break
 
     if prefer_ambiguous_dates and len(preview_rows) < preview_limit:
-        preview_rows.extend(fallback_rows[:preview_limit - len(preview_rows)])
+        preview_rows.extend(fallback_rows[: preview_limit - len(preview_rows)])
 
     return preview_rows
 
@@ -500,11 +484,13 @@ def preview_row_payload(record, tx):
         "month_first_date": parse_date(
             raw_date,
             date_formats=date_formats_for_order(DATE_ORDER_MONTH_FIRST),
-        ) or "",
+        )
+        or "",
         "day_first_date": parse_date(
             raw_date,
             date_formats=date_formats_for_order(DATE_ORDER_DAY_FIRST),
-        ) or "",
+        )
+        or "",
         "description": tx["description"],
         "amount": f"{tx['amount']:.2f}",
         "raw_amount": preview_raw_amount(record),

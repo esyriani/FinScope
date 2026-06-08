@@ -8,7 +8,6 @@ from finance_app.modules.recurring.forms import parse_expected_day, recurring_pa
 from finance_app.modules.recurring.patterns import normalize_active, upsert_recurring_pattern
 from finance_app.modules.recurring.service import build_recurring_page_context
 
-
 recurring_bp = Blueprint("recurring", __name__)
 
 

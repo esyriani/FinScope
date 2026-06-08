@@ -3,7 +3,6 @@
 import ast
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -32,7 +31,10 @@ def test_refactored_modules_stay_below_review_size():
 
 def test_dashboard_context_builder_stays_as_orchestration():
     """Keep dashboard context building split across focused helpers."""
-    assert function_line_count(
-        "src/finance_app/modules/dashboard/service.py",
-        "build_dashboard_context",
-    ) <= 20
+    assert (
+        function_line_count(
+            "src/finance_app/modules/dashboard/service.py",
+            "build_dashboard_context",
+        )
+        <= 20
+    )

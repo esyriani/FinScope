@@ -7,7 +7,6 @@ states, so they stay near the transaction feature instead of the schema.
 
 from finance_app.core.constants import CATEGORY_SOURCE_AI, CATEGORY_SOURCE_HISTORY, CATEGORY_SOURCE_RULE
 
-
 CATEGORY_STATUS_UNKNOWN = "unknown"
 CATEGORY_STATUS_CATEGORIZED = "categorized"
 CATEGORY_STATUS_FILTERS = (

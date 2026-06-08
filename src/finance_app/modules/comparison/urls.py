@@ -18,5 +18,3 @@ def build_comparison_url(**params):
 
     query = urlencode(cleaned, doseq=True)
     return url_for("comparison.comparison") + (f"?{query}" if query else "")
-
-

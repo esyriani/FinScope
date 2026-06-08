@@ -74,15 +74,8 @@ def validate_core_schema(conn):
         if table_name not in existing_tables:
             continue
 
-        actual_columns = {
-            column["name"]
-            for column in inspector.get_columns(table_name)
-        }
-        missing = [
-            column.name
-            for column in table.columns
-            if column.name not in actual_columns
-        ]
+        actual_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        missing = [column.name for column in table.columns if column.name not in actual_columns]
         if missing:
             missing_columns[table_name] = missing
 
@@ -97,9 +90,7 @@ def schema_validation_message(retired_tables, missing_tables, missing_columns):
         details.append(f"missing tables: {', '.join(missing_tables)}")
     if missing_columns:
         formatted_columns = [
-            f"{table}.{column}"
-            for table, columns in sorted(missing_columns.items())
-            for column in columns
+            f"{table}.{column}" for table, columns in sorted(missing_columns.items()) for column in columns
         ]
         details.append(f"missing columns: {', '.join(formatted_columns)}")
     if retired_tables:
@@ -107,6 +98,5 @@ def schema_validation_message(retired_tables, missing_tables, missing_columns):
 
     return (
         "Configured database schema is not current. Recreate the development "
-        "database or restore a current backup; "
-        + "; ".join(details)
+        "database or restore a current backup; " + "; ".join(details)
     )

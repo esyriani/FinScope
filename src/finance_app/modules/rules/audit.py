@@ -33,7 +33,6 @@ from finance_app.modules.categories.rules_matching import (
 from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.settings.runtime import get_unknown_category
 
-
 OVERLAP_HARMLESS = "harmless"
 OVERLAP_TAG_DIFFERENCE = "tag_difference"
 OVERLAP_CATEGORY_CONFLICT = "category_conflict"
@@ -367,9 +366,7 @@ def analyze_rule_overlaps(audit_data):
 
         severity = classify_rule_overlap(rule_a, rule_b, shared_audits)
         winning_rule_counts = Counter(
-            rule_id_from_match(audit.winning_match)
-            for audit in shared_audits
-            if audit.winning_match is not None
+            rule_id_from_match(audit.winning_match) for audit in shared_audits if audit.winning_match is not None
         )
         overlaps.append(
             RuleOverlap(
@@ -400,11 +397,7 @@ def shared_rule_pair_audits(audit_data):
     shared_pairs = defaultdict(list)
     for audit in audit_data.transaction_audits:
         matched_rule_ids = sorted(
-            {
-                rule_id_from_match(match)
-                for match in audit.matches
-                if rule_id_from_match(match) is not None
-            }
+            {rule_id_from_match(match) for match in audit.matches if rule_id_from_match(match) is not None}
         )
         for rule_a_id, rule_b_id in combinations(matched_rule_ids, 2):
             shared_pairs[(rule_a_id, rule_b_id)].append(audit)
@@ -413,10 +406,7 @@ def shared_rule_pair_audits(audit_data):
 
 def shared_matching_transaction_audits(audit_data, rule_a_id, rule_b_id):
     """Return transaction audits where both rule IDs matched."""
-    rule_a_transaction_ids = {
-        audit.transaction["id"]
-        for audit in audit_data.matches_by_rule_id.get(rule_a_id, ())
-    }
+    rule_a_transaction_ids = {audit.transaction["id"] for audit in audit_data.matches_by_rule_id.get(rule_a_id, ())}
     shared = []
     for audit in audit_data.matches_by_rule_id.get(rule_b_id, ()):
         if audit.transaction["id"] in rule_a_transaction_ids:
@@ -428,8 +418,7 @@ def classify_rule_overlap(rule_a, rule_b, shared_transaction_audits):
     """Classify the severity of an overlapping rule pair."""
     if rule_a.get("category") != rule_b.get("category"):
         if len(shared_transaction_audits) > 1 or any(
-            transaction_was_manually_reviewed(audit.transaction)
-            for audit in shared_transaction_audits
+            transaction_was_manually_reviewed(audit.transaction) for audit in shared_transaction_audits
         ):
             return OVERLAP_CRITICAL_CONFLICT
         return OVERLAP_CATEGORY_CONFLICT
@@ -451,9 +440,7 @@ def analyze_shadowed_rules(audit_data):
             continue
 
         shadowing_rule_counts = Counter(
-            rule_id_from_match(audit.winning_match)
-            for audit in losses
-            if audit.winning_match is not None
+            rule_id_from_match(audit.winning_match) for audit in losses if audit.winning_match is not None
         )
         findings.append(
             ShadowedRule(
@@ -466,8 +453,7 @@ def analyze_shadowed_rules(audit_data):
                 conflicting_loss_count=sum(
                     1
                     for audit in losses
-                    if audit.winning_match is not None
-                    and audit.winning_match.category != rule.get("category")
+                    if audit.winning_match is not None and audit.winning_match.category != rule.get("category")
                 ),
                 suggested_action=suggest_shadowed_action(
                     rule,
@@ -513,11 +499,7 @@ def analyze_stale_rules(audit_data, recent_since=None):
 
         recent_matches = None
         if recent_since is not None:
-            recent_matches = sum(
-                1
-                for audit in matches
-                if audit.transaction.get("tx_date") >= recent_since
-            )
+            recent_matches = sum(1 for audit in matches if audit.transaction.get("tx_date") >= recent_since)
             if recent_matches == 0:
                 findings.append(
                     StaleRule(
@@ -556,9 +538,7 @@ def analyze_specificity_warnings(audit_data):
             if losing_match.specificity <= winning_match.specificity:
                 continue
             grouped_audits[(winning_rule_id, losing_rule_id)].append(audit)
-            grouped_reasons[(winning_rule_id, losing_rule_id)][
-                precedence_win_reason(winning_match, losing_match)
-            ] += 1
+            grouped_reasons[(winning_rule_id, losing_rule_id)][precedence_win_reason(winning_match, losing_match)] += 1
 
     warnings = []
     for (winning_rule_id, losing_rule_id), audits in grouped_audits.items():
@@ -568,9 +548,7 @@ def analyze_specificity_warnings(audit_data):
             continue
 
         conflicting_count = sum(
-            1
-            for audit in audits
-            if matched_rule_category(audit, losing_rule_id) != audit.winning_match.category
+            1 for audit in audits if matched_rule_category(audit, losing_rule_id) != audit.winning_match.category
         )
         warnings.append(
             SpecificityWarning(
@@ -687,11 +665,14 @@ def preview_rule_set_change(conn, action, proposed_rules, transaction_limit=None
     impacts = tuple(
         impact
         for audit in audit_data.transaction_audits
-        if (impact := preview_rule_set_change_impact(
+        if (
+            impact := preview_rule_set_change_impact(
                 audit,
                 proposed_rules,
                 unknown_category,
-            )) is not None
+            )
+        )
+        is not None
     )
     return RuleChangePreview(
         action=action,
@@ -770,11 +751,14 @@ def preview_rule_change_impacts(audit_data, action, rule_id, unknown_category, p
         return tuple(
             impact
             for audit in audit_data.transaction_audits
-            if (impact := preview_create_rule_impact(
+            if (
+                impact := preview_create_rule_impact(
                     audit,
                     proposed_rule,
                     unknown_category,
-                )) is not None
+                )
+            )
+            is not None
         )
     if action == PREVIEW_DELETE_RULE:
         return tuple(
@@ -786,12 +770,15 @@ def preview_rule_change_impacts(audit_data, action, rule_id, unknown_category, p
         return tuple(
             impact
             for audit in audit_data.transaction_audits
-            if (impact := preview_edit_rule_impact(
+            if (
+                impact := preview_edit_rule_impact(
                     audit,
                     rule_id,
                     proposed_rule,
                     unknown_category,
-                )) is not None
+                )
+            )
+            is not None
         )
     if action == PREVIEW_APPLY_WHERE_WINS:
         return tuple(
@@ -899,11 +886,7 @@ def preview_delete_rule_impact(audit, rule_id, unknown_category):
     if rule_id not in current_rule_ids and audit.transaction.get("category_rule_id") != rule_id:
         return None
 
-    proposed_matches = tuple(
-        match
-        for match in audit.matches
-        if rule_id_from_match(match) != rule_id
-    )
+    proposed_matches = tuple(match for match in audit.matches if rule_id_from_match(match) != rule_id)
     proposed_winner = select_winning_rule_match(proposed_matches)
     current_category, current_tags = assignment_from_match(audit.winning_match, unknown_category)
     proposed_category, proposed_tags = assignment_from_match(proposed_winner, unknown_category)
@@ -949,11 +932,9 @@ def preview_edit_rule_impact(audit, rule_id, proposed_rule, unknown_category):
     ):
         return None
 
-    proposed_matches = tuple(
-        match
-        for match in audit.matches
-        if rule_id_from_match(match) != rule_id
-    ) + proposed_rule_matches
+    proposed_matches = (
+        tuple(match for match in audit.matches if rule_id_from_match(match) != rule_id) + proposed_rule_matches
+    )
     proposed_winner = select_winning_rule_match(proposed_matches)
     current_category, current_tags = assignment_from_match(audit.winning_match, unknown_category)
     proposed_category, proposed_tags = assignment_from_match(proposed_winner, unknown_category)
@@ -1102,31 +1083,11 @@ def rule_change_preview_summary(impacts, unknown_category):
     """Return aggregate counts for a rule change preview."""
     return {
         "total_affected_transactions": len(impacts),
-        "winning_rule_changes": sum(
-            1
-            for impact in impacts
-            if impact.current_rule_id != impact.proposed_rule_id
-        ),
-        "category_changes": sum(
-            1
-            for impact in impacts
-            if impact.current_category != impact.proposed_category
-        ),
-        "tag_changes": sum(
-            1
-            for impact in impacts
-            if impact.current_tags != impact.proposed_tags
-        ),
-        "would_become_unknown": sum(
-            1
-            for impact in impacts
-            if impact.proposed_category == unknown_category
-        ),
-        "newly_require_review": sum(
-            1
-            for impact in impacts
-            if impact.proposed_category == unknown_category
-        ),
+        "winning_rule_changes": sum(1 for impact in impacts if impact.current_rule_id != impact.proposed_rule_id),
+        "category_changes": sum(1 for impact in impacts if impact.current_category != impact.proposed_category),
+        "tag_changes": sum(1 for impact in impacts if impact.current_tags != impact.proposed_tags),
+        "would_become_unknown": sum(1 for impact in impacts if impact.proposed_category == unknown_category),
+        "newly_require_review": sum(1 for impact in impacts if impact.proposed_category == unknown_category),
     }
 
 
@@ -1136,22 +1097,14 @@ def get_rule_audit_summary(audit_data):
     shadowed = analyze_shadowed_rules(audit_data)
     stale = analyze_stale_rules(audit_data)
     specificity_warnings = analyze_specificity_warnings(audit_data)
-    rules_with_matches = {
-        rule_id
-        for rule_id, matches in audit_data.matches_by_rule_id.items()
-        if matches
-    }
+    rules_with_matches = {rule_id for rule_id, matches in audit_data.matches_by_rule_id.items() if matches}
     rules_with_stored_application = {
-        rule_id
-        for rule_id, transactions in audit_data.stored_applied_by_rule_id.items()
-        if transactions
+        rule_id for rule_id, transactions in audit_data.stored_applied_by_rule_id.items() if transactions
     }
     return {
         "total_active_rules": len(audit_data.rules),
         "rules_with_zero_historical_matches": len(audit_data.rules) - len(rules_with_matches),
-        "rules_with_historical_matches_but_zero_applied": len(
-            rules_with_matches - rules_with_stored_application
-        ),
+        "rules_with_historical_matches_but_zero_applied": len(rules_with_matches - rules_with_stored_application),
         "overlapping_rule_pairs": len(overlaps),
         "harmless_overlaps": count_overlaps_by_severity(overlaps, OVERLAP_HARMLESS),
         "category_conflict_overlaps": count_overlaps_by_severity(
@@ -1189,19 +1142,12 @@ def normalized_tag_set(rule):
 
 def transaction_was_manually_reviewed(transaction):
     """Return whether a transaction has evidence of manual review."""
-    return bool(
-        transaction.get("reviewed_at")
-        or transaction.get("category_source") == CATEGORY_SOURCE_MANUAL
-    )
+    return bool(transaction.get("reviewed_at") or transaction.get("category_source") == CATEGORY_SOURCE_MANUAL)
 
 
 def count_stored_applied_in_audits(rule_id, transaction_audits):
     """Return how many shared transactions currently reference a rule ID."""
-    return sum(
-        1
-        for audit in transaction_audits
-        if audit.transaction.get("category_rule_id") == rule_id
-    )
+    return sum(1 for audit in transaction_audits if audit.transaction.get("category_rule_id") == rule_id)
 
 
 def most_common_counter_key(counter):
@@ -1270,4 +1216,3 @@ def precedence_win_reason(winning_match, losing_match):
 def compute_rule_specificity_score(rule):
     """Return the deterministic specificity score tuple for a rule."""
     return rule_specificity(rule)
-

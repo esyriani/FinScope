@@ -37,19 +37,25 @@ def test_shared_database_helpers_accept_core_connection(core_conn):
     )
     set_owner_setting(core_conn, "default_table_page_size", 33)
 
-    rule = core_conn.execute(
-        select(category_rules_table.c.keyword, category_rules_table.c.category).where(
-            category_rules_table.c.id == rule_id
+    rule = (
+        core_conn.execute(
+            select(category_rules_table.c.keyword, category_rules_table.c.category).where(
+                category_rules_table.c.id == rule_id
+            )
         )
-    ).mappings().one()
-    transaction = core_conn.execute(
-        select(transactions_table.c.description, transactions_table.c.category).where(
-            transactions_table.c.id == transaction_id
+        .mappings()
+        .one()
+    )
+    transaction = (
+        core_conn.execute(
+            select(transactions_table.c.description, transactions_table.c.category).where(
+                transactions_table.c.id == transaction_id
+            )
         )
-    ).mappings().one()
-    owner_id = core_conn.execute(
-        select(users_table.c.id).where(users_table.c.username == "owner")
-    ).scalar_one()
+        .mappings()
+        .one()
+    )
+    owner_id = core_conn.execute(select(users_table.c.id).where(users_table.c.username == "owner")).scalar_one()
     setting = core_conn.execute(
         select(user_settings_table.c.value).where(
             user_settings_table.c.user_id == owner_id,
@@ -87,22 +93,26 @@ def test_shared_data_factory_builds_domain_rows(data_factory, core_conn):
         tags=["Support tag"],
     )
 
-    user = core_conn.execute(
-        select(users_table.c.username, users_table.c.display_name).where(
-            users_table.c.id == user_id
+    user = (
+        core_conn.execute(select(users_table.c.username, users_table.c.display_name).where(users_table.c.id == user_id))
+        .mappings()
+        .one()
+    )
+    account = core_conn.execute(select(accounts_table.c.name).where(accounts_table.c.id == account_id)).scalar_one()
+    statement = (
+        core_conn.execute(
+            select(statements_table.c.filename, statements_table.c.account_id).where(
+                statements_table.c.id == statement_id
+            )
         )
-    ).mappings().one()
-    account = core_conn.execute(
-        select(accounts_table.c.name).where(accounts_table.c.id == account_id)
-    ).scalar_one()
-    statement = core_conn.execute(
-        select(statements_table.c.filename, statements_table.c.account_id).where(
-            statements_table.c.id == statement_id
-        )
-    ).mappings().one()
-    tag = core_conn.execute(
-        select(tags_table.c.name, tags_table.c.color).where(tags_table.c.id == tag_id)
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
+    tag = (
+        core_conn.execute(select(tags_table.c.name, tags_table.c.color).where(tags_table.c.id == tag_id))
+        .mappings()
+        .one()
+    )
 
     assert dict(user) == {"username": "support-user", "display_name": "Support user"}
     assert account == "Support checking"

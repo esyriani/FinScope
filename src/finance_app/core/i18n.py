@@ -14,7 +14,6 @@ from flask import g, has_request_context
 
 from finance_app.core.constants import BASE_DIR
 
-
 DEFAULT_LANGUAGE = "en"
 DEFAULT_LOCALE = "en-CA"
 SUPPORTED_LANGUAGES = {
@@ -115,19 +114,13 @@ def month_abbreviation(month, language=None):
 def month_abbreviation_labels(language=None):
     """Return localized short month labels for January through December."""
     active_language = language or current_language()
-    return [
-        translate(month, active_language)
-        for month in MONTH_ABBREVIATIONS
-    ]
+    return [translate(month, active_language) for month in MONTH_ABBREVIATIONS]
 
 
 def weekday_abbreviation_labels(language=None):
     """Return localized weekday labels starting on Monday."""
     active_language = language or current_language()
-    return [
-        translate(day, active_language)
-        for day in WEEKDAY_ABBREVIATIONS
-    ]
+    return [translate(day, active_language) for day in WEEKDAY_ABBREVIATIONS]
 
 
 def format_month_year(value, language=None):
@@ -145,10 +138,7 @@ def client_translations(language, messages):
     Returns:
         A mapping from each source message to its translated display string.
     """
-    return {
-        str(message): translate(str(message), language)
-        for message in messages
-    }
+    return {str(message): translate(str(message), language) for message in messages}
 
 
 def translate(message, language=None, **variables):
@@ -185,9 +175,7 @@ def _load_catalog(language):
     if not isinstance(raw_catalog, dict):
         return {}
     return {
-        str(key): str(value)
-        for key, value in raw_catalog.items()
-        if isinstance(key, str) and isinstance(value, str)
+        str(key): str(value) for key, value in raw_catalog.items() if isinstance(key, str) and isinstance(value, str)
     }
 
 
@@ -205,11 +193,7 @@ def _format_message(template, source, variables):
 
 def _validate_format_variables(template, variables):
     """Reject translated placeholders that were not supplied by the caller."""
-    field_names = {
-        field_name
-        for _, field_name, _, _ in Formatter().parse(template)
-        if field_name
-    }
+    field_names = {field_name for _, field_name, _, _ in Formatter().parse(template) if field_name}
     missing = field_names - set(variables)
     if missing:
         raise KeyError(next(iter(missing)))

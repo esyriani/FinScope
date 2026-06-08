@@ -17,11 +17,14 @@ def test_apply_single_rule_route_requires_preview_confirmation(csrf_client, core
         follow_redirects=True,
     )
 
-    tx = core_conn.execute(text("""
+    tx = core_conn.execute(
+        text("""
         SELECT category, needs_review, category_source, category_rule_id
         FROM transactions
         WHERE id = :p0
-    """), {"p0": tx_id}).fetchone()
+    """),
+        {"p0": tx_id},
+    ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Preview apply before applying a rule.")
     assert tuple(tx) == ("UNKNOWN", 1, "unknown", None)
@@ -43,16 +46,22 @@ def test_apply_single_rule_route_updates_only_transactions_where_rule_wins(csrf_
         follow_redirects=True,
     )
 
-    winning_tx = core_conn.execute(text("""
+    winning_tx = core_conn.execute(
+        text("""
         SELECT category, needs_review, category_source, category_rule_id
         FROM transactions
         WHERE id = :p0
-        """), {"p0": winning_tx_id}).fetchone()
-    losing_tx = core_conn.execute(text("""
+        """),
+        {"p0": winning_tx_id},
+    ).fetchone()
+    losing_tx = core_conn.execute(
+        text("""
         SELECT category, needs_review, category_rule_id
         FROM transactions
         WHERE id = :p0
-    """), {"p0": losing_tx_id}).fetchone()
+    """),
+        {"p0": losing_tx_id},
+    ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Rule applied where it wins to 1 existing transactions.")
     assert tuple(winning_tx) == ("Food", 0, "rule", broad_rule_id)
@@ -75,12 +84,15 @@ def test_apply_single_rule_route_can_force_apply_matching_transactions(csrf_clie
         follow_redirects=True,
     )
 
-    rows = core_conn.execute(text("""
+    rows = core_conn.execute(
+        text("""
         SELECT id, category, needs_review, category_source, category_rule_id
         FROM transactions
         WHERE id IN (:p0, :p1)
         ORDER BY id
-    """), {"p0": winning_tx_id, "p1": losing_tx_id}).fetchall()
+    """),
+        {"p0": winning_tx_id, "p1": losing_tx_id},
+    ).fetchall()
     assert response.status_code == 200
     assert_visible_text(response, "Rule force-applied to 2 existing transactions.")
     assert [tuple(row)[1:] for row in rows] == [

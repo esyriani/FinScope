@@ -107,21 +107,25 @@ def categorize_transactions(transactions, conn=None, use_llm=True):
 def category_state_from_evidence(conn, transaction, scored_rule, category_options, unknown_category, use_llm=True):
     """Return the category state for one transaction from rule/history evidence."""
     rule_category = (
-        normalize_category(scored_rule.category, category_options)
-        if scored_rule is not None
-        else unknown_category
+        normalize_category(scored_rule.category, category_options) if scored_rule is not None else unknown_category
     )
     rule_evidence = None
     if scored_rule is not None:
         rule_evidence = rule_evidence_payload(scored_rule, rule_category)
         transaction["rule_evidence"] = rule_evidence
-    if scored_rule is not None and rule_category != unknown_category and scored_rule.confidence >= HIGH_CONFIDENCE_THRESHOLD:
+    if (
+        scored_rule is not None
+        and rule_category != unknown_category
+        and scored_rule.confidence >= HIGH_CONFIDENCE_THRESHOLD
+    ):
         return rule_category_state(conn, scored_rule, rule_category, unknown_category, needs_review=False)
 
     historical = retrieve_historical_decision(conn, transaction, unknown_category)
     historical_evidence = historical_evidence_payload(historical)
     transaction["historical_evidence"] = historical_evidence
-    history_category = normalize_category(historical.category, category_options) if historical.category else unknown_category
+    history_category = (
+        normalize_category(historical.category, category_options) if historical.category else unknown_category
+    )
     if historical.is_medium_confidence and history_category != unknown_category:
         confidence = historical.confidence
         rule_id = None
@@ -156,7 +160,11 @@ def category_state_from_evidence(conn, transaction, scored_rule, category_option
             ),
         )
 
-    if scored_rule is not None and rule_category != unknown_category and scored_rule.confidence >= MEDIUM_CONFIDENCE_THRESHOLD:
+    if (
+        scored_rule is not None
+        and rule_category != unknown_category
+        and scored_rule.confidence >= MEDIUM_CONFIDENCE_THRESHOLD
+    ):
         if use_llm:
             return unknown_category_state(
                 conn,
@@ -291,7 +299,9 @@ def rule_category_metadata(scored_rule, category, decision):
     }
 
 
-def historical_category_metadata(historical, category, tags, confidence, unknown_category, scored_rule=None, rule_category=None):
+def historical_category_metadata(
+    historical, category, tags, confidence, unknown_category, scored_rule=None, rule_category=None
+):
     """Return persisted audit metadata for a historical categorization."""
     decision = apply_review_policy(category, tags, confidence, unknown_category)
     metadata = {
@@ -359,5 +369,3 @@ def historical_evidence_payload(historical):
             for candidate in historical.candidates
         ],
     }
-
-

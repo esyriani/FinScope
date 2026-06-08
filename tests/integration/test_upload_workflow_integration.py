@@ -90,10 +90,7 @@ def test_upload_route_submits_background_import_job(client, core_conn, monkeypat
 
 def test_upload_preview_detects_month_first_slash_dates(client, core_conn):
     """Verify the preview parses unambiguous month-first CSV dates correctly."""
-    raw_csv = (
-        b"05/18/2026,DISNEY PLUS,9.19,,4463.99\n"
-        b"05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64\n"
-    )
+    raw_csv = b"05/18/2026,DISNEY PLUS,9.19,,4463.99\n" b"05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64\n"
 
     response = client.post(
         "/upload/preview",
@@ -153,10 +150,7 @@ def test_upload_preview_requires_choice_for_ambiguous_slash_dates(client, core_c
 
 def test_upload_preview_prioritizes_ambiguous_date_samples(client, core_conn):
     """Verify preview samples show ambiguous date rows when available."""
-    clear_rows = "\n".join(
-        f"12/{day}/2025,CLEAR SAMPLE {day},1.00,,"
-        for day in range(13, 25)
-    )
+    clear_rows = "\n".join(f"12/{day}/2025,CLEAR SAMPLE {day},1.00,," for day in range(13, 25))
     raw_csv = f"{clear_rows}\n05/12/2026,AMBIGUOUS SAMPLE,2.00,,\n".encode("utf-8")
 
     response = client.post(
@@ -320,14 +314,17 @@ def test_upload_route_stores_interac_direction_override(client, core_conn, monke
 def test_retry_statement_import_route_queues_existing_statement(client, core_conn, monkeypatch):
     """Verify retry queues import work from stored statement text."""
     account_id, statement_id = create_account_statement(core_conn, "retry.csv")
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         UPDATE statements
         SET raw_text = :p0,
             extension = 'csv',
             import_status = 'failed',
             import_error = 'Parser failed'
         WHERE id = :p1
-        """), {"p0": "Date,Description,Amount\n2026-01-02,RETRY SHOP,12.34\n", "p1": statement_id})
+        """),
+        {"p0": "Date,Description,Amount\n2026-01-02,RETRY SHOP,12.34\n", "p1": statement_id},
+    )
     core_conn.commit()
     submitted_jobs = []
 
@@ -353,11 +350,14 @@ def test_retry_statement_import_route_queues_existing_statement(client, core_con
         follow_redirects=True,
     )
 
-    statement = core_conn.execute(text("""
+    statement = core_conn.execute(
+        text("""
         SELECT import_status, import_error, imported_count
         FROM statements
         WHERE id = :p0
-        """), {"p0": statement_id}).fetchone()
+        """),
+        {"p0": statement_id},
+    ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Retry queued.")
     assert tuple(statement) == ("queued", None, 0)
@@ -381,15 +381,19 @@ def test_retry_statement_import_route_queues_existing_statement(client, core_con
 def test_reprocess_statement_import_route_removes_statement_transactions(client, core_conn, monkeypatch):
     """Verify reprocess clears statement transactions before queueing import work."""
     account_id, statement_id = create_account_statement(core_conn, "reprocess.csv")
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         UPDATE statements
         SET raw_text = :p0,
             extension = 'csv',
             import_status = 'completed',
             imported_count = 1
         WHERE id = :p1
-        """), {"p0": "Date,Description,Amount\n2026-01-02,REPROCESS SHOP,12.34\n", "p1": statement_id})
-    core_conn.execute(text("""
+        """),
+        {"p0": "Date,Description,Amount\n2026-01-02,REPROCESS SHOP,12.34\n", "p1": statement_id},
+    )
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             statement_id,
             account_id,
@@ -400,15 +404,16 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
             fingerprint
         )
         VALUES (:p0, :p1, '2026-01-01', 'OLD SHOP', 5.00, 'UNKNOWN', 'reprocess-old')
-        """), {"p0": statement_id, "p1": account_id})
+        """),
+        {"p0": statement_id, "p1": account_id},
+    )
     core_conn.commit()
     submitted_jobs = []
     monkeypatch.setattr(
         upload_controller,
         "submit_background_job",
         lambda label, func, *args, undo_handler=None, undo_args=None, **kwargs: (
-            submitted_jobs.append((label, func, args, undo_handler, undo_args, kwargs))
-            or "reprocess-job-id"
+            submitted_jobs.append((label, func, args, undo_handler, undo_args, kwargs)) or "reprocess-job-id"
         ),
     )
 
@@ -418,16 +423,26 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
         follow_redirects=True,
     )
 
-    transaction_count = core_conn.execute(text("""
+    transaction_count = (
+        core_conn.execute(
+            text("""
         SELECT COUNT(*) AS count
         FROM transactions
         WHERE statement_id = :p0
-        """), {"p0": statement_id}).fetchone()._mapping["count"]
-    statement = core_conn.execute(text("""
+        """),
+            {"p0": statement_id},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
+    statement = core_conn.execute(
+        text("""
         SELECT import_status, imported_count
         FROM statements
         WHERE id = :p0
-        """), {"p0": statement_id}).fetchone()
+        """),
+        {"p0": statement_id},
+    ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Reprocess queued.")
     assert transaction_count == 0
@@ -447,7 +462,8 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
 def test_undo_statement_upload_job_removes_statement_transactions_and_tags(app, core_conn):
     """Verify upload undo removes the statement and all imported transactions."""
     account_id, statement_id = create_account_statement(core_conn, "undo.csv")
-    tx_id = core_conn.execute(text("""
+    tx_id = core_conn.execute(
+        text("""
         INSERT INTO transactions (
             statement_id,
             account_id,
@@ -458,23 +474,44 @@ def test_undo_statement_upload_job_removes_statement_transactions_and_tags(app, 
             fingerprint
         )
         VALUES (:p0, :p1, '2026-01-02', 'UNDO SHOP', 12.34, 'Food', 'undo-upload-tx')
-        """), {"p0": statement_id, "p1": account_id}).lastrowid
+        """),
+        {"p0": statement_id, "p1": account_id},
+    ).lastrowid
     tag_id = core_conn.execute(text("""
         SELECT id
         FROM tags
         WHERE name = 'Tax'
         """)).fetchone()._mapping["id"]
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transaction_tags (transaction_id, tag_id)
         VALUES (:p0, :p1)
-        """), {"p0": tx_id, "p1": tag_id})
+        """),
+        {"p0": tx_id, "p1": tag_id},
+    )
     core_conn.commit()
 
     message = upload_workflow.undo_statement_upload_job(statement_id)
 
-    statement_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM statements WHERE id = :p0"), {"p0": statement_id}).fetchone()._mapping["count"]
-    transaction_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM transactions WHERE statement_id = :p0"), {"p0": statement_id}).fetchone()._mapping["count"]
-    tag_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM transaction_tags WHERE transaction_id = :p0"), {"p0": tx_id}).fetchone()._mapping["count"]
+    statement_count = (
+        core_conn.execute(text("SELECT COUNT(*) AS count FROM statements WHERE id = :p0"), {"p0": statement_id})
+        .fetchone()
+        ._mapping["count"]
+    )
+    transaction_count = (
+        core_conn.execute(
+            text("SELECT COUNT(*) AS count FROM transactions WHERE statement_id = :p0"), {"p0": statement_id}
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
+    tag_count = (
+        core_conn.execute(
+            text("SELECT COUNT(*) AS count FROM transaction_tags WHERE transaction_id = :p0"), {"p0": tx_id}
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
     assert message == "Removed statement undo.csv and 1 transaction."
     assert statement_count == 0
     assert transaction_count == 0

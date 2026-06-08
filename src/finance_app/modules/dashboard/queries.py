@@ -46,21 +46,25 @@ def fetch_spending_by_category(conn, filters, unknown_category, include_income_c
     category = func.coalesce(transactions_table.c.category, unknown_category)
     total = func.sum(transactions_table.c.amount)
     income_filter = [] if include_income_category else [category != DASHBOARD_INCOME_CATEGORY]
-    return conn.execute(
-        select(
-            category.label("category"),
-            total.label("total"),
+    return (
+        conn.execute(
+            select(
+                category.label("category"),
+                total.label("total"),
+            )
+            .where(
+                spending_impact_clause(),
+                non_transfer_clause(),
+                category != unknown_category,
+                *income_filter,
+                *filters,
+            )
+            .group_by(category)
+            .order_by(total.desc())
         )
-        .where(
-            spending_impact_clause(),
-            non_transfer_clause(),
-            category != unknown_category,
-            *income_filter,
-            *filters,
-        )
-        .group_by(category)
-        .order_by(total.desc())
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def fetch_spending_by_tag(conn, filters, include_income_category=False):
@@ -73,43 +77,46 @@ def fetch_spending_by_tag(conn, filters, include_income_category=False):
     category = func.coalesce(transactions_table.c.category, "")
     total = func.sum(transactions_table.c.amount)
     income_filter = [] if include_income_category else [category != DASHBOARD_INCOME_CATEGORY]
-    tagged_rows = conn.execute(
-        select(
-            tags_table.c.name.label("category"),
-            tags_table.c.name.label("tag"),
-            total.label("total"),
-        )
-        .select_from(
-            transactions_table
-            .join(
-                transaction_tags_table,
-                transaction_tags_table.c.transaction_id == transactions_table.c.id,
+    tagged_rows = (
+        conn.execute(
+            select(
+                tags_table.c.name.label("category"),
+                tags_table.c.name.label("tag"),
+                total.label("total"),
             )
-            .join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
+            .select_from(
+                transactions_table.join(
+                    transaction_tags_table,
+                    transaction_tags_table.c.transaction_id == transactions_table.c.id,
+                ).join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
+            )
+            .where(
+                spending_impact_clause(),
+                non_transfer_clause(),
+                *income_filter,
+                *filters,
+            )
+            .group_by(tags_table.c.name)
+            .order_by(total.desc(), tags_table.c.name)
         )
-        .where(
-            spending_impact_clause(),
-            non_transfer_clause(),
-            *income_filter,
-            *filters,
-        )
-        .group_by(tags_table.c.name)
-        .order_by(total.desc(), tags_table.c.name)
-    ).mappings().fetchall()
-
-    has_tag = exists(
-        select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id)
+        .mappings()
+        .fetchall()
     )
-    untagged = conn.execute(
-        select(total.label("total"))
-        .where(
-            spending_impact_clause(),
-            non_transfer_clause(),
-            ~has_tag,
-            *income_filter,
-            *filters,
+
+    has_tag = exists(select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id))
+    untagged = (
+        conn.execute(
+            select(total.label("total")).where(
+                spending_impact_clause(),
+                non_transfer_clause(),
+                ~has_tag,
+                *income_filter,
+                *filters,
+            )
         )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
     untagged_total = untagged["total"] if untagged else None
     rows = [dict(row) for row in tagged_rows]
     if untagged_total:
@@ -131,20 +138,24 @@ def fetch_monthly_expenses(conn, filters):
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
     total = func.sum(transactions_table.c.amount)
-    rows = conn.execute(
-        select(
-            year.label("year"),
-            month.label("month"),
-            total.label("total"),
+    rows = (
+        conn.execute(
+            select(
+                year.label("year"),
+                month.label("month"),
+                total.label("total"),
+            )
+            .where(
+                spending_impact_clause(),
+                non_transfer_clause(),
+                *filters,
+            )
+            .group_by(year, month)
+            .order_by(year, month)
         )
-        .where(
-            spending_impact_clause(),
-            non_transfer_clause(),
-            *filters,
-        )
-        .group_by(year, month)
-        .order_by(year, month)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return month_total_rows(rows)
 
 
@@ -153,21 +164,25 @@ def fetch_monthly_income(conn, filters, include_transfer_credits=False):
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
     total = func.sum(-transactions_table.c.amount)
-    rows = conn.execute(
-        select(
-            year.label("year"),
-            month.label("month"),
-            total.label("total"),
+    rows = (
+        conn.execute(
+            select(
+                year.label("year"),
+                month.label("month"),
+                total.label("total"),
+            )
+            .where(
+                transactions_table.c.amount < 0,
+                income_or_tagged_transfer_credit_clause(include_transfer_credits),
+                reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
+                *filters,
+            )
+            .group_by(year, month)
+            .order_by(year, month)
         )
-        .where(
-            transactions_table.c.amount < 0,
-            income_or_tagged_transfer_credit_clause(include_transfer_credits),
-            reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
-            *filters,
-        )
-        .group_by(year, month)
-        .order_by(year, month)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return month_total_rows(rows)
 
 
@@ -176,19 +191,23 @@ def fetch_monthly_net(conn, filters, include_transfer_credits=False):
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
     total = func.sum(-transactions_table.c.amount)
-    rows = conn.execute(
-        select(
-            year.label("year"),
-            month.label("month"),
-            total.label("total"),
+    rows = (
+        conn.execute(
+            select(
+                year.label("year"),
+                month.label("month"),
+                total.label("total"),
+            )
+            .where(
+                reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
+                *filters,
+            )
+            .group_by(year, month)
+            .order_by(year, month)
         )
-        .where(
-            reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
-            *filters,
-        )
-        .group_by(year, month)
-        .order_by(year, month)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return month_total_rows(rows)
 
 
@@ -273,27 +292,31 @@ def fetch_merchant_analytics(
 
 def fetch_merchant_transaction_rows(conn, filters, unknown_category):
     """Fetch merchant transaction rows."""
-    return conn.execute(
-        select(
-            transactions_table.c.description,
-            transactions_table.c.merchant_id,
-            merchants_table.c.merchant_key.label("merchant_name"),
-            merchants_table.c.merchant_key.label("merchant_key"),
-            transactions_table.c.amount,
-            func.coalesce(transactions_table.c.category, unknown_category).label("category"),
-        )
-        .select_from(
-            transactions_table.outerjoin(
-                merchants_table,
-                merchants_table.c.id == transactions_table.c.merchant_id,
+    return (
+        conn.execute(
+            select(
+                transactions_table.c.description,
+                transactions_table.c.merchant_id,
+                merchants_table.c.merchant_key.label("merchant_name"),
+                merchants_table.c.merchant_key.label("merchant_key"),
+                transactions_table.c.amount,
+                func.coalesce(transactions_table.c.category, unknown_category).label("category"),
+            )
+            .select_from(
+                transactions_table.outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == transactions_table.c.merchant_id,
+                )
+            )
+            .where(
+                spending_impact_clause(),
+                non_transfer_clause(),
+                *filters,
             )
         )
-        .where(
-            spending_impact_clause(),
-            non_transfer_clause(),
-            *filters,
-        )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def fetch_previous_merchant_totals(
@@ -340,168 +363,165 @@ def fetch_previous_merchant_totals(
         conn=conn,
     )
 
-    return {
-        merchant_key: aggregate["total"]
-        for merchant_key, aggregate in aggregates.items()
-    }
+    return {merchant_key: aggregate["total"] for merchant_key, aggregate in aggregates.items()}
 
 
 def fetch_summary(conn, filters, unknown_category, include_transfer_credits=False):
     """Fetch dashboard summary totals, optionally including filtered transfer credits."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
-    has_tag = exists(
-        select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id)
-    )
+    has_tag = exists(select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id))
     categorized = category != unknown_category
     untagged_spending = spending_impact_clause() & non_transfer_clause() & ~has_tag
-    return conn.execute(
-        select(
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            spending_impact_clause() & non_transfer_clause(),
-                            transactions_table.c.amount,
-                        ),
-                        else_=0,
-                    )
+    return (
+        conn.execute(
+            select(
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                spending_impact_clause() & non_transfer_clause(),
+                                transactions_table.c.amount,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("total_spending"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                (transactions_table.c.amount < 0)
+                                & income_or_tagged_transfer_credit_clause(include_transfer_credits)
+                                & reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
+                                -transactions_table.c.amount,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("total_income"),
+                func.count().label("transaction_count"),
+                func.coalesce(func.avg(func.abs(transactions_table.c.amount)), 0).label("average_transaction_amount"),
+                func.coalesce(func.sum(case((category == unknown_category, 1), else_=0)), 0).label(
+                    "uncategorized_count"
                 ),
-                0,
-            ).label("total_spending"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            (transactions_table.c.amount < 0)
-                            & income_or_tagged_transfer_credit_clause(include_transfer_credits)
-                            & reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
-                            -transactions_table.c.amount,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("total_income"),
-            func.count().label("transaction_count"),
-            func.coalesce(func.avg(func.abs(transactions_table.c.amount)), 0).label("average_transaction_amount"),
-            func.coalesce(func.sum(case((category == unknown_category, 1), else_=0)), 0).label("uncategorized_count"),
-            func.coalesce(func.sum(case((untagged_spending, 1), else_=0)), 0).label("untagged_spending_count"),
-            func.coalesce(
-                func.sum(case((untagged_spending, transactions_table.c.amount), else_=0)),
-                0,
-            ).label("untagged_spending_total"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            (transactions_table.c.needs_review == 1)
-                            & (category == unknown_category),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("unknown_needs_review_count"),
-            func.coalesce(func.sum(case((categorized, 1), else_=0)), 0).label("categorized_count"),
-            func.coalesce(
-                func.sum(case((transactions_table.c.needs_review == 1, 1), else_=0)),
-                0,
-            ).label("needs_review_count"),
-            func.coalesce(
-                func.sum(case((transactions_table.c.reviewed_at.is_not(None), 1), else_=0)),
-                0,
-            ).label("manually_reviewed_count"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            categorized
-                            & (transactions_table.c.category_source == CATEGORY_SOURCE_RULE),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("rule_count"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            categorized
-                            & (transactions_table.c.category_source == CATEGORY_SOURCE_HISTORY),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("history_count"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            categorized
-                            & (transactions_table.c.category_source == CATEGORY_SOURCE_AI),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("ai_count"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            categorized
-                            & (transactions_table.c.category_source == CATEGORY_SOURCE_MANUAL),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("manual_source_count"),
-            func.count(func.distinct(date_month_identity(transactions_table.c.tx_date))).label("active_months"),
-            func.min(transactions_table.c.tx_date).label("first_tx_date"),
-            func.max(transactions_table.c.tx_date).label("last_tx_date"),
+                func.coalesce(func.sum(case((untagged_spending, 1), else_=0)), 0).label("untagged_spending_count"),
+                func.coalesce(
+                    func.sum(case((untagged_spending, transactions_table.c.amount), else_=0)),
+                    0,
+                ).label("untagged_spending_total"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                (transactions_table.c.needs_review == 1) & (category == unknown_category),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("unknown_needs_review_count"),
+                func.coalesce(func.sum(case((categorized, 1), else_=0)), 0).label("categorized_count"),
+                func.coalesce(
+                    func.sum(case((transactions_table.c.needs_review == 1, 1), else_=0)),
+                    0,
+                ).label("needs_review_count"),
+                func.coalesce(
+                    func.sum(case((transactions_table.c.reviewed_at.is_not(None), 1), else_=0)),
+                    0,
+                ).label("manually_reviewed_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                categorized & (transactions_table.c.category_source == CATEGORY_SOURCE_RULE),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("rule_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                categorized & (transactions_table.c.category_source == CATEGORY_SOURCE_HISTORY),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("history_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                categorized & (transactions_table.c.category_source == CATEGORY_SOURCE_AI),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("ai_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                categorized & (transactions_table.c.category_source == CATEGORY_SOURCE_MANUAL),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("manual_source_count"),
+                func.count(func.distinct(date_month_identity(transactions_table.c.tx_date))).label("active_months"),
+                func.min(transactions_table.c.tx_date).label("first_tx_date"),
+                func.max(transactions_table.c.tx_date).label("last_tx_date"),
+            ).where(
+                reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
+                *filters,
+            )
         )
-        .where(
-            reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
-            *filters,
-        )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
 
 
 def fetch_quick_view_counts(conn, filters, unknown_category):
     """Fetch quick view counts."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
-    row = conn.execute(
-        select(
-            func.count().label("all_count"),
-            func.coalesce(
-                func.sum(case((transactions_table.c.needs_review == 1, 1), else_=0)),
-                0,
-            ).label("needs_review_count"),
-            func.coalesce(func.sum(case((category == unknown_category, 1), else_=0)), 0).label("unknown_count"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            (category != unknown_category)
-                            & (transactions_table.c.needs_review == 0),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("categorized_count"),
+    row = (
+        conn.execute(
+            select(
+                func.count().label("all_count"),
+                func.coalesce(
+                    func.sum(case((transactions_table.c.needs_review == 1, 1), else_=0)),
+                    0,
+                ).label("needs_review_count"),
+                func.coalesce(func.sum(case((category == unknown_category, 1), else_=0)), 0).label("unknown_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                (category != unknown_category) & (transactions_table.c.needs_review == 0),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("categorized_count"),
+            ).where(non_transfer_clause(), *filters)
         )
-        .where(non_transfer_clause(), *filters)
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
 
     return {
         "all_count": row["all_count"] or 0,

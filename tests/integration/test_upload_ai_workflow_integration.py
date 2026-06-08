@@ -45,19 +45,25 @@ def test_import_statement_job_queues_llm_categorization_for_unknowns(app, core_c
         "Date,Description,Amount\n2026-01-02,UNKNOWN SHOP,12.34\n",
     )
 
-    rows = core_conn.execute(text("""
+    rows = core_conn.execute(
+        text("""
         SELECT description, category, needs_review
         FROM transactions
         WHERE statement_id = :p0
-        """), {"p0": statement_id}).fetchall()
+        """),
+        {"p0": statement_id},
+    ).fetchall()
     assert "Queued AI categorization for 1 unknown transaction." in message
     assert [tuple(row) for row in rows] == [("UNKNOWN SHOP", "UNKNOWN", 1)]
-    statement = core_conn.execute(text("""
+    statement = core_conn.execute(
+        text("""
         SELECT import_status, imported_count, skipped_count, ignored_count,
                llm_candidate_count, import_error
         FROM statements
         WHERE id = :p0
-        """), {"p0": statement_id}).fetchone()
+        """),
+        {"p0": statement_id},
+    ).fetchone()
     assert tuple(statement) == ("completed", 1, 0, 0, 1, None)
     assert submitted_jobs == [
         {
@@ -96,7 +102,8 @@ def test_import_statement_job_respects_disabled_automatic_ai(app, core_conn, mon
 def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app, core_conn):
     """Verify that LLM categorization results are persisted to uploaded transactions."""
     _, statement_id = create_account_statement(core_conn, "llm.csv")
-    unknown_id = core_conn.execute(text("""
+    unknown_id = core_conn.execute(
+        text("""
         INSERT INTO transactions (
             statement_id,
             tx_date,
@@ -107,8 +114,11 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             fingerprint
         )
         VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'llm-unknown')
-        """), {"p0": statement_id}).lastrowid
-    known_id = core_conn.execute(text("""
+        """),
+        {"p0": statement_id},
+    ).lastrowid
+    known_id = core_conn.execute(
+        text("""
         INSERT INTO transactions (
             statement_id,
             tx_date,
@@ -119,8 +129,11 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             fingerprint
         )
         VALUES (:p0, '2026-01-03', 'KNOWN SHOP', 50.00, 'Utilities', 0, 'llm-known')
-        """), {"p0": statement_id}).lastrowid
-    ignored_id = core_conn.execute(text("""
+        """),
+        {"p0": statement_id},
+    ).lastrowid
+    ignored_id = core_conn.execute(
+        text("""
         INSERT INTO transactions (
             statement_id,
             tx_date,
@@ -132,7 +145,9 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             fingerprint
         )
         VALUES (:p0, '2026-01-04', 'IGNORED SHOP', 25.00, 'UNKNOWN', 1, 1, 'llm-ignored')
-        """), {"p0": statement_id}).lastrowid
+        """),
+        {"p0": statement_id},
+    ).lastrowid
     core_conn.commit()
 
     def categorize_for_test(transactions, conn=None, use_llm=True):
@@ -158,12 +173,15 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
         transaction_categorizer=categorize_for_test,
     )
 
-    updated = core_conn.execute(text("""
+    updated = core_conn.execute(
+        text("""
         SELECT category, needs_review, category_source, category_confidence,
                category_rule_id, categorized_at, reviewed_at
         FROM transactions
         WHERE id = :p0
-        """), {"p0": unknown_id}).fetchone()
+        """),
+        {"p0": unknown_id},
+    ).fetchone()
     known = core_conn.execute(text("SELECT category FROM transactions WHERE id = :p0"), {"p0": known_id}).fetchone()
     ignored = core_conn.execute(text("SELECT category FROM transactions WHERE id = :p0"), {"p0": ignored_id}).fetchone()
     assert message == "1 automatically categorized: 1 AI."
@@ -185,7 +203,8 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
     """Verify metadata-only LLM unknown outcomes are persisted for existing rows."""
     del app
     _, statement_id = create_account_statement(core_conn, "llm-unknown-metadata.csv")
-    unknown_id = core_conn.execute(text("""
+    unknown_id = core_conn.execute(
+        text("""
         INSERT INTO transactions (
             statement_id,
             tx_date,
@@ -196,7 +215,9 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
             fingerprint
         )
         VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'llm-unknown-metadata')
-        """), {"p0": statement_id}).lastrowid
+        """),
+        {"p0": statement_id},
+    ).lastrowid
     core_conn.commit()
 
     def categorize_for_test(transactions, conn=None, use_llm=True):
@@ -229,11 +250,14 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
         transaction_categorizer=categorize_for_test,
     )
 
-    row = core_conn.execute(text("""
+    row = core_conn.execute(
+        text("""
         SELECT category, needs_review, category_source, category_metadata
         FROM transactions
         WHERE id = :p0
-        """), {"p0": unknown_id}).fetchone()
+        """),
+        {"p0": unknown_id},
+    ).fetchone()
     metadata = json.loads(row._mapping["category_metadata"])
     assert message == "0 automatically categorized."
     assert row._mapping["category"] == "UNKNOWN"
@@ -293,7 +317,8 @@ def test_categorize_statement_unknown_transactions_job_reports_no_work(app, core
 def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_conn, monkeypatch):
     """Verify Uploaded statements can queue AI reruns for remaining unknown rows."""
     _, statement_id = create_account_statement(core_conn, "manual-statement-ai.csv")
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             statement_id,
             tx_date,
@@ -304,7 +329,9 @@ def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_co
             fingerprint
         )
         VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'manual-statement-ai')
-        """), {"p0": statement_id})
+        """),
+        {"p0": statement_id},
+    )
     core_conn.commit()
     submitted = []
 
@@ -337,5 +364,3 @@ def test_automatic_categorization_message_reports_source_breakdown():
     )
 
     assert message == "76 automatically categorized: 50 similarity, 26 AI."
-
-

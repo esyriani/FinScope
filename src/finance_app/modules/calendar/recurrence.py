@@ -312,7 +312,9 @@ def classify_recurring_match(
     for candidate in candidates:
         candidate_date = datetime.strptime(candidate["date"], "%Y-%m-%d").date()
         date_difference = (candidate_date - expected_date).days
-        amount_difference = rounded_money_decimal(money_to_decimal(candidate["amount"]) - money_to_decimal(typical_amount))
+        amount_difference = rounded_money_decimal(
+            money_to_decimal(candidate["amount"]) - money_to_decimal(typical_amount)
+        )
         candidate_match = {
             **base_match,
             "date_difference_days": date_difference,
@@ -445,8 +447,7 @@ def recurring_frequency_label(dates, months):
         return "Irregular recurring"
 
     intervals = [
-        (current_date - previous_date).days
-        for previous_date, current_date in zip(unique_dates, unique_dates[1:])
+        (current_date - previous_date).days for previous_date, current_date in zip(unique_dates, unique_dates[1:])
     ]
 
     if interval_match_ratio(intervals, 6, 8) >= 0.6:
@@ -462,8 +463,7 @@ def recurring_frequency_label(dates, months):
 
     month_numbers = sorted(month_number(month_key) for month_key in months)
     month_gaps = [
-        current_month - previous_month
-        for previous_month, current_month in zip(month_numbers, month_numbers[1:])
+        current_month - previous_month for previous_month, current_month in zip(month_numbers, month_numbers[1:])
     ]
     if month_gap_match_ratio(month_gaps, {12}) >= 0.6:
         return "Annual"

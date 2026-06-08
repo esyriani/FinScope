@@ -9,11 +9,18 @@ from tests.support.web import set_csrf_token
 
 def category_count(conn, name):
     """Return how many categories exist with the supplied name."""
-    return conn.execute(text("""
+    return (
+        conn.execute(
+            text("""
         SELECT COUNT(*) AS count
         FROM categories
         WHERE name = :p0
-        """), {"p0": name}).fetchone()._mapping["count"]
+        """),
+            {"p0": name},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
 
 
 def test_real_app_form_post_rejects_missing_csrf_token(client, core_conn):

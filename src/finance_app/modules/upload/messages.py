@@ -13,7 +13,6 @@ from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_RULE,
 )
 
-
 AUTOMATIC_CATEGORIZATION_SOURCE_ORDER = (
     CATEGORY_SOURCE_HISTORY,
     CATEGORY_SOURCE_AI,
@@ -70,10 +69,7 @@ def ai_request_status_needs_log(status):
 
 def format_failure_counts(counts):
     """Return compact failure reason counts for progress logs."""
-    return ", ".join(
-        f"{reason}: {count}"
-        for reason, count in sorted(counts.items())
-    )
+    return ", ".join(f"{reason}: {count}" for reason, count in sorted(counts.items()))
 
 
 def merge_source_counts(target, source):
@@ -140,8 +136,7 @@ def upload_result_message(
         return message
 
     message = (
-        f"Statement uploaded. Added {inserted_count} transactions. "
-        f"Skipped {skipped_count} duplicate transactions. "
+        f"Statement uploaded. Added {inserted_count} transactions. " f"Skipped {skipped_count} duplicate transactions. "
     )
 
     if ignored_count:

@@ -31,11 +31,7 @@ def clean_tags(values):
 
 def clean_filter_values(values):
     """Clean repeated string filter values."""
-    return [
-        value.strip()
-        for value in values
-        if value.strip()
-    ]
+    return [value.strip() for value in values if value.strip()]
 
 
 def default_month():

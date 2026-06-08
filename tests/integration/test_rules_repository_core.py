@@ -66,9 +66,7 @@ def test_rules_repository_import_helpers_support_core_connections(app, core_conn
         assert snapshot["merchant_name"] == "CORE MARKET"
         assert snapshot["tags"] == ["Tax"]
         assert rule_reference_count(conn, rule_id) == 1
-        assert snapshot_transaction_rule_refs(conn) == [
-            {"transaction_id": transaction_id, "category_rule_id": rule_id}
-        ]
+        assert snapshot_transaction_rule_refs(conn) == [{"transaction_id": transaction_id, "category_rule_id": rule_id}]
         assert snapshot in snapshot_category_rules(conn)
 
     persisted = core_conn.execute(text("""
@@ -114,7 +112,5 @@ def test_rules_repository_restore_and_cleanup_support_core_connections(app, core
         assert snapshot_rule_by_id(conn, rule["id"]) == expected_rule
         assert remove_imported_categories(conn, created_categories) == 0
 
-        conn.execute(
-            delete(category_rules_table).where(category_rules_table.c.id == rule["id"])
-        )
+        conn.execute(delete(category_rules_table).where(category_rules_table.c.id == rule["id"]))
         assert remove_imported_categories(conn, created_categories) == 1

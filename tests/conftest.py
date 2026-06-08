@@ -23,7 +23,6 @@ from tests.support.database import TestDataFactory  # noqa: E402
 from tests.support.network import install_network_guard  # noqa: E402
 from tests.support.web import CsrfEnabledClient  # noqa: E402
 
-
 LAYER_MARKERS = {
     "unit": "unit",
     "integration": "integration",

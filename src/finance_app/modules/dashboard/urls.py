@@ -74,15 +74,17 @@ def dashboard_table_sort_url(args, table, sort_name, current_sort, current_direc
         )
 
     next_direction = (
-        "desc" if current_direction == "asc" else "asc"
-    ) if current_sort == sort_name else dashboard_table_default_direction(sort_name)
+        ("desc" if current_direction == "asc" else "asc")
+        if current_sort == sort_name
+        else dashboard_table_default_direction(sort_name)
+    )
 
     return dashboard_url(
         args,
         **{
             f"{table}_sort": sort_name,
             f"{table}_direction": next_direction,
-        }
+        },
     )
 
 

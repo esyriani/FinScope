@@ -67,10 +67,7 @@ def apply_review_group_job(
         undo_state["transaction_id"] = transaction_id
         undo_state["selected_transaction_ids"] = list(selected_transaction_ids or [])
 
-    message = (
-        f"Categorized {len(changes)} transaction"
-        f"{'' if len(changes) == 1 else 's'} as {category}."
-    )
+    message = f"Categorized {len(changes)} transaction" f"{'' if len(changes) == 1 else 's'} as {category}."
     if rule_change:
         message += f" Rule saved for {rule_keyword}{amount_bounds_label(amount_min, amount_max)}."
     return message
@@ -105,10 +102,7 @@ def undo_review_group_job(undo_state):
     message += "" if restored_count == 1 else "s"
     message += "."
     if skipped_count:
-        message += (
-            f" Skipped {skipped_count} transaction"
-            f"{'' if skipped_count == 1 else 's'} changed after the job."
-        )
+        message += f" Skipped {skipped_count} transaction" f"{'' if skipped_count == 1 else 's'} changed after the job."
     if rule_result:
         message += f" {rule_result}"
     return message
@@ -296,9 +290,7 @@ def undo_review_rule(conn, rule_change):
         return "Rule changed after the job; left it in place."
 
     if previous_rule is None:
-        conn.execute(
-            delete(category_rules_table).where(category_rules_table.c.id == rule_id)
-        )
+        conn.execute(delete(category_rules_table).where(category_rules_table.c.id == rule_id))
         return "Removed created rule."
 
     category_id = previous_rule.get("category_id")
@@ -340,7 +332,4 @@ def rule_snapshots_match(left, right):
         "source",
         "ai_approved",
     )
-    return (
-        all(left.get(key) == right.get(key) for key in keys)
-        and left.get("tags", []) == right.get("tags", [])
-    )
+    return all(left.get(key) == right.get(key) for key in keys) and left.get("tags", []) == right.get("tags", [])

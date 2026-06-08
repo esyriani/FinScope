@@ -7,7 +7,6 @@ provide source-specific evidence and persist the returned decision fields.
 
 from dataclasses import dataclass
 
-
 MEDIUM_CONFIDENCE_THRESHOLD = 0.85
 HIGH_CONFIDENCE_THRESHOLD = 0.95
 AGREEMENT_BONUS = 0.04
@@ -126,14 +125,10 @@ def combine_confidence(
         return None
 
     agreement_values = [
-        value
-        for value in (clamp_confidence(item) for item in agreement_confidences)
-        if value is not None
+        value for value in (clamp_confidence(item) for item in agreement_confidences) if value is not None
     ]
     disagreement_values = [
-        value
-        for value in (clamp_confidence(item) for item in disagreement_confidences)
-        if value is not None
+        value for value in (clamp_confidence(item) for item in disagreement_confidences) if value is not None
     ]
 
     if agreement_values:

@@ -1,4 +1,3 @@
-
 """Command-line entry point for FinScope."""
 
 import sys

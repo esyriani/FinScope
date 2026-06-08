@@ -134,14 +134,18 @@ def update_rule_from_form(conn, rule_id, form):
 
 def fetch_rule_source(conn, rule_id):
     """Return the merchant scope and source for a category rule."""
-    return conn.execute(
-        select(
-            category_rules_table.c.merchant_id,
-            category_rules_table.c.account_id,
-            category_rules_table.c.direction,
-            category_rules_table.c.source,
-        ).where(category_rules_table.c.id == rule_id)
-    ).mappings().fetchone()
+    return (
+        conn.execute(
+            select(
+                category_rules_table.c.merchant_id,
+                category_rules_table.c.account_id,
+                category_rules_table.c.direction,
+                category_rules_table.c.source,
+            ).where(category_rules_table.c.id == rule_id)
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def approve_automatic_rule(conn, rule_id):
@@ -166,23 +170,23 @@ def approve_automatic_rule(conn, rule_id):
     if row["ai_approved"]:
         return row["keyword"], False
 
-    conn.execute(
-        update(category_rules_table)
-        .where(category_rules_table.c.id == rule_id)
-        .values(ai_approved=1)
-    )
+    conn.execute(update(category_rules_table).where(category_rules_table.c.id == rule_id).values(ai_approved=1))
     return row["keyword"], True
 
 
 def fetch_rule_approval(conn, rule_id):
     """Return rule fields needed by the approval workflow."""
-    return conn.execute(
-        select(
-            category_rules_table.c.keyword,
-            category_rules_table.c.source,
-            category_rules_table.c.ai_approved,
-        ).where(category_rules_table.c.id == rule_id)
-    ).mappings().fetchone()
+    return (
+        conn.execute(
+            select(
+                category_rules_table.c.keyword,
+                category_rules_table.c.source,
+                category_rules_table.c.ai_approved,
+            ).where(category_rules_table.c.id == rule_id)
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def count_rule_transaction_references(conn, rule_id):
@@ -216,33 +220,41 @@ def count_rule_transaction_references_by_rule_id(conn, rule_ids):
         transaction_tags_table.c.transaction_id.label("transaction_id"),
     ).where(transaction_tags_table.c.rule_id.in_(rule_ids))
     refs = union_all(category_refs, tag_refs).subquery()
-    rows = conn.execute(
-        select(
-            refs.c.rule_id,
-            func.count(func.distinct(refs.c.transaction_id)).label("count"),
+    rows = (
+        conn.execute(
+            select(
+                refs.c.rule_id,
+                func.count(func.distinct(refs.c.transaction_id)).label("count"),
+            )
+            .where(refs.c.rule_id.is_not(None))
+            .group_by(refs.c.rule_id)
         )
-        .where(refs.c.rule_id.is_not(None))
-        .group_by(refs.c.rule_id)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return {int(row["rule_id"]): int(row["count"]) for row in rows}
 
 
 def get_rule_for_apply(conn, rule_id):
     """Return rule for apply."""
-    row = conn.execute(
-        select(
-            category_rules_table.c.id,
-            category_rules_table.c.account_id,
-            category_rules_table.c.merchant_id,
-            category_rules_table.c.keyword,
-            category_rules_table.c.category,
-            category_rules_table.c.category_id,
-            category_rules_table.c.amount_min,
-            category_rules_table.c.amount_max,
-            category_rules_table.c.direction,
-            category_rules_table.c.source,
-        ).where(category_rules_table.c.id == rule_id)
-    ).mappings().fetchone()
+    row = (
+        conn.execute(
+            select(
+                category_rules_table.c.id,
+                category_rules_table.c.account_id,
+                category_rules_table.c.merchant_id,
+                category_rules_table.c.keyword,
+                category_rules_table.c.category,
+                category_rules_table.c.category_id,
+                category_rules_table.c.amount_min,
+                category_rules_table.c.amount_max,
+                category_rules_table.c.direction,
+                category_rules_table.c.source,
+            ).where(category_rules_table.c.id == rule_id)
+        )
+        .mappings()
+        .fetchone()
+    )
     if row is None:
         return None
 
@@ -257,7 +269,5 @@ def get_rule_for_apply(conn, rule_id):
 
 def delete_rule(conn, rule_id):
     """Delete a category rule and return whether a row was removed."""
-    result = conn.execute(
-        delete(category_rules_table).where(category_rules_table.c.id == rule_id)
-    )
+    result = conn.execute(delete(category_rules_table).where(category_rules_table.c.id == rule_id))
     return (result.rowcount or 0) > 0

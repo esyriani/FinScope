@@ -18,7 +18,6 @@ from tests.support.html import (
     parse_html,
 )
 
-
 HTML = """
 <html>
   <head>

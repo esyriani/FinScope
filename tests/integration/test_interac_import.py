@@ -19,9 +19,7 @@ from finance_app.modules.upload.workflow import (
 
 def create_account(conn, name="Checking", account_type="checking"):
     """Create an account row for Interac import tests."""
-    return conn.execute(
-        insert(accounts_table).values(name=name, account_type=account_type)
-    ).inserted_primary_key[0]
+    return conn.execute(insert(accounts_table).values(name=name, account_type=account_type)).inserted_primary_key[0]
 
 
 def create_interac_match(conn, account_id, description, amount, fingerprint):
@@ -42,15 +40,19 @@ def create_interac_match(conn, account_id, description, amount, fingerprint):
 
 def transaction_rows(conn):
     """Return transaction rows used by Interac import assertions."""
-    return conn.execute(
-        select(
-            transactions_table.c.account_id,
-            transactions_table.c.description,
-            transactions_table.c.amount,
-            transactions_table.c.category,
-            transactions_table.c.merchant_id,
-        ).order_by(transactions_table.c.id)
-    ).mappings().fetchall()
+    return (
+        conn.execute(
+            select(
+                transactions_table.c.account_id,
+                transactions_table.c.description,
+                transactions_table.c.amount,
+                transactions_table.c.category,
+                transactions_table.c.merchant_id,
+            ).order_by(transactions_table.c.id)
+        )
+        .mappings()
+        .fetchall()
+    )
 
 
 def test_interac_history_enriches_existing_checking_transaction(app):
@@ -59,9 +61,7 @@ def test_interac_history_enriches_existing_checking_transaction(app):
     with db_core_transaction() as conn:
         account_id = create_account(conn)
         merchant = get_or_create_merchant_for_name(conn, "Kiet Menage")
-        food_id = conn.execute(
-            select(categories_table.c.id).where(categories_table.c.name == "Food")
-        ).scalar_one()
+        food_id = conn.execute(select(categories_table.c.id).where(categories_table.c.name == "Food")).scalar_one()
         conn.execute(
             insert(category_rules_table).values(
                 merchant_id=merchant["id"],

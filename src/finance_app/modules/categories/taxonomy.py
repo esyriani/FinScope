@@ -19,7 +19,6 @@ from finance_app.database.tables import (
 from finance_app.database.upsert import insert_or_select_unique_row
 from finance_app.modules.categories.builtins import BUILTIN_CATEGORIES, builtin_category_names
 
-
 CATEGORY_SEED_PATH = Path(BASE_DIR) / "taxonomy.yml"
 DEFAULT_TAG_COLOR = "#64748b"
 TAG_COLORS = {
@@ -139,11 +138,7 @@ def clean_color(value):
     """Clean color."""
     color = str(value or "").strip()
     hex_digits = "0123456789abcdefABCDEF"
-    if (
-        len(color) == 7
-        and color.startswith("#")
-        and all(char in hex_digits for char in color[1:])
-    ):
+    if len(color) == 7 and color.startswith("#") and all(char in hex_digits for char in color[1:]):
         return color.lower()
     return ""
 
@@ -165,10 +160,7 @@ def seed_category_taxonomy(conn):
     seed = load_category_seed()
     categories = seed["categories"]
     tags = seed["tags"]
-    reserved_names = {
-        name.casefold()
-        for name in builtin_category_names()
-    }
+    reserved_names = {name.casefold() for name in builtin_category_names()}
 
     for category in BUILTIN_CATEGORIES:
         upsert_category_metadata(
@@ -290,43 +282,48 @@ def upsert_tag_metadata(conn, name, description="", instruction="", color=None):
 
 def get_category_rows(conn):
     """Return category rows."""
-    return conn.execute(
-        select(
-            categories_table.c.id,
-            categories_table.c.name,
-            categories_table.c.description,
-            categories_table.c.instruction,
-        ).order_by(
-            case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
-            func.lower(categories_table.c.name),
-            categories_table.c.name,
+    return (
+        conn.execute(
+            select(
+                categories_table.c.id,
+                categories_table.c.name,
+                categories_table.c.description,
+                categories_table.c.instruction,
+            ).order_by(
+                case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
+                func.lower(categories_table.c.name),
+                categories_table.c.name,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def get_category_description_map(conn):
     """Return category descriptions keyed by category name."""
-    return {
-        row["name"]: row["description"] or ""
-        for row in get_category_rows(conn)
-    }
+    return {row["name"]: row["description"] or "" for row in get_category_rows(conn)}
 
 
 def get_tag_rows(conn):
     """Return tag rows."""
-    return conn.execute(
-        select(
-            tags_table.c.id,
-            tags_table.c.name,
-            tags_table.c.description,
-            tags_table.c.instruction,
-            tags_table.c.color,
-        ).order_by(
-            builtin_tag_order_expression(),
-            func.lower(tags_table.c.name),
-            tags_table.c.name,
+    return (
+        conn.execute(
+            select(
+                tags_table.c.id,
+                tags_table.c.name,
+                tags_table.c.description,
+                tags_table.c.instruction,
+                tags_table.c.color,
+            ).order_by(
+                builtin_tag_order_expression(),
+                func.lower(tags_table.c.name),
+                tags_table.c.name,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def get_tag_options(conn):
@@ -349,10 +346,7 @@ def get_tag_option_rows(conn):
 
 def get_tag_color_map(conn):
     """Return tag color map."""
-    return {
-        row["name"]: clean_color(row["color"]) or tag_color_for_name(row["name"])
-        for row in get_tag_rows(conn)
-    }
+    return {row["name"]: clean_color(row["color"]) or tag_color_for_name(row["name"]) for row in get_tag_rows(conn)}
 
 
 def normalize_tag_names(values, allowed_tags=None):
@@ -362,10 +356,7 @@ def normalize_tag_names(values, allowed_tags=None):
     if isinstance(values, str):
         values = split_tag_text(values)
 
-    allowed_by_fold = {
-        str(tag).casefold(): tag
-        for tag in (allowed_tags or [])
-    }
+    allowed_by_fold = {str(tag).casefold(): tag for tag in (allowed_tags or [])}
     normalized = []
     seen = set()
 
@@ -384,11 +375,7 @@ def normalize_tag_names(values, allowed_tags=None):
 
 def split_tag_text(value):
     """Split tag text."""
-    return [
-        chunk.strip()
-        for chunk in str(value or "").replace("|", ",").replace(";", ",").split(",")
-        if chunk.strip()
-    ]
+    return [chunk.strip() for chunk in str(value or "").replace("|", ",").replace(";", ",").split(",") if chunk.strip()]
 
 
 def tag_ids_by_name(conn, tag_names):
@@ -397,22 +384,20 @@ def tag_ids_by_name(conn, tag_names):
     if not normalized:
         return {}
 
-    rows = conn.execute(
-        select(tags_table.c.id, tags_table.c.name).where(tags_table.c.name.in_(normalized))
-    ).mappings().fetchall()
+    rows = (
+        conn.execute(select(tags_table.c.id, tags_table.c.name).where(tags_table.c.name.in_(normalized)))
+        .mappings()
+        .fetchall()
+    )
     return {row["name"]: row["id"] for row in rows}
 
 
 def set_rule_tags(conn, rule_id, tag_names):
     """Set rule tags."""
-    conn.execute(
-        delete(category_rule_tags_table).where(category_rule_tags_table.c.rule_id == rule_id)
-    )
+    conn.execute(delete(category_rule_tags_table).where(category_rule_tags_table.c.rule_id == rule_id))
     tag_ids = tag_ids_by_name(conn, tag_names)
     for tag_id in tag_ids.values():
-        conn.execute(
-            insert(category_rule_tags_table).values(rule_id=rule_id, tag_id=tag_id)
-        )
+        conn.execute(insert(category_rule_tags_table).values(rule_id=rule_id, tag_id=tag_id))
 
 
 def get_rule_tags_by_rule_id(conn, rule_ids):
@@ -421,12 +406,16 @@ def get_rule_tags_by_rule_id(conn, rule_ids):
     if not rule_ids:
         return {}
 
-    rows = conn.execute(
-        select(category_rule_tags_table.c.rule_id, tags_table.c.name)
-        .join(tags_table, tags_table.c.id == category_rule_tags_table.c.tag_id)
-        .where(category_rule_tags_table.c.rule_id.in_(rule_ids))
-        .order_by(func.lower(tags_table.c.name), tags_table.c.name)
-    ).mappings().fetchall()
+    rows = (
+        conn.execute(
+            select(category_rule_tags_table.c.rule_id, tags_table.c.name)
+            .join(tags_table, tags_table.c.id == category_rule_tags_table.c.tag_id)
+            .where(category_rule_tags_table.c.rule_id.in_(rule_ids))
+            .order_by(func.lower(tags_table.c.name), tags_table.c.name)
+        )
+        .mappings()
+        .fetchall()
+    )
 
     result = {rule_id: [] for rule_id in rule_ids}
     for row in rows:
@@ -437,9 +426,7 @@ def get_rule_tags_by_rule_id(conn, rule_ids):
 def set_transaction_tags(conn, transaction_id, tag_names, source=CATEGORY_SOURCE_UNKNOWN, rule_id=None):
     """Set transaction tags."""
     normalized_source = normalize_transaction_tag_source(source)
-    conn.execute(
-        delete(transaction_tags_table).where(transaction_tags_table.c.transaction_id == transaction_id)
-    )
+    conn.execute(delete(transaction_tags_table).where(transaction_tags_table.c.transaction_id == transaction_id))
     tag_ids = tag_ids_by_name(conn, tag_names)
     for tag_id in tag_ids.values():
         conn.execute(
@@ -461,12 +448,16 @@ def normalize_transaction_tag_source(source):
 
 def get_transaction_tag_names(conn, transaction_id):
     """Return transaction tag names."""
-    rows = conn.execute(
-        select(tags_table.c.name)
-        .join(transaction_tags_table, transaction_tags_table.c.tag_id == tags_table.c.id)
-        .where(transaction_tags_table.c.transaction_id == transaction_id)
-        .order_by(func.lower(tags_table.c.name), tags_table.c.name)
-    ).mappings().fetchall()
+    rows = (
+        conn.execute(
+            select(tags_table.c.name)
+            .join(transaction_tags_table, transaction_tags_table.c.tag_id == tags_table.c.id)
+            .where(transaction_tags_table.c.transaction_id == transaction_id)
+            .order_by(func.lower(tags_table.c.name), tags_table.c.name)
+        )
+        .mappings()
+        .fetchall()
+    )
     return [row["name"] for row in rows]
 
 
@@ -476,15 +467,18 @@ def get_transaction_tags_by_id(conn, transaction_ids):
     if not transaction_ids:
         return {}
 
-    rows = conn.execute(
-        select(transaction_tags_table.c.transaction_id, tags_table.c.name)
-        .join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
-        .where(transaction_tags_table.c.transaction_id.in_(transaction_ids))
-        .order_by(func.lower(tags_table.c.name), tags_table.c.name)
-    ).mappings().fetchall()
+    rows = (
+        conn.execute(
+            select(transaction_tags_table.c.transaction_id, tags_table.c.name)
+            .join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
+            .where(transaction_tags_table.c.transaction_id.in_(transaction_ids))
+            .order_by(func.lower(tags_table.c.name), tags_table.c.name)
+        )
+        .mappings()
+        .fetchall()
+    )
 
     result = {tx_id: [] for tx_id in transaction_ids}
     for row in rows:
         result.setdefault(row["transaction_id"], []).append(row["name"])
     return result
-

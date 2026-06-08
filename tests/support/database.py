@@ -41,7 +41,6 @@ from finance_app.modules.categories.taxonomy import (
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_description
 from finance_app.modules.auth import repository as auth_repository
 
-
 UNIQUE_COUNTER = count(1)
 
 
@@ -259,9 +258,7 @@ def insert_account(
             account_type=ACCOUNT_TYPE_CHECKING,
         )
 
-    row = conn.execute(
-        select(accounts_table.c.id).where(accounts_table.c.name == account_name)
-    ).mappings().fetchone()
+    row = conn.execute(select(accounts_table.c.id).where(accounts_table.c.name == account_name)).mappings().fetchone()
     if row is None:
         result = conn.execute(
             insert(accounts_table).values(
@@ -276,11 +273,7 @@ def insert_account(
         values = {"account_type": account_type}
         if paid_from_account_id is not None or paid_from_account_name is not None:
             values["paid_from_account_id"] = paid_from_account_id
-        conn.execute(
-            update(accounts_table)
-            .where(accounts_table.c.id == account_id)
-            .values(**values)
-        )
+        conn.execute(update(accounts_table).where(accounts_table.c.id == account_id).values(**values))
 
     conn.commit()
     return account_id
@@ -309,9 +302,11 @@ def insert_statement_type(
         The statement type id.
     """
     type_name = name or unique_test_value("statement-type")
-    row = conn.execute(
-        select(statement_types_table.c.id).where(statement_types_table.c.name == type_name)
-    ).mappings().fetchone()
+    row = (
+        conn.execute(select(statement_types_table.c.id).where(statement_types_table.c.name == type_name))
+        .mappings()
+        .fetchone()
+    )
     values = {
         "parser_type": parser_type,
         "import_mode": import_mode,
@@ -319,16 +314,12 @@ def insert_statement_type(
         "active": 1 if active else 0,
     }
     if row is None:
-        result = conn.execute(
-            insert(statement_types_table).values(name=type_name, **values)
-        )
+        result = conn.execute(insert(statement_types_table).values(name=type_name, **values))
         statement_type_id = inserted_primary_key(result)
     else:
         statement_type_id = row["id"]
         conn.execute(
-            update(statement_types_table)
-            .where(statement_types_table.c.id == statement_type_id)
-            .values(**values)
+            update(statement_types_table).where(statement_types_table.c.id == statement_type_id).values(**values)
         )
 
     conn.commit()
@@ -337,12 +328,16 @@ def insert_statement_type(
 
 def default_statement_type_id(conn):
     """Return an active statement type id, creating one if the seed is absent."""
-    row = conn.execute(
-        select(statement_types_table.c.id)
-        .where(statement_types_table.c.active == 1)
-        .order_by(statement_types_table.c.id)
-        .limit(1)
-    ).mappings().fetchone()
+    row = (
+        conn.execute(
+            select(statement_types_table.c.id)
+            .where(statement_types_table.c.active == 1)
+            .order_by(statement_types_table.c.id)
+            .limit(1)
+        )
+        .mappings()
+        .fetchone()
+    )
     if row is not None:
         return row["id"]
     return insert_statement_type(conn)
@@ -449,9 +444,7 @@ def insert_tag(conn, name=None, *, description="", instruction="", color=None):
     if tag_name is None:
         raise ValueError("Tag name cannot be blank.")
 
-    tag_id = conn.execute(
-        select(tags_table.c.id).where(tags_table.c.name == tag_name)
-    ).scalar_one()
+    tag_id = conn.execute(select(tags_table.c.id).where(tags_table.c.name == tag_name)).scalar_one()
     conn.commit()
     return tag_id
 
@@ -631,9 +624,7 @@ def set_owner_setting(conn, key, value):
         key: Setting key.
         value: Setting value, converted to text for storage.
     """
-    owner_id = conn.execute(
-        select(users_table.c.id).where(users_table.c.username == "owner")
-    ).scalar_one()
+    owner_id = conn.execute(select(users_table.c.id).where(users_table.c.username == "owner")).scalar_one()
     result = conn.execute(
         update(user_settings_table)
         .where(

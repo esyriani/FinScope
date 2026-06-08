@@ -7,7 +7,6 @@ inside the Python test suite.
 import re
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXPORTS_JS = PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js"
 
@@ -24,7 +23,7 @@ def function_body(source, name):
         elif source[index] == "}":
             depth -= 1
         index += 1
-    return source[match.end():index - 1]
+    return source[match.end() : index - 1]
 
 
 def test_csv_escape_neutralizes_spreadsheet_formula_prefixes():
@@ -34,7 +33,7 @@ def test_csv_escape_neutralizes_spreadsheet_formula_prefixes():
     csv_escape_body = function_body(source, "csvEscape")
 
     assert "const CSV_FORMULA_PREFIX_RE = /^[=+\\-@\\t\\r]/;" in source
-    assert "String(value ?? \"\")" in sanitizer_body
+    assert 'String(value ?? "")' in sanitizer_body
     assert "CSV_FORMULA_PREFIX_RE.test(text) ? `'${text}` : text" in sanitizer_body
     assert "const text = sanitizeCsvFormulaValue(value);" in csv_escape_body
-    assert "String(value ?? \"\")" not in csv_escape_body
+    assert 'String(value ?? "")' not in csv_escape_body

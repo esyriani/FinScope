@@ -57,18 +57,14 @@ def test_combine_confidence_rewards_agreement_and_penalizes_disagreement():
 
 def test_evidence_decision_source_uses_controlled_values():
     """Verify evidence combinations map to the audit decision-source vocabulary."""
-    assert (
-        evidence_decision_source(manual=True, rule=True, retrieval=True, llm=True)
-        == DECISION_SOURCE_MANUAL
-    )
+    assert evidence_decision_source(manual=True, rule=True, retrieval=True, llm=True) == DECISION_SOURCE_MANUAL
     assert evidence_decision_source(rule=True) == DECISION_SOURCE_RULE
     assert evidence_decision_source(retrieval=True) == DECISION_SOURCE_SIMILAR_TRANSACTIONS
     assert evidence_decision_source(rule=True, retrieval=True) == DECISION_SOURCE_COMBINED
     assert evidence_decision_source(llm=True) == DECISION_SOURCE_LLM
     assert evidence_decision_source(rule=True, llm=True) == DECISION_SOURCE_COMBINED
     assert (
-        evidence_decision_source(rule=True, retrieval=True, llm=True)
-        == DECISION_SOURCE_LLM_WITH_SIMILAR_TRANSACTIONS
+        evidence_decision_source(rule=True, retrieval=True, llm=True) == DECISION_SOURCE_LLM_WITH_SIMILAR_TRANSACTIONS
     )
     assert evidence_decision_source() == DECISION_SOURCE_UNKNOWN
 

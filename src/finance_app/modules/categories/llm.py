@@ -45,7 +45,6 @@ from finance_app.modules.categories.llm_taxonomy import (
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 from finance_app.modules.settings.runtime import get_float_setting, get_setting
 
-
 logger = logging.getLogger(__name__)
 _request_context = local()
 LLM_BATCH_SIZE = 20
@@ -70,7 +69,7 @@ def record_llm_request_status(status, **fields):
 def chunked(items, size):
     """Yield fixed-size chunks from a sequence."""
     for index in range(0, len(items), size):
-        yield items[index:index + size]
+        yield items[index : index + size]
 
 
 def pair_llm_results(unknown_items, llm_results):
@@ -79,9 +78,7 @@ def pair_llm_results(unknown_items, llm_results):
     # so older or malformed responses can still be interpreted conservatively.
     if llm_results and all(isinstance(result, dict) and "request_id" in result for result in llm_results):
         results_by_id = {
-            str(result.get("request_id")): result
-            for result in llm_results
-            if result.get("request_id") is not None
+            str(result.get("request_id")): result for result in llm_results if result.get("request_id") is not None
         }
         for tx in unknown_items:
             result = results_by_id.get(str(tx.get("llm_request_id")))
@@ -114,11 +111,7 @@ def automatic_rule_amount_bounds(amount):
 
 def save_automatic_category_rule(conn, transaction, category, tags):
     """Persist an accepted no-review LLM categorization as an automatic rule."""
-    keyword = normalize_merchant_description(
-        transaction.get("merchant_key")
-        or transaction.get("description")
-        or ""
-    )
+    keyword = normalize_merchant_description(transaction.get("merchant_key") or transaction.get("description") or "")
     if not keyword:
         return None
 
@@ -288,15 +281,9 @@ def classify_unknowns_with_llm(
                 tag_rows,
             )
             category_outside_candidate_taxonomy = (
-                category_id_is_valid
-                and category_id is not None
-                and category_id not in set(candidate_category_ids)
+                category_id_is_valid and category_id is not None and category_id not in set(candidate_category_ids)
             )
-            tag_ids_outside_candidate_taxonomy = [
-                tag_id
-                for tag_id in tag_ids
-                if tag_id not in set(candidate_tag_ids)
-            ]
+            tag_ids_outside_candidate_taxonomy = [tag_id for tag_id in tag_ids if tag_id not in set(candidate_tag_ids)]
             tag_drop = filtered_llm_tags_for_validity(
                 tags,
                 tag_ids,
@@ -549,9 +536,7 @@ def parse_llm_tag_ids(value, allowed_tag_rows):
         return [], [], [value], False
 
     tags_by_id = {
-        str(row.get("id")): row.get("name")
-        for row in allowed_tag_rows
-        if row.get("id") is not None and row.get("name")
+        str(row.get("id")): row.get("name") for row in allowed_tag_rows if row.get("id") is not None and row.get("name")
     }
     names = []
     tag_ids = []
@@ -666,16 +651,11 @@ def llm_category_metadata(
         "candidate_category_ids": list(candidate_category_ids or []),
         "candidate_tag_ids": list(candidate_tag_ids or []),
         "category_outside_candidate_taxonomy": bool(category_outside_candidate_taxonomy),
-        "full_taxonomy_fallback_used": bool(
-            category_outside_candidate_taxonomy
-            and not decision.assigned_unknown
-        ),
+        "full_taxonomy_fallback_used": bool(category_outside_candidate_taxonomy and not decision.assigned_unknown),
         "full_taxonomy_fallback_rejected": False,
         "llm_confidence": llm_confidence,
         "llm_reason": str(result.get("reason") or "").strip(),
-        "supported_by_similar_transactions": parse_bool(
-            result.get("supported_by_similar_transactions")
-        ),
+        "supported_by_similar_transactions": parse_bool(result.get("supported_by_similar_transactions")),
     }
     if tag_ids_outside_candidate_taxonomy:
         metadata["tag_ids_outside_candidate_taxonomy"] = tag_ids_outside_candidate_taxonomy

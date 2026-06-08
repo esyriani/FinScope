@@ -42,7 +42,6 @@ from finance_app.modules.rules.service import (
     update_rule_from_form,
 )
 
-
 rules_bp = Blueprint("rules", __name__)
 
 
@@ -110,9 +109,7 @@ def audit_rule_preview():
     try:
         with db_core_transaction() as conn:
             proposed_rule = (
-                preview_rule_from_form(conn, request.form)
-                if action in {"create_rule", "edit_rule"}
-                else None
+                preview_rule_from_form(conn, request.form) if action in {"create_rule", "edit_rule"} else None
             )
             context = build_rule_change_preview_context(
                 conn,
@@ -321,11 +318,7 @@ def approve_rule(rule_id):
         flash(gettext(str(exc)))
         return redirect(next_url)
 
-    message = (
-        gettext("Rule approved: {keyword}", keyword=keyword)
-        if changed
-        else gettext("Rule already approved.")
-    )
+    message = gettext("Rule approved: {keyword}", keyword=keyword) if changed else gettext("Rule already approved.")
     if wants_json_response():
         return jsonify(
             {
@@ -461,14 +454,17 @@ def delete_rule(rule_id):
     message = gettext("Rule deleted.") if deleted else gettext("Rule not found.")
     if wants_json_response():
         status = 200 if deleted else 404
-        return jsonify(
-            {
-                "ok": deleted,
-                "action": "delete",
-                "rule_id": rule_id,
-                "message": message,
-            }
-        ), status
+        return (
+            jsonify(
+                {
+                    "ok": deleted,
+                    "action": "delete",
+                    "rule_id": rule_id,
+                    "message": message,
+                }
+            ),
+            status,
+        )
 
     flash(message)
     return redirect(next_url)

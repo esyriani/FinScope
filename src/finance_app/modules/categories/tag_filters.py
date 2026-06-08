@@ -13,7 +13,6 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 
-
 UNTAGGED_TAG_FILTER = "__untagged__"
 
 
@@ -93,9 +92,7 @@ def rule_tag_condition(selected_tags, rule_id_column, include=True):
             tags_table.c.name.in_(tags),
         )
     )
-    has_any_tag = exists(
-        select(1).where(category_rule_tags_table.c.rule_id == rule_id_column)
-    )
+    has_any_tag = exists(select(1).where(category_rule_tags_table.c.rule_id == rule_id_column))
     selected_conditions = []
     if tags:
         selected_conditions.append(has_selected_tag)

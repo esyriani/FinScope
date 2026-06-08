@@ -22,7 +22,6 @@ from finance_app.modules.auth.service import (
     update_own_display_name,
 )
 
-
 auth_bp = Blueprint("auth", __name__)
 PENDING_PASSWORD_CHANGE_USER_ID = "pending_password_change_user_id"
 PENDING_PASSWORD_CHANGE_USERNAME = "pending_password_change_username"
@@ -306,8 +305,16 @@ def forced_password_change_user_id():
 def render_forced_password_change(error=None):
     """Render the login shell with the forced password-change modal open."""
     forced_user = {
-        "username": getattr(current_user, "username", None) if current_user.is_authenticated else session.get(PENDING_PASSWORD_CHANGE_USERNAME),
-        "display_name": getattr(current_user, "display_name", None) if current_user.is_authenticated else session.get(PENDING_PASSWORD_CHANGE_DISPLAY_NAME),
+        "username": (
+            getattr(current_user, "username", None)
+            if current_user.is_authenticated
+            else session.get(PENDING_PASSWORD_CHANGE_USERNAME)
+        ),
+        "display_name": (
+            getattr(current_user, "display_name", None)
+            if current_user.is_authenticated
+            else session.get(PENDING_PASSWORD_CHANGE_DISPLAY_NAME)
+        ),
     }
     return render_template(
         "auth_login.html",
@@ -337,11 +344,7 @@ def temporary_password_modal_payload(user, temporary_password):
 
 def ownership_handoff_candidates(users):
     """Return active non-owner users eligible to receive ownership."""
-    return [
-        user
-        for user in users
-        if user["role"] != "owner" and user["is_active"]
-    ]
+    return [user for user in users if user["role"] != "owner" and user["is_active"]]
 
 
 def safe_next_url(value):

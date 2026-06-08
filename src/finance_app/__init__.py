@@ -22,7 +22,6 @@ from finance_app.modules.categories.service import get_builtin_category_names
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.settings.runtime import get_setting_with_fallback
 
-
 CLIENT_TRANSLATION_MESSAGES = (
     "Amount changed",
     "Annual",
@@ -200,11 +199,7 @@ def create_app():
         theme_mode = get_setting_with_fallback("theme_mode", THEME_MODE_DARK)
         ui_language = normalize_language(getattr(g, "ui_language", settings.locale))
         return {
-            "ui_theme": (
-                THEME_MODE_DARK
-                if str(theme_mode).strip().lower() == THEME_MODE_DARK
-                else THEME_MODE_LIGHT
-            ),
+            "ui_theme": (THEME_MODE_DARK if str(theme_mode).strip().lower() == THEME_MODE_DARK else THEME_MODE_LIGHT),
             "ui_language": ui_language,
             "ui_locale": locale_for_language(ui_language),
             "supported_languages": SUPPORTED_LANGUAGES,

@@ -18,7 +18,6 @@ from finance_app.modules.taxonomy_admin.service import (
     update_tag_from_form,
 )
 
-
 taxonomy_admin_bp = Blueprint("taxonomy_admin", __name__)
 
 

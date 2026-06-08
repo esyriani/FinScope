@@ -178,10 +178,7 @@ def test_parse_csv_transactions_detects_header_after_intro_rows():
     result = parse_csv_transactions(raw_text, statement_type="credit_card")
 
     assert result["ignored_rows"] == 1
-    assert [
-        (tx["tx_date"], tx["description"], tx["amount"])
-        for tx in result["transactions"]
-    ] == [
+    assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
         ("2026-01-02", "GROCERY", 12.34),
         ("2026-01-03", "PAYMENT", -100.00),
     ]
@@ -211,10 +208,7 @@ def test_parse_csv_transactions_infers_month_first_slash_dates_without_header():
     result = parse_csv_transactions(raw_text, statement_type="bank_account")
 
     assert result["ignored_rows"] == 0
-    assert [
-        (tx["tx_date"], tx["description"], tx["amount"])
-        for tx in result["transactions"]
-    ] == [
+    assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
         ("2026-05-18", "DISNEY PLUS", 9.19),
         ("2026-05-06", "HANGTAG PARKING", 2.25),
     ]
@@ -268,10 +262,7 @@ def test_parse_csv_transactions_parses_quoted_iso_debit_credit_without_header():
     result = parse_csv_transactions(raw_text, statement_type="bank_account")
 
     assert result["ignored_rows"] == 0
-    assert [
-        (tx["tx_date"], tx["description"], tx["amount"])
-        for tx in result["transactions"]
-    ] == [
+    assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
         ("2026-04-29", "PMT PRET  *326060301", 2400.00),
         ("2026-04-30", "UDEM            PAIE", -3505.37),
     ]
@@ -294,10 +285,7 @@ def test_parse_csv_transactions_counts_malformed_rows_without_losing_valid_rows(
     result = parse_csv_transactions(raw_text, statement_type="bank_account")
 
     assert result["ignored_rows"] == 3
-    assert [
-        (tx["tx_date"], tx["description"], tx["amount"])
-        for tx in result["transactions"]
-    ] == [
+    assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
         ("2026-01-02", "Quoted, Merchant", -1234.56),
         ("2026-01-05", "Valid Cafe", 42.10),
     ]
@@ -336,7 +324,7 @@ def test_parse_csv_transactions_parses_interac_received_history():
     raw_text = "\n".join(
         [
             "Date Deposited,Received From,Amount,Method,Status",
-            "02-Jan-23,CHARLES-ANTOINE DEMERS,\"$1,250.00\",Email/Mobile,Autodeposited",
+            '02-Jan-23,CHARLES-ANTOINE DEMERS,"$1,250.00",Email/Mobile,Autodeposited',
         ]
     )
 

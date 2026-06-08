@@ -24,6 +24,7 @@ from finance_app.modules.categories.service import save_category_rule
 @dataclass(frozen=True)
 class ManualCategoryAssignment:
     """Represent manual category assignment."""
+
     updated: bool
     saved_rule_id: int | None = None
     transaction_changed: bool = False
@@ -31,14 +32,18 @@ class ManualCategoryAssignment:
 
 def get_transaction_for_category_update(conn, transaction_id):
     """Return transaction for category update."""
-    row = conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.merchant_id,
-            transactions_table.c.description,
-            transactions_table.c.amount,
-        ).where(transactions_table.c.id == transaction_id)
-    ).mappings().fetchone()
+    row = (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.merchant_id,
+                transactions_table.c.description,
+                transactions_table.c.amount,
+            ).where(transactions_table.c.id == transaction_id)
+        )
+        .mappings()
+        .fetchone()
+    )
     if row is None:
         return None
 
@@ -49,37 +54,41 @@ def get_transaction_for_category_update(conn, transaction_id):
 
 def get_transaction_for_ai_categorization(conn, transaction_id):
     """Return a transaction row with category fields needed for a one-off AI rerun."""
-    row = conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.statement_id,
-            transactions_table.c.account_id,
-            transactions_table.c.merchant_id,
-            transactions_table.c.tx_date,
-            transactions_table.c.description,
-            transactions_table.c.amount,
-            transactions_table.c.category,
-            transactions_table.c.category_id,
-            transactions_table.c.needs_review,
-            transactions_table.c.category_source,
-            transactions_table.c.category_confidence,
-            transactions_table.c.category_rule_id,
-            transactions_table.c.category_metadata,
-            transactions_table.c.categorized_at,
-            transactions_table.c.reviewed_at,
-            transactions_table.c.ignored,
-            transactions_table.c.transaction_kind,
-            accounts_table.c.name.label("account_name"),
-            accounts_table.c.account_type.label("account_type"),
-        )
-        .select_from(
-            transactions_table.outerjoin(
-                accounts_table,
-                accounts_table.c.id == transactions_table.c.account_id,
+    row = (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.statement_id,
+                transactions_table.c.account_id,
+                transactions_table.c.merchant_id,
+                transactions_table.c.tx_date,
+                transactions_table.c.description,
+                transactions_table.c.amount,
+                transactions_table.c.category,
+                transactions_table.c.category_id,
+                transactions_table.c.needs_review,
+                transactions_table.c.category_source,
+                transactions_table.c.category_confidence,
+                transactions_table.c.category_rule_id,
+                transactions_table.c.category_metadata,
+                transactions_table.c.categorized_at,
+                transactions_table.c.reviewed_at,
+                transactions_table.c.ignored,
+                transactions_table.c.transaction_kind,
+                accounts_table.c.name.label("account_name"),
+                accounts_table.c.account_type.label("account_type"),
             )
+            .select_from(
+                transactions_table.outerjoin(
+                    accounts_table,
+                    accounts_table.c.id == transactions_table.c.account_id,
+                )
+            )
+            .where(transactions_table.c.id == transaction_id)
         )
-        .where(transactions_table.c.id == transaction_id)
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
     if row is None:
         return None
 
@@ -105,21 +114,22 @@ def assign_manual_category(
     modal. Rule-only saves approve the current row without changing its existing
     category provenance.
     """
-    current = conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.category,
-        ).where(transactions_table.c.id == transaction_id)
-    ).mappings().fetchone()
+    current = (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.category,
+            ).where(transactions_table.c.id == transaction_id)
+        )
+        .mappings()
+        .fetchone()
+    )
     if current is None:
         return ManualCategoryAssignment(updated=False)
 
     submitted_tags = tag_names or []
     current_tags = get_transaction_tag_names(conn, transaction_id)
-    transaction_changed = (
-        current["category"] != category
-        or set(current_tags) != set(submitted_tags)
-    )
+    transaction_changed = current["category"] != category or set(current_tags) != set(submitted_tags)
 
     if transaction_changed:
         metadata = manual_category_assignment()
@@ -213,11 +223,7 @@ def set_transaction_ignored(conn, transaction_id, ignored):
     values = {"ignored": ignored}
     if ignored:
         values["needs_review"] = 0
-    cursor = conn.execute(
-        update(transactions_table)
-        .where(transactions_table.c.id == transaction_id)
-        .values(**values)
-    )
+    cursor = conn.execute(update(transactions_table).where(transactions_table.c.id == transaction_id).values(**values))
     return cursor.rowcount > 0
 
 
@@ -231,11 +237,7 @@ def set_transactions_ignored(conn, transaction_ids, ignored):
     values = {"ignored": ignored}
     if ignored:
         values["needs_review"] = 0
-    cursor = conn.execute(
-        update(transactions_table)
-        .where(transactions_table.c.id.in_(ids))
-        .values(**values)
-    )
+    cursor = conn.execute(update(transactions_table).where(transactions_table.c.id.in_(ids)).values(**values))
     return cursor.rowcount
 
 
@@ -288,26 +290,27 @@ def get_transactions_for_recategorization(conn, transaction_ids):
         return []
 
     row_order = case(
-        *(
-            (transactions_table.c.id == transaction_id, index)
-            for index, transaction_id in enumerate(ids)
-        ),
+        *((transactions_table.c.id == transaction_id, index) for index, transaction_id in enumerate(ids)),
         else_=len(ids),
     )
-    rows = conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.account_id,
-            transactions_table.c.tx_date,
-            transactions_table.c.merchant_id,
-            transactions_table.c.description,
-            transactions_table.c.amount,
-            transactions_table.c.category,
-            transactions_table.c.transaction_kind,
+    rows = (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.account_id,
+                transactions_table.c.tx_date,
+                transactions_table.c.merchant_id,
+                transactions_table.c.description,
+                transactions_table.c.amount,
+                transactions_table.c.category,
+                transactions_table.c.transaction_kind,
+            )
+            .where(transactions_table.c.id.in_(ids))
+            .order_by(row_order)
         )
-        .where(transactions_table.c.id.in_(ids))
-        .order_by(row_order)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
     return [
         {

@@ -35,6 +35,7 @@ def isolated_background_runner(monkeypatch):
         runner._jobs.clear()
         runner._job_sequence = 0
 
+
 def complete_job(label="Completed job", result="done", undo_handler=None):
     """Create a completed background job for route tests."""
     job_id = runner.submit_background_job(label, lambda: "placeholder", undo_handler=undo_handler)
@@ -207,11 +208,11 @@ def test_jobs_page_renders_ajax_auto_refresh_controls(client):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'data-jobs-auto-refresh' in body
+    assert "data-jobs-auto-refresh" in body
     assert 'data-jobs-auto-refresh-interval="10"' in body
-    assert 'data-jobs-refresh-button' in body
+    assert "data-jobs-refresh-button" in body
     assert 'data-jobs-refresh-interval="10"' in body
-    assert 'data-jobs-refresh-target=\'[data-ajax-refresh-target="jobs-actions"]\'' in body
+    assert "data-jobs-refresh-target='[data-ajax-refresh-target=\"jobs-actions\"]'" in body
     assert "Refresh (10)" in body
 
 

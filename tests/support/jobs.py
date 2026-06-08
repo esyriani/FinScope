@@ -7,7 +7,6 @@ starting asynchronous work.
 
 from dataclasses import dataclass, field
 
-
 DEFAULT_CAPTURED_JOB_ID = "test-background-job"
 
 

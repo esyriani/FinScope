@@ -71,19 +71,23 @@ def insert_merchant_rule(conn, merchant_id, keyword, category, amount_min=None, 
 
 def transaction_state(conn, tx_id):
     """Return selected transaction fields for assertions."""
-    return conn.execute(
-        select(
-            transactions_table.c.category,
-            transactions_table.c.category_id,
-            transactions_table.c.needs_review,
-            transactions_table.c.category_source,
-            transactions_table.c.category_confidence,
-            transactions_table.c.category_rule_id,
-            transactions_table.c.category_metadata,
-            transactions_table.c.categorized_at,
-            transactions_table.c.reviewed_at,
-        ).where(transactions_table.c.id == tx_id)
-    ).mappings().fetchone()
+    return (
+        conn.execute(
+            select(
+                transactions_table.c.category,
+                transactions_table.c.category_id,
+                transactions_table.c.needs_review,
+                transactions_table.c.category_source,
+                transactions_table.c.category_confidence,
+                transactions_table.c.category_rule_id,
+                transactions_table.c.category_metadata,
+                transactions_table.c.categorized_at,
+                transactions_table.c.reviewed_at,
+            ).where(transactions_table.c.id == tx_id)
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def test_apply_single_rule_to_transactions_updates_matching_active_rows(core_conn):
@@ -127,12 +131,8 @@ def test_apply_single_rule_to_transactions_updates_matching_active_rows(core_con
 
 def test_rules_respect_account_and_direction_constraints(core_conn):
     """Verify rule matching honors explicit account and direction constraints."""
-    checking_id = core_conn.execute(
-        insert(accounts_table).values(name="Checking")
-    ).inserted_primary_key[0]
-    savings_id = core_conn.execute(
-        insert(accounts_table).values(name="Savings")
-    ).inserted_primary_key[0]
+    checking_id = core_conn.execute(insert(accounts_table).values(name="Checking")).inserted_primary_key[0]
+    savings_id = core_conn.execute(insert(accounts_table).values(name="Savings")).inserted_primary_key[0]
     checking_match_id = insert_rule_engine_transaction(
         core_conn,
         "Metro Grocery",
@@ -268,9 +268,7 @@ def test_apply_all_rules_to_transactions_captures_undo_and_skips_noops(core_conn
     payroll_rule_id = insert_rule(core_conn, "PAYROLL", "Income")
     cafe_rule_id = insert_rule(core_conn, "CAFE", "Food")
     core_conn.execute(
-        update(transactions_table)
-        .where(transactions_table.c.id == already_id)
-        .values(category_rule_id=cafe_rule_id)
+        update(transactions_table).where(transactions_table.c.id == already_id).values(category_rule_id=cafe_rule_id)
     )
     core_conn.commit()
 
@@ -379,8 +377,7 @@ def test_undo_apply_all_rules_job_skips_transactions_changed_after_job(app, core
     message = undo_apply_all_rules_job(undo_state)
 
     assert message == (
-        "Restored previous rule categories for 0 transactions. "
-        "Skipped 1 transaction that changed after the job."
+        "Restored previous rule categories for 0 transactions. " "Skipped 1 transaction that changed after the job."
     )
     assert transaction_state(core_conn, metro_id)["category"] == "Personal"
 

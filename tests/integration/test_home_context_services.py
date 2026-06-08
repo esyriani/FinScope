@@ -59,7 +59,8 @@ def test_home_context_surfaces_command_center_activity(core_conn, monkeypatch):
         ORDER BY id
         LIMIT 1
         """)).fetchone()._mapping["id"]
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO statements (
             statement_type_id,
             filename,
@@ -73,12 +74,15 @@ def test_home_context_surfaces_command_center_activity(core_conn, monkeypatch):
             :p0, 'failed-home.csv', 'failed-home-checksum', 'raw',
             'failed', 'Parser failed', '2026-05-07T10:00:00Z'
         )
-        """), {"p0": statement_type_id})
+        """),
+        {"p0": statement_type_id},
+    )
     core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source, ai_approved, created_at)
         VALUES ('Suggested Home Merchant', 'Food', 'automatic', 0, '2026-05-06T10:00:00Z')
         """))
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -91,7 +95,32 @@ def test_home_context_surfaces_command_center_activity(core_conn, monkeypatch):
             fingerprint
         )
         VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8)
-        """), [{"p0": "2026-05-06", "p1": "Reviewed Home Cafe", "p2": 22.00, "p3": "Food", "p4": "manual", "p5": 0, "p6": "2026-05-06T12:00:00Z", "p7": "2026-05-06T12:00:00Z", "p8": "home-reviewed-activity"}, {"p0": "2026-05-07", "p1": "Categorized Home Market", "p2": 44.00, "p3": "Food", "p4": "rule", "p5": 0, "p6": None, "p7": "2026-05-07T12:00:00Z", "p8": "home-categorized-activity"}])
+        """),
+        [
+            {
+                "p0": "2026-05-06",
+                "p1": "Reviewed Home Cafe",
+                "p2": 22.00,
+                "p3": "Food",
+                "p4": "manual",
+                "p5": 0,
+                "p6": "2026-05-06T12:00:00Z",
+                "p7": "2026-05-06T12:00:00Z",
+                "p8": "home-reviewed-activity",
+            },
+            {
+                "p0": "2026-05-07",
+                "p1": "Categorized Home Market",
+                "p2": 44.00,
+                "p3": "Food",
+                "p4": "rule",
+                "p5": 0,
+                "p6": None,
+                "p7": "2026-05-07T12:00:00Z",
+                "p8": "home-categorized-activity",
+            },
+        ],
+    )
     core_conn.commit()
 
     context = home_service.build_home_context()
@@ -129,20 +158,20 @@ def test_home_quick_insights_use_ranked_comparison_candidates(app, core_conn, mo
         ("2026-05-06", "Echo Store", 200.00, "Food", "home-rank-echo-current"),
         ("2026-05-07", "Foxtrot Utilities", 50.00, "Utilities", "home-rank-foxtrot-current"),
     ]
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
         VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
-        """), [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows])
+        """),
+        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+    )
     core_conn.commit()
 
     with app.test_request_context("/"):
         context = home_service.build_home_context()
 
     insights = context["quick_insights"]
-    merchant_rank = next(
-        insight for insight in insights
-        if insight["insight_type"] == "merchant_rank_increase"
-    )
+    merchant_rank = next(insight for insight in insights if insight["insight_type"] == "merchant_rank_increase")
 
     assert len(insights) == 3
     assert [insight["score"] for insight in insights] == sorted(
@@ -169,5 +198,3 @@ def test_home_quick_insights_use_ranked_comparison_candidates(app, core_conn, mo
     assert "date_from=2026-05-01" in merchant_rank["href"]
     assert "date_to=2026-05-09" in merchant_rank["href"]
     assert "merchant_key=BRAVO+STORE" in merchant_rank["href"]
-
-

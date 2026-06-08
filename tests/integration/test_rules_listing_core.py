@@ -20,7 +20,8 @@ def insert_listing_rule(
     tags=None,
 ):
     """Insert a category rule and optional tags for listing tests."""
-    rule_id = conn.execute(text("""
+    rule_id = conn.execute(
+        text("""
         INSERT INTO category_rules (
             merchant_id,
             keyword,
@@ -31,7 +32,17 @@ def insert_listing_rule(
             amount_max
         )
         VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)
-        """), {"p0": merchant_id, "p1": keyword, "p2": category, "p3": source, "p4": ai_approved, "p5": amount_min, "p6": amount_max}).lastrowid
+        """),
+        {
+            "p0": merchant_id,
+            "p1": keyword,
+            "p2": category,
+            "p3": source,
+            "p4": ai_approved,
+            "p5": amount_min,
+            "p6": amount_max,
+        },
+    ).lastrowid
     set_rule_tags(conn, rule_id, tags or [])
     conn.commit()
     return rule_id

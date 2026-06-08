@@ -23,7 +23,6 @@ from finance_app.database.engine import db_core_connection, db_core_transaction
 from finance_app.modules.auth import repository
 from finance_app.modules.auth.models import AuthenticatedUser
 
-
 AUTH_OPERATIONAL_ERRORS = (SqlAlchemyOperationalError,)
 AUTH_INTEGRITY_ERRORS = (SqlAlchemyIntegrityError,)
 FAILED_LOGIN_LIMIT = 5
@@ -102,11 +101,7 @@ def authenticate_user(username, password, ip_address=None):
             return AuthenticatedUser(refreshed)
 
         failed_count = failed_count_after_attempt(row, now)
-        locked_until = (
-            now + timedelta(minutes=LOCKOUT_MINUTES)
-            if failed_count >= FAILED_LOGIN_LIMIT
-            else None
-        )
+        locked_until = now + timedelta(minutes=LOCKOUT_MINUTES) if failed_count >= FAILED_LOGIN_LIMIT else None
         repository.record_login_failure(conn, row["id"], failed_count, locked_until, now)
         repository.insert_audit_event(
             conn,

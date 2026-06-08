@@ -23,10 +23,7 @@ from finance_app.modules.merchants.repository import find_merchant_by_name, get_
 
 def existing_category_names(conn):
     """Return existing category names."""
-    return {
-        row["name"]
-        for row in conn.execute(select(categories_table.c.name)).mappings().fetchall()
-    }
+    return {row["name"] for row in conn.execute(select(categories_table.c.name)).mappings().fetchall()}
 
 
 def ensure_import_category(conn, category, existing_categories, created_categories):
@@ -74,17 +71,20 @@ def category_rule_exists(conn, rule):
         if account_id is None
         else category_rules_table.c.account_id == account_id
     )
-    return conn.execute(
-        select(category_rules_table.c.id)
-        .where(
-            scope_condition,
-            account_condition,
-            category_rules_table.c.direction == direction,
-            amount_min_condition,
-            amount_max_condition,
-        )
-        .limit(1)
-    ).fetchone() is not None
+    return (
+        conn.execute(
+            select(category_rules_table.c.id)
+            .where(
+                scope_condition,
+                account_condition,
+                category_rules_table.c.direction == direction,
+                amount_min_condition,
+                amount_max_condition,
+            )
+            .limit(1)
+        ).fetchone()
+        is not None
+    )
 
 
 def insert_imported_rule(conn, rule):
@@ -123,9 +123,7 @@ def resolve_rule_merchant_id(conn, rule, create=False):
         return None
 
     merchant = (
-        get_or_create_merchant_for_name(conn, merchant_name)
-        if create
-        else find_merchant_by_name(conn, merchant_name)
+        get_or_create_merchant_for_name(conn, merchant_name) if create else find_merchant_by_name(conn, merchant_name)
     )
     return merchant["id"] if merchant else None
 
@@ -145,9 +143,7 @@ def resolve_rule_account_id(conn, rule, require_existing=False):
     if not account_name:
         return None
 
-    row = conn.execute(
-        select(accounts_table.c.id).where(accounts_table.c.name == account_name)
-    ).mappings().fetchone()
+    row = conn.execute(select(accounts_table.c.id).where(accounts_table.c.name == account_name)).mappings().fetchone()
     if row:
         return row["id"]
     if require_existing:
@@ -177,18 +173,18 @@ def snapshot_category_rules(conn):
                 category_rules_table.c.created_at,
             )
             .select_from(
-                category_rules_table
-                .outerjoin(
+                category_rules_table.outerjoin(
                     accounts_table,
                     accounts_table.c.id == category_rules_table.c.account_id,
-                )
-                .outerjoin(
+                ).outerjoin(
                     merchants_table,
                     merchants_table.c.id == category_rules_table.c.merchant_id,
                 )
             )
             .order_by(category_rules_table.c.id)
-        ).mappings().fetchall()
+        )
+        .mappings()
+        .fetchall()
     ]
     tags_by_rule_id = get_rule_tags_by_rule_id(conn, [row["id"] for row in rows])
     for row in rows:
@@ -198,36 +194,38 @@ def snapshot_category_rules(conn):
 
 def snapshot_rule_by_id(conn, rule_id):
     """Handle snapshot rule by ID."""
-    row = conn.execute(
-        select(
-            category_rules_table.c.id,
-            category_rules_table.c.account_id,
-            accounts_table.c.name.label("account_name"),
-            category_rules_table.c.merchant_id,
-            merchants_table.c.merchant_key.label("merchant_name"),
-            category_rules_table.c.keyword,
-            category_rules_table.c.category,
-            category_rules_table.c.category_id,
-            category_rules_table.c.amount_min,
-            category_rules_table.c.amount_max,
-            category_rules_table.c.direction,
-            category_rules_table.c.source,
-            category_rules_table.c.ai_approved,
-            category_rules_table.c.created_at,
-        )
-        .select_from(
-            category_rules_table
-            .outerjoin(
-                accounts_table,
-                accounts_table.c.id == category_rules_table.c.account_id,
+    row = (
+        conn.execute(
+            select(
+                category_rules_table.c.id,
+                category_rules_table.c.account_id,
+                accounts_table.c.name.label("account_name"),
+                category_rules_table.c.merchant_id,
+                merchants_table.c.merchant_key.label("merchant_name"),
+                category_rules_table.c.keyword,
+                category_rules_table.c.category,
+                category_rules_table.c.category_id,
+                category_rules_table.c.amount_min,
+                category_rules_table.c.amount_max,
+                category_rules_table.c.direction,
+                category_rules_table.c.source,
+                category_rules_table.c.ai_approved,
+                category_rules_table.c.created_at,
             )
-            .outerjoin(
-                merchants_table,
-                merchants_table.c.id == category_rules_table.c.merchant_id,
+            .select_from(
+                category_rules_table.outerjoin(
+                    accounts_table,
+                    accounts_table.c.id == category_rules_table.c.account_id,
+                ).outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == category_rules_table.c.merchant_id,
+                )
             )
+            .where(category_rules_table.c.id == rule_id)
         )
-        .where(category_rules_table.c.id == rule_id)
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
     if not row:
         return None
     row = dict(row)
@@ -272,25 +270,25 @@ def rule_snapshots_equal(left, right):
         "ai_approved",
         "created_at",
     )
-    return [
-        tuple(rule[column] for column in columns) + (tuple(rule.get("tags") or []),)
-        for rule in left
-    ] == [
-        tuple(rule[column] for column in columns) + (tuple(rule.get("tags") or []),)
-        for rule in right
+    return [tuple(rule[column] for column in columns) + (tuple(rule.get("tags") or []),) for rule in left] == [
+        tuple(rule[column] for column in columns) + (tuple(rule.get("tags") or []),) for rule in right
     ]
 
 
 def snapshot_transaction_rule_refs(conn):
     """Handle snapshot transaction rule refs."""
-    rows = conn.execute(
-        select(
-            transactions_table.c.id.label("transaction_id"),
-            transactions_table.c.category_rule_id,
+    rows = (
+        conn.execute(
+            select(
+                transactions_table.c.id.label("transaction_id"),
+                transactions_table.c.category_rule_id,
+            )
+            .where(transactions_table.c.category_rule_id.is_not(None))
+            .order_by(transactions_table.c.id)
         )
-        .where(transactions_table.c.category_rule_id.is_not(None))
-        .order_by(transactions_table.c.id)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [
         {
             "transaction_id": row["transaction_id"],
@@ -360,9 +358,7 @@ def remove_imported_categories(conn, categories):
         if transaction_count or rule_count:
             continue
 
-        result = conn.execute(
-            delete(categories_table).where(categories_table.c.name == category)
-        )
+        result = conn.execute(delete(categories_table).where(categories_table.c.name == category))
         removed += result.rowcount or 0
 
     return removed

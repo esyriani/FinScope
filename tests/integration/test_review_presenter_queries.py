@@ -147,9 +147,7 @@ def test_review_display_rows_ungroup_and_attach_urls(app, core_conn):
     assert hydro_row["is_ungrouped"] is False
     assert hydro_row["display_label"] == "HYDRO QUEBEC"
     assert hydro_row["category_sources"] == ["AI"]
-    assert hydro_row["category_source_badges"] == [
-        {"label": "AI", "class": "text-bg-info"}
-    ]
+    assert hydro_row["category_source_badges"] == [{"label": "AI", "class": "text-bg-info"}]
     assert hydro_row["transactions"][0]["description"] == "Hydro Quebec"
     assert hydro_row["transactions"][0]["category_source_label"] == "AI"
     assert hydro_row["transactions"][0]["category_confidence_label"] == "72%"

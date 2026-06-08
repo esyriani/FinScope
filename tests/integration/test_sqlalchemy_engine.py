@@ -92,9 +92,7 @@ def test_ensure_database_exists_creates_mysql_schema_from_server_url():
         "isolation_level": "AUTOCOMMIT",
         "pool_pre_ping": True,
     }
-    assert executed == [
-        "CREATE DATABASE IF NOT EXISTS `finscope` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-    ]
+    assert executed == ["CREATE DATABASE IF NOT EXISTS `finscope` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"]
 
 
 def test_ensure_database_exists_ignores_sqlite_urls():
@@ -218,18 +216,14 @@ def test_app_request_nested_transaction_without_conn_keeps_outer_boundary(app):
 
                 active_after_inner.append(outer.in_transaction())
                 in_request_count = outer.execute(
-                    select(categories_table.c.id).where(
-                        categories_table.c.name.in_((outer_category, nested_category))
-                    )
+                    select(categories_table.c.id).where(categories_table.c.name.in_((outer_category, nested_category)))
                 ).fetchall()
                 assert len(in_request_count) == 2
                 raise RuntimeError("force outer rollback")
 
     with db_core_transaction() as conn:
         persisted_count = conn.execute(
-            select(categories_table.c.id).where(
-                categories_table.c.name.in_((outer_category, nested_category))
-            )
+            select(categories_table.c.id).where(categories_table.c.name.in_((outer_category, nested_category)))
         ).fetchall()
 
     assert active_after_inner == [True]
@@ -325,16 +319,12 @@ def test_core_sqlite_connections_enforce_foreign_keys(tmp_path):
     with patch.object(engine_module, "settings", SimpleNamespace(database_url=database_url)):
         with db_core_transaction() as conn:
             conn.execute(text("CREATE TABLE parent (id INTEGER PRIMARY KEY)"))
-            conn.execute(
-                text(
-                    """
+            conn.execute(text("""
                     CREATE TABLE child (
                         parent_id INTEGER NOT NULL,
                         FOREIGN KEY (parent_id) REFERENCES parent(id)
                     )
-                    """
-                )
-            )
+                    """))
 
         with pytest.raises(IntegrityError):
             with db_core_transaction() as conn:
@@ -351,14 +341,19 @@ def test_init_db_uses_core_metadata_for_sqlite_url(tmp_path):
 
     with (
         patch.object(engine_module, "settings", test_settings),
-        patch.object(connection_module.metadata, "create_all", wraps=connection_module.metadata.create_all) as create_all,
+        patch.object(
+            connection_module.metadata, "create_all", wraps=connection_module.metadata.create_all
+        ) as create_all,
     ):
         connection_module.init_db()
         engine = get_database_engine()
         inspector = inspect(engine)
         assert "transactions" in inspector.get_table_names()
         with engine.connect() as conn:
-            assert conn.execute(text("SELECT builtin_key FROM categories WHERE name = 'UNKNOWN'")).scalar_one() == "unknown"
+            assert (
+                conn.execute(text("SELECT builtin_key FROM categories WHERE name = 'UNKNOWN'")).scalar_one()
+                == "unknown"
+            )
             assert conn.execute(text("SELECT COUNT(*) FROM statement_types")).scalar_one() > 0
             assert conn.execute(text("SELECT COUNT(*) FROM categories")).scalar_one() > 0
 

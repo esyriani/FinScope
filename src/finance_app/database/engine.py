@@ -12,7 +12,6 @@ from sqlalchemy.engine import URL, make_url
 
 from finance_app.core.config import settings
 
-
 CORE_DB_CONTEXT_KEY = "finance_core_db"
 CORE_DB_TRANSACTION_DEPTH_KEY = "finance_core_transaction_depth"
 

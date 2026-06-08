@@ -13,7 +13,6 @@ from finance_app.modules.settings.service import (
     validate_openai_model_from_form,
 )
 
-
 settings_bp = Blueprint("settings_page", __name__)
 
 

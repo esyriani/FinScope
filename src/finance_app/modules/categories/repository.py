@@ -29,7 +29,6 @@ from finance_app.modules.categories.taxonomy import (
     set_rule_tags,
 )
 
-
 CATEGORY_DATABASE_UNAVAILABLE_ERRORS = (
     SqlAlchemyOperationalError,
     SqlAlchemyProgrammingError,
@@ -126,16 +125,20 @@ def find_existing_rule(
     direction=CATEGORY_RULE_DIRECTION_ANY,
 ):
     """Return the existing Core rule for a merchant or keyword scope."""
-    return conn.execute(
-        existing_rule_select(
-            keyword,
-            amount_min,
-            amount_max,
-            merchant_id,
-            account_id=account_id,
-            direction=direction,
+    return (
+        conn.execute(
+            existing_rule_select(
+                keyword,
+                amount_min,
+                amount_max,
+                merchant_id,
+                account_id=account_id,
+                direction=direction,
+            )
         )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
 
 
 def existing_rule_select(
@@ -216,13 +219,17 @@ def get_category_options(conn=None):
 
 def fetch_category_names(conn):
     """Fetch category names."""
-    rows = conn.execute(
-        select(categories_table.c.name).order_by(
-            case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
-            func.lower(categories_table.c.name),
-            categories_table.c.name,
+    rows = (
+        conn.execute(
+            select(categories_table.c.name).order_by(
+                case((categories_table.c.builtin_key.is_not(None), 1), else_=0),
+                func.lower(categories_table.c.name),
+                categories_table.c.name,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [row["name"] for row in rows]
 
 
@@ -262,14 +269,18 @@ def get_builtin_category_names(conn=None):
 
 def fetch_builtin_category_names(conn):
     """Fetch category names whose rows are marked with a built-in key."""
-    rows = conn.execute(
-        select(categories_table.c.name)
-        .where(categories_table.c.builtin_key.is_not(None))
-        .order_by(
-            func.lower(categories_table.c.name),
-            categories_table.c.name,
+    rows = (
+        conn.execute(
+            select(categories_table.c.name)
+            .where(categories_table.c.builtin_key.is_not(None))
+            .order_by(
+                func.lower(categories_table.c.name),
+                categories_table.c.name,
+            )
         )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [row["name"] for row in rows]
 
 
@@ -316,11 +327,13 @@ def resolve_category_id(conn, category):
     if not category_name:
         return None
 
-    row = conn.execute(
-        select(categories_table.c.id, categories_table.c.name).where(
-            categories_table.c.name == category_name
+    row = (
+        conn.execute(
+            select(categories_table.c.id, categories_table.c.name).where(categories_table.c.name == category_name)
         )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
     if row is not None:
         return row["id"]
 
@@ -344,33 +357,27 @@ def rename_category(conn, old_name, new_name):
     if old_category == new_category:
         return new_category
 
-    old_row = conn.execute(
-        select(categories_table.c.id, categories_table.c.builtin_key).where(
-            categories_table.c.name == old_category
+    old_row = (
+        conn.execute(
+            select(categories_table.c.id, categories_table.c.builtin_key).where(categories_table.c.name == old_category)
         )
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
     if old_row is None:
         return None
     if old_row["builtin_key"]:
         return None
 
-    existing = conn.execute(
-        select(categories_table.c.id).where(categories_table.c.name == new_category)
-    ).mappings().fetchone()
+    existing = (
+        conn.execute(select(categories_table.c.id).where(categories_table.c.name == new_category)).mappings().fetchone()
+    )
     if existing and existing["id"] != old_row["id"]:
         return None
 
-    conn.execute(
-        update(categories_table)
-        .where(categories_table.c.id == old_row["id"])
-        .values(name=new_category)
-    )
+    conn.execute(update(categories_table).where(categories_table.c.id == old_row["id"]).values(name=new_category))
     for table in (transactions_table, category_rules_table):
-        conn.execute(
-            update(table)
-            .where(table.c.category_id == old_row["id"])
-            .values(category=new_category)
-        )
+        conn.execute(update(table).where(table.c.category_id == old_row["id"]).values(category=new_category))
 
     return new_category
 
@@ -381,49 +388,53 @@ def get_category_rules(conn=None):
         with db_core_transaction() as conn:
             return get_category_rules(conn)
 
-    rows = conn.execute(
-        select(
-            category_rules_table.c.id,
-            category_rules_table.c.account_id,
-            category_rules_table.c.merchant_id,
-            merchants_table.c.merchant_key.label("merchant_name"),
-            category_rules_table.c.keyword,
-            category_rules_table.c.category,
-            category_rules_table.c.category_id,
-            category_rules_table.c.amount_min,
-            category_rules_table.c.amount_max,
-            category_rules_table.c.direction,
-            category_rules_table.c.source,
-            category_rules_table.c.ai_approved,
-        )
-        .select_from(
-            category_rules_table.outerjoin(
-                merchants_table,
-                merchants_table.c.id == category_rules_table.c.merchant_id,
+    rows = (
+        conn.execute(
+            select(
+                category_rules_table.c.id,
+                category_rules_table.c.account_id,
+                category_rules_table.c.merchant_id,
+                merchants_table.c.merchant_key.label("merchant_name"),
+                category_rules_table.c.keyword,
+                category_rules_table.c.category,
+                category_rules_table.c.category_id,
+                category_rules_table.c.amount_min,
+                category_rules_table.c.amount_max,
+                category_rules_table.c.direction,
+                category_rules_table.c.source,
+                category_rules_table.c.ai_approved,
+            )
+            .select_from(
+                category_rules_table.outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == category_rules_table.c.merchant_id,
+                )
+            )
+            .order_by(
+                case(
+                    (category_rules_table.c.source == CATEGORY_RULE_SOURCE_MANUAL, 0),
+                    (category_rules_table.c.source == CATEGORY_RULE_SOURCE_AUTOMATIC, 1),
+                    else_=2,
+                ),
+                case(
+                    (
+                        or_(
+                            category_rules_table.c.amount_min.is_not(None),
+                            category_rules_table.c.amount_max.is_not(None),
+                        ),
+                        0,
+                    ),
+                    else_=1,
+                ),
+                case((category_rules_table.c.merchant_id.is_not(None), 0), else_=1),
+                case((category_rules_table.c.account_id.is_not(None), 0), else_=1),
+                category_rules_table.c.direction,
+                func.length(category_rules_table.c.keyword).desc(),
             )
         )
-        .order_by(
-            case(
-                (category_rules_table.c.source == CATEGORY_RULE_SOURCE_MANUAL, 0),
-                (category_rules_table.c.source == CATEGORY_RULE_SOURCE_AUTOMATIC, 1),
-                else_=2,
-            ),
-            case(
-                (
-                    or_(
-                        category_rules_table.c.amount_min.is_not(None),
-                        category_rules_table.c.amount_max.is_not(None),
-                    ),
-                    0,
-                ),
-                else_=1,
-            ),
-            case((category_rules_table.c.merchant_id.is_not(None), 0), else_=1),
-            case((category_rules_table.c.account_id.is_not(None), 0), else_=1),
-            category_rules_table.c.direction,
-            func.length(category_rules_table.c.keyword).desc(),
-        )
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     rules = [dict(row) for row in rows]
     tags_by_rule_id = get_rule_tags_by_rule_id(conn, [rule["id"] for rule in rules])
     for rule in rules:
@@ -476,5 +487,3 @@ def normalize_rule_direction(value):
     """Return a valid category-rule direction constraint."""
     text = str(value or CATEGORY_RULE_DIRECTION_ANY).strip().lower()
     return text if text in CATEGORY_RULE_DIRECTIONS else CATEGORY_RULE_DIRECTION_ANY
-
-

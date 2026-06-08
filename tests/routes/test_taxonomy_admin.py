@@ -122,21 +122,29 @@ tags:
         content_type="multipart/form-data",
         follow_redirects=True,
     )
-    category = core_conn.execute(
-        select(
-            categories_table.c.name,
-            categories_table.c.description,
-            categories_table.c.instruction,
-        ).where(categories_table.c.name == "Custom admin")
-    ).mappings().fetchone()
-    tag = core_conn.execute(
-        select(
-            tags_table.c.name,
-            tags_table.c.description,
-            tags_table.c.instruction,
-            tags_table.c.color,
-        ).where(tags_table.c.name == "Audit trail")
-    ).mappings().fetchone()
+    category = (
+        core_conn.execute(
+            select(
+                categories_table.c.name,
+                categories_table.c.description,
+                categories_table.c.instruction,
+            ).where(categories_table.c.name == "Custom admin")
+        )
+        .mappings()
+        .fetchone()
+    )
+    tag = (
+        core_conn.execute(
+            select(
+                tags_table.c.name,
+                tags_table.c.description,
+                tags_table.c.instruction,
+                tags_table.c.color,
+            ).where(tags_table.c.name == "Audit trail")
+        )
+        .mappings()
+        .fetchone()
+    )
 
     assert response.status_code == 200
     assert "Imported 1 categories and 1 tags." in response.get_data(as_text=True)

@@ -23,7 +23,6 @@ from finance_app.modules.categories.taxonomy import normalize_tag_names
 from finance_app.modules.categories.llm_taxonomy import semantic_tokens
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
-
 MAX_PROMPT_MANUAL_RULES = 50
 LLM_SYSTEM_PROMPT_PATH = Path(__file__).with_name("llm_system_prompt.json")
 
@@ -312,10 +311,7 @@ def prompt_relevant_manual_rules(rules, unknown_items):
             scored_rules.append((score, index, rule))
 
     scored_rules.sort(key=lambda item: (-item[0], item[1]))
-    return [
-        rule
-        for _, _, rule in scored_rules[:MAX_PROMPT_MANUAL_RULES]
-    ]
+    return [rule for _, _, rule in scored_rules[:MAX_PROMPT_MANUAL_RULES]]
 
 
 def manual_rule_prompt_relevance(rule, unknown_items):

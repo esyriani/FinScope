@@ -26,8 +26,8 @@ def transactions_sort_url(sort_name, current_sort, current_direction):
     """Render sort URL."""
     default_direction = "desc" if sort_name == TRANSACTION_SORT_DATE else "asc"
     next_direction = (
-        "desc" if current_direction == "asc" else "asc"
-    ) if current_sort == sort_name else default_direction
+        ("desc" if current_direction == "asc" else "asc") if current_sort == sort_name else default_direction
+    )
     return transactions_url(sort=sort_name, direction=next_direction, page=1)
 
 

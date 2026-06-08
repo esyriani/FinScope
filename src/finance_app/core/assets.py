@@ -10,7 +10,6 @@ from pathlib import Path
 
 from flask import url_for
 
-
 ASSET_HASH_LENGTH = 12
 
 

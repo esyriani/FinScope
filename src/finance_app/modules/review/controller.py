@@ -20,7 +20,6 @@ from finance_app.modules.review.service import (
 from finance_app.modules.rules.forms import normalize_rule_keyword, parse_amount_bounds
 from finance_app.modules.settings.runtime import get_unknown_category
 
-
 review_bp = Blueprint("review", __name__)
 
 
@@ -52,9 +51,7 @@ def apply_review_group():
 
     try:
         selected_transaction_ids = (
-            []
-            if transaction_id is not None
-            else parse_review_transaction_ids(request.form.getlist("transaction_ids"))
+            [] if transaction_id is not None else parse_review_transaction_ids(request.form.getlist("transaction_ids"))
         )
     except ValueError:
         flash(gettext("Review transaction not found."))
@@ -80,9 +77,7 @@ def apply_review_group():
     amount_min = None
     amount_max = None
 
-    if selected_transaction_ids and not set(selected_transaction_ids).issubset(
-        group_transaction_ids
-    ):
+    if selected_transaction_ids and not set(selected_transaction_ids).issubset(group_transaction_ids):
         flash(gettext("Review transaction not found."))
         return redirect(next_url)
 
@@ -114,9 +109,11 @@ def apply_review_group():
     job_label = (
         f"Review transaction {transaction_id} as {category}"
         if transaction_id
-        else f"Review {len(selected_transaction_ids)} transactions as {category}"
-        if selected_transaction_ids
-        else f"Review {short_label(merchant_key)} as {category}"
+        else (
+            f"Review {len(selected_transaction_ids)} transactions as {category}"
+            if selected_transaction_ids
+            else f"Review {short_label(merchant_key)} as {category}"
+        )
     )
     job_kwargs = {}
     if selected_transaction_ids:
@@ -139,13 +136,7 @@ def apply_review_group():
         **job_kwargs,
     )
 
-    review_target = (
-        "transaction"
-        if transaction_id
-        else "transactions"
-        if selected_transaction_ids
-        else "group"
-    )
+    review_target = "transaction" if transaction_id else "transactions" if selected_transaction_ids else "group"
     flash(
         gettext(
             "Review {target} queued in the background. Track progress on the Jobs page. Job: {job_id}",

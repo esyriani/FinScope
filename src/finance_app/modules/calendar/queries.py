@@ -71,55 +71,60 @@ def non_transfer_clause():
 
 def transaction_row_select(unknown_category):
     """Return the shared calendar transaction projection."""
-    return (
-        select(
-            transactions_table.c.tx_date,
-            transactions_table.c.description,
-            transactions_table.c.merchant_id,
-            merchants_table.c.merchant_key.label("merchant_name"),
-            merchants_table.c.merchant_key.label("merchant_key"),
-            transactions_table.c.amount,
-            transactions_table.c.transaction_kind,
-            func.coalesce(transactions_table.c.category, unknown_category).label("category"),
-            func.coalesce(accounts_table.c.name, "Personal").label("account_name"),
-        )
-        .select_from(
-            transactions_table.outerjoin(
-                accounts_table,
-                accounts_table.c.id == transactions_table.c.account_id,
-            ).outerjoin(
-                merchants_table,
-                merchants_table.c.id == transactions_table.c.merchant_id,
-            )
+    return select(
+        transactions_table.c.tx_date,
+        transactions_table.c.description,
+        transactions_table.c.merchant_id,
+        merchants_table.c.merchant_key.label("merchant_name"),
+        merchants_table.c.merchant_key.label("merchant_key"),
+        transactions_table.c.amount,
+        transactions_table.c.transaction_kind,
+        func.coalesce(transactions_table.c.category, unknown_category).label("category"),
+        func.coalesce(accounts_table.c.name, "Personal").label("account_name"),
+    ).select_from(
+        transactions_table.outerjoin(
+            accounts_table,
+            accounts_table.c.id == transactions_table.c.account_id,
+        ).outerjoin(
+            merchants_table,
+            merchants_table.c.id == transactions_table.c.merchant_id,
         )
     )
 
 
 def fetch_month_transactions(conn, month_start, month_end, unknown_category, category_filter):
     """Fetch month transactions."""
-    return conn.execute(
-        transaction_row_select(unknown_category)
-        .where(
-            transactions_table.c.ignored == 0,
-            non_transfer_clause(),
-            transactions_table.c.tx_date >= month_start,
-            transactions_table.c.tx_date <= month_end,
-            *category_filter,
+    return (
+        conn.execute(
+            transaction_row_select(unknown_category)
+            .where(
+                transactions_table.c.ignored == 0,
+                non_transfer_clause(),
+                transactions_table.c.tx_date >= month_start,
+                transactions_table.c.tx_date <= month_end,
+                *category_filter,
+            )
+            .order_by(transactions_table.c.tx_date, transactions_table.c.amount.desc())
         )
-        .order_by(transactions_table.c.tx_date, transactions_table.c.amount.desc())
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def fetch_recurring_source_rows(conn, unknown_category, category_filter):
     """Fetch recurring source rows."""
     recurring_start = shift_months(date.today(), -18)
-    return conn.execute(
-        transaction_row_select(unknown_category)
-        .where(
-            transactions_table.c.ignored == 0,
-            non_transfer_clause(),
-            transactions_table.c.tx_date >= recurring_start,
-            *category_filter,
+    return (
+        conn.execute(
+            transaction_row_select(unknown_category)
+            .where(
+                transactions_table.c.ignored == 0,
+                non_transfer_clause(),
+                transactions_table.c.tx_date >= recurring_start,
+                *category_filter,
+            )
+            .order_by(transactions_table.c.tx_date)
         )
-        .order_by(transactions_table.c.tx_date)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )

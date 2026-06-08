@@ -15,7 +15,8 @@ from finance_app.modules.review.workflow import (
 
 def insert_review_transaction(conn, description, amount, fingerprint):
     """Insert a transaction that should appear in review workflows."""
-    tx_id = conn.execute(text("""
+    tx_id = conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -26,19 +27,28 @@ def insert_review_transaction(conn, description, amount, fingerprint):
             fingerprint
         )
         VALUES ('2026-01-02', :p0, :p1, 'UNKNOWN', 1, 'unknown', :p2)
-        """), {"p0": description, "p1": amount, "p2": fingerprint}).lastrowid
+        """),
+        {"p0": description, "p1": amount, "p2": fingerprint},
+    ).lastrowid
     conn.commit()
     return tx_id
 
 
 def transaction_state(conn, tx_id):
     """Return selected transaction state for assertions."""
-    return conn.execute(text("""
+    return (
+        conn.execute(
+            text("""
         SELECT category, needs_review, category_source, category_confidence,
                category_rule_id, category_metadata, categorized_at, reviewed_at
         FROM transactions
         WHERE id = :p0
-        """), {"p0": tx_id}).mappings().fetchone()
+        """),
+            {"p0": tx_id},
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def test_apply_review_group_transactions_updates_group_and_tags(core_conn):
@@ -124,7 +134,13 @@ def test_save_review_rule_and_undo_created_rule(core_conn):
     result = undo_review_rule(core_conn, rule_change)
     core_conn.commit()
 
-    remaining = core_conn.execute(text("SELECT COUNT(*) AS count FROM category_rules WHERE id = :p0"), {"p0": rule_change["rule_id"]}).fetchone()._mapping["count"]
+    remaining = (
+        core_conn.execute(
+            text("SELECT COUNT(*) AS count FROM category_rules WHERE id = :p0"), {"p0": rule_change["rule_id"]}
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
     assert result == "Removed created rule."
     assert remaining == 0
 
@@ -139,14 +155,19 @@ def test_save_review_rule_and_undo_restores_previous_rule(core_conn):
     result = undo_review_rule(core_conn, rule_change)
     core_conn.commit()
 
-    rule = core_conn.execute(text("""
+    rule = core_conn.execute(
+        text("""
         SELECT keyword, category, source
         FROM category_rules
         WHERE id = :p0
-        """), {"p0": original_change["rule_id"]}).fetchone()
+        """),
+        {"p0": original_change["rule_id"]},
+    ).fetchone()
     assert result == "Restored previous rule."
     assert tuple(rule) == ("METRO GROCERY", "Utilities", "manual")
-    assert get_rule_tags_by_rule_id(core_conn, [original_change["rule_id"]])[original_change["rule_id"]] == ["Government"]
+    assert get_rule_tags_by_rule_id(core_conn, [original_change["rule_id"]])[original_change["rule_id"]] == [
+        "Government"
+    ]
 
 
 def test_apply_review_group_job_and_undo_restore_transactions_and_rule(app, core_conn):

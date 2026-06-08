@@ -90,7 +90,9 @@ def test_rules_route_formats_created_timestamp(client, core_conn):
     """Verify that the rules table uses the shared timestamp display format."""
     created_at = "2026-05-13T03:38:00Z"
     rule_id = insert_rule(core_conn, keyword="TIMESTAMP RULE", category="Food")
-    core_conn.execute(text("UPDATE category_rules SET created_at = :p0 WHERE id = :p1"), {"p0": created_at, "p1": rule_id})
+    core_conn.execute(
+        text("UPDATE category_rules SET created_at = :p0 WHERE id = :p1"), {"p0": created_at, "p1": rule_id}
+    )
     core_conn.commit()
 
     response = client.get("/rules")
@@ -130,7 +132,8 @@ def test_rules_route_uses_direct_delete_for_unapplied_rules(client, core_conn):
 def test_rules_route_keeps_delete_preview_for_applied_rules(client, core_conn):
     """Verify applied rules keep the delete preview action."""
     rule_id = insert_rule(core_conn, keyword="APPLIED STORE", category="Food")
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -139,7 +142,9 @@ def test_rules_route_keeps_delete_preview_for_applied_rules(client, core_conn):
             '2026-01-02', 'Applied Store', 12.34, 'Food', 'rule',
             :p0, 0, 'rules-page-applied-delete'
         )
-        """), {"p0": rule_id})
+        """),
+        {"p0": rule_id},
+    )
     core_conn.commit()
 
     response = client.get("/rules")
@@ -183,10 +188,7 @@ def test_rules_modals_render_category_and_tag_description_tooltips(client):
         response,
         "label",
         attrs={
-            "title": (
-                "Marks transactions that may be useful for tax preparation, accounting, "
-                "or year-end review."
-            )
+            "title": ("Marks transactions that may be useful for tax preparation, accounting, " "or year-end review.")
         },
     )
 
@@ -357,11 +359,14 @@ def test_rules_update_route_can_change_merchant_bound_rule_to_fuzzy(client, core
         follow_redirects=True,
     )
 
-    rule = core_conn.execute(text("""
+    rule = core_conn.execute(
+        text("""
         SELECT merchant_id, keyword, category
         FROM category_rules
         WHERE id = :p0
-        """), {"p0": rule_id}).fetchone()
+        """),
+        {"p0": rule_id},
+    ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Rule updated.")
     assert tuple(rule) == (None, "COSTCO RENEWAL", "Food")
@@ -557,7 +562,8 @@ def test_rules_delete_route_removes_unapplied_rule_without_preview(client, core_
 def test_rules_delete_route_requires_preview_when_rule_is_applied(client, core_conn):
     """Verify direct deletion is blocked when a transaction references the rule."""
     rule_id = insert_rule(core_conn)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -566,7 +572,9 @@ def test_rules_delete_route_requires_preview_when_rule_is_applied(client, core_c
             '2026-01-02', 'Metro Grocery', 12.34, 'Food', 'rule',
             :p0, 0, 'delete-route-applied'
         )
-        """), {"p0": rule_id})
+        """),
+        {"p0": rule_id},
+    )
     core_conn.commit()
 
     response = client.post(
@@ -622,7 +630,8 @@ def test_rules_delete_route_returns_json_for_unapplied_delete(client, core_conn)
 def test_rules_delete_route_rejects_unconfirmed_json_delete_when_applied(client, core_conn):
     """Verify AJAX deletion still requires preview for applied rules."""
     rule_id = insert_rule(core_conn)
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date, description, amount, category, category_source,
             category_rule_id, needs_review, fingerprint
@@ -631,7 +640,9 @@ def test_rules_delete_route_rejects_unconfirmed_json_delete_when_applied(client,
             '2026-01-02', 'Metro Grocery', 12.34, 'Food', 'rule',
             :p0, 0, 'delete-route-ajax-applied'
         )
-        """), {"p0": rule_id})
+        """),
+        {"p0": rule_id},
+    )
     core_conn.commit()
 
     response = client.post(

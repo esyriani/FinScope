@@ -10,7 +10,11 @@ from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
-from finance_app.modules.categories.service import get_category_rules, normalize_merchant_description, rule_amount_matches
+from finance_app.modules.categories.service import (
+    get_category_rules,
+    normalize_merchant_description,
+    rule_amount_matches,
+)
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.transactions.constants import (
     AMOUNT_TYPE_CREDIT,
@@ -271,11 +275,7 @@ def source_transactions_url(
     """Return a transactions URL for a category source insight."""
     if not source:
         return ""
-    source_filter = (
-        CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED
-        if source == CATEGORY_SOURCE_MANUAL
-        else source
-    )
+    source_filter = CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED if source == CATEGORY_SOURCE_MANUAL else source
     return dashboard_transactions_url(
         period,
         filter_mode,
@@ -463,7 +463,9 @@ def sort_merchant_rows(rows, sort, direction):
         DASHBOARD_MERCHANT_SORT_CATEGORY: lambda row: dashboard_sort_text(row["category"]),
         DASHBOARD_MERCHANT_SORT_TRANSACTIONS: lambda row: row["transaction_count"],
         DASHBOARD_MERCHANT_SORT_SPENDING: lambda row: row["total"],
-        DASHBOARD_MERCHANT_SORT_PERIOD_CHANGE: lambda row: dashboard_optional_number(row["period_change"].get("sort_value")),
+        DASHBOARD_MERCHANT_SORT_PERIOD_CHANGE: lambda row: dashboard_optional_number(
+            row["period_change"].get("sort_value")
+        ),
         DASHBOARD_MERCHANT_SORT_RULES: lambda row: len(row["rules"]),
     }
     rows.sort(key=key_map[sort], reverse=direction == "desc")
@@ -649,18 +651,22 @@ def build_category_rows(
         is_untagged = bool(row_data.get("untagged"))
         label = gettext("Untagged") if is_untagged else row_data["category"]
         if is_tag_breakdown:
-            url = "" if is_untagged else dashboard_transactions_url(
-                period,
-                filter_mode,
-                selected_categories,
-                True,
-                date_from,
-                date_to,
-                quick_view,
-                selected_tags=selected_tags,
-                merchant_search=merchant_search,
-                tags=[tag_name],
-                amount_type=AMOUNT_TYPE_SPENDING,
+            url = (
+                ""
+                if is_untagged
+                else dashboard_transactions_url(
+                    period,
+                    filter_mode,
+                    selected_categories,
+                    True,
+                    date_from,
+                    date_to,
+                    quick_view,
+                    selected_tags=selected_tags,
+                    merchant_search=merchant_search,
+                    tags=[tag_name],
+                    amount_type=AMOUNT_TYPE_SPENDING,
+                )
             )
         else:
             url = dashboard_transactions_url(
@@ -676,12 +682,14 @@ def build_category_rows(
                 category=row_data["category"],
                 amount_type=AMOUNT_TYPE_SPENDING,
             )
-        rows.append({
-            "category": label,
-            "total": total,
-            "share": round((total / total_spending) * 100, 1) if total_spending else 0,
-            "url": url,
-        })
+        rows.append(
+            {
+                "category": label,
+                "total": total,
+                "share": round((total / total_spending) * 100, 1) if total_spending else 0,
+                "url": url,
+            }
+        )
 
     max_total = max((row["total"] for row in rows), default=0)
     for row in rows:
@@ -692,14 +700,8 @@ def build_category_rows(
 
 def build_spending_income_series(monthly_expenses, monthly_income):
     """Build spending income series."""
-    expense_by_month = {
-        row["month"]: rounded_money_float(row["total"])
-        for row in monthly_expenses
-    }
-    income_by_month = {
-        row["month"]: rounded_money_float(row["total"])
-        for row in monthly_income
-    }
+    expense_by_month = {row["month"]: rounded_money_float(row["total"]) for row in monthly_expenses}
+    income_by_month = {row["month"]: rounded_money_float(row["total"]) for row in monthly_income}
     months = sorted(set(expense_by_month) | set(income_by_month))
 
     return {
@@ -799,14 +801,10 @@ def build_data_quality(summary):
         },
     ]
     visible_source_metrics = [
-        metric
-        for metric in source_metrics
-        if metric["count"] > 0 or metric["label"] == "By rule"
+        metric for metric in source_metrics if metric["count"] > 0 or metric["label"] == "By rule"
     ]
     compact_source_metrics = [
-        metric
-        for metric in source_metrics
-        if metric["count"] == 0 and metric["label"] != "By rule"
+        metric for metric in source_metrics if metric["count"] == 0 and metric["label"] != "By rule"
     ]
 
     metric_groups = [

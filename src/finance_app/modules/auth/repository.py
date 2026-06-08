@@ -41,9 +41,7 @@ def active_owner_count(conn):
 
 def get_user_by_id(conn, user_id):
     """Return one user by primary key, or ``None`` when absent."""
-    return conn.execute(
-        select(*USER_COLUMNS).where(users_table.c.id == user_id)
-    ).mappings().fetchone()
+    return conn.execute(select(*USER_COLUMNS).where(users_table.c.id == user_id)).mappings().fetchone()
 
 
 def get_user_by_username(conn, username):
@@ -52,9 +50,7 @@ def get_user_by_username(conn, username):
     if not normalized:
         return None
 
-    return conn.execute(
-        select(*USER_COLUMNS).where(users_table.c.username_key == normalized)
-    ).mappings().fetchone()
+    return conn.execute(select(*USER_COLUMNS).where(users_table.c.username_key == normalized)).mappings().fetchone()
 
 
 def username_exists(conn, username, exclude_user_id=None):
@@ -101,9 +97,7 @@ def insert_user(
 def update_display_name(conn, user_id, display_name, now):
     """Update one user's UI display name and return the affected row count."""
     return conn.execute(
-        update(users_table)
-        .where(users_table.c.id == user_id)
-        .values(display_name=display_name, updated_at=now)
+        update(users_table).where(users_table.c.id == user_id).values(display_name=display_name, updated_at=now)
     ).rowcount
 
 
@@ -152,18 +146,14 @@ def update_password(conn, user_id, password_hash, must_change_password, now):
 def update_user_active(conn, user_id, is_active, now):
     """Activate or deactivate one user and return the affected row count."""
     return conn.execute(
-        update(users_table)
-        .where(users_table.c.id == user_id)
-        .values(is_active=1 if is_active else 0, updated_at=now)
+        update(users_table).where(users_table.c.id == user_id).values(is_active=1 if is_active else 0, updated_at=now)
     ).rowcount
 
 
 def update_user_role(conn, user_id, role, now):
     """Update one user's role and return the affected row count."""
     return conn.execute(
-        update(users_table)
-        .where(users_table.c.id == user_id)
-        .values(role=role, updated_at=now)
+        update(users_table).where(users_table.c.id == user_id).values(role=role, updated_at=now)
     ).rowcount
 
 
@@ -182,9 +172,7 @@ def update_owner_roles_except(conn, preserved_user_id, role, now):
 def force_password_change(conn, user_id, now):
     """Mark one user as requiring a password change at next login."""
     return conn.execute(
-        update(users_table)
-        .where(users_table.c.id == user_id)
-        .values(must_change_password=1, updated_at=now)
+        update(users_table).where(users_table.c.id == user_id).values(must_change_password=1, updated_at=now)
     ).rowcount
 
 

@@ -64,20 +64,9 @@ def parse_dashboard_request(args):
         filter_mode = FILTER_MODE_INCLUDE
 
     breakdown_mode = parse_dashboard_breakdown(args.get("breakdown"))
-    show_untagged = (
-        breakdown_mode == DASHBOARD_BREAKDOWN_TAG
-        and parse_dashboard_flag(args.get("show_untagged"))
-    )
-    selected_categories = [
-        category.strip()
-        for category in args.getlist("categories")
-        if category.strip()
-    ]
-    selected_tags = [
-        tag.strip()
-        for tag in args.getlist("tags")
-        if tag.strip()
-    ]
+    show_untagged = breakdown_mode == DASHBOARD_BREAKDOWN_TAG and parse_dashboard_flag(args.get("show_untagged"))
+    selected_categories = [category.strip() for category in args.getlist("categories") if category.strip()]
+    selected_tags = [tag.strip() for tag in args.getlist("tags") if tag.strip()]
     date_from = parse_iso_date(args.get("date_from")) if period == PERIOD_CUSTOM else ""
     date_to = parse_iso_date(args.get("date_to")) if period == PERIOD_CUSTOM else ""
     if date_from and date_to and date_from > date_to:

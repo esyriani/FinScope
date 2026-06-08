@@ -35,7 +35,6 @@ from finance_app.modules.upload.repository import (
 )
 from finance_app.modules.upload.service import build_statement_preview, build_upload_context
 
-
 upload_bp = Blueprint("upload", __name__)
 
 

@@ -3,28 +3,125 @@
 from sqlalchemy import text
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
-from tests.support.html import assert_visible_text
+from tests.support.html import assert_not_markup, assert_not_visible_text, assert_visible_text
 from tests.support.web import set_csrf_token
 
 
 def insert_category(conn, name):
     """Insert a category and return its id."""
-    category_id = conn.execute(text("""
+    category_id = conn.execute(
+        text("""
         INSERT INTO categories (name)
         VALUES (:p0)
-        """), {"p0": name}).lastrowid
+        """),
+        {"p0": name},
+    ).lastrowid
     conn.commit()
     return category_id
 
 
 def insert_tag(conn, name, color="#64748b"):
     """Insert a tag and return its id."""
-    tag_id = conn.execute(text("""
+    tag_id = conn.execute(
+        text("""
         INSERT INTO tags (name, color)
         VALUES (:p0, :p1)
-        """), {"p0": name, "p1": color}).lastrowid
+        """),
+        {"p0": name, "p1": color},
+    ).lastrowid
     conn.commit()
     return tag_id
+
+
+def test_taxonomy_category_create_and_delete_routes_persist_changes(client, core_conn):
+    """Verify that category create and delete routes update the database."""
+    token = set_csrf_token(client)
+
+    create_response = client.post(
+        "/taxonomy/categories/create",
+        data={
+            CSRF_FIELD_NAME: token,
+            "name": "Subscriptions",
+            "description": "Recurring paid services",
+            "instruction": "Use for streaming and software subscriptions.",
+        },
+        follow_redirects=True,
+    )
+
+    category = core_conn.execute(text("""
+        SELECT id, description, instruction
+        FROM categories
+        WHERE name = 'Subscriptions'
+        """)).fetchone()
+    assert create_response.status_code == 200
+    assert category is not None
+    assert category._mapping["description"] == "Recurring paid services"
+
+    delete_response = client.post(
+        "/taxonomy/categories/delete",
+        data={
+            CSRF_FIELD_NAME: token,
+            "category_id": category._mapping["id"],
+        },
+        follow_redirects=True,
+    )
+
+    remaining = core_conn.execute(text("""
+        SELECT COUNT(*) AS count
+        FROM categories
+        WHERE name = 'Subscriptions'
+        """)).fetchone()._mapping["count"]
+    assert delete_response.status_code == 200
+    assert remaining == 0
+
+
+def test_taxonomy_category_delete_route_refuses_in_use_category(client, core_conn):
+    """Verify that the category delete route keeps categories used by transactions."""
+    category_id = core_conn.execute(text("""
+        INSERT INTO categories (name)
+        VALUES ('Transit')
+        """)).lastrowid
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category_id,
+            fingerprint
+        )
+        VALUES ('2026-01-02', 'METRO PASS', 91.25, :p0, 'route-delete-guard')
+        """),
+        {"p0": category_id},
+    )
+    core_conn.commit()
+
+    response = client.post(
+        "/taxonomy/categories/delete",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "category_id": category_id,
+        },
+        follow_redirects=True,
+    )
+
+    category_count = (
+        core_conn.execute(
+            text("""
+        SELECT COUNT(*) AS count
+        FROM categories
+        WHERE id = :p0
+        """),
+            {"p0": category_id},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
+    assert response.status_code == 200
+    assert_visible_text(response, "Only unused categories can be deleted.")
+    assert_not_visible_text(response, "Category Transit cannot be deleted because it is in use")
+    assert_not_markup(response, "bi-lock")
+    assert category_count == 1
 
 
 def test_category_update_route_rejects_rename_conflict(client, core_conn):
@@ -44,11 +141,14 @@ def test_category_update_route_rejects_rename_conflict(client, core_conn):
         follow_redirects=True,
     )
 
-    source = core_conn.execute(text("""
+    source = core_conn.execute(
+        text("""
         SELECT name, description, instruction
         FROM categories
         WHERE id = :p0
-        """), {"p0": source_id}).fetchone()
+        """),
+        {"p0": source_id},
+    ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Choose a unique category name.")
     assert tuple(source) == ("Pets", None, None)
@@ -171,10 +271,14 @@ def test_tag_create_update_and_delete_routes(client, core_conn):
         },
         follow_redirects=True,
     )
-    remaining = core_conn.execute(
-        text("SELECT COUNT(*) AS count FROM tags WHERE id = :p0"),
-        {"p0": tag._mapping["id"]},
-    ).fetchone()._mapping["count"]
+    remaining = (
+        core_conn.execute(
+            text("SELECT COUNT(*) AS count FROM tags WHERE id = :p0"),
+            {"p0": tag._mapping["id"]},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
     assert delete_response.status_code == 200
     assert_visible_text(delete_response, "Tag deleted: Reviewed")
     assert remaining == 0
@@ -218,14 +322,20 @@ def test_tag_delete_route_blocks_transaction_and_rule_usage(client, core_conn):
         INSERT INTO category_rules (keyword, category)
         VALUES ('STORE', 'Food')
         """)).lastrowid
-    core_conn.execute(text("""
+    core_conn.execute(
+        text("""
         INSERT INTO transaction_tags (transaction_id, tag_id)
         VALUES (:p0, :p1)
-        """), {"p0": tx_id, "p1": transaction_tag_id})
-    core_conn.execute(text("""
+        """),
+        {"p0": tx_id, "p1": transaction_tag_id},
+    )
+    core_conn.execute(
+        text("""
         INSERT INTO category_rule_tags (rule_id, tag_id)
         VALUES (:p0, :p1)
-        """), {"p0": rule_id, "p1": rule_tag_id})
+        """),
+        {"p0": rule_id, "p1": rule_tag_id},
+    )
     core_conn.commit()
     token = set_csrf_token(client)
 
@@ -240,11 +350,18 @@ def test_tag_delete_route_blocks_transaction_and_rule_usage(client, core_conn):
         follow_redirects=True,
     )
 
-    remaining = core_conn.execute(text("""
+    remaining = (
+        core_conn.execute(
+            text("""
         SELECT COUNT(*) AS count
     FROM tags
     WHERE id IN (:p0, :p1)
-        """), {"p0": transaction_tag_id, "p1": rule_tag_id}).fetchone()._mapping["count"]
+        """),
+            {"p0": transaction_tag_id, "p1": rule_tag_id},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
     assert_visible_text(transaction_response, "Only unused tags can be deleted.")
     assert_visible_text(rule_response, "Only unused tags can be deleted.")
     assert remaining == 2

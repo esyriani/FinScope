@@ -222,10 +222,7 @@ def test_dashboard_context_tag_breakdown_counts_each_matching_tag(app, core_conn
         "Shared",
         "Untagged",
     ]
-    untagged_row = next(
-        row for row in untagged_context["category_rows"]
-        if row["category"] == "Untagged"
-    )
+    untagged_row = next(row for row in untagged_context["category_rows"] if row["category"] == "Untagged")
     assert untagged_row["url"] == ""
 
 
@@ -240,9 +237,7 @@ def test_dashboard_tag_cashflow_includes_tagged_transfer_credits(app, core_conn)
 
     with app.test_request_context("/dashboard"):
         untagged_context = build_dashboard_context(MultiDict(date_args))
-        reimbursable_context = build_dashboard_context(
-            MultiDict([*date_args, ("tags", "Reimbursable")])
-        )
+        reimbursable_context = build_dashboard_context(MultiDict([*date_args, ("tags", "Reimbursable")]))
 
     assert untagged_context["total_spending"] == 300.00
     assert untagged_context["total_income"] == 0
@@ -414,15 +409,10 @@ def test_dashboard_context_calculates_previous_period_merchant_deltas(app, core_
     with app.test_request_context("/dashboard"):
         context = build_dashboard_context(args)
 
-    merchants = {
-        row["merchant"]: row
-        for row in context["merchant_rows"]
-    }
+    merchants = {row["merchant"]: row for row in context["merchant_rows"]}
     assert merchants["METRO GROCERY"]["total"] == 150.00
     assert merchants["METRO GROCERY"]["period_change"]["label"] == "+50%"
     assert merchants["METRO GROCERY"]["period_change"]["direction"] == "up"
     assert merchants["METRO GROCERY"]["period_change"]["sort_value"] == 50
     assert merchants["NEW BAKERY"]["period_change"]["label"] == "n/a"
     assert merchants["NEW BAKERY"]["period_change"]["detail"] == "No comparison"
-
-

@@ -57,19 +57,11 @@ from finance_app.modules.transactions.constants import (
 
 def parse_transaction_filters(args, conn):
     """Parse transaction filters."""
-    selected_categories = [
-        value.strip()
-        for value in args.getlist("categories")
-        if value.strip()
-    ]
+    selected_categories = [value.strip() for value in args.getlist("categories") if value.strip()]
     legacy_category = args.get("category", "").strip()
     if legacy_category and legacy_category not in selected_categories:
         selected_categories.append(legacy_category)
-    selected_tags = [
-        value.strip()
-        for value in args.getlist("tags")
-        if value.strip()
-    ]
+    selected_tags = [value.strip() for value in args.getlist("tags") if value.strip()]
     filter_mode = args.get("filter_mode", FILTER_MODE_INCLUDE).strip()
     if filter_mode not in FILTER_MODES:
         filter_mode = FILTER_MODE_INCLUDE
@@ -191,9 +183,7 @@ def build_transaction_core_filters(filters, unknown_category, conn=None):
     elif filters["amount_type"] == AMOUNT_TYPE_CREDIT:
         core_filters.add(transactions_table.c.amount < 0)
         core_filters.add(
-            transactions_table.c.transaction_kind.in_(
-                (TRANSACTION_KIND_INCOME, TRANSACTION_KIND_TRANSFER)
-            )
+            transactions_table.c.transaction_kind.in_((TRANSACTION_KIND_INCOME, TRANSACTION_KIND_TRANSFER))
         )
     elif filters["amount_type"] == AMOUNT_TYPE_PAYMENT:
         core_filters.add(transactions_table.c.transaction_kind == TRANSACTION_KIND_PAYMENT)
@@ -246,12 +236,7 @@ def search_condition(search, unknown_category):
         transactions_table.c.tx_date,
         cast(transactions_table.c.amount, String),
     )
-    return or_(
-        *[
-            func.lower(cast(expression, String)).like(pattern)
-            for expression in expressions
-        ]
-    )
+    return or_(*[func.lower(cast(expression, String)).like(pattern) for expression in expressions])
 
 
 def merchant_key_condition(conn, merchant_key):
@@ -275,27 +260,27 @@ def matching_transaction_ids_for_merchant_key(conn, merchant_key):
         description_matches_any_candidate(transactions_table.c.description, description_candidates)
     )
 
-    rows = conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.description,
-            transactions_table.c.merchant_id,
-            merchants_table.c.merchant_key.label("merchant_name"),
-            merchants_table.c.merchant_key.label("merchant_key"),
-        )
-        .select_from(
-            transactions_table.outerjoin(
-                merchants_table,
-                merchants_table.c.id == transactions_table.c.merchant_id,
+    rows = (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.description,
+                transactions_table.c.merchant_id,
+                merchants_table.c.merchant_key.label("merchant_name"),
+                merchants_table.c.merchant_key.label("merchant_key"),
             )
+            .select_from(
+                transactions_table.outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == transactions_table.c.merchant_id,
+                )
+            )
+            .where(or_(*candidate_conditions))
         )
-        .where(or_(*candidate_conditions))
-    ).mappings().fetchall()
-    return [
-        row["id"]
-        for row in rows
-        if merchant_identity_from_row(row, conn=conn)["name"] == merchant_key
-    ]
+        .mappings()
+        .fetchall()
+    )
+    return [row["id"] for row in rows if merchant_identity_from_row(row, conn=conn)["name"] == merchant_key]
 
 
 def category_source_value(source):

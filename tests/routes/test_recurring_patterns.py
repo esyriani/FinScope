@@ -29,8 +29,8 @@ from finance_app.modules.recurring.service import (
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_name
 from tests.support.web import set_csrf_token
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 def recurring_json(client, path, payload):
     """POST a JSON recurring-pattern payload with CSRF protection."""
@@ -146,7 +146,7 @@ def test_recurring_page_uses_shared_status_filter_links(client):
     assert response.status_code == 200
     assert 'aria-label="Status filter"' in body
     assert 'data-recurring-status-filter="overdue"' in body
-    assert 'data-recurring-ajax-link' in body
+    assert "data-recurring-ajax-link" in body
     assert 'name="statuses" value="overdue"' in body
     assert 'aria-pressed="true"' in body
     assert 'id="recurring-status"' not in body
@@ -159,7 +159,7 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'data-recurring-dynamic' in body
+    assert "data-recurring-dynamic" in body
     assert "recurring-summary-layout" in body
     assert "recurring-metric-carousel" in body
     assert 'id="recurring-month"' in body
@@ -171,7 +171,7 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
     assert "data-paginated-table" in body
     assert 'data-pagination-label="Recurring activity pages"' in body
     assert 'data-export-visible-source="#recurring-activity-table"' in body
-    assert "data-export-excel-extension=\"xlsx\"" not in body
+    assert 'data-export-excel-extension="xlsx"' not in body
     assert 'colspan="8"' in body
     assert "Status detail" in body
     assert "Matched date" in body
@@ -180,14 +180,7 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
 
 def test_table_export_script_prompts_for_displayed_or_entire_table():
     """Verify shared table export asks which row scope should be downloaded."""
-    body = (
-        PROJECT_ROOT
-        / "src"
-        / "finance_app"
-        / "static"
-        / "js"
-        / "exports.js"
-    ).read_text(encoding="utf-8")
+    body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
 
     assert "chooseTableExportScope" in body
     assert "Displayed rows" in body
@@ -217,13 +210,7 @@ def test_recurring_calendar_exposes_empty_state_context(client):
 
 def test_recurring_activity_template_keeps_post_action_state_hooks():
     """Verify recurring list rows keep the client hooks updated after actions."""
-    body = (
-        PROJECT_ROOT
-        / "src"
-        / "finance_app"
-        / "templates"
-        / "_recurring_activity.html"
-    ).read_text(encoding="utf-8")
+    body = (PROJECT_ROOT / "src" / "finance_app" / "templates" / "_recurring_activity.html").read_text(encoding="utf-8")
 
     assert "data-recurring-user-status" in body
     assert "data-recurring-active" in body
@@ -232,13 +219,7 @@ def test_recurring_activity_template_keeps_post_action_state_hooks():
 
 def test_recurring_calendar_template_places_amount_on_its_own_chip_line():
     """Verify recurring calendar chips keep the amount separate from merchant text."""
-    body = (
-        PROJECT_ROOT
-        / "src"
-        / "finance_app"
-        / "templates"
-        / "_recurring_calendar.html"
-    ).read_text(encoding="utf-8")
+    body = (PROJECT_ROOT / "src" / "finance_app" / "templates" / "_recurring_calendar.html").read_text(encoding="utf-8")
 
     assert "recurring-calendar-chip-amount" in body
 
@@ -260,18 +241,27 @@ def test_recurring_detail_modal_exposes_decision_summary_hooks(client):
 
 def test_recurring_status_detail_explains_list_statuses():
     """Verify recurring row status details explain why each row needs attention."""
-    assert recurring_status_detail(
-        {"status": "occurred", "match_details": {}},
-        date(2026, 5, 5),
-    ) == "Date and amount matched."
-    assert recurring_status_detail(
-        {"status": "overdue", "date": "2026-05-01", "match_details": {}},
-        date(2026, 5, 5),
-    ) == "4 days overdue"
-    assert recurring_status_detail(
-        {"status": "possibly_inactive", "match_details": {"missed_cycles": 2}},
-        date(2026, 5, 5),
-    ) == "Missed 2 expected cycles."
+    assert (
+        recurring_status_detail(
+            {"status": "occurred", "match_details": {}},
+            date(2026, 5, 5),
+        )
+        == "Date and amount matched."
+    )
+    assert (
+        recurring_status_detail(
+            {"status": "overdue", "date": "2026-05-01", "match_details": {}},
+            date(2026, 5, 5),
+        )
+        == "4 days overdue"
+    )
+    assert (
+        recurring_status_detail(
+            {"status": "possibly_inactive", "match_details": {"missed_cycles": 2}},
+            date(2026, 5, 5),
+        )
+        == "Missed 2 expected cycles."
+    )
 
 
 def test_recurring_empty_state_message_mentions_filters_when_applied(app):
@@ -396,7 +386,9 @@ def test_upsert_recurring_pattern_preserves_existing_values_when_not_overridden(
         active=1,
     )
     core_conn.commit()
-    merchant_id = core_conn.execute(text("SELECT id FROM merchants WHERE merchant_key = 'GYM'")).fetchone()._mapping["id"]
+    merchant_id = (
+        core_conn.execute(text("SELECT id FROM merchants WHERE merchant_key = 'GYM'")).fetchone()._mapping["id"]
+    )
 
     upsert_recurring_pattern(
         core_conn,

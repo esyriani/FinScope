@@ -19,7 +19,6 @@ def parse_selected_years(values):
     return years
 
 
-
 def clean_categories(values):
     """Clean categories."""
     return clean_filter_values(values)
@@ -32,12 +31,7 @@ def clean_tags(values):
 
 def clean_filter_values(values):
     """Clean repeated string filter values."""
-    return [
-        value.strip()
-        for value in values
-        if value.strip()
-    ]
-
+    return [value.strip() for value in values if value.strip()]
 
 
 def parse_period_comparison(value):
@@ -59,5 +53,3 @@ def parse_baseline_year(value, selected_years):
     except (TypeError, ValueError):
         return None
     return baseline_year if baseline_year in selected_years else None
-
-

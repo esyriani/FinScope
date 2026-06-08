@@ -31,7 +31,6 @@ from finance_app.modules.rules.import_export import (
     RULE_IMPORT_MODE_OVERRIDE,
 )
 
-
 SEVERITY_LABELS = {
     OVERLAP_HARMLESS: "Harmless overlap",
     OVERLAP_TAG_DIFFERENCE: "Tag difference",
@@ -97,11 +96,7 @@ def present_overlap(overlap, rule_by_id):
             key=lambda item: (-item[1], rule_label(rule_by_id.get(item[0], {}))),
         )
     ]
-    loser_ids = [
-        rule_id
-        for rule_id in (rule_a_id, rule_b_id)
-        if rule_id not in winner_ids
-    ]
+    loser_ids = [rule_id for rule_id in (rule_a_id, rule_b_id) if rule_id not in winner_ids]
     winning_side_label = overlap_winning_side_label(
         overlap.winning_rule_counts,
         rule_a_id,
@@ -137,10 +132,7 @@ def present_overlap(overlap, rule_by_id):
 
 def present_shared_transaction(audit, winning_rule_id, losing_rule_id, rule_by_id):
     """Return a display mapping for one shared matching transaction."""
-    match_by_rule_id = {
-        rule_id_from_match(match): match
-        for match in audit.matches
-    }
+    match_by_rule_id = {rule_id_from_match(match): match for match in audit.matches}
     winning_rule_match = match_by_rule_id[winning_rule_id]
     losing_rule_match = match_by_rule_id[losing_rule_id]
     actual_winning_rule_id = rule_id_from_match(audit.winning_match)
@@ -156,8 +148,7 @@ def present_shared_transaction(audit, winning_rule_id, losing_rule_id, rule_by_i
         "rule_b_match": present_match(losing_rule_match),
         "winning_rule_label": rule_label(winner_rule) if winner_rule else "-",
         "winner_agrees_with_current_category": (
-            audit.winning_match is not None
-            and audit.winning_match.category == transaction.get("category")
+            audit.winning_match is not None and audit.winning_match.category == transaction.get("category")
         ),
     }
 
@@ -329,9 +320,7 @@ def overlap_action_reason(overlap):
             tags_b=rule_b_tags,
         )
     if overlap.severity == OVERLAP_CRITICAL_CONFLICT:
-        return gettext(
-            "These rules assign different categories across multiple shared transactions."
-        )
+        return gettext("These rules assign different categories across multiple shared transactions.")
     if overlap.severity == OVERLAP_CATEGORY_CONFLICT:
         return gettext(
             "These rules assign different categories: {category_a} versus {category_b}.",
@@ -418,10 +407,7 @@ def recommended_next_step(summary, shadowed_rows):
 def build_win_explanation(shared_audits, winning_rule_id, losing_rule_id, rule_by_id):
     """Return a readable explanation of why the displayed overlap winner wins."""
     for audit in shared_audits:
-        match_by_rule_id = {
-            rule_id_from_match(match): match
-            for match in audit.matches
-        }
+        match_by_rule_id = {rule_id_from_match(match): match for match in audit.matches}
         winning_match = match_by_rule_id.get(winning_rule_id)
         losing_match = match_by_rule_id.get(losing_rule_id)
         if winning_match is None or losing_match is None:
@@ -488,13 +474,9 @@ def specificity_comparison_label(left, right):
 def build_rule_assessment(total_matches, total_wins, total_losses, shadowed, stale, overlaps):
     """Return summary paragraphs and a recommended action for a rule detail page."""
     category_conflicts = [
-        overlap for overlap in overlaps
-        if overlap.severity in {OVERLAP_CATEGORY_CONFLICT, OVERLAP_CRITICAL_CONFLICT}
+        overlap for overlap in overlaps if overlap.severity in {OVERLAP_CATEGORY_CONFLICT, OVERLAP_CRITICAL_CONFLICT}
     ]
-    tag_differences = [
-        overlap for overlap in overlaps
-        if overlap.severity == OVERLAP_TAG_DIFFERENCE
-    ]
+    tag_differences = [overlap for overlap in overlaps if overlap.severity == OVERLAP_TAG_DIFFERENCE]
     if category_conflicts:
         return {
             "badge_label": "Category conflict",
@@ -537,7 +519,11 @@ def build_rule_assessment(total_matches, total_wins, total_losses, shadowed, sta
             "badge_label": STALE_LABELS.get(stale.status, "Stale"),
             "badge_class": STALE_BADGE_CLASSES.get(stale.status, "text-bg-secondary"),
             "paragraphs": [
-                "This rule has no historical matches." if stale.status == STALE_UNUSED else "This rule has not matched recently.",
+                (
+                    "This rule has no historical matches."
+                    if stale.status == STALE_UNUSED
+                    else "This rule has not matched recently."
+                ),
             ],
             "recommended_action_label": suggested_action_label(stale.suggested_action),
             "recommended_action_detail": "Review whether this rule is still needed. If not, preview removal impact.",
@@ -819,9 +805,5 @@ def overlap_display_rule_ids(overlap, rule_a_id, rule_b_id):
 
 def joined_rule_labels(rule_ids, rule_by_id):
     """Return comma-separated rule labels for rule IDs."""
-    labels = [
-        rule_label(rule_by_id[rule_id])
-        for rule_id in rule_ids
-        if rule_id in rule_by_id
-    ]
+    labels = [rule_label(rule_by_id[rule_id]) for rule_id in rule_ids if rule_id in rule_by_id]
     return ", ".join(labels)

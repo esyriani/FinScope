@@ -18,7 +18,6 @@ from finance_app.modules.categories.repository import normalize_category
 from finance_app.modules.categories.taxonomy import normalize_tag_names
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
-
 COMMON_CATEGORY_LIMIT = 6
 MAX_CANDIDATE_CATEGORIES = 20
 MAX_CANDIDATE_TAGS = 16
@@ -120,10 +119,7 @@ def semantic_taxonomy_names(transaction, taxonomy_rows, taxonomy_options, unknow
     if not query_tokens:
         return []
 
-    option_order = {
-        name: index
-        for index, name in enumerate(taxonomy_options)
-    }
+    option_order = {name: index for index, name in enumerate(taxonomy_options)}
     rows_by_name = {row["name"]: row for row in taxonomy_rows}
     scored = []
     for name in taxonomy_options:
@@ -154,28 +150,31 @@ def semantic_tokens(value):
     return {
         token
         for token in re.findall(r"[A-Z0-9]+", normalized)
-        if len(token) >= MIN_SEMANTIC_TOKEN_LENGTH
-        and token not in SEMANTIC_STOPWORDS
+        if len(token) >= MIN_SEMANTIC_TOKEN_LENGTH and token not in SEMANTIC_STOPWORDS
     }
 
 
 def common_category_names(conn, category_options, unknown_category):
     """Return commonly used non-unknown categories from persisted transactions."""
-    rows = conn.execute(
-        select(
-            transactions_table.c.category,
-            func.count().label("count"),
+    rows = (
+        conn.execute(
+            select(
+                transactions_table.c.category,
+                func.count().label("count"),
+            )
+            .where(
+                transactions_table.c.ignored == 0,
+                transactions_table.c.category.is_not(None),
+                transactions_table.c.category != unknown_category,
+                transactions_table.c.category.in_(category_options),
+            )
+            .group_by(transactions_table.c.category)
+            .order_by(func.count().desc(), transactions_table.c.category)
+            .limit(COMMON_CATEGORY_LIMIT)
         )
-        .where(
-            transactions_table.c.ignored == 0,
-            transactions_table.c.category.is_not(None),
-            transactions_table.c.category != unknown_category,
-            transactions_table.c.category.in_(category_options),
-        )
-        .group_by(transactions_table.c.category)
-        .order_by(func.count().desc(), transactions_table.c.category)
-        .limit(COMMON_CATEGORY_LIMIT)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [row["category"] for row in rows]
 
 
@@ -185,22 +184,26 @@ def merchant_history_category_names(conn, transaction, category_options, unknown
     if merchant_id is None:
         return []
 
-    rows = conn.execute(
-        select(
-            transactions_table.c.category,
-            func.count().label("count"),
+    rows = (
+        conn.execute(
+            select(
+                transactions_table.c.category,
+                func.count().label("count"),
+            )
+            .where(
+                transactions_table.c.ignored == 0,
+                transactions_table.c.merchant_id == int(merchant_id),
+                transactions_table.c.category.is_not(None),
+                transactions_table.c.category != unknown_category,
+                transactions_table.c.category.in_(category_options),
+            )
+            .group_by(transactions_table.c.category)
+            .order_by(func.count().desc(), transactions_table.c.category)
+            .limit(COMMON_CATEGORY_LIMIT)
         )
-        .where(
-            transactions_table.c.ignored == 0,
-            transactions_table.c.merchant_id == int(merchant_id),
-            transactions_table.c.category.is_not(None),
-            transactions_table.c.category != unknown_category,
-            transactions_table.c.category.in_(category_options),
-        )
-        .group_by(transactions_table.c.category)
-        .order_by(func.count().desc(), transactions_table.c.category)
-        .limit(COMMON_CATEGORY_LIMIT)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [row["category"] for row in rows]
 
 
@@ -277,24 +280,28 @@ def tags_for_candidate_categories(conn, candidate_categories, tag_options):
     if not concrete_categories or not tag_options:
         return []
 
-    rows = conn.execute(
-        select(
-            tags_table.c.name,
-            func.count().label("count"),
+    rows = (
+        conn.execute(
+            select(
+                tags_table.c.name,
+                func.count().label("count"),
+            )
+            .select_from(
+                transaction_tags_table.join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id).join(
+                    transactions_table, transactions_table.c.id == transaction_tags_table.c.transaction_id
+                )
+            )
+            .where(
+                transactions_table.c.category.in_(concrete_categories),
+                tags_table.c.name.in_(tag_options),
+            )
+            .group_by(tags_table.c.name)
+            .order_by(func.count().desc(), tags_table.c.name)
+            .limit(MAX_CANDIDATE_TAGS)
         )
-        .select_from(
-            transaction_tags_table
-            .join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
-            .join(transactions_table, transactions_table.c.id == transaction_tags_table.c.transaction_id)
-        )
-        .where(
-            transactions_table.c.category.in_(concrete_categories),
-            tags_table.c.name.in_(tag_options),
-        )
-        .group_by(tags_table.c.name)
-        .order_by(func.count().desc(), tags_table.c.name)
-        .limit(MAX_CANDIDATE_TAGS)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     return [row["name"] for row in rows]
 
 
@@ -303,17 +310,21 @@ def common_tag_names(conn, tag_options):
     if not tag_options:
         return []
 
-    rows = conn.execute(
-        select(
-            tags_table.c.name,
-            func.count().label("count"),
+    rows = (
+        conn.execute(
+            select(
+                tags_table.c.name,
+                func.count().label("count"),
+            )
+            .select_from(transaction_tags_table.join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id))
+            .where(tags_table.c.name.in_(tag_options))
+            .group_by(tags_table.c.name)
+            .order_by(func.count().desc(), tags_table.c.name)
+            .limit(MAX_CANDIDATE_TAGS)
         )
-        .select_from(transaction_tags_table.join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id))
-        .where(tags_table.c.name.in_(tag_options))
-        .group_by(tags_table.c.name)
-        .order_by(func.count().desc(), tags_table.c.name)
-        .limit(MAX_CANDIDATE_TAGS)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
     names = [row["name"] for row in rows]
     return names or list(tag_options[:MAX_CANDIDATE_TAGS])
 
@@ -321,16 +332,9 @@ def common_tag_names(conn, tag_options):
 def taxonomy_rows_for_names(rows, names):
     """Return taxonomy rows ordered by a compact name list."""
     rows_by_name = {row["name"]: row for row in rows}
-    return [
-        rows_by_name.get(name, {"id": None, "name": name, "description": "", "instruction": ""})
-        for name in names
-    ]
+    return [rows_by_name.get(name, {"id": None, "name": name, "description": "", "instruction": ""}) for name in names]
 
 
 def taxonomy_ids_for_names(rows, names):
     """Return taxonomy row IDs ordered by a compact name list."""
-    return [
-        row["id"]
-        for row in taxonomy_rows_for_names(rows, names)
-        if row.get("id") is not None
-    ]
+    return [row["id"] for row in taxonomy_rows_for_names(rows, names) if row.get("id") is not None]

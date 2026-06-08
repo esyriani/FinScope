@@ -6,7 +6,6 @@ The helpers assume Flask's test client session support is available.
 
 from finance_app.core.csrf import CSRF_FIELD_NAME, CSRF_HEADER_NAME, CSRF_SESSION_KEY
 
-
 DEFAULT_TEST_CSRF_TOKEN = "test-csrf-token"
 
 

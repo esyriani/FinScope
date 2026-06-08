@@ -3,7 +3,6 @@
 from pathlib import Path
 import re
 
-
 ROOT = Path(__file__).resolve().parents[2]
 STATIC_JS = ROOT / "src" / "finance_app" / "static" / "js"
 STATIC_CSS = ROOT / "src" / "finance_app" / "static" / "css"
@@ -55,7 +54,7 @@ def test_templates_do_not_include_executable_inline_scripts():
                 continue
             if 'type="application/json"' in attrs:
                 continue
-            line_number = template[:match.start()].count("\n") + 1
+            line_number = template[: match.start()].count("\n") + 1
             offenders.append(f"{template_path.relative_to(ROOT)}:{line_number}")
 
     assert offenders == []

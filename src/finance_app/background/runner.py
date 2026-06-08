@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from threading import Lock, local
 from uuid import uuid4
 
-
 MAIN_JOB_QUEUE = "main"
 AI_JOB_QUEUE = "ai"
 JOB_QUEUES = frozenset({MAIN_JOB_QUEUE, AI_JOB_QUEUE})
@@ -220,7 +219,7 @@ def append_job_log_entry(job, message, params=None, level="info"):
         }
     )
     if len(entries) > MAX_PROGRESS_LOG_ENTRIES:
-        del entries[:len(entries) - MAX_PROGRESS_LOG_ENTRIES]
+        del entries[: len(entries) - MAX_PROGRESS_LOG_ENTRIES]
 
 
 def normalize_log_level(level):
@@ -254,9 +253,7 @@ def cancel_background_job(job_id):
 
         job["cancel_requested"] = True
         future = job.get("_future")
-        cancelled_before_start = job["status"] == "queued" and (
-            future is None or future.cancel()
-        )
+        cancelled_before_start = job["status"] == "queued" and (future is None or future.cancel())
         if cancelled_before_start:
             job["status"] = "cancelled"
             job["result"] = "Job cancelled before it started."
@@ -279,8 +276,7 @@ def cancel_queued_background_jobs(queue=None):
         job_ids = [
             job_id
             for job_id, job in _jobs.items()
-            if job["status"] == "queued"
-            and (queue is None or job.get("queue") == queue)
+            if job["status"] == "queued" and (queue is None or job.get("queue") == queue)
         ]
 
     cancelled_count = 0
@@ -311,7 +307,7 @@ def list_background_jobs(limit=50, offset=0):
     if limit is None:
         return jobs[offset:]
 
-    return jobs[offset:offset + limit]
+    return jobs[offset : offset + limit]
 
 
 def count_background_jobs():
@@ -367,20 +363,13 @@ def undo_background_job(job_id):
 
 def public_job(job):
     """Build the job representation exposed to controllers."""
-    public = {
-        key: value
-        for key, value in dict(job).items()
-        if not key.startswith("_")
-    }
+    public = {key: value for key, value in dict(job).items() if not key.startswith("_")}
     public["can_undo"] = (
         job.get("_undo_handler") is not None
         and job["status"] in UNDOABLE_STATUSES
         and job["undo_status"] == "available"
     )
-    public["can_cancel"] = (
-        job["status"] in CANCELLABLE_STATUSES
-        and not job.get("cancel_requested")
-    )
+    public["can_cancel"] = job["status"] in CANCELLABLE_STATUSES and not job.get("cancel_requested")
     public["progress_params"] = dict(public.get("progress_params") or {})
     public["progress_log"] = [
         {

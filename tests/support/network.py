@@ -24,8 +24,7 @@ def blocked_network_call(*args, **kwargs):
     """
     del args, kwargs
     raise NetworkAccessBlockedError(
-        "Tests may not open network connections. Inject a fake client or stub "
-        "the external service call instead."
+        "Tests may not open network connections. Inject a fake client or stub " "the external service call instead."
     )
 
 

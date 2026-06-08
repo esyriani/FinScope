@@ -19,11 +19,14 @@ def rule_by_id(conn, rule_id):
     Returns:
         A SQLite row for the matching rule, or ``None`` when absent.
     """
-    return conn.execute(text("""
+    return conn.execute(
+        text("""
         SELECT id, keyword, category, amount_min, amount_max, source, ai_approved
         FROM category_rules
         WHERE id = :p0
-        """), {"p0": rule_id}).fetchone()
+        """),
+        {"p0": rule_id},
+    ).fetchone()
 
 
 def html_fragment_after(body, marker, length=500):
@@ -41,7 +44,7 @@ def html_fragment_after(body, marker, length=500):
         ValueError: If the marker is not found.
     """
     start = body.index(marker)
-    return body[start:start + length]
+    return body[start : start + length]
 
 
 def set_default_table_page_size(conn, size):

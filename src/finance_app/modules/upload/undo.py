@@ -25,9 +25,11 @@ def statement_filename_row(conn, statement_id):
     Returns:
         A mapping row with the filename, or ``None`` when the statement is gone.
     """
-    return conn.execute(
-        select(statements_table.c.filename).where(statements_table.c.id == statement_id)
-    ).mappings().fetchone()
+    return (
+        conn.execute(select(statements_table.c.filename).where(statements_table.c.id == statement_id))
+        .mappings()
+        .fetchone()
+    )
 
 
 def statement_transaction_count(conn, statement_id):
@@ -41,9 +43,7 @@ def statement_transaction_count(conn, statement_id):
 
 def delete_statement_transactions(conn, statement_id):
     """Delete all transaction rows imported by one statement."""
-    conn.execute(
-        delete(transactions_table).where(transactions_table.c.statement_id == statement_id)
-    )
+    conn.execute(delete(transactions_table).where(transactions_table.c.statement_id == statement_id))
 
 
 def delete_statement(conn, statement_id):
@@ -89,8 +89,4 @@ def restore_enriched_transaction(conn, change):
         "reviewed_at": change["reviewed_at"],
         "transaction_kind": change.get("transaction_kind", TRANSACTION_KIND_EXPENSE),
     }
-    return conn.execute(
-        update(transactions_table)
-        .where(transactions_table.c.id == change["id"])
-        .values(**values)
-    )
+    return conn.execute(update(transactions_table).where(transactions_table.c.id == change["id"]).values(**values))

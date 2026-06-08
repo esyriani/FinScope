@@ -72,7 +72,7 @@ def test_credit_card_import_marks_card_and_checking_payments_as_non_reportable(a
             "credit_card",
             "csv",
             (
-                "2026-05-08,\"COSTCO WHOLESALE W527 MONTREAL, QC\",277.72,,5268********2914\n"
+                '2026-05-08,"COSTCO WHOLESALE W527 MONTREAL, QC",277.72,,5268********2914\n'
                 "2026-05-05,PAYMENT THANK YOU/PAIEMEN T MERCI,,819.55,5268********2914\n"
             ),
             undo_state={},

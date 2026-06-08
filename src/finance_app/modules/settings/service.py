@@ -33,7 +33,6 @@ from finance_app.modules.settings.runtime import (
     upsert_user_setting,
 )
 
-
 GENERAL_SETTING_SAVE_KEYS = GENERAL_SETTING_KEYS
 
 
@@ -58,9 +57,7 @@ PROBABILITY_SETTING_KEYS = (
 )
 
 
-DECIMAL_SETTING_KEYS = (
-    "recurrence_amount_tolerance_absolute",
-)
+DECIMAL_SETTING_KEYS = ("recurrence_amount_tolerance_absolute",)
 
 
 def build_settings_context():
@@ -82,7 +79,9 @@ def build_settings_context():
             "comparison_insight_card_limit",
             str(app_settings.default_comparison_insight_card_limit),
         ),
-        "home_top_category_limit": current.get("home_top_category_limit", str(app_settings.default_home_top_category_limit)),
+        "home_top_category_limit": current.get(
+            "home_top_category_limit", str(app_settings.default_home_top_category_limit)
+        ),
         "merchant_table_limit": current.get("merchant_table_limit", str(app_settings.default_merchant_table_limit)),
         "rule_preview_limit": current.get("rule_preview_limit", str(app_settings.default_rule_preview_limit)),
         "rule_audit_transaction_limit": current.get(
@@ -98,15 +97,17 @@ def build_settings_context():
             format_probability(app_settings.default_llm_review_threshold),
         ),
         "verify_threshold": current.get("verify_threshold", format_probability(app_settings.default_verify_threshold)),
-        "auto_llm_categorization_enabled": str(
-            current.get("auto_llm_categorization_enabled", "0")
-        ).strip().lower() not in {"0", "false", "no", "off"},
+        "auto_llm_categorization_enabled": str(current.get("auto_llm_categorization_enabled", "0")).strip().lower()
+        not in {"0", "false", "no", "off"},
         "transaction_ai_rerun_enabled": str(
             current.get(
                 "transaction_ai_rerun_enabled",
                 "1" if app_settings.default_transaction_ai_rerun_enabled else "0",
             )
-        ).strip().lower() not in {"0", "false", "no", "off"},
+        )
+        .strip()
+        .lower()
+        not in {"0", "false", "no", "off"},
         "openai_model": current.get("openai_model", app_settings.default_categorization_model),
         "recurrence_minimum_occurrences": current.get(
             "recurrence_minimum_occurrences",
@@ -148,11 +149,7 @@ def save_settings_from_form(form):
 
     general_values = parse_general_settings_form(form, app_settings)
     can_manage_global_settings = current_user_can(PERMISSION_MANAGE_GLOBAL_SETTINGS)
-    global_values = (
-        parse_global_settings_form(form, app_settings)
-        if can_manage_global_settings
-        else {}
-    )
+    global_values = parse_global_settings_form(form, app_settings) if can_manage_global_settings else {}
 
     with db_core_transaction() as conn:
         seed_runtime_settings(conn)
@@ -196,10 +193,7 @@ def is_openai_model_available(model_name):
     except Exception:
         return False, "Could not load models for the configured OpenAI API key."
 
-    model_ids = {
-        str(model.id)
-        for model in getattr(models, "data", [])
-    }
+    model_ids = {str(model.id) for model in getattr(models, "data", [])}
     if model_name in model_ids:
         return True, f"Model is available to this API key: {model_name}"
 

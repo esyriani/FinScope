@@ -53,10 +53,7 @@ def test_runtime_settings_helpers_support_core_connections(app, core_conn):
         assert get_statement_type_by_parser_type(conn, "bank_account")["name"] == "Core bank account"
         upsert_setting(conn, "unknown_category", "CORE UNKNOWN")
 
-    active = {
-        row["name"]: row["parser_type"]
-        for row in get_statement_type_options(core_conn)
-    }
+    active = {row["name"]: row["parser_type"] for row in get_statement_type_options(core_conn)}
     assert get_all_settings(core_conn)["theme_mode"] == "light"
     assert get_setting_with_fallback("theme_mode", "dark") == "light"
     assert get_unknown_category(core_conn) == "UNKNOWN"
@@ -92,11 +89,7 @@ def test_sync_statement_types_updates_adds_and_inactivates_rows(core_conn):
         row["name"]: (row["parser_type"], row["import_mode"], row["default_account_type"])
         for row in get_statement_type_options(core_conn)
     }
-    inactive = [
-        row
-        for row in get_statement_type_options(core_conn, include_inactive=True)
-        if not row["active"]
-    ]
+    inactive = [row for row in get_statement_type_options(core_conn, include_inactive=True) if not row["active"]]
     assert active == {
         "Daily bank account": ("bank_account", "ledger", "checking"),
         "Rewards card": ("credit_card", "ledger", "credit_card"),

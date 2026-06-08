@@ -50,13 +50,10 @@ commands:
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
-Run the current incremental quality checks from the repository root:
+Run the current quality checks from the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -B -m black --check `
-  sitecustomize.py `
-  src\finance_app\core\query.py `
-  src\finance_app\modules\merchants\normalization.py
+.\.venv\Scripts\python.exe -B -m black --check .
 .\.venv\Scripts\python.exe -B -m ruff check `
   sitecustomize.py `
   src\finance_app\core\query.py `
@@ -66,8 +63,8 @@ Run the current incremental quality checks from the repository root:
 
 Mypy is configured as a gradual allowlist in `pyproject.toml`. Add modules to
 that list only after their public helpers have useful annotations and the
-reported errors are actionable. Black and Ruff use the same first pilot targets
-until the existing formatting and lint baseline is cleaned up.
+reported errors are actionable. Ruff still uses the first pilot targets until
+the existing lint baseline is cleaned up.
 
 ## Markers
 

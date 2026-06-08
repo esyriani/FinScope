@@ -73,10 +73,7 @@ def apply_heatmap(days, metric):
     """Apply heatmap."""
     max_values = {
         option: max(
-            (
-                abs(heatmap_value(day, option)) if option == "net" else heatmap_value(day, option)
-                for day in days
-            ),
+            (abs(heatmap_value(day, option)) if option == "net" else heatmap_value(day, option) for day in days),
             default=0,
         )
         for option in HEATMAP_OPTIONS
@@ -131,11 +128,13 @@ def build_calendar_summary(transactions, recurring_items):
     income = sum(item["amount"] for item in transactions if item["type"] == "income")
     recurring_spending = sum(item["amount"] for item in recurring_items if item["type"] == "spending")
     recurring_income = sum(item["amount"] for item in recurring_items if item["type"] == "income")
-    recurring_occurred_count = len([
-        item
-        for item in recurring_items
-        if item["status"] in {"occurred", "amount_changed", "likely_occurred", "matched"}
-    ])
+    recurring_occurred_count = len(
+        [
+            item
+            for item in recurring_items
+            if item["status"] in {"occurred", "amount_changed", "likely_occurred", "matched"}
+        ]
+    )
     recurring_expected_count = len([item for item in recurring_items if item["status"] == "expected"])
     recurring_overdue_count = len([item for item in recurring_items if item["status"] == "overdue"])
     recurring_possibly_inactive_count = len([item for item in recurring_items if item["status"] == "possibly_inactive"])

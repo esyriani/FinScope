@@ -4,7 +4,6 @@ import ast
 import json
 from pathlib import Path
 
-
 ROUTE_FILES = tuple(Path("src/finance_app/modules").glob("*/controller.py"))
 
 

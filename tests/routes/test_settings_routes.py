@@ -52,12 +52,19 @@ def settings_form_data(conn, **overrides):
 
 def user_settings(conn, username="owner"):
     """Return user-specific settings for a test username."""
-    rows = conn.execute(text("""
+    rows = (
+        conn.execute(
+            text("""
         SELECT us.key, us.value
         FROM user_settings us
         JOIN users u ON u.id = us.user_id
         WHERE u.username = :p0
-        """), {"p0": username}).mappings().fetchall()
+        """),
+            {"p0": username},
+        )
+        .mappings()
+        .fetchall()
+    )
     return {row["key"]: row["value"] for row in rows}
 
 
@@ -98,13 +105,9 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
 
     settings = get_all_settings(core_conn)
     owner_settings = user_settings(core_conn)
-    active_names = {
-        row["name"]: row["parser_type"]
-        for row in get_statement_type_options(core_conn)
-    }
+    active_names = {row["name"]: row["parser_type"] for row in get_statement_type_options(core_conn)}
     all_statement_types = {
-        row["name"]: row["active"]
-        for row in get_statement_type_options(core_conn, include_inactive=True)
+        row["name"]: row["active"] for row in get_statement_type_options(core_conn, include_inactive=True)
     }
     assert response.status_code == 200
     assert_visible_text(response, "Settings saved.")
@@ -266,7 +269,9 @@ def test_viewer_can_only_save_own_general_settings(app, core_conn):
     assert viewer_settings["ui_language"] == "fr"
     assert viewer_settings["comparison_insight_card_limit"] == "5"
     assert global_settings["openai_model"] == original_global_settings["openai_model"]
-    assert global_settings["recurrence_minimum_occurrences"] == original_global_settings["recurrence_minimum_occurrences"]
+    assert (
+        global_settings["recurrence_minimum_occurrences"] == original_global_settings["recurrence_minimum_occurrences"]
+    )
     assert validate_response.status_code == 403
 
 

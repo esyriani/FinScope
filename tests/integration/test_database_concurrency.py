@@ -43,9 +43,7 @@ def test_concurrent_merchant_get_or_create_reselects_existing_row(core_conn, mon
     )
 
     merchant_count = core_conn.execute(
-        select(func.count())
-        .select_from(merchants_table)
-        .where(merchants_table.c.merchant_key == "RACE MERCHANT")
+        select(func.count()).select_from(merchants_table).where(merchants_table.c.merchant_key == "RACE MERCHANT")
     ).scalar_one()
 
     assert injected["merchant"] is True

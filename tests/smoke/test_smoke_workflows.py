@@ -64,11 +64,7 @@ def wait_for_job_label(label, timeout=5):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         job = next(
-            (
-                item
-                for item in runner.list_background_jobs(limit=None)
-                if item["label"] == label
-            ),
+            (item for item in runner.list_background_jobs(limit=None) if item["label"] == label),
             None,
         )
         if job is not None:
@@ -250,11 +246,7 @@ def test_smoke_same_transaction_can_import_for_different_accounts(client, core_c
     """Upload the same merchant for two accounts and verify both appear."""
     insert_rule(core_conn, "SHARED ACCOUNT MERCHANT", "Food")
     first_csv = "Date,Description,Amount\n2026-01-08,Shared Account Merchant,12.34\n"
-    second_csv = (
-        "Date,Description,Amount\n"
-        "2026-01-08,Shared Account Merchant,12.34\n"
-        "not a date,ignored row,\n"
-    )
+    second_csv = "Date,Description,Amount\n" "2026-01-08,Shared Account Merchant,12.34\n" "not a date,ignored row,\n"
 
     post_csv_upload(client, core_conn, "smoke-account-a.csv", first_csv, account_name="Account A")
     post_csv_upload(client, core_conn, "smoke-account-b.csv", second_csv, account_name="Account B")

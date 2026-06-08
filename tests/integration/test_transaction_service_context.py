@@ -14,7 +14,11 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
-from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names, set_transaction_tags
+from finance_app.modules.categories.taxonomy import (
+    get_rule_tags_by_rule_id,
+    get_transaction_tag_names,
+    set_transaction_tags,
+)
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_description
 from finance_app.modules.transactions import service as transactions_service
 from finance_app.modules.transactions.service import build_transactions_context
@@ -22,9 +26,7 @@ from finance_app.modules.transactions.service import build_transactions_context
 
 def seed_transactions(conn):
     """Seed transactions with categories, sources, tags, and ignored state."""
-    account_id = conn.execute(
-        insert(accounts_table).values(name="Checking")
-    ).inserted_primary_key[0]
+    account_id = conn.execute(insert(accounts_table).values(name="Checking")).inserted_primary_key[0]
     rows = [
         ("2026-01-01", "Metro Grocery", 20.00, "Food", "rule", 0, None, 0, "tx-list-metro"),
         ("2026-01-02", "Cafe Bistro", 12.50, "Food", "manual", 0, "2026-01-05T00:00:00Z", 0, "tx-list-cafe"),
@@ -59,9 +61,7 @@ def seed_transactions(conn):
         .where(
             user_settings_table.c["key"] == "default_table_page_size",
             user_settings_table.c.user_id
-            == select(users_table.c.id)
-            .where(users_table.c.username == "owner")
-            .scalar_subquery(),
+            == select(users_table.c.id).where(users_table.c.username == "owner").scalar_subquery(),
         )
         .values(value="2")
     )
@@ -137,24 +137,14 @@ def test_transactions_context_category_source_and_review_filters(core_conn):
     """Verify category source, review, and unknown/categorized filters."""
     seed_transactions(core_conn)
 
-    ai_context = build_transactions_context(
-        MultiDict([("period", "all"), ("category_source", "ai")])
-    )
-    manual_context = build_transactions_context(
-        MultiDict([("period", "all"), ("category_source", "manual_reviewed")])
-    )
-    unknown_context = build_transactions_context(
-        MultiDict([("period", "all"), ("category_status", "unknown")])
-    )
-    needs_review_context = build_transactions_context(
-        MultiDict([("period", "all"), ("review", "needs_review")])
-    )
+    ai_context = build_transactions_context(MultiDict([("period", "all"), ("category_source", "ai")]))
+    manual_context = build_transactions_context(MultiDict([("period", "all"), ("category_source", "manual_reviewed")]))
+    unknown_context = build_transactions_context(MultiDict([("period", "all"), ("category_status", "unknown")]))
+    needs_review_context = build_transactions_context(MultiDict([("period", "all"), ("review", "needs_review")]))
     pending_approval_context = build_transactions_context(
         MultiDict([("period", "all"), ("review", "pending_approval")])
     )
-    verified_context = build_transactions_context(
-        MultiDict([("period", "all"), ("review", "verified")])
-    )
+    verified_context = build_transactions_context(MultiDict([("period", "all"), ("review", "verified")]))
 
     assert descriptions(ai_context) == ["Hydro Quebec"]
     assert ai_context["selected_category_source"] == "ai"
@@ -186,9 +176,7 @@ def test_transactions_context_merchant_filters_and_tag_rendering(core_conn):
     """Verify merchant filters and tag view model fields."""
     seed_transactions(core_conn)
 
-    merchant_context = build_transactions_context(
-        MultiDict([("period", "all"), ("merchant_key", "Metro Grocery")])
-    )
+    merchant_context = build_transactions_context(MultiDict([("period", "all"), ("merchant_key", "Metro Grocery")]))
     category_context = build_transactions_context(
         MultiDict(
             [
@@ -200,12 +188,8 @@ def test_transactions_context_merchant_filters_and_tag_rendering(core_conn):
             ]
         )
     )
-    tag_context = build_transactions_context(
-        MultiDict([("period", "all"), ("tags", "Shared")])
-    )
-    untagged_context = build_transactions_context(
-        MultiDict([("period", "all"), ("tags", UNTAGGED_TAG_FILTER)])
-    )
+    tag_context = build_transactions_context(MultiDict([("period", "all"), ("tags", "Shared")]))
+    untagged_context = build_transactions_context(MultiDict([("period", "all"), ("tags", UNTAGGED_TAG_FILTER)]))
 
     metro = merchant_context["transactions"][0]
     assert descriptions(merchant_context) == ["Metro Grocery"]
@@ -230,9 +214,7 @@ def test_transactions_context_merchant_filters_and_tag_rendering(core_conn):
 
 def test_transactions_context_merchant_filter_uses_deterministic_keys(core_conn):
     """Verify merchant filtering does not expand through unmanaged aliases."""
-    account_id = core_conn.execute(
-        insert(accounts_table).values(name="Merchant checking")
-    ).inserted_primary_key[0]
+    account_id = core_conn.execute(insert(accounts_table).values(name="Merchant checking")).inserted_primary_key[0]
     food_id = resolve_category_id(core_conn, "Food")
     core_conn.execute(
         insert(transactions_table),
@@ -289,9 +271,7 @@ def test_transactions_context_merchant_filter_uses_deterministic_keys(core_conn)
     )
     core_conn.commit()
 
-    context = build_transactions_context(
-        MultiDict([("period", "all"), ("merchant_key", "AMZN MKTP")])
-    )
+    context = build_transactions_context(MultiDict([("period", "all"), ("merchant_key", "AMZN MKTP")]))
 
     assert context["total_count"] == 1
     assert descriptions(context) == ["AMZN MKTP CA*1234"]
@@ -299,9 +279,7 @@ def test_transactions_context_merchant_filter_uses_deterministic_keys(core_conn)
 
 def test_transactions_context_custom_dates_are_inclusive(core_conn):
     """Verify custom date filters include exact start and end boundaries."""
-    account_id = core_conn.execute(
-        insert(accounts_table).values(name="Boundary checking")
-    ).inserted_primary_key[0]
+    account_id = core_conn.execute(insert(accounts_table).values(name="Boundary checking")).inserted_primary_key[0]
     food_id = resolve_category_id(core_conn, "Food")
     for tx_date, description, fingerprint in [
         ("2026-03-31", "Before boundary", "tx-list-before-boundary"),
@@ -358,9 +336,7 @@ def test_transactions_context_reads_single_transaction_ai_setting(core_conn):
 
 def test_recategorize_selected_transactions_job_updates_selected_rows(core_conn, monkeypatch):
     """Verify selected recategorization persists workflow results and tags."""
-    account_id = core_conn.execute(
-        insert(accounts_table).values(name="Batch AI")
-    ).inserted_primary_key[0]
+    account_id = core_conn.execute(insert(accounts_table).values(name="Batch AI")).inserted_primary_key[0]
     target_id = core_conn.execute(
         insert(transactions_table).values(
             account_id=account_id,
@@ -439,9 +415,17 @@ def test_recategorize_selected_transactions_job_updates_selected_rows(core_conn,
 
     message = transactions_service.recategorize_selected_transactions_job([target_id, other_id])
 
-    target = core_conn.execute(text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"), {"p0": target_id}).fetchone()
-    other = core_conn.execute(text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"), {"p0": other_id}).fetchone()
-    untouched = core_conn.execute(text("SELECT category, category_source, needs_review FROM transactions WHERE id = :p0"), {"p0": untouched_id}).fetchone()
+    target = core_conn.execute(
+        text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"),
+        {"p0": target_id},
+    ).fetchone()
+    other = core_conn.execute(
+        text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"),
+        {"p0": other_id},
+    ).fetchone()
+    untouched = core_conn.execute(
+        text("SELECT category, category_source, needs_review FROM transactions WHERE id = :p0"), {"p0": untouched_id}
+    ).fetchone()
     assert message == "2 selected transactions recategorized."
     assert tuple(target) == ("Entertainment", "ai", 0.96, 0)
     assert tuple(other) == ("Food", "rule", 0.75, 1)
@@ -452,9 +436,7 @@ def test_recategorize_selected_transactions_job_updates_selected_rows(core_conn,
 
 def test_suggest_transaction_ai_category_does_not_update_rows(core_conn, monkeypatch):
     """Verify a one-off AI suggestion does not mutate transactions or rules."""
-    account_id = core_conn.execute(
-        insert(accounts_table).values(name="AI checking")
-    ).inserted_primary_key[0]
+    account_id = core_conn.execute(insert(accounts_table).values(name="AI checking")).inserted_primary_key[0]
     merchant_id = get_or_create_merchant_for_description(core_conn, "TVA SPORTS DIRECT")["id"]
     ids = []
     for fingerprint in ("ai-single-target", "ai-single-other"):
@@ -509,15 +491,19 @@ def test_suggest_transaction_ai_category_does_not_update_rows(core_conn, monkeyp
 
     result = transactions_service.suggest_transaction_ai_category(ids[0])
 
-    target = core_conn.execute(
-        select(
-            transactions_table.c.category,
-            transactions_table.c.category_source,
-            transactions_table.c.category_confidence,
-            transactions_table.c.category_rule_id,
-            transactions_table.c.needs_review,
-        ).where(transactions_table.c.id == ids[0])
-    ).mappings().fetchone()
+    target = (
+        core_conn.execute(
+            select(
+                transactions_table.c.category,
+                transactions_table.c.category_source,
+                transactions_table.c.category_confidence,
+                transactions_table.c.category_rule_id,
+                transactions_table.c.needs_review,
+            ).where(transactions_table.c.id == ids[0])
+        )
+        .mappings()
+        .fetchone()
+    )
     other = core_conn.execute(
         select(transactions_table.c.category).where(transactions_table.c.id == ids[1])
     ).scalar_one()
@@ -543,9 +529,7 @@ def test_suggest_transaction_ai_category_does_not_update_rows(core_conn, monkeyp
 
 def test_apply_transaction_ai_suggestion_updates_selected_row(core_conn, monkeypatch):
     """Verify accepting an AI suggestion applies only the selected transaction."""
-    account_id = core_conn.execute(
-        insert(accounts_table).values(name="AI checking apply")
-    ).inserted_primary_key[0]
+    account_id = core_conn.execute(insert(accounts_table).values(name="AI checking apply")).inserted_primary_key[0]
     merchant_id = get_or_create_merchant_for_description(core_conn, "TVA SPORTS DIRECT")["id"]
     ids = []
     for fingerprint in ("ai-apply-target", "ai-apply-other"):
@@ -599,17 +583,21 @@ def test_apply_transaction_ai_suggestion_updates_selected_row(core_conn, monkeyp
 
     result = transactions_service.apply_transaction_ai_suggestion(ids[0], suggestion)
 
-    target = core_conn.execute(
-        select(
-            transactions_table.c.category,
-            transactions_table.c.category_source,
-            transactions_table.c.category_confidence,
-            transactions_table.c.category_rule_id,
-            transactions_table.c.category_metadata,
-            transactions_table.c.needs_review,
-            transactions_table.c.reviewed_at,
-        ).where(transactions_table.c.id == ids[0])
-    ).mappings().fetchone()
+    target = (
+        core_conn.execute(
+            select(
+                transactions_table.c.category,
+                transactions_table.c.category_source,
+                transactions_table.c.category_confidence,
+                transactions_table.c.category_rule_id,
+                transactions_table.c.category_metadata,
+                transactions_table.c.needs_review,
+                transactions_table.c.reviewed_at,
+            ).where(transactions_table.c.id == ids[0])
+        )
+        .mappings()
+        .fetchone()
+    )
     other = core_conn.execute(
         select(transactions_table.c.category).where(transactions_table.c.id == ids[1])
     ).scalar_one()
@@ -633,9 +621,7 @@ def test_apply_transaction_ai_suggestion_updates_selected_row(core_conn, monkeyp
 
 def test_apply_transaction_ai_suggestion_can_create_rule(core_conn):
     """Verify accepting an AI suggestion can save a user-approved rule."""
-    account_id = core_conn.execute(
-        insert(accounts_table).values(name="AI checking rule")
-    ).inserted_primary_key[0]
+    account_id = core_conn.execute(insert(accounts_table).values(name="AI checking rule")).inserted_primary_key[0]
     merchant_id = get_or_create_merchant_for_description(core_conn, "TVA SPORTS DIRECT")["id"]
     tx_id = core_conn.execute(
         insert(transactions_table).values(
@@ -682,10 +668,15 @@ def test_apply_transaction_ai_suggestion_can_create_rule(core_conn):
         FROM category_rules
         WHERE keyword = 'TVA SPORTS DIRECT'
         """)).fetchone()
-    tx = core_conn.execute(
-        select(transactions_table.c.category, transactions_table.c.needs_review)
-        .where(transactions_table.c.id == tx_id)
-    ).mappings().fetchone()
+    tx = (
+        core_conn.execute(
+            select(transactions_table.c.category, transactions_table.c.needs_review).where(
+                transactions_table.c.id == tx_id
+            )
+        )
+        .mappings()
+        .fetchone()
+    )
 
     assert result["updated"] is True
     assert result["saved_rule_id"] == rule._mapping["id"]

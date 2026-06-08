@@ -309,11 +309,7 @@ def prepare_dashboard_data(args, dashboard_request, query_data):
         quick_view,
         merchant_search,
     )
-    income_amount_type = (
-        AMOUNT_TYPE_CREDIT
-        if query_data.include_transfer_credits
-        else AMOUNT_TYPE_INCOME
-    )
+    income_amount_type = AMOUNT_TYPE_CREDIT if query_data.include_transfer_credits else AMOUNT_TYPE_INCOME
 
     return PreparedDashboardData(
         total_spending=total_spending,
@@ -340,7 +336,8 @@ def dashboard_breakdown_rows(dashboard_request, query_data, total_spending):
         query_data.spending_by_category_all
         if dashboard_request.show_income
         else [
-            row for row in query_data.spending_by_category_all
+            row
+            for row in query_data.spending_by_category_all
             if str(row["category"]).casefold() != income_category_name
         ]
     )
@@ -350,14 +347,15 @@ def dashboard_breakdown_rows(dashboard_request, query_data, total_spending):
         else spending_by_category
     )
     if dashboard_request.breakdown_mode == DASHBOARD_BREAKDOWN_TAG and not dashboard_request.show_untagged:
-        spending_breakdown = [
-            row for row in spending_breakdown
-            if not row.get("untagged")
-        ]
+        spending_breakdown = [row for row in spending_breakdown if not row.get("untagged")]
     if dashboard_request.breakdown_mode == DASHBOARD_BREAKDOWN_TAG:
-        breakdown_total = total_spending if dashboard_request.show_income else max(
-            0,
-            total_spending - rounded_money_float(income_category_spending),
+        breakdown_total = (
+            total_spending
+            if dashboard_request.show_income
+            else max(
+                0,
+                total_spending - rounded_money_float(income_category_spending),
+            )
         )
     else:
         breakdown_total = sum(money_to_float(row["total"]) for row in spending_by_category)
@@ -473,18 +471,9 @@ def dashboard_summary_context(query_data, prepared_data):
 def dashboard_category_context(prepared_data):
     """Return chart and table rows for the selected spending breakdown."""
     return {
-        "category_labels": [
-            row["category"]
-            for row in prepared_data.chart_category_rows
-        ],
-        "category_totals": [
-            rounded_money_float(row["total"])
-            for row in prepared_data.chart_category_rows
-        ],
-        "category_urls": [
-            row["url"]
-            for row in prepared_data.chart_category_rows
-        ],
+        "category_labels": [row["category"] for row in prepared_data.chart_category_rows],
+        "category_totals": [rounded_money_float(row["total"]) for row in prepared_data.chart_category_rows],
+        "category_urls": [row["url"] for row in prepared_data.chart_category_rows],
         "category_rows": prepared_data.category_rows,
     }
 
@@ -493,20 +482,14 @@ def dashboard_month_context(dashboard_request, query_data, prepared_data):
     """Return monthly chart series and drill-down URLs."""
     return {
         "expense_month_labels": [row["month"] for row in query_data.monthly_expenses],
-        "expense_month_totals": [
-            rounded_money_float(row["total"])
-            for row in query_data.monthly_expenses
-        ],
+        "expense_month_totals": [rounded_money_float(row["total"]) for row in query_data.monthly_expenses],
         "expense_month_urls": dashboard_month_urls(
             query_data.monthly_expenses,
             dashboard_request,
             AMOUNT_TYPE_SPENDING,
         ),
         "income_month_labels": [row["month"] for row in query_data.monthly_income],
-        "income_month_totals": [
-            rounded_money_float(row["total"])
-            for row in query_data.monthly_income
-        ],
+        "income_month_totals": [rounded_money_float(row["total"]) for row in query_data.monthly_income],
         "income_month_urls": dashboard_month_urls(
             query_data.monthly_income,
             dashboard_request,
@@ -526,10 +509,7 @@ def dashboard_month_context(dashboard_request, query_data, prepared_data):
             prepared_data.income_amount_type,
         ),
         "net_month_labels": [row["month"] for row in query_data.monthly_net],
-        "net_month_totals": [
-            rounded_money_float(row["total"])
-            for row in query_data.monthly_net
-        ],
+        "net_month_totals": [rounded_money_float(row["total"]) for row in query_data.monthly_net],
         "net_month_urls": dashboard_month_urls_for_labels(
             [row["month"] for row in query_data.monthly_net],
             dashboard_request,

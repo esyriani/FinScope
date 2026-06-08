@@ -44,7 +44,8 @@ def insert_financial_transaction(
     ignored=0,
 ):
     """Insert one report transaction for analytics assertions."""
-    conn.execute(text("""
+    conn.execute(
+        text("""
         INSERT INTO transactions (
             tx_date,
             description,
@@ -57,7 +58,8 @@ def insert_financial_transaction(
             fingerprint
         )
         VALUES (:p0, :p1, :p2, :p3, 0, 'manual', :p4, :p5, :p6)
-        """), {
+        """),
+        {
             "p0": tx_date,
             "p1": description,
             "p2": amount,
@@ -65,7 +67,8 @@ def insert_financial_transaction(
             "p4": ignored,
             "p5": transaction_kind,
             "p6": fingerprint,
-        })
+        },
+    )
     conn.commit()
 
 
@@ -238,18 +241,10 @@ def test_comparison_refunds_reduce_current_and_previous_period_spending(app, cor
         )
 
     with app.test_request_context("/comparison"):
-        context = comparison_service.build_comparison_context(
-            MultiDict([("period_comparison", "month_previous")])
-        )
+        context = comparison_service.build_comparison_context(MultiDict([("period_comparison", "month_previous")]))
 
-    totals = {
-        metric["label"]: metric
-        for metric in context["period_comparison"]["totals"]
-    }
-    category_rows = {
-        row["category"]: row
-        for row in context["period_comparison"]["category_rows"]
-    }
+    totals = {metric["label"]: metric for metric in context["period_comparison"]["totals"]}
+    category_rows = {row["category"]: row for row in context["period_comparison"]["category_rows"]}
 
     assert totals["Spending"]["current"] == 150.00
     assert totals["Spending"]["previous"] == 100.00

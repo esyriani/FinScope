@@ -147,10 +147,7 @@ def test_filter_new_transactions_preserves_first_occurrence_order_for_generated_
     new_transactions, skipped_count = filter_new_transactions(core_conn, batch, account_id=7)
 
     assert skipped_count == len(batch) - len(unique_rows)
-    assert [tx["description"] for tx in new_transactions] == [
-        row["description"]
-        for row in unique_rows
-    ]
+    assert [tx["description"] for tx in new_transactions] == [row["description"] for row in unique_rows]
     assert len({tx["fingerprint"] for tx in new_transactions}) == len(unique_rows)
 
 

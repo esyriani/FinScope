@@ -16,39 +16,47 @@ from finance_app.modules.statements.importer import get_file_extension, normaliz
 
 def statement_import_row(conn, statement_id):
     """Return persisted statement data needed to queue import work."""
-    return conn.execute(
-        select(
-            statements_table.c.id,
-            statements_table.c.account_id,
-            statements_table.c.filename,
-            statements_table.c.extension,
-            statements_table.c.raw_text,
-            statements_table.c.import_status,
-            statements_table.c.interac_direction,
-            statements_table.c.date_order,
-            statement_types_table.c.parser_type,
-            statement_types_table.c.import_mode,
-        )
-        .select_from(
-            statements_table.join(
-                statement_types_table,
-                statement_types_table.c.id == statements_table.c.statement_type_id,
+    return (
+        conn.execute(
+            select(
+                statements_table.c.id,
+                statements_table.c.account_id,
+                statements_table.c.filename,
+                statements_table.c.extension,
+                statements_table.c.raw_text,
+                statements_table.c.import_status,
+                statements_table.c.interac_direction,
+                statements_table.c.date_order,
+                statement_types_table.c.parser_type,
+                statement_types_table.c.import_mode,
             )
+            .select_from(
+                statements_table.join(
+                    statement_types_table,
+                    statement_types_table.c.id == statements_table.c.statement_type_id,
+                )
+            )
+            .where(statements_table.c.id == statement_id)
         )
-        .where(statements_table.c.id == statement_id)
-    ).mappings().fetchone()
+        .mappings()
+        .fetchone()
+    )
 
 
 def statement_by_checksum(conn, checksum):
     """Return an uploaded statement row by checksum for duplicate detection."""
-    return conn.execute(
-        select(
-            statements_table.c.id,
-            statements_table.c.filename,
-            statements_table.c.uploaded_at,
-            statements_table.c.import_status,
-        ).where(statements_table.c.checksum == checksum)
-    ).mappings().fetchone()
+    return (
+        conn.execute(
+            select(
+                statements_table.c.id,
+                statements_table.c.filename,
+                statements_table.c.uploaded_at,
+                statements_table.c.import_status,
+            ).where(statements_table.c.checksum == checksum)
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def create_uploaded_statement(
@@ -81,9 +89,7 @@ def create_uploaded_statement(
 
 def delete_statement_transactions(conn, statement_id):
     """Delete imported transactions for a statement before reprocessing."""
-    conn.execute(
-        delete(transactions_table).where(transactions_table.c.statement_id == statement_id)
-    )
+    conn.execute(delete(transactions_table).where(transactions_table.c.statement_id == statement_id))
 
 
 def statement_extension(statement):

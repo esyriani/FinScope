@@ -62,14 +62,9 @@ def parse_global_settings_form(form, app_settings):
             form.get("verify_threshold"),
             "Verify threshold",
         ),
-        "auto_llm_categorization_enabled": parse_checkbox(
-            form.get("auto_llm_categorization_enabled")
-        ),
-        "transaction_ai_rerun_enabled": parse_checkbox(
-            form.get("transaction_ai_rerun_enabled")
-        ),
-        "openai_model": clean_openai_model(form.get("openai_model"))
-        or app_settings.default_categorization_model,
+        "auto_llm_categorization_enabled": parse_checkbox(form.get("auto_llm_categorization_enabled")),
+        "transaction_ai_rerun_enabled": parse_checkbox(form.get("transaction_ai_rerun_enabled")),
+        "openai_model": clean_openai_model(form.get("openai_model")) or app_settings.default_categorization_model,
         "recurrence_minimum_occurrences": parse_positive_int(
             form.get("recurrence_minimum_occurrences"),
             RECURRENCE_DETECTION_DEFAULTS.minimum_occurrences,

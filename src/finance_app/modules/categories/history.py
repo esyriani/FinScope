@@ -30,7 +30,6 @@ from finance_app.modules.merchants.sql_filters import (
     merchant_description_candidates,
 )
 
-
 CANDIDATE_POOL_LIMIT = 120
 EVIDENCE_LIMIT = 8
 MIN_CANDIDATE_SCORE = 0.55
@@ -112,8 +111,7 @@ def retrieve_historical_decision(conn, transaction, unknown_category):
         (
             candidate
             for candidate in (
-                score_historical_candidate(conn, transaction, row, tag_map.get(row["id"], ()))
-                for row in rows
+                score_historical_candidate(conn, transaction, row, tag_map.get(row["id"], ())) for row in rows
             )
             if candidate.score >= MIN_CANDIDATE_SCORE
         ),
@@ -138,28 +136,32 @@ def historical_candidate_rows(conn, transaction, unknown_category):
     if candidate_filter is None:
         return []
 
-    return conn.execute(
-        select(
-            transactions_table.c.id,
-            transactions_table.c.account_id,
-            transactions_table.c.merchant_id,
-            transactions_table.c.tx_date,
-            transactions_table.c.description,
-            transactions_table.c.amount,
-            transactions_table.c.category,
-            transactions_table.c.category_source,
-            transactions_table.c.category_confidence,
-            transactions_table.c.reviewed_at,
-            transactions_table.c.transaction_kind,
+    return (
+        conn.execute(
+            select(
+                transactions_table.c.id,
+                transactions_table.c.account_id,
+                transactions_table.c.merchant_id,
+                transactions_table.c.tx_date,
+                transactions_table.c.description,
+                transactions_table.c.amount,
+                transactions_table.c.category,
+                transactions_table.c.category_source,
+                transactions_table.c.category_confidence,
+                transactions_table.c.reviewed_at,
+                transactions_table.c.transaction_kind,
+            )
+            .where(*conditions, candidate_filter)
+            .order_by(
+                case((transactions_table.c.reviewed_at.is_not(None), 0), else_=1),
+                transactions_table.c.tx_date.desc(),
+                transactions_table.c.id.desc(),
+            )
+            .limit(CANDIDATE_POOL_LIMIT)
         )
-        .where(*conditions, candidate_filter)
-        .order_by(
-            case((transactions_table.c.reviewed_at.is_not(None), 0), else_=1),
-            transactions_table.c.tx_date.desc(),
-            transactions_table.c.id.desc(),
-        )
-        .limit(CANDIDATE_POOL_LIMIT)
-    ).mappings().fetchall()
+        .mappings()
+        .fetchall()
+    )
 
 
 def candidate_pool_filter(conn, transaction):
@@ -169,10 +171,7 @@ def candidate_pool_filter(conn, transaction):
     if merchant_id is not None:
         filters.append(transactions_table.c.merchant_id == int(merchant_id))
 
-    merchant_key = (
-        transaction.get("merchant_key")
-        or transaction.get("description")
-    )
+    merchant_key = transaction.get("merchant_key") or transaction.get("description")
     description_candidates = merchant_description_candidates(conn, merchant_key)
     if description_candidates:
         filters.append(description_matches_any_candidate(transactions_table.c.description, description_candidates))
@@ -251,11 +250,7 @@ def score_historical_candidate(conn, transaction, row, tags):
 
 def current_merchant_identity(transaction):
     """Return the best available normalized merchant text for a transaction."""
-    return str(
-        transaction.get("merchant_key")
-        or transaction.get("description")
-        or ""
-    ).strip()
+    return str(transaction.get("merchant_key") or transaction.get("description") or "").strip()
 
 
 def merchant_similarity(transaction, row, current_merchant, candidate_merchant):
@@ -346,22 +341,13 @@ def historical_decision_from_candidates(candidates):
     vote_totals = {}
     for candidate in candidates:
         vote_totals[candidate.category] = (
-            vote_totals.get(candidate.category, 0.0)
-            + candidate.score * candidate.authority
+            vote_totals.get(candidate.category, 0.0) + candidate.score * candidate.authority
         )
 
     category, winning_weight = max(vote_totals.items(), key=lambda item: item[1])
     total_weight = sum(vote_totals.values())
-    winning_candidates = [
-        candidate
-        for candidate in candidates
-        if candidate.category == category
-    ]
-    strong_candidates = [
-        candidate
-        for candidate in winning_candidates
-        if candidate.score >= STRONG_CANDIDATE_SCORE
-    ]
+    winning_candidates = [candidate for candidate in candidates if candidate.category == category]
+    strong_candidates = [candidate for candidate in winning_candidates if candidate.score >= STRONG_CANDIDATE_SCORE]
     winner_share = winning_weight / total_weight if total_weight else 0.0
     top_score = winning_candidates[0].score if winning_candidates else 0.0
     exceptional_single = (

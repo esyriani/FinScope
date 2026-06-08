@@ -7,7 +7,6 @@ protect built-in rows from user edits and deletes.
 
 from finance_app.core.constants import TRANSFER_CATEGORY, UNKNOWN_CATEGORY
 
-
 BUILTIN_CATEGORY_UNKNOWN = "unknown"
 BUILTIN_CATEGORY_TRANSFERS = "transfers"
 
@@ -17,8 +16,7 @@ BUILTIN_CATEGORIES = (
         "name": UNKNOWN_CATEGORY,
         "description": "Transactions whose category is not known with sufficient confidence.",
         "instruction": (
-            "Use when no listed category is clearly supported by the transaction "
-            "description and available context."
+            "Use when no listed category is clearly supported by the transaction " "description and available context."
         ),
     },
     {
@@ -47,7 +45,4 @@ def builtin_category_names():
 def is_builtin_category_name(name):
     """Return whether a submitted category name is reserved by FinScope."""
     normalized = str(name or "").strip().casefold()
-    return normalized in {
-        category_name.casefold()
-        for category_name in builtin_category_names()
-    }
+    return normalized in {category_name.casefold() for category_name in builtin_category_names()}

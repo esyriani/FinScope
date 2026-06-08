@@ -59,7 +59,7 @@ def get_existing_transaction_fingerprints(conn, fingerprints):
     chunk_size = 900
 
     for index in range(0, len(fingerprints), chunk_size):
-        chunk = fingerprints[index:index + chunk_size]
+        chunk = fingerprints[index : index + chunk_size]
         if not chunk:
             continue
 

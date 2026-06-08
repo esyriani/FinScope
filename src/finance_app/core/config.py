@@ -8,7 +8,6 @@ from urllib.parse import quote, unquote
 
 from finance_app.core.constants import BASE_DIR
 
-
 CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(BASE_DIR) / "config.ini"))
 EXAMPLE_CONFIG_PATH = Path(BASE_DIR) / "config.example.ini"
 DEVELOPMENT_SECRET_KEY = "dev-secret-key"
@@ -18,6 +17,7 @@ LOCAL_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 @dataclass(frozen=True)
 class AppSettings:
     """Represent app settings."""
+
     config_path: Path
     secret_key: str
     timezone: str
@@ -113,7 +113,10 @@ def load_settings(config_path=CONFIG_PATH):
             50,
         ),
         default_comparison_max_years=parse_positive_int(
-            env("FINANCE_DEFAULT_COMPARISON_MAX_YEARS", parser.get("setting_defaults", "comparison_max_years", fallback="2")),
+            env(
+                "FINANCE_DEFAULT_COMPARISON_MAX_YEARS",
+                parser.get("setting_defaults", "comparison_max_years", fallback="2"),
+            ),
             2,
         ),
         default_comparison_insight_card_limit=parse_positive_int(
@@ -124,15 +127,24 @@ def load_settings(config_path=CONFIG_PATH):
             7,
         ),
         default_home_top_category_limit=parse_positive_int(
-            env("FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT", parser.get("setting_defaults", "home_top_category_limit", fallback="5")),
+            env(
+                "FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT",
+                parser.get("setting_defaults", "home_top_category_limit", fallback="5"),
+            ),
             5,
         ),
         default_merchant_table_limit=parse_positive_int(
-            env("FINANCE_DEFAULT_MERCHANT_TABLE_LIMIT", parser.get("setting_defaults", "merchant_table_limit", fallback="10")),
+            env(
+                "FINANCE_DEFAULT_MERCHANT_TABLE_LIMIT",
+                parser.get("setting_defaults", "merchant_table_limit", fallback="10"),
+            ),
             10,
         ),
         default_rule_preview_limit=parse_positive_int(
-            env("FINANCE_DEFAULT_RULE_PREVIEW_LIMIT", parser.get("setting_defaults", "rule_preview_limit", fallback="10")),
+            env(
+                "FINANCE_DEFAULT_RULE_PREVIEW_LIMIT",
+                parser.get("setting_defaults", "rule_preview_limit", fallback="10"),
+            ),
             10,
         ),
         default_rule_audit_transaction_limit=parse_positive_int(
@@ -143,15 +155,23 @@ def load_settings(config_path=CONFIG_PATH):
             5000,
         ),
         default_llm_confidence_threshold=parse_probability(
-            env("FINANCE_DEFAULT_LLM_CONFIDENCE_THRESHOLD", parser.get("setting_defaults", "llm_confidence_threshold", fallback="0.85")),
+            env(
+                "FINANCE_DEFAULT_LLM_CONFIDENCE_THRESHOLD",
+                parser.get("setting_defaults", "llm_confidence_threshold", fallback="0.85"),
+            ),
             0.85,
         ),
         default_llm_review_threshold=parse_probability(
-            env("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", parser.get("setting_defaults", "llm_review_threshold", fallback="0.60")),
+            env(
+                "FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD",
+                parser.get("setting_defaults", "llm_review_threshold", fallback="0.60"),
+            ),
             0.60,
         ),
         default_verify_threshold=parse_probability(
-            env("FINANCE_DEFAULT_VERIFY_THRESHOLD", parser.get("setting_defaults", "verify_threshold", fallback="0.95")),
+            env(
+                "FINANCE_DEFAULT_VERIFY_THRESHOLD", parser.get("setting_defaults", "verify_threshold", fallback="0.95")
+            ),
             0.95,
         ),
         default_transaction_ai_rerun_enabled=parse_bool(
@@ -163,7 +183,8 @@ def load_settings(config_path=CONFIG_PATH):
         default_categorization_model=env(
             "FINANCE_DEFAULT_CATEGORIZATION_MODEL",
             parser.get("setting_defaults", "categorization_model", fallback="gpt-4o-mini"),
-        ).strip() or "gpt-4o-mini",
+        ).strip()
+        or "gpt-4o-mini",
     )
 
 
@@ -197,7 +218,7 @@ def sqlite_path_from_database_url(database_url):
     if not url.startswith("sqlite:///"):
         return None
 
-    path_text = unquote(url[len("sqlite:///"):])
+    path_text = unquote(url[len("sqlite:///") :])
     if os.name == "nt" and path_text.startswith("/") and len(path_text) > 2 and path_text[2] == ":":
         path_text = path_text[1:]
 

@@ -17,7 +17,6 @@ from finance_app.modules.categories.decision import (
     normalize_decision_source,
 )
 
-
 CATEGORY_SOURCE_LABELS = {
     CATEGORY_SOURCE_UNKNOWN: "Unknown",
     CATEGORY_SOURCE_RULE: "Rule",
@@ -202,14 +201,9 @@ def normalize_category_metadata(metadata):
     `decision_source` keys wherever metadata is structured as dictionaries.
     """
     if isinstance(metadata, dict):
-        normalized = {
-            key: normalize_category_metadata(value)
-            for key, value in metadata.items()
-        }
+        normalized = {key: normalize_category_metadata(value) for key, value in metadata.items()}
         if "decision_source" in normalized:
-            normalized["decision_source"] = normalize_decision_source(
-                normalized["decision_source"]
-            )
+            normalized["decision_source"] = normalize_decision_source(normalized["decision_source"])
         return normalized
     if isinstance(metadata, list):
         return [normalize_category_metadata(item) for item in metadata]

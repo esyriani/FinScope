@@ -64,7 +64,7 @@ def build_review_context(args):
     total_pages = max(1, (total_count + page_size - 1) // page_size)
     page = min(page, total_pages)
     offset = (page - 1) * page_size
-    visible_rows = review_rows[offset:offset + page_size]
+    visible_rows = review_rows[offset : offset + page_size]
     attach_review_row_urls(visible_rows, page, ungrouped_keys, sort, direction, merchant_search)
 
     return dict(
@@ -112,11 +112,7 @@ def filter_review_groups_by_merchant(groups, merchant_search):
         return groups
 
     needle = merchant_search.casefold()
-    return [
-        group
-        for group in groups
-        if needle in str(group.get("merchant_key") or "").casefold()
-    ]
+    return [group for group in groups if needle in str(group.get("merchant_key") or "").casefold()]
 
 
 def review_groups(conn, unknown_category, merchant_candidate=""):
