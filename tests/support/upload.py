@@ -73,20 +73,6 @@ def create_account_statement(conn, filename="statement.csv"):
     return account_id, statement_id
 
 
-def set_auto_llm_categorization(conn, enabled):
-    """Persist the automatic AI queueing toggle for the seeded owner."""
-    conn.execute(
-        text("""
-        UPDATE user_settings
-        SET value = :p0
-        WHERE key = 'auto_llm_categorization_enabled'
-          AND user_id = (SELECT id FROM users WHERE username = 'owner')
-        """),
-        {"p0": "1" if enabled else "0"},
-    )
-    conn.commit()
-
-
 def insert_llm_progress_transactions(conn, statement_id, account_id):
     """Insert unknown transactions that exercise success, unresolved, and request-error batches."""
     conn.execute(

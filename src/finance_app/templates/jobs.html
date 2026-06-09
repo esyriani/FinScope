@@ -1,5 +1,5 @@
 {% set page_stylesheets = ["css/tables.css", "css/exports.css"] %}
-{% set page_scripts = ["js/jobs.js", "js/tables.js", "js/exports.js"] %}
+{% set page_scripts = ["js/jobs.js", "js/tables.js", "js/ai-token-estimate.js", "js/exports.js"] %}
 {% extends "base.html" %}
 {% from "_pagination.html" import pagination with context %}
 
@@ -41,6 +41,9 @@
         <form
             method="post"
             action="{{ url_for('jobs.categorize_all_unknowns') }}"
+            {% if confirm_ai_token_usage_enabled %}
+            data-ai-token-estimate-url="{{ url_for('jobs.estimate_categorize_all_unknowns') }}"
+            {% endif %}
             data-ajax-refresh-form
             data-ajax-refresh-target='[data-ajax-refresh-target="jobs-actions"]'
         >

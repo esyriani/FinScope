@@ -1,11 +1,14 @@
 """Flask routes for the transactions feature."""
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
 from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.auth.permissions import PERMISSION_EDIT_TRANSACTIONS, permission_required
+from finance_app.modules.categories.llm_token_confirmation import ai_token_estimate_confirmed
+from finance_app.modules.categories.llm_token_presenter import localize_token_estimate_result
+from finance_app.modules.categories.llm_tokens import AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE
 from finance_app.modules.categories.service import (
     get_category_options,
     normalize_category,
@@ -163,6 +166,10 @@ def batch_transactions() -> ResponseReturnValue:
         return redirect(transactions_redirect_with_ignored(redirect_url, "all"))
 
     if action == "recategorize":
+        if not ai_token_estimate_confirmed(request.form):
+            flash(gettext(AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE))
+            return redirect(redirect_url)
+
         result = transactions_service.queue_selected_transaction_recategorization(transaction_ids)
         job_id = result.get("job_id")
         selected_count = result.get("selected_count") or 0
@@ -186,6 +193,26 @@ def batch_transactions() -> ResponseReturnValue:
     return redirect(redirect_url)
 
 
+@transactions_bp.route("/transactions/batch/ai-estimate", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
+def estimate_batch_transaction_ai() -> ResponseReturnValue:
+    """Return a token estimate for selected transaction recategorization."""
+    result = transactions_service.estimate_selected_transaction_recategorization(
+        request.form.getlist("transaction_ids")
+    )
+    status_code = 200 if result.get("ok") else 400
+    return jsonify(localized_json_result(result)), status_code
+
+
+@transactions_bp.route("/transactions/<int:transaction_id>/suggest-category/estimate", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
+def estimate_transaction_category_suggestion(transaction_id: int) -> ResponseReturnValue:
+    """Return a token estimate for one transaction AI category suggestion."""
+    result = transactions_service.estimate_transaction_ai_category(transaction_id)
+    status_code = 200 if result.get("ok") else 400
+    return jsonify(localized_json_result(result)), status_code
+
+
 @transactions_bp.route("/transactions/<int:transaction_id>/run-ai", methods=["POST"])
 @transactions_bp.route("/transactions/<int:transaction_id>/suggest-category", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
@@ -196,6 +223,10 @@ def suggest_transaction_category(transaction_id: int) -> ResponseReturnValue:
     apply action. It does not mutate the selected transaction or create a rule.
     """
     next_url = transactions_redirect_target()
+    if not ai_token_estimate_confirmed(request.form):
+        flash(gettext(AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE))
+        return redirect(next_url or url_for("transactions.transactions"))
+
     result = transactions_service.suggest_transaction_ai_category(transaction_id)
     display_result = dict(result)
     persistence = display_result.pop("persistence", None)
@@ -245,3 +276,8 @@ def apply_transaction_ai_suggestion(transaction_id: int) -> ResponseReturnValue:
         session.pop("transaction_ai_suggestion", None)
     flash(gettext(result.get("message") or "AI suggestion cannot be applied."))
     return redirect(next_url or url_for("transactions.transactions"))
+
+
+def localized_json_result(result: dict[str, object]) -> dict[str, object]:
+    """Return a JSON result with its top-level message localized."""
+    return localize_token_estimate_result(result, gettext)

@@ -21,7 +21,11 @@ from finance_app.core.i18n import gettext
 from finance_app.core.query import parse_page
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.auth.permissions import PERMISSION_MANAGE_JOBS, permission_required
-from finance_app.modules.settings.runtime import get_int_setting
+from finance_app.modules.categories.llm_token_confirmation import ai_token_estimate_confirmed
+from finance_app.modules.categories.llm_token_presenter import localize_token_estimate_result
+from finance_app.modules.categories.llm_tokens import AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE
+from finance_app.modules.settings.runtime import confirm_ai_token_usage_enabled, get_int_setting
+from finance_app.modules.upload import service as upload_service
 from finance_app.modules.upload import workflow as upload_workflow
 
 jobs_bp = Blueprint("jobs", __name__)
@@ -34,6 +38,7 @@ def jobs() -> str:
     page = parse_page(request.args.get("page"))
     with db_core_transaction() as conn:
         page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
+        confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
 
     total_count = count_background_jobs()
     total_pages = max(1, (total_count + page_size - 1) // page_size)
@@ -49,6 +54,7 @@ def jobs() -> str:
         total_pages=total_pages,
         page_start=offset + 1 if total_count else 0,
         page_end=min(offset + page_size, total_count),
+        confirm_ai_token_usage_enabled=confirm_ai_token_usage,
     )
 
 
@@ -153,6 +159,10 @@ def categorize_all_unknowns() -> ResponseReturnValue:
         flash(gettext("No unknown transactions need AI categorization."))
         return redirect(next_url)
 
+    if not ai_token_estimate_confirmed(request.form):
+        flash(gettext(AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE))
+        return redirect(next_url)
+
     job_id = upload_workflow.queue_all_unknown_llm_categorization()
     flash(
         gettext(
@@ -168,6 +178,19 @@ def categorize_all_unknowns() -> ResponseReturnValue:
     return redirect(next_url)
 
 
+@jobs_bp.route("/jobs/ai/categorize-unknowns/estimate", methods=["POST"])
+@permission_required(PERMISSION_MANAGE_JOBS)
+def estimate_categorize_all_unknowns() -> ResponseReturnValue:
+    """Return a token estimate for all-unknown AI categorization."""
+    with db_core_transaction() as conn:
+        unknown_count = upload_workflow.count_unknown_transactions(conn)
+
+    if not unknown_count:
+        return jsonify({"ok": False, "message": gettext("No unknown transactions need AI categorization.")}), 400
+
+    return jsonify(localized_json_result(upload_service.estimate_all_unknown_llm_categorization()))
+
+
 def jobs_redirect_target() -> str:
     """Return a safe redirect target for jobs actions."""
     target = request.form.get("next", "").strip()
@@ -175,3 +198,8 @@ def jobs_redirect_target() -> str:
         return target
 
     return url_for("jobs.jobs")
+
+
+def localized_json_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a JSON result with its top-level message localized."""
+    return localize_token_estimate_result(result, gettext)

@@ -49,6 +49,35 @@ def test_build_llm_prompt_includes_transaction_kind_and_bank_context():
     assert "best supported category" in system_prompt
 
 
+def test_build_llm_messages_returns_final_chat_payload():
+    """Verify the shared message builder returns final system and user content."""
+    messages = llm.build_llm_messages(
+        [
+            {
+                "llm_request_id": "0",
+                "merchant_key": "METRO",
+                "description": "Metro Grocery",
+                "amount": 12.34,
+                "category": "UNKNOWN",
+            }
+        ],
+        [],
+        ["UNKNOWN", "Food"],
+        category_rows=[
+            {"id": 1, "name": "UNKNOWN", "description": "", "instruction": ""},
+            {"id": 2, "name": "Food", "description": "Food purchases", "instruction": "Use for groceries."},
+        ],
+        verify_threshold=0.91,
+        review_threshold=0.62,
+    )
+
+    assert [message["role"] for message in messages] == ["system", "user"]
+    assert "At or above 0.91" in messages[0]["content"]
+    payload = json.loads(messages[1]["content"])
+    assert payload["transactions"][0]["merchant_key"] == "METRO"
+    assert payload["transactions"][0]["candidate_taxonomy"]["categories"][1]["name"] == "Food"
+
+
 def test_build_llm_prompt_minimizes_evidence_and_keeps_compact_candidate_taxonomy():
     """Verify LLM prompts omit raw finance context while keeping compact hints."""
     prompt = llm.build_llm_prompt(

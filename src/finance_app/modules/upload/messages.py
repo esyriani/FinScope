@@ -116,7 +116,6 @@ def upload_result_message(
     skipped_count: int,
     ignored_count: int,
     llm_candidate_count: int = 0,
-    llm_job_queued: bool = False,
 ) -> str:
     """Render the background upload result message."""
     del extension
@@ -146,16 +145,10 @@ def upload_result_message(
         message += f"Ignored {ignored_count} non-transaction rows. "
 
     if llm_candidate_count:
-        if llm_job_queued:
-            message += (
-                f"Queued AI categorization for {llm_candidate_count} unknown transaction"
-                f"{'' if llm_candidate_count == 1 else 's'}. "
-            )
-        else:
-            message += (
-                f"{llm_candidate_count} unknown transaction"
-                f"{'' if llm_candidate_count == 1 else 's'} can be categorized with AI from Uploaded statements. "
-            )
+        message += (
+            f"{llm_candidate_count} unknown transaction"
+            f"{'' if llm_candidate_count == 1 else 's'} can be categorized with AI from Uploaded statements. "
+        )
 
     message += "The original file was not stored."
     return message

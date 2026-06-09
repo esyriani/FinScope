@@ -9,6 +9,7 @@
     "js/rules.js",
     "js/tag-multiselect.js",
     "js/tables.js",
+    "js/ai-token-estimate.js",
     "js/exports.js"
 ] %}
 {% extends "base.html" %}
@@ -226,6 +227,10 @@
             action="{{ url_for('transactions.batch_transactions') }}"
             class="d-flex flex-wrap align-items-center justify-content-between gap-2"
             data-transaction-batch-form
+            {% if confirm_ai_token_usage_enabled %}
+            data-ai-token-estimate-url="{{ url_for('transactions.estimate_batch_transaction_ai') }}"
+            data-ai-token-estimate-submitter-required="true"
+            {% endif %}
             data-ajax-refresh-form
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -249,6 +254,9 @@
                     data-busy-overlay
                     data-busy-delay-ms="0"
                     data-busy-message="{{ _('Recategorizing selected transactions...') }}"
+                    {% if confirm_ai_token_usage_enabled %}
+                    data-ai-token-estimate-submitter
+                    {% endif %}
                 >
                     <i class="bi bi-arrow-repeat" aria-hidden="true"></i>{{ _("Recategorize selected") }}
                 </button>
@@ -389,6 +397,9 @@
                                             <form
                                                 method="post"
                                                 action="{{ url_for('transactions.suggest_transaction_category', transaction_id=tx['id']) }}"
+                                                {% if confirm_ai_token_usage_enabled %}
+                                                data-ai-token-estimate-url="{{ url_for('transactions.estimate_transaction_category_suggestion', transaction_id=tx['id']) }}"
+                                                {% endif %}
                                                 data-busy-overlay
                                                 data-busy-delay-ms="0"
                                                 data-busy-message="{{ _('Suggesting category...') }}"

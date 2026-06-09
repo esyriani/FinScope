@@ -36,6 +36,8 @@ from finance_app.database.upsert import insert_or_select_unique_row
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 from finance_app.modules.users import repository as user_repository
 
+CONFIRM_AI_TOKEN_USAGE_SETTING_KEY = "confirm_ai_token_usage_enabled"
+
 SETTINGS_DEFAULTS: dict[str, str] = {
     "default_table_page_size": str(settings.default_table_page_size),
     "comparison_max_years": str(settings.default_comparison_max_years),
@@ -49,8 +51,8 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "llm_confidence_threshold": str(settings.default_llm_confidence_threshold),
     "llm_review_threshold": str(settings.default_llm_review_threshold),
     "verify_threshold": str(settings.default_verify_threshold),
-    "auto_llm_categorization_enabled": "0",
     "transaction_ai_rerun_enabled": "1" if settings.default_transaction_ai_rerun_enabled else "0",
+    CONFIRM_AI_TOKEN_USAGE_SETTING_KEY: "1",
     "openai_model": settings.default_categorization_model,
     "recurrence_minimum_occurrences": str(RECURRENCE_DETECTION_DEFAULTS.minimum_occurrences),
     "recurrence_date_tolerance_days": str(RECURRENCE_DETECTION_DEFAULTS.date_tolerance_days),
@@ -416,6 +418,18 @@ def get_float_setting(
 def get_bool_setting(conn: Any, key: str, fallback: bool = False) -> bool:
     """Return boolean setting from a stored runtime value."""
     value = get_setting(conn, key)
+    return parse_bool_setting_value(value, fallback=fallback)
+
+
+def get_owner_bool_setting(conn: Any, key: str, fallback: bool = False) -> bool:
+    """Return a boolean owner-managed setting from the owner fallback row."""
+    owner = user_repository.get_first_active_owner(conn)
+    value = get_setting(conn, key, user_id=owner["id"]) if owner is not None else SETTINGS_DEFAULTS.get(key)
+    return parse_bool_setting_value(value, fallback=fallback)
+
+
+def parse_bool_setting_value(value: object, fallback: bool = False) -> bool:
+    """Return a boolean interpretation of a persisted setting value."""
     if value is None:
         return bool(fallback)
 
@@ -425,6 +439,11 @@ def get_bool_setting(conn: Any, key: str, fallback: bool = False) -> bool:
     if text in {"0", "false", "no", "off"}:
         return False
     return bool(fallback)
+
+
+def confirm_ai_token_usage_enabled(conn: Any) -> bool:
+    """Return whether AI actions must show and confirm a token estimate."""
+    return get_owner_bool_setting(conn, CONFIRM_AI_TOKEN_USAGE_SETTING_KEY, True)
 
 
 def get_unknown_category(conn: object) -> str:

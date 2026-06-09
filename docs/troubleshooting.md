@@ -49,7 +49,7 @@ If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or
 ## LLM categorization does not run
 
 Verify that `OPENAI_API_KEY` or `api_keys.openai_api_key` is configured.
-For automatic runs after statement imports, also verify that Settings > Categorization has automatic AI after import enabled. This setting is off by default.
+After statement imports, run AI manually from Uploaded statements or Jobs and review the token estimate before continuing.
 
 Without a key, unknown transactions remain unknown and can be reviewed manually.
 

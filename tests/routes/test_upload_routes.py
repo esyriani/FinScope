@@ -3,6 +3,7 @@
 import io
 
 from sqlalchemy import text
+from tests.support.database import set_owner_setting
 from tests.support.html import assert_markup, assert_visible_text
 from tests.support.web import set_csrf_token
 
@@ -181,6 +182,208 @@ def test_upload_route_renders_interac_import_guidance(client, core_conn):
         "skipped rows are ambiguous matches",
         "no matching checking transaction yet",
     )
+
+
+def test_estimate_categorize_statement_unknowns_returns_json(client, core_conn, monkeypatch):
+    """Verify the statement AI estimate route returns JSON."""
+    statement_type_id = core_conn.execute(text("""
+        SELECT id
+        FROM statement_types
+        WHERE active = 1
+        ORDER BY id
+        LIMIT 1
+        """)).fetchone()._mapping["id"]
+    statement_id = core_conn.execute(
+        text("""
+        INSERT INTO statements (
+            statement_type_id,
+            filename,
+            checksum,
+            extension,
+            raw_text,
+            import_status,
+            uploaded_at
+        )
+        VALUES (
+            :p0,
+            'statement.csv',
+            'statement-estimate-route',
+            'csv',
+            'Date,Description,Amount',
+            'completed',
+            '2026-05-11T09:59:59Z'
+        )
+        """),
+        {"p0": statement_type_id},
+    ).lastrowid
+    core_conn.commit()
+
+    from finance_app.modules.upload import controller as upload_controller
+
+    monkeypatch.setattr(upload_controller.upload_workflow, "count_statement_unknown_transactions", lambda conn, sid: 2)
+    monkeypatch.setattr(
+        upload_controller,
+        "estimate_statement_llm_categorization",
+        lambda sid: {
+            "ok": True,
+            "message": "AI token estimate ready.",
+            "estimate": {"request_count": 2, "input_tokens": 222},
+        },
+    )
+
+    response = client.post(
+        f"/upload/{statement_id}/categorize-unknowns/estimate",
+        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["estimate"]["request_count"] == 2
+    assert response.get_json()["message"] == "AI token estimate ready."
+
+
+def test_categorize_statement_unknowns_requires_token_estimate_confirmation(client, core_conn, monkeypatch):
+    """Verify statement AI categorization does not queue without confirmation."""
+    statement_type_id = core_conn.execute(text("""
+        SELECT id
+        FROM statement_types
+        WHERE active = 1
+        ORDER BY id
+        LIMIT 1
+        """)).fetchone()._mapping["id"]
+    statement_id = core_conn.execute(
+        text("""
+        INSERT INTO statements (
+            statement_type_id,
+            filename,
+            checksum,
+            extension,
+            raw_text,
+            import_status,
+            uploaded_at
+        )
+        VALUES (
+            :p0,
+            'statement-ai-unconfirmed.csv',
+            'statement-ai-unconfirmed',
+            'csv',
+            'Date,Description,Amount',
+            'completed',
+            '2026-05-11T09:59:59Z'
+        )
+        """),
+        {"p0": statement_type_id},
+    ).lastrowid
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            statement_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            fingerprint
+        )
+        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'statement-ai-unconfirmed-tx')
+        """),
+        {"p0": statement_id},
+    )
+    core_conn.commit()
+    submitted = []
+
+    from finance_app.modules.upload import controller as upload_controller
+
+    def queue_for_test(queued_statement_id):
+        """Capture accidental statement AI queue requests."""
+        submitted.append(queued_statement_id)
+        return "statementaijob123"
+
+    monkeypatch.setattr(upload_controller.upload_workflow, "queue_statement_llm_categorization", queue_for_test)
+
+    response = client.post(
+        f"/upload/{statement_id}/categorize-unknowns",
+        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/upload"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert submitted == []
+    assert_visible_text(response, "Review the token estimate before running AI.")
+
+
+def test_categorize_statement_unknowns_runs_without_confirmation_when_setting_disabled(
+    client,
+    core_conn,
+    monkeypatch,
+):
+    """Verify statement AI can queue without modal confirmation when the setting is off."""
+    statement_type_id = core_conn.execute(text("""
+        SELECT id
+        FROM statement_types
+        WHERE active = 1
+        ORDER BY id
+        LIMIT 1
+        """)).fetchone()._mapping["id"]
+    statement_id = core_conn.execute(
+        text("""
+        INSERT INTO statements (
+            statement_type_id,
+            filename,
+            checksum,
+            extension,
+            raw_text,
+            import_status,
+            uploaded_at
+        )
+        VALUES (
+            :p0,
+            'statement-ai-confirm-disabled.csv',
+            'statement-ai-confirm-disabled',
+            'csv',
+            'Date,Description,Amount',
+            'completed',
+            '2026-05-11T09:59:59Z'
+        )
+        """),
+        {"p0": statement_type_id},
+    ).lastrowid
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            statement_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            fingerprint
+        )
+        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'statement-ai-confirm-disabled-tx')
+        """),
+        {"p0": statement_id},
+    )
+    core_conn.commit()
+    set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
+    submitted = []
+
+    from finance_app.modules.upload import controller as upload_controller
+
+    def queue_for_test(queued_statement_id):
+        """Capture the statement AI queue request."""
+        submitted.append(queued_statement_id)
+        return "statementaijob123"
+
+    monkeypatch.setattr(upload_controller.upload_workflow, "queue_statement_llm_categorization", queue_for_test)
+
+    response = client.post(
+        f"/upload/{statement_id}/categorize-unknowns",
+        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/upload"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert submitted == [statement_id]
+    assert_visible_text(response, "AI categorization queued for 1 unknown transaction.")
 
 
 def test_upload_route_rejects_duplicate_statement_checksum(client, core_conn, monkeypatch):

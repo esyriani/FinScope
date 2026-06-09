@@ -9,7 +9,6 @@ from tests.support.upload import (
     build_llm_progress_categorizer,
     create_account_statement,
     insert_llm_progress_transactions,
-    set_auto_llm_categorization,
 )
 from tests.support.web import set_csrf_token
 
@@ -18,10 +17,9 @@ from finance_app.modules.categories.taxonomy import get_transaction_tag_names
 from finance_app.modules.upload import workflow as upload_workflow
 
 
-def test_import_statement_job_queues_llm_categorization_for_unknowns(app, core_conn, monkeypatch):
-    """Verify that statement import queues a follow-up LLM job for unknown rows."""
+def test_import_statement_job_keeps_ai_candidates_for_manual_estimate_first_run(app, core_conn, monkeypatch):
+    """Verify imports do not queue AI before a user reviews token estimates."""
     account_id, statement_id = create_account_statement(core_conn, "unknowns.csv")
-    set_auto_llm_categorization(core_conn, True)
     submitted_jobs = []
 
     def capture_job(label, func, *args, **kwargs):
@@ -54,7 +52,7 @@ def test_import_statement_job_queues_llm_categorization_for_unknowns(app, core_c
         """),
         {"p0": statement_id},
     ).fetchall()
-    assert "Queued AI categorization for 1 unknown transaction." in message
+    assert "1 unknown transaction can be categorized with AI from Uploaded statements." in message
     assert [tuple(row) for row in rows] == [("UNKNOWN SHOP", "UNKNOWN", 1)]
     statement = core_conn.execute(
         text("""
@@ -66,21 +64,13 @@ def test_import_statement_job_queues_llm_categorization_for_unknowns(app, core_c
         {"p0": statement_id},
     ).fetchone()
     assert tuple(statement) == ("completed", 1, 0, 0, 1, None)
-    assert submitted_jobs == [
-        {
-            "label": f"AI categorize statement {statement_id}",
-            "func": upload_workflow.categorize_statement_unknown_transactions_job,
-            "args": (statement_id,),
-            "kwargs": {"queue": "ai"},
-        }
-    ]
+    assert submitted_jobs == []
 
 
-def test_import_statement_job_respects_disabled_automatic_ai(app, core_conn, monkeypatch):
-    """Verify unknown rows stay rerunnable when automatic AI queueing is off."""
+def test_import_statement_job_reports_no_ai_candidates_when_none_remain(app, core_conn, monkeypatch):
+    """Verify imports without unknown rows do not mention manual AI reruns."""
     account_id, statement_id = create_account_statement(core_conn, "manual-ai.csv")
     submitted_jobs = []
-    set_auto_llm_categorization(core_conn, False)
 
     monkeypatch.setattr(
         upload_workflow,
@@ -93,11 +83,11 @@ def test_import_statement_job_respects_disabled_automatic_ai(app, core_conn, mon
         account_id,
         "credit_card",
         "csv",
-        "Date,Description,Amount\n2026-01-02,UNKNOWN SHOP,12.34\n",
+        "Date,Description,Amount\n",
     )
 
     assert submitted_jobs == []
-    assert "1 unknown transaction can be categorized with AI from Uploaded statements." in message
+    assert "can be categorized with AI" not in message
 
 
 def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app, core_conn):
@@ -345,7 +335,11 @@ def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_co
 
     response = client.post(
         f"/upload/{statement_id}/categorize-unknowns",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/upload"},
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "next": "/upload",
+            "ai_token_estimate_confirmed": "1",
+        },
         follow_redirects=True,
     )
 

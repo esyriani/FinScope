@@ -593,6 +593,108 @@ h2 {
     --bs-alert-color: var(--app-heading);
 }
 
+.btn {
+    border-radius: 8px;
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--app-accent);
+    --bs-btn-border-color: var(--app-accent);
+    --bs-btn-color: #ffffff;
+    --bs-btn-hover-bg: var(--app-accent-strong);
+    --bs-btn-hover-border-color: var(--app-accent-strong);
+    --bs-btn-hover-color: #ffffff;
+    --bs-btn-active-bg: var(--app-accent-strong);
+    --bs-btn-active-border-color: var(--app-accent-strong);
+    --bs-btn-active-color: #ffffff;
+}
+
+[data-bs-theme="dark"] .btn-primary {
+    --bs-btn-active-color: #041714;
+    --bs-btn-color: #05201c;
+    --bs-btn-hover-color: #041714;
+}
+
+.btn-outline-primary {
+    --bs-btn-active-bg: var(--app-accent);
+    --bs-btn-active-border-color: var(--app-accent);
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-border-color: rgba(var(--app-accent-rgb), 0.55);
+    --bs-btn-color: var(--app-accent-strong);
+    --bs-btn-hover-bg: var(--app-accent);
+    --bs-btn-hover-border-color: var(--app-accent);
+    --bs-btn-hover-color: #ffffff;
+}
+
+[data-bs-theme="dark"] .btn-outline-primary {
+    --bs-btn-active-color: #05201c;
+    --bs-btn-hover-color: #05201c;
+}
+
+.btn-outline-secondary {
+    --bs-btn-active-bg: var(--app-surface-soft);
+    --bs-btn-active-border-color: var(--app-border-strong);
+    --bs-btn-active-color: var(--app-heading);
+    --bs-btn-border-color: var(--app-border-strong);
+    --bs-btn-color: var(--app-text);
+    --bs-btn-hover-bg: var(--app-surface-soft);
+    --bs-btn-hover-border-color: var(--app-border-strong);
+    --bs-btn-hover-color: var(--app-heading);
+}
+
+.btn-outline-success {
+    --bs-btn-active-bg: var(--app-success);
+    --bs-btn-active-border-color: var(--app-success);
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-border-color: rgba(var(--app-success-rgb), 0.55);
+    --bs-btn-color: var(--app-success);
+    --bs-btn-hover-bg: var(--app-success);
+    --bs-btn-hover-border-color: var(--app-success);
+    --bs-btn-hover-color: #ffffff;
+}
+
+[data-bs-theme="dark"] .btn-outline-success {
+    --bs-btn-active-color: #052012;
+    --bs-btn-hover-color: #052012;
+}
+
+.btn-outline-warning {
+    --bs-btn-active-bg: var(--app-warning);
+    --bs-btn-active-border-color: var(--app-warning);
+    --bs-btn-active-color: #241605;
+    --bs-btn-border-color: rgba(var(--app-warning-rgb), 0.62);
+    --bs-btn-color: var(--app-warning);
+    --bs-btn-hover-bg: var(--app-warning);
+    --bs-btn-hover-border-color: var(--app-warning);
+    --bs-btn-hover-color: #241605;
+}
+
+.btn-outline-danger {
+    --bs-btn-border-color: rgba(var(--app-danger-rgb), 0.55);
+    --bs-btn-color: var(--app-danger);
+    --bs-btn-hover-bg: var(--app-danger);
+    --bs-btn-hover-border-color: var(--app-danger);
+    --bs-btn-hover-color: #ffffff;
+}
+
+[data-bs-theme="dark"] .btn-outline-danger {
+    --bs-btn-hover-color: #2b050c;
+}
+
+.btn .bi {
+    line-height: 1;
+    margin-right: 0.35rem;
+    vertical-align: -0.08em;
+}
+
+.btn-sm .bi {
+    margin-right: 0.28rem;
+}
+
+.btn-icon-only .bi {
+    margin-right: 0;
+}
+
 .filter-actions {
     align-items: end;
     display: flex;
@@ -613,6 +715,10 @@ h2 {
     display: flex;
     max-height: calc(100vh - 1rem);
     max-height: calc(100dvh - 1rem);
+}
+
+.modal-dialog-fit-content {
+    height: auto;
 }
 
 .modal-footer {
@@ -643,6 +749,117 @@ h2 {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
+}
+
+.modal-dialog-fit-content .modal-body,
+.modal-dialog-fit-content .modal-content > form > .modal-body {
+    flex: 0 1 auto;
+}
+
+.ai-token-estimate-summary {
+    display: grid;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+}
+
+.ai-token-estimate-message {
+    color: var(--app-heading);
+    font-size: 1rem;
+    margin: 0;
+}
+
+.ai-token-estimate-context {
+    color: var(--app-muted);
+    margin: 0;
+}
+
+.ai-token-estimate-usage {
+    margin-bottom: 1rem;
+    padding: 0.75rem 0.875rem;
+}
+
+.ai-token-estimate-usage-label {
+    font-weight: 700;
+}
+
+.ai-token-estimate-usage-detail {
+    font-size: 0.92rem;
+    margin-top: 0.15rem;
+}
+
+.ai-token-estimate-list {
+    display: grid;
+    margin: 0;
+}
+
+.ai-token-estimate-row {
+    align-items: baseline;
+    border-top: 1px solid var(--app-border);
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(10rem, 1fr) minmax(0, max-content);
+    padding: 0.55rem 0;
+}
+
+.ai-token-estimate-row:first-child {
+    border-top: 0;
+}
+
+.ai-token-estimate-label {
+    color: var(--app-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.ai-token-estimate-value {
+    color: var(--app-heading);
+    font-weight: 700;
+    margin: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+}
+
+.ai-token-estimate-row-emphasized .ai-token-estimate-value {
+    font-size: 1.25rem;
+}
+
+.ai-token-estimate-helper {
+    color: var(--app-muted);
+    font-size: 0.84rem;
+    font-weight: 500;
+    margin-top: 0.15rem;
+}
+
+.ai-token-estimate-details {
+    border-top: 1px solid var(--app-border);
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+}
+
+.ai-token-estimate-details summary {
+    color: var(--app-heading);
+    cursor: pointer;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+
+.ai-token-estimate-details:not([open]) summary {
+    margin-bottom: 0;
+}
+
+.ai-token-estimate-list-compact .ai-token-estimate-row {
+    padding: 0.45rem 0;
+}
+
+@media (max-width: 575.98px) {
+    .ai-token-estimate-row {
+        gap: 0.15rem;
+        grid-template-columns: 1fr;
+    }
+
+    .ai-token-estimate-value {
+        text-align: left;
+    }
 }
 
 @media (min-width: 576px) {

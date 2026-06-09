@@ -1,5 +1,5 @@
 {% set page_stylesheets = ["css/tables.css", "css/exports.css"] %}
-{% set page_scripts = ["js/upload.js", "js/tables.js", "js/exports.js"] %}
+{% set page_scripts = ["js/upload.js", "js/tables.js", "js/ai-token-estimate.js", "js/exports.js"] %}
 {% extends "base.html" %}
 {% from "_pagination.html" import pagination with context %}
 
@@ -306,7 +306,14 @@
                                 >
                                     <i class="bi bi-arrow-repeat" aria-hidden="true"></i>{{ _("Reprocess") }}
                                 </button>
-                                <form method="post" action="{{ url_for('upload.categorize_statement_unknowns', statement_id=statement['id']) }}" data-ajax-refresh-form>
+                                <form
+                                    method="post"
+                                    action="{{ url_for('upload.categorize_statement_unknowns', statement_id=statement['id']) }}"
+                                    {% if confirm_ai_token_usage_enabled %}
+                                    data-ai-token-estimate-url="{{ url_for('upload.estimate_categorize_statement_unknowns', statement_id=statement['id']) }}"
+                                    {% endif %}
+                                    data-ajax-refresh-form
+                                >
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="next" value="{{ request.full_path }}">
                                     <button

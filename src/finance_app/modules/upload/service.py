@@ -1,6 +1,6 @@
 """Application orchestration for the upload feature."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
 
 from sqlalchemy import func, select
@@ -41,7 +41,15 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
-from finance_app.modules.settings.runtime import get_int_setting, get_statement_type_options
+from finance_app.modules.categories.categorization import categorize_transactions
+from finance_app.modules.categories.llm_estimation import estimate_llm_categorization_tokens
+from finance_app.modules.categories.repository import get_category_rules
+from finance_app.modules.settings.runtime import (
+    confirm_ai_token_usage_enabled,
+    get_int_setting,
+    get_statement_type_options,
+    get_unknown_category,
+)
 from finance_app.modules.statements.importer import (
     analyze_slash_date_order,
     build_interac_transfer,
@@ -57,6 +65,7 @@ from finance_app.modules.statements.importer import (
     parse_money,
     preferred_date_formats_for_values,
 )
+from finance_app.modules.upload import workflow as upload_workflow
 
 STATEMENT_TEXT_PREVIEW_CHARS = 2000
 STATEMENT_PREVIEW_ROW_LIMIT = 12
@@ -71,6 +80,7 @@ def build_upload_context(args: Any) -> dict[str, Any]:
     page = parse_page(args.get("page"))
     with db_core_transaction() as conn:
         page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
+        confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
         statement_types = get_statement_type_options(conn)
         accounts = (
             conn.execute(
@@ -176,6 +186,7 @@ def build_upload_context(args: Any) -> dict[str, Any]:
         "total_pages": total_pages,
         "page_start": offset + 1 if total_count else 0,
         "page_end": min(offset + page_size, total_count),
+        "confirm_ai_token_usage_enabled": confirm_ai_token_usage,
     }
 
 
@@ -194,6 +205,51 @@ def present_statement(statement: Any) -> dict[str, Any]:
     row["extension_label"] = (row.get("extension") or "").upper() or "n/a"
     row["date_order_label"] = DATE_ORDERS.get(row.get("date_order") or DATE_ORDER_AUTO, DATE_ORDERS[DATE_ORDER_AUTO])
     return row
+
+
+def estimate_statement_llm_categorization(statement_id: int) -> dict[str, Any]:
+    """Return a token estimate for one statement's unknown AI categorization."""
+    return estimate_unknown_llm_categorization(statement_id=statement_id, scope="statement_unknowns")
+
+
+def estimate_all_unknown_llm_categorization() -> dict[str, Any]:
+    """Return a token estimate for all active unknown AI categorization."""
+    return estimate_unknown_llm_categorization(statement_id=None, scope="all_unknowns")
+
+
+def estimate_unknown_llm_categorization(statement_id: int | None, scope: str) -> dict[str, Any]:
+    """Return a JSON-ready token estimate for unknown transaction AI categorization."""
+    with db_core_transaction() as conn:
+        unknown_category = get_unknown_category(conn)
+        rows = upload_workflow.unknown_transaction_rows(conn, unknown_category, statement_id=statement_id)
+        transactions: list[MutableMapping[str, Any]] = []
+        for row in rows:
+            transaction: MutableMapping[str, Any] = dict(row)
+            transaction["category"] = row["category"] or unknown_category
+            transactions.append(transaction)
+        categorized = categorize_transactions(transactions, conn=conn, use_llm=False) if transactions else []
+        estimate = estimate_llm_categorization_tokens(
+            conn,
+            categorized,
+            get_category_rules(conn),
+            unknown_category,
+        )
+
+    return ai_token_estimate_result(scope, len(rows), estimate)
+
+
+def ai_token_estimate_result(scope: str, transaction_count: int, estimate: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a JSON-ready token estimate payload for queued AI actions."""
+    request_count = int(estimate.get("request_count") or 0)
+    return {
+        "ok": True,
+        "scope": scope,
+        "transaction_count": transaction_count,
+        "message": (
+            "No LLM request would be sent for this action." if request_count == 0 else "AI token estimate ready."
+        ),
+        "estimate": dict(estimate),
+    }
 
 
 def build_statement_preview(

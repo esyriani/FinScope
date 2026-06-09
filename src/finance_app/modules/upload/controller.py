@@ -19,6 +19,9 @@ from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.accounts.repository import get_or_create_account, normalize_account_type
 from finance_app.modules.auth.permissions import PERMISSION_IMPORT_STATEMENTS, permission_required
+from finance_app.modules.categories.llm_token_confirmation import ai_token_estimate_confirmed
+from finance_app.modules.categories.llm_token_presenter import localize_token_estimate_result
+from finance_app.modules.categories.llm_tokens import AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE
 from finance_app.modules.categories.service import categorize_transactions
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.settings.runtime import get_statement_type_by_id
@@ -37,7 +40,11 @@ from finance_app.modules.upload.repository import (
     statement_extension,
     statement_import_row,
 )
-from finance_app.modules.upload.service import build_statement_preview, build_upload_context
+from finance_app.modules.upload.service import (
+    build_statement_preview,
+    build_upload_context,
+    estimate_statement_llm_categorization,
+)
 
 upload_bp = Blueprint("upload", __name__)
 
@@ -262,6 +269,10 @@ def categorize_statement_unknowns(statement_id: int) -> ResponseReturnValue:
             flash(gettext("No unknown transactions need AI categorization for this statement."))
             return redirect(next_url)
 
+    if not ai_token_estimate_confirmed(request.form):
+        flash(gettext(AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE))
+        return redirect(next_url)
+
     job_id = upload_workflow.queue_statement_llm_categorization(statement_id)
     flash(
         gettext(
@@ -275,6 +286,41 @@ def categorize_statement_unknowns(statement_id: int) -> ResponseReturnValue:
         )
     )
     return redirect(next_url)
+
+
+@upload_bp.route("/upload/<int:statement_id>/categorize-unknowns/estimate", methods=["POST"])
+@permission_required(PERMISSION_IMPORT_STATEMENTS)
+def estimate_categorize_statement_unknowns(statement_id: int) -> ResponseReturnValue:
+    """Return a token estimate for one statement's current unknown rows."""
+    with db_core_transaction() as conn:
+        statement = statement_import_row(conn, statement_id)
+        if statement is None:
+            return jsonify({"ok": False, "message": gettext("Statement not found.")}), 404
+
+        if statement["import_status"] in ACTIVE_STATEMENT_IMPORT_STATUSES:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "message": gettext("Wait for the statement import to finish before running AI categorization."),
+                    }
+                ),
+                400,
+            )
+
+        unknown_count = upload_workflow.count_statement_unknown_transactions(conn, statement_id)
+        if not unknown_count:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "message": gettext("No unknown transactions need AI categorization for this statement."),
+                    }
+                ),
+                400,
+            )
+
+    return jsonify(localized_json_result(estimate_statement_llm_categorization(statement_id)))
 
 
 def queue_existing_statement_import(statement_id: int, reprocess: bool = False) -> ResponseReturnValue:
@@ -364,6 +410,11 @@ def upload_redirect_target() -> str:
         return target
 
     return url_for("upload.upload")
+
+
+def localized_json_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON result with its top-level message localized."""
+    return localize_token_estimate_result(result, gettext)
 
 
 def read_statement_text(uploaded_file: FileStorage, extension: str) -> str | None:

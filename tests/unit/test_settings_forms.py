@@ -62,8 +62,8 @@ def test_parse_global_settings_form_normalizes_owner_settings():
             ("llm_confidence_threshold", "0.80"),
             ("llm_review_threshold", "0.60"),
             ("verify_threshold", "0.90"),
-            ("auto_llm_categorization_enabled", "on"),
             ("transaction_ai_rerun_enabled", ""),
+            ("confirm_ai_token_usage_enabled", "1"),
             ("openai_model", "gpt-4.1-mini"),
             ("recurrence_minimum_occurrences", "3"),
             ("recurrence_date_tolerance_days", "5"),
@@ -81,8 +81,8 @@ def test_parse_global_settings_form_normalizes_owner_settings():
     parsed = parse_global_settings_form(form, settings_defaults())
 
     assert parsed["llm_confidence_threshold"] == 0.8
-    assert parsed["auto_llm_categorization_enabled"] is True
     assert parsed["transaction_ai_rerun_enabled"] is False
+    assert parsed["confirm_ai_token_usage_enabled"] is True
     assert parsed["openai_model"] == "gpt-4.1-mini"
     assert parsed["statement_types"] == [
         {

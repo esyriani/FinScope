@@ -16,12 +16,23 @@ from tests.support.llm import (
     unknown_transaction,
 )
 
-from finance_app.modules.categories import llm
+from finance_app.modules.categories import llm, llm_estimation
+from finance_app.modules.categories.llm_tokens import DEFAULT_EXPECTED_OUTPUT_TOKENS
 
 """
 These tests are designed to verify the internal logic of the LLM categorization adapter, not the behavior of a specific model. They use deterministic mocked responses to ensure consistent test results and avoid external dependencies. If these tests are failing, focus on the adapter's handling of LLM results, integration with rules and retrieval, and metadata recording rather than the content of the mocked LLM responses.
 IMPORTANT: No LLM is called in these tests, so no API keys or network access are required. The LLM response is fully mocked to return deterministic results for various scenarios, including accepted categories, confidence levels, and failure modes.
 """
+
+
+class CharacterEncoding:
+    """Deterministic test encoding that counts one token per character."""
+
+    name = "character-test"
+
+    def encode(self, value):
+        """Return one fake token per character."""
+        return list(str(value))
 
 
 def test_pair_llm_results_uses_request_ids_and_positional_fallback():
@@ -148,6 +159,31 @@ def test_classify_unknowns_with_llm_applies_thresholds_and_filters_invalid_value
         ORDER BY keyword
         """)).fetchall()
     assert [tuple(rule) for rule in rules] == [("METRO", "Food", 0.0, None, "automatic")]
+
+
+def test_estimate_llm_categorization_tokens_uses_final_prompt_batches(core_conn):
+    """Verify token estimates are built from final prepared LLM batches."""
+    transactions = [unknown_transaction("Metro Grocery", "METRO", 12.34)]
+
+    estimate = llm_estimation.estimate_llm_categorization_tokens(
+        core_conn,
+        transactions,
+        [],
+        "UNKNOWN",
+        prepare_candidate_taxonomies=compact_candidates_for_test,
+        batch_size=1,
+        encoding_factory=lambda _model: CharacterEncoding(),
+    )
+
+    assert estimate["model"]
+    assert estimate["request_count"] == 1
+    assert estimate["batch_count"] == 1
+    assert estimate["input_tokens"] > 0
+    assert estimate["expected_output_tokens"] == DEFAULT_EXPECTED_OUTPUT_TOKENS
+    assert estimate["total_tokens"] == estimate["input_tokens"] + estimate["expected_output_tokens"]
+    assert estimate["max_batch_input_tokens"] == estimate["input_tokens"]
+    assert estimate["tokenizer_available"] is True
+    assert estimate["batches"][0]["request_count"] == 1
 
 
 def test_classify_unknowns_with_llm_can_skip_automatic_rule_creation(core_conn):

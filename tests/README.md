@@ -8,6 +8,11 @@ Tests are organized by the layer they primarily exercise:
 - [smoke/](smoke/): high-value happy-path workflows across routes, background jobs, and persistence.
 - [support/](support/): shared test helpers for CSRF setup, database row factories, background job capture, and deterministic LLM stubs.
 
+This file is intentionally scoped to test-suite structure, pytest selection,
+fixtures, and curation rules. For development dependency setup and the full
+formatter, linter, type-checker, frontend, and pytest gate, see
+[Developer guide](../docs/developer-guide.md#quality-checks).
+
 ## Curation strategy
 
 The curated suite should maximize confidence per test, not preserve a historical

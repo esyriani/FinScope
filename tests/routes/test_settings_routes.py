@@ -33,8 +33,8 @@ def settings_form_data(conn, **overrides):
         "llm_confidence_threshold": "0.75",
         "llm_review_threshold": "0.65",
         "verify_threshold": "0.90",
-        "auto_llm_categorization_enabled": "1",
         "transaction_ai_rerun_enabled": "1",
+        "confirm_ai_token_usage_enabled": "1",
         "openai_model": "gpt-4o-mini",
         "recurrence_minimum_occurrences": "4",
         "recurrence_date_tolerance_days": "6",
@@ -79,12 +79,9 @@ def test_settings_page_uses_dark_theme_by_default(client):
     assert_has_element(response, "button", attrs={"id": "settings-categorization-tab", "role": "tab"})
     assert_has_element(response, "section", attrs={"id": "settings-general", "role": "tabpanel"})
     assert_has_element(response, "input", attrs={"id": "theme_mode_dark", "checked": True})
+    assert_has_element(response, "input", attrs={"id": "confirm_ai_token_usage_enabled", "checked": True})
     assert_has_element(response, "input", attrs={"id": "comparison_insight_card_limit"})
-    assert_has_element(
-        response,
-        "input",
-        attrs={"id": "auto_llm_categorization_enabled", "checked": False},
-    )
+    assert "auto_llm_categorization_enabled" not in response.get_data(as_text=True)
 
 
 def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_types(client, core_conn):
@@ -122,8 +119,8 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert settings["llm_confidence_threshold"] == "0.75"
     assert settings["llm_review_threshold"] == "0.65"
     assert settings["verify_threshold"] == "0.90"
-    assert settings["auto_llm_categorization_enabled"] == "1"
     assert settings["transaction_ai_rerun_enabled"] == "1"
+    assert settings["confirm_ai_token_usage_enabled"] == "1"
     assert settings["openai_model"] == "gpt-4o-mini"
     assert settings["recurrence_minimum_occurrences"] == "4"
     assert settings["recurrence_date_tolerance_days"] == "6"
@@ -180,21 +177,6 @@ def test_settings_post_ignores_unknown_category_override(client, core_conn):
     assert user_settings(core_conn)["theme_mode"] == "light"
 
 
-def test_settings_post_can_disable_automatic_ai_queueing(client, core_conn):
-    """Verify the owner can pause automatic AI categorization after imports."""
-    form = settings_form_data(core_conn)
-    form.pop("auto_llm_categorization_enabled")
-
-    response = client.post(
-        "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
-        follow_redirects=True,
-    )
-
-    assert response.status_code == 200
-    assert get_all_settings(core_conn)["auto_llm_categorization_enabled"] == "0"
-
-
 def test_settings_post_can_disable_single_transaction_ai_button(client, core_conn):
     """Verify the owner can hide the transaction AI suggestion action."""
     form = settings_form_data(core_conn)
@@ -208,6 +190,21 @@ def test_settings_post_can_disable_single_transaction_ai_button(client, core_con
 
     assert response.status_code == 200
     assert get_all_settings(core_conn)["transaction_ai_rerun_enabled"] == "0"
+
+
+def test_settings_post_can_disable_ai_token_confirmation(client, core_conn):
+    """Verify the owner can turn off the token-confirmation step for AI actions."""
+    form = settings_form_data(core_conn)
+    form.pop("confirm_ai_token_usage_enabled")
+
+    response = client.post(
+        "/settings",
+        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert get_all_settings(core_conn)["confirm_ai_token_usage_enabled"] == "0"
 
 
 def test_settings_post_saves_ui_language_and_renders_french(client, core_conn):

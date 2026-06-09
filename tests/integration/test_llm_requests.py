@@ -60,6 +60,7 @@ def test_request_llm_categories_parses_mocked_openai_json():
     assert fake_client.constructor_calls == [{"api_key": "sk-test", "timeout": llm.LLM_TIMEOUT_SECONDS}]
     assert fake_client.created_calls[0]["model"] == "gpt-test"
     assert fake_client.created_calls[0]["response_format"] == {"type": "json_object"}
+    assert [message["role"] for message in fake_client.created_calls[0]["messages"]] == ["system", "user"]
 
 
 def test_request_llm_categories_handles_invalid_json():

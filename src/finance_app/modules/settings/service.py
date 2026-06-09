@@ -27,7 +27,9 @@ from finance_app.modules.settings.forms import (
     parse_global_settings_form,
 )
 from finance_app.modules.settings.runtime import (
+    CONFIRM_AI_TOKEN_USAGE_SETTING_KEY,
     GENERAL_SETTING_KEYS,
+    confirm_ai_token_usage_enabled,
     get_all_settings,
     get_statement_type_options,
     seed_runtime_settings,
@@ -46,10 +48,7 @@ GLOBAL_STRING_SETTING_KEYS = (
     "recurrence_missed_cycles_before_inactive",
 )
 
-BOOLEAN_SETTING_KEYS = (
-    "auto_llm_categorization_enabled",
-    "transaction_ai_rerun_enabled",
-)
+BOOLEAN_SETTING_KEYS = ("transaction_ai_rerun_enabled", CONFIRM_AI_TOKEN_USAGE_SETTING_KEY)
 
 
 PROBABILITY_SETTING_KEYS = (
@@ -70,6 +69,7 @@ def build_settings_context() -> dict[str, Any]:
         seed_runtime_settings(conn)
         current = get_all_settings(conn)
         statement_types = get_statement_type_options(conn) if can_manage_global_settings else []
+        confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
 
     return {
         "default_table_page_size": current.get("default_table_page_size", str(app_settings.default_table_page_size)),
@@ -100,8 +100,6 @@ def build_settings_context() -> dict[str, Any]:
             format_probability(app_settings.default_llm_review_threshold),
         ),
         "verify_threshold": current.get("verify_threshold", format_probability(app_settings.default_verify_threshold)),
-        "auto_llm_categorization_enabled": str(current.get("auto_llm_categorization_enabled", "0")).strip().lower()
-        not in {"0", "false", "no", "off"},
         "transaction_ai_rerun_enabled": str(
             current.get(
                 "transaction_ai_rerun_enabled",
@@ -111,6 +109,7 @@ def build_settings_context() -> dict[str, Any]:
         .strip()
         .lower()
         not in {"0", "false", "no", "off"},
+        CONFIRM_AI_TOKEN_USAGE_SETTING_KEY: confirm_ai_token_usage,
         "openai_model": current.get("openai_model", app_settings.default_categorization_model),
         "recurrence_minimum_occurrences": current.get(
             "recurrence_minimum_occurrences",

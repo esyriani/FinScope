@@ -174,15 +174,10 @@ legend.form-label {
 }
 
 .form-control,
-.form-select,
-.btn {
-    border-radius: 8px;
-}
-
-.form-control,
 .form-select {
     background-color: var(--input-bg);
     border-color: var(--input-border);
+    border-radius: 8px;
     color: var(--app-text);
 }
 
@@ -221,75 +216,6 @@ legend.form-label {
 .form-check-input:focus {
     border-color: var(--app-accent);
     box-shadow: var(--focus-shadow);
-}
-
-.btn-primary {
-    --bs-btn-bg: var(--app-accent);
-    --bs-btn-border-color: var(--app-accent);
-    --bs-btn-color: #ffffff;
-    --bs-btn-hover-bg: var(--app-accent-strong);
-    --bs-btn-hover-border-color: var(--app-accent-strong);
-    --bs-btn-hover-color: #ffffff;
-    --bs-btn-active-bg: var(--app-accent-strong);
-    --bs-btn-active-border-color: var(--app-accent-strong);
-}
-
-[data-bs-theme="dark"] .btn-primary {
-    --bs-btn-color: #05201c;
-    --bs-btn-hover-color: #041714;
-    --bs-btn-active-color: #041714;
-}
-
-.btn-outline-primary {
-    --bs-btn-color: var(--app-accent-strong);
-    --bs-btn-border-color: rgba(var(--app-accent-rgb), 0.55);
-    --bs-btn-hover-bg: var(--app-accent);
-    --bs-btn-hover-border-color: var(--app-accent);
-    --bs-btn-hover-color: #ffffff;
-    --bs-btn-active-bg: var(--app-accent);
-    --bs-btn-active-border-color: var(--app-accent);
-}
-
-[data-bs-theme="dark"] .btn-outline-primary {
-    --bs-btn-hover-color: #05201c;
-    --bs-btn-active-color: #05201c;
-}
-
-.btn-outline-secondary {
-    --bs-btn-color: var(--app-text);
-    --bs-btn-border-color: var(--app-border-strong);
-    --bs-btn-hover-bg: var(--app-surface-soft);
-    --bs-btn-hover-border-color: var(--app-border-strong);
-    --bs-btn-hover-color: var(--app-heading);
-    --bs-btn-active-bg: var(--app-surface-soft);
-    --bs-btn-active-border-color: var(--app-border-strong);
-    --bs-btn-active-color: var(--app-heading);
-}
-
-.btn-outline-danger {
-    --bs-btn-color: var(--app-danger);
-    --bs-btn-border-color: rgba(var(--app-danger-rgb), 0.55);
-    --bs-btn-hover-bg: var(--app-danger);
-    --bs-btn-hover-border-color: var(--app-danger);
-    --bs-btn-hover-color: #ffffff;
-}
-
-.btn .bi {
-    line-height: 1;
-    margin-right: 0.35rem;
-    vertical-align: -0.08em;
-}
-
-.btn-sm .bi {
-    margin-right: 0.28rem;
-}
-
-.btn-icon-only .bi {
-    margin-right: 0;
-}
-
-[data-bs-theme="dark"] .btn-outline-danger {
-    --bs-btn-hover-color: #2b050c;
 }
 
 .rule-audit-search-row {

@@ -1,238 +1,137 @@
-# User Guide
+# User guide
 
-This guide covers local setup and day-to-day FinScope workflows for end users. Developer setup, code quality, architecture, and testing details live in the [Developer Guide](developer-guide.md), [Architecture](architecture.md), [Database](database.md), [Testing](testing.md), and [Background Jobs](background-jobs.md) docs.
+This guide is a concise feature reference for day-to-day FinScope use. Start with [Getting started](getting-started.md) for the first-run walkthrough, then use the [Tutorial](tutorial.md) for workflow advice and best practices.
 
-## First Run
+## Upload
 
-Install the runtime dependencies, copy the local configuration file, and start FinScope from the repository root.
+Upload imports CSV statements and manages uploaded statement history.
 
-<details open>
-<summary>Windows PowerShell</summary>
+The upload form collects an account name, statement import type, account reporting role, optional Interac direction, optional paid-from account for credit cards, and the CSV file. The preview modal shows parsed rows, row counts, date range, and date-format controls before import confirmation.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-Copy-Item src\finance_app\config.example.ini src\finance_app\config.ini
-.\.venv\Scripts\python.exe -B src\finance_app\app.py
-```
+Uploaded statements show import status, added/skipped/ignored counts, unknown counts, AI candidate counts, stored text preview, Retry, Reprocess, and Run AI actions. Retry reruns a failed or incomplete import from stored statement text. Reprocess removes transactions imported from that statement and imports them again from stored statement text.
 
-</details>
+Interac e-Transfer history is enrichment-only. Import matching checking statements first, then import Interac history for the same account so FinScope can update existing generic transfer rows.
 
-<details>
-<summary>Windows cmd</summary>
+## Transactions
 
-```bat
-python -m venv .venv
-.venv\Scripts\activate.bat
-python -m pip install -r requirements.txt
-copy /Y src\finance_app\config.example.ini src\finance_app\config.ini
-.venv\Scripts\python.exe -B src\finance_app\app.py
-```
+Transactions is the searchable ledger view. It supports period, category, tag, status, ignored-state, and categorization-method filters.
 
-</details>
+Editors and owners can approve rows, ignore or restore rows, edit categories and tags, save rules from transaction edits, run the optional single-transaction AI suggestion action when enabled, and use batch actions for selected rows.
 
-<details>
-<summary>macOS</summary>
+Ignored rows stay in the database but are excluded from normal active-transaction views and rule matching unless a feature explicitly includes ignored rows.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-cp src/finance_app/config.example.ini src/finance_app/config.ini
-.venv/bin/python -B src/finance_app/app.py
-```
+## Rules
 
-</details>
+Rules assign categories and optional tags to matching transactions.
 
-<details>
-<summary>Linux</summary>
+Rules can be created, edited, deleted, imported, exported, approved, preview-applied individually, or preview-applied as a full rule set. Rule changes are preview-first when existing transactions may be affected.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-cp src/finance_app/config.example.ini src/finance_app/config.ini
-.venv/bin/python -B src/finance_app/app.py
-```
+Rules created directly from Rules are keyword-fuzzy by default. Rules saved while editing a transaction can be merchant-bound when the transaction has a durable merchant identity. Rules may also be scoped by account, transaction direction, and amount bounds.
 
-</details>
+Rule audit reports overlapping rules, category conflicts, tag differences, shadowed rules, stale or unused rules, and specificity warnings. See [Taxonomy and categorization](taxonomy.md) for matching precedence and [Background jobs](background-jobs.md) for queued rule-job behavior.
 
-Open `http://127.0.0.1:5000`. On first run, FinScope redirects to `/auth/bootstrap`; create exactly one owner account there. The owner can create editor and viewer users from Users. See [Authentication](authentication.md) for role and password details.
+## Review
 
-## Run on Another Port
+Review groups active unknown or review-required transactions by merchant-like text so related rows can be categorized together.
 
-<details open>
-<summary>Windows PowerShell</summary>
+The page shows group counts, transaction counts, largest group, review amount, examples, and Review group actions. In the review modal, users can assign a category, assign tags, save a reusable rule, or use Show all transactions to apply the change only to selected rows in the group.
 
-```powershell
-$env:FINANCE_PORT = "5001"
-.\.venv\Scripts\python.exe -B src\finance_app\app.py
-```
+Review operations may run as background jobs. Check Jobs when a review action is queued.
 
-</details>
+## Home
 
-<details>
-<summary>Windows cmd</summary>
+Home is the operational landing page after login.
 
-```bat
-set "FINANCE_PORT=5001"
-.venv\Scripts\python.exe -B src\finance_app\app.py
-```
+It shows a financial pulse, needs-attention items, recent activity, quick insights, and shortcuts. Use it after imports or long-running jobs to see what needs cleanup next.
 
-</details>
+## Dashboard
 
-<details>
-<summary>macOS</summary>
+Dashboard summarizes the selected period.
 
-```bash
-export FINANCE_PORT=5001
-.venv/bin/python -B src/finance_app/app.py
-```
+It includes categorization completeness, spending, income and credits, net cash flow, savings rate, average transaction, untagged rate, verified rate, top categorization source, spending breakdowns by category or tag, monthly cash flow, spending versus income over time, and merchant analytics.
 
-</details>
+Transfers and payments are visible as transactions but excluded from spending and income totals to avoid double-counting internal money movement. When concrete tag filters are applied, matching transfer credits can be included so reimbursement-style tags can show a net view.
 
-<details>
-<summary>Linux</summary>
+Unknown categories reduce report usefulness. Use the categorization completeness panel to find transactions that need review.
 
-```bash
-export FINANCE_PORT=5001
-.venv/bin/python -B src/finance_app/app.py
-```
+## Comparison
 
-</details>
+Comparison analyzes spending changes.
 
-## Configuration
+Period changes compare a selected current period with a matching prior period. The view includes summary metrics, key insights, category changes, merchant changes, and filters for categories and tags.
 
-FinScope loads [src/finance_app/config.example.ini](../src/finance_app/config.example.ini), overlays [src/finance_app/config.ini](../src/finance_app/config.ini) when present, then applies environment variable overrides.
+Year trends compare monthly spending across selected years. The view includes monthly spending charts, spending distribution, and category spending by year. Category warnings appear when Unknown spending may make comparison unreliable.
 
-Common settings:
+## Calendar
 
-| Setting | Environment variable | Purpose |
-| --- | --- | --- |
-| `app.secret_key` | `FINANCE_SECRET_KEY` | Flask session signing key. The bundled `dev-secret-key` is only accepted for debug or loopback local runs. |
-| `app.timezone` | `FINANCE_TIMEZONE` | IANA timezone used for displaying UTC timestamps, such as `America/Toronto`. |
-| `app.currency_symbol` | `FINANCE_CURRENCY_SYMBOL` | Currency symbol used by Python and template money formatting. |
-| `app.secure_cookies` | `FINANCE_SECURE_COOKIES` | Whether session and remember cookies require HTTPS. |
-| `database.url` | `FINANCE_DATABASE_URL` | SQLAlchemy database URL used by the runtime database layer. |
-| `database.path` | `FINANCE_DB_PATH` | SQLite database path. |
-| `server.host` | `FINANCE_HOST` | Flask bind host. |
-| `server.port` | `FINANCE_PORT` | Flask port. |
-| `server.debug` | `FINANCE_DEBUG` | Debug mode. Keep false outside development. |
-| `api_keys.openai_api_key` | `OPENAI_API_KEY` | Enables optional LLM categorization. |
+Calendar shows posted daily transactions for a selected month.
 
-Interface language is a user-bound runtime setting stored in `user_settings` and managed from Settings. English source strings are the canonical message ids; French translations live in [src/finance_app/translations/fr.json](../src/finance_app/translations/fr.json).
+It summarizes monthly spending, income and credits, net cash flow, expected recurring items, and daily transaction counts. The heatmap can show spending, income, or net cash flow. Day cells can open transaction detail for that date.
 
-## Database Selection
+## Recurring
 
-Leave `database.url` blank for the default SQLite database at [runtime/finescope.db](../runtime/finescope.db). Set `database.url` to a SQLAlchemy URL when you want an explicit SQLite file or MySQL database.
+Recurring detects repeated spending and income patterns.
 
-Selection priority:
+It provides list and calendar views, category and tag filters, confidence filtering, status filtering, month navigation, and summary metrics for needs-attention items, monthly recurring spending, recurring income, expected soon, occurred, overdue, and possibly inactive patterns.
 
-1. `FINANCE_DATABASE_URL`, when set.
-2. `database.url` in [src/finance_app/config.ini](../src/finance_app/config.ini), when non-empty.
-3. A generated SQLite URL from the configured database path.
+Users with recurring-edit permission can confirm a pattern, ignore a pattern, or edit frequency, expected date, typical amount, tolerances, and active state from the detail modal.
 
-SQLite path priority, used only when no database URL is provided:
+## Jobs
 
-1. `FINANCE_DB_PATH`, when set.
-2. `database.path` in [src/finance_app/config.ini](../src/finance_app/config.ini), when present.
-3. `database.path` in [src/finance_app/config.example.ini](../src/finance_app/config.example.ini).
+Jobs tracks longer-running workflows while the app remains usable.
 
-Supported backends are SQLite 3.31+ and MySQL 8.0.16+ through PyMySQL. See [Database](database.md) for schema and backend details.
+Common jobs include statement import, AI categorization, applying rules, review operations, and rule import. The page shows status, timestamps, results, errors, AI progress logs, cancellation where supported, and undo where the completed job still has undo metadata.
 
-## Upload a Statement
+AI categorization uses a separate queue from the main import/rule/review queue. Jobs also provides Run AI on unknowns and Clear queued AI controls.
 
-1. Go to Upload.
-2. Choose an account name. This is the account that will own the imported or enriched rows.
-3. Choose the statement import type. This controls the file parser and import behavior.
-4. Review the account reporting role. FinScope suggests a role from the statement import type; usually keep the suggestion unless the account should behave differently in reports.
-5. For Interac e-Transfer history, import the matching checking statements first. Interac history is enrichment-only: it matches generic checking rows such as `Envoi - VFC` or `Recept - VFC` and replaces them with the real counterparty.
-6. For credit cards, optionally enter the checking or savings account that pays the card.
-7. Choose a CSV and review the preview modal. If slash dates are ambiguous, choose `MM/DD/YYYY` or `DD/MM/YYYY` before confirming.
-8. Confirm the import, then use Transactions, Review, and Jobs to inspect the result.
-9. If import processing fails, use Upload > Uploaded statements to retry from stored statement text.
-10. If parser behavior or statement settings changed, use Reprocess to clear that statement's imported transactions and import them again.
-11. If AI categorization is paused or was interrupted, use Jobs > Run AI on unknowns or Upload > Uploaded statements > Run AI to rerun categorization for remaining unknown transactions.
+## Settings
 
-Statement import type examples:
+Settings stores user-bound runtime preferences.
 
-| Statement import type | Typical account reporting role | Import behavior |
-| --- | --- | --- |
-| Checking account | Checking account | Adds checking transactions as ledger rows. |
-| Credit card | Credit card | Adds card purchases as ledger rows and marks card payments as payments/transfers. |
-| Interac e-Transfer | Checking account | Matches existing checking e-transfer rows and enriches their descriptions without adding duplicate ledger rows. |
+All authenticated users can edit General settings such as theme mode, interface language, and personal table/display limits. Owners can also edit advanced categorization settings, recurrence detection defaults, and statement import type mappings.
 
-Credit card uploads create purchase-level ledger rows. Payment rows from the card statement and matched payment rows from the funding account remain visible as payments/transfers but are excluded from spending and income totals.
+See [Authentication and authorization](authentication.md) for role-specific settings permissions.
 
-Tagged reimbursement credits remain categorized as Transfers. When a dashboard or comparison cash-flow view is filtered by included tags, matching negative transfer rows are included as credits so reimbursable travel, work, insurance, or shared-expense tags can show a net amount after repayment.
+## Taxonomy
 
-## Create a Rule
+Admin > Taxonomy manages categories and tags in the active database.
 
-1. Go to Rules.
-2. Enter a merchant keyword, category, optional amount bounds, and optional tags.
-3. Preview matches.
-4. Save and apply the rule.
+Categories are exclusive primary classifications. Tags are optional secondary labels that can overlap. The page supports creating, editing, deleting unused values, and importing or exporting taxonomy YAML.
 
-Rules created from the Rules page are keyword-fuzzy by default. Rules saved while editing a transaction are merchant-bound when that transaction has a durable merchant identity. Rules CSV import/export includes an optional `merchant_name` column for merchant-bound rules.
+The seed file [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml) is used only when initializing a new database. After initialization, use the Taxonomy page for runtime changes. See [Taxonomy and categorization](taxonomy.md) for the full model.
 
-Rule audit is available from Rules. It reports overlapping rules, category conflicts, tag differences, shadowed rules, stale or unused rules, and specificity warnings. See [Background Jobs](background-jobs.md) for queued rule-job behavior.
+## AI categorization
 
-## Review Unknown Transactions
+AI categorization is optional and requires `OPENAI_API_KEY` or `api_keys.openai_api_key`.
 
-1. Go to Review.
-2. Review grouped merchants or individual rows.
-3. Open a group and use Show all transactions when only some rows should be categorized differently.
-4. Assign categories and tags.
-5. Save reusable mappings as rules when appropriate.
+Manual AI reruns are available from Jobs and Uploaded statements after FinScope shows a token estimate. Owners can turn the token-confirmation step on or off from Settings > Categorization. The single-transaction Suggest category action can also be shown or hidden from Settings when configured.
 
-## Control AI Categorization
+LLM prompts are privacy-minimized. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples to external providers.
 
-AI categorization runs in a separate background queue so OpenAI timeouts do not block statement imports, rule jobs, or review jobs. Automatic AI categorization after imports is off by default; owners can opt in from Settings > Categorization.
+## Privacy and security
 
-External LLM prompts are privacy-minimized. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. The static system-prompt policy is stored in [src/finance_app/modules/categories/llm_system_prompt.json](../src/finance_app/modules/categories/llm_system_prompt.json) so prompt changes can be reviewed separately from request code.
+FinScope handles financial data. Treat runtime databases, uploaded statement text, backups, logs, credentials, and API keys as sensitive.
 
-Use Jobs to run AI on all active unknown transactions, cancel a queued or running AI job, or clear queued AI jobs. Manual reruns only target active transactions whose category is still unknown, so they do not overwrite manually reviewed or already categorized rows.
-
-For focused review, Settings > Categorization can show a Suggest category action on transaction rows. This synchronous action previews an LLM suggestion for one transaction, then lets the user explicitly apply it to the row or apply it and create a reusable rule.
-
-## Manage Taxonomy
-
-1. Go to Admin > Taxonomy.
-2. Create or edit categories and tags.
-3. Export or import the taxonomy as YAML when moving category and tag metadata between databases.
-4. Delete unused taxonomy values when they are no longer referenced.
-
-See [Taxonomy and Categorization](taxonomy.md) for category/tag seed data, synchronization, and categorization flow details.
-
-## Privacy and Security
-
-FinScope handles financial data. Treat the local database and uploaded content as sensitive.
-
-- Single-tenant authenticated application: all authenticated users share the same finance database.
-- One owner account manages editor and viewer access.
-- Passwords are stored with Werkzeug `scrypt` hashes; plaintext passwords are never stored.
-- Login failures are tracked and temporarily locked after repeated failures.
-- SQLite and MySQL are fully supported. SQLite stores the database on local disk by default; MySQL is selected through `database.url`.
-- No encryption at rest is implemented by FinScope.
-- CSRF protection is enabled for mutating Flask routes.
+- One deployment maps to one shared finance database.
+- One owner manages editor and viewer users.
+- Passwords are stored with Werkzeug `scrypt` hashes.
+- CSRF protection is enabled for mutating routes.
 - Session cookies are HttpOnly and SameSite=Lax; secure cookies are enabled when debug mode is off.
-- OpenAI integration is optional and only active when an API key is configured and an owner explicitly runs or enables AI categorization.
+- No encryption at rest is implemented by FinScope.
+- Optional OpenAI integration is inactive unless configured and explicitly run or enabled.
 
 Operational recommendations:
 
 - Keep `FINANCE_SECRET_KEY` private.
-- Change the bootstrap owner password after setup if it was created in a shared environment.
 - Keep `OPENAI_API_KEY` out of source control.
-- Store [runtime/finescope.db](../runtime/finescope.db), MySQL credentials, and database backups in protected locations.
+- Protect `runtime/finescope.db`, MySQL credentials, and backups.
 - Back up the active database regularly.
 - Do not run with debug mode enabled on a shared network.
-- Review data-sharing implications before running or enabling LLM categorization.
 
-## Known Limitations
+## Known limitations
 
 - FinScope supports multiple authenticated users for one shared finance dataset, not multi-tenant hosting.
-- Background job state is in memory and is lost on process restart.
-- No bank synchronization.
-- No built-in encryption at rest.
-- SQLite is appropriate for local use, not high-concurrency workloads. Use MySQL when the deployment needs stronger server-side concurrency and backup tooling.
+- Background job state is process-local and in memory.
+- No bank synchronization is built in.
+- No built-in encryption at rest is implemented.
+- SQLite is intended for local use, not high-concurrency workloads.

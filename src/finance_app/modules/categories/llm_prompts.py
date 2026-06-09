@@ -163,6 +163,41 @@ def taxonomy_prompt_line(row: Mapping[str, Any]) -> str:
     return f"- {label}: {detail}" if detail else f"- {label}"
 
 
+def build_llm_messages(
+    unknown_items: Sequence[Mapping[str, Any]],
+    rules: Sequence[Mapping[str, Any]],
+    category_options: Sequence[str],
+    tag_options: Sequence[str] | None = None,
+    category_rows: Sequence[Mapping[str, Any]] | None = None,
+    tag_rows: Sequence[Mapping[str, Any]] | None = None,
+    verify_threshold: float | None = None,
+    review_threshold: float | None = None,
+) -> list[dict[str, str]]:
+    """Build the final chat messages sent for LLM categorization.
+
+    The returned messages are the single source for both the OpenAI request and
+    token estimation. Callers must prepare transaction evidence and candidate
+    taxonomies before using this helper.
+    """
+    return [
+        {
+            "role": "system",
+            "content": build_llm_system_prompt(category_rows, tag_rows, verify_threshold, review_threshold),
+        },
+        {
+            "role": "user",
+            "content": build_llm_prompt(
+                unknown_items,
+                rules,
+                category_options,
+                tag_options,
+                category_rows,
+                tag_rows,
+            ),
+        },
+    ]
+
+
 def build_llm_prompt(
     unknown_items: Sequence[Mapping[str, Any]],
     rules: Sequence[Mapping[str, Any]],

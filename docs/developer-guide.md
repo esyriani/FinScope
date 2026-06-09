@@ -1,8 +1,8 @@
-# Developer Guide
+# Developer guide
 
-This guide covers repository onboarding and development workflow. Detailed architecture, database, testing, and background-job behavior remains in [Architecture](architecture.md), [Database](database.md), [Testing](testing.md), and [Background Jobs](background-jobs.md).
+This guide covers repository onboarding and development workflow. Detailed architecture, database, testing, and background-job behavior remains in [Architecture](architecture.md), [Database](database.md), [Testing](testing.md), and [Background jobs](background-jobs.md).
 
-## Tech Stack
+## Tech stack
 
 - Python 3.10+; developed and tested with Python 3.11.9.
 - Flask 3.1.3 and Flask-Login 0.6.3.
@@ -13,7 +13,7 @@ This guide covers repository onboarding and development workflow. Detailed archi
 - OpenAI SDK 2.33.0 for optional LLM categorization.
 - Node.js 20+ with npm for frontend formatting and linting.
 
-## Repository Layout
+## Repository layout
 
 - [src/finance_app/__init__.py](../src/finance_app/__init__.py): Flask application factory.
 - [src/finance_app/app.py](../src/finance_app/app.py): application entry point.
@@ -28,16 +28,16 @@ This guide covers repository onboarding and development workflow. Detailed archi
 - [docs/](./): project documentation.
 - [runtime/](../runtime/): local runtime data, including the default SQLite database.
 
-## Development Setup
+## Development setup
 
-Start with the runtime setup in the [User Guide](user-guide.md), then install the developer dependencies.
+Start with the runtime setup in [Getting started](getting-started.md), then install the developer dependencies.
 
 <details open>
 <summary>Windows PowerShell</summary>
 
 ```powershell
 python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -47,7 +47,7 @@ npm install
 
 ```bat
 python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -57,7 +57,7 @@ npm install
 
 ```bash
 python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -67,18 +67,85 @@ npm install
 
 ```bash
 python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
 
+`requirements-dev.txt` installs the runtime/test dependencies from
+`requirements.txt` plus Black, djlint, mypy, and Ruff. `package-lock.json`
+pins the npm formatter and linting dependencies: Prettier, ESLint, Stylelint,
+and their shared configs.
+
 Developer tooling is configured in [pyproject.toml](../pyproject.toml), [pytest.ini](../pytest.ini), [package.json](../package.json), [eslint.config.mjs](../eslint.config.mjs), [stylelint.config.mjs](../stylelint.config.mjs), and [.prettierrc.json](../.prettierrc.json).
 
-## Quality Checks
+## Quality checks
 
-Use [Testing](testing.md) as the source of truth for pytest markers, coverage, formatter, linter, type-checker, and frontend quality commands. Run the smallest useful marker while iterating, then run the full suite before broad changes or release work.
+Run the smallest useful pytest marker while iterating, then run the full local
+quality gate before broad changes, release work, or pull requests:
 
-## Development Principles
+<details open>
+<summary>Windows PowerShell</summary>
+
+```powershell
+.\.venv\Scripts\python.exe -B -m black --check .
+.\.venv\Scripts\python.exe -B -m djlint src/finance_app/templates --profile=jinja --lint
+.\.venv\Scripts\python.exe -B -m ruff check .
+.\.venv\Scripts\python.exe -B -m mypy
+npm run lint:frontend
+.\.venv\Scripts\python.exe -B -m pytest
+```
+
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+.venv\Scripts\python.exe -B -m black --check .
+.venv\Scripts\python.exe -B -m djlint src/finance_app/templates --profile=jinja --lint
+.venv\Scripts\python.exe -B -m ruff check .
+.venv\Scripts\python.exe -B -m mypy
+npm run lint:frontend
+.venv\Scripts\python.exe -B -m pytest
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+.venv/bin/python -B -m black --check .
+.venv/bin/python -B -m djlint src/finance_app/templates --profile=jinja --lint
+.venv/bin/python -B -m ruff check .
+.venv/bin/python -B -m mypy
+npm run lint:frontend
+.venv/bin/python -B -m pytest
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+.venv/bin/python -B -m black --check .
+.venv/bin/python -B -m djlint src/finance_app/templates --profile=jinja --lint
+.venv/bin/python -B -m ruff check .
+.venv/bin/python -B -m mypy
+npm run lint:frontend
+.venv/bin/python -B -m pytest
+```
+
+</details>
+
+The GitHub Actions workflow in [.github/workflows/quality.yml](../.github/workflows/quality.yml)
+runs the same formatter, linter, type-checker, frontend, and pytest gates. Use
+[Testing](testing.md) for marker-specific pytest commands, coverage, and details
+about each quality tool.
+
+## Development principles
 
 - Keep feature code modular under [src/finance_app/modules/](../src/finance_app/modules/).
 - Keep route handlers thin.
@@ -90,18 +157,20 @@ Use [Testing](testing.md) as the source of truth for pytest markers, coverage, f
 - Do not commit local databases, secrets, uploaded statements, logs, or runtime files.
 - Update docs when setup, architecture, schema, workflows, or user-visible behavior changes.
 
-## Documentation Map
+## Documentation map
 
-- [User Guide](user-guide.md): end-user setup and workflows.
+- [Getting started](getting-started.md): short first-run walkthrough for new users.
+- [Tutorial](tutorial.md): practical user workflow and best-practices guide.
+- [User guide](user-guide.md): concise feature reference for day-to-day users.
 - [Architecture](architecture.md): feature-module layering and runtime boundaries.
 - [Database](database.md): backend selection, schema responsibilities, table documentation, and generated artifacts.
 - [Testing](testing.md): pytest markers, command reference, suite layout, and quality gates.
-- [Background Jobs](background-jobs.md): queue behavior, state lifecycle, cancellation, and undo behavior.
-- [Authentication](authentication.md): owner bootstrap, roles, password handling, settings permissions, and deployment notes.
-- [Taxonomy and Categorization](taxonomy.md): category/tag storage, seed data, synchronization, and categorization flow.
+- [Background jobs](background-jobs.md): queue behavior, state lifecycle, cancellation, and undo behavior.
+- [Authentication and authorization](authentication.md): owner bootstrap, roles, password handling, settings permissions, and deployment notes.
+- [Taxonomy and categorization](taxonomy.md): category/tag storage, seed data, synchronization, and categorization flow.
 - [Troubleshooting](troubleshooting.md): common local setup and runtime issues.
 
-## Contribution Baseline
+## Contribution baseline
 
 1. Keep changes consistent with the modular architecture.
 2. Add tests at the right layer.

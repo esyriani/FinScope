@@ -54,7 +54,7 @@ from finance_app.modules.merchants.repository import (
     get_or_create_merchant_for_description,
     get_or_create_merchant_for_name,
 )
-from finance_app.modules.settings.runtime import get_bool_setting, get_unknown_category
+from finance_app.modules.settings.runtime import get_unknown_category
 from finance_app.modules.statements.importer import parse_csv_transactions
 from finance_app.modules.transactions.importer import filter_new_transactions
 from finance_app.modules.upload.messages import (
@@ -555,11 +555,6 @@ def import_statement_transactions_job(
             )
         raise
 
-    llm_job_queued = False
-    if llm_candidate_count and auto_llm_categorization_enabled():
-        queue_statement_llm_categorization(statement_id)
-        llm_job_queued = True
-
     return upload_result_message(
         statement_type,
         extension,
@@ -567,14 +562,7 @@ def import_statement_transactions_job(
         skipped_count,
         ignored_count,
         llm_candidate_count=llm_candidate_count,
-        llm_job_queued=llm_job_queued,
     )
-
-
-def auto_llm_categorization_enabled() -> bool:
-    """Return whether imports should automatically queue AI categorization."""
-    with db_core_transaction() as conn:
-        return get_bool_setting(conn, "auto_llm_categorization_enabled", fallback=False)
 
 
 def queue_statement_llm_categorization(statement_id: int) -> str:

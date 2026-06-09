@@ -188,10 +188,9 @@ AI uses three configurable thresholds with separate responsibilities:
 3. `llm_confidence_threshold` controls when a no-review AI result can create a reusable automatic rule.
 
 LLM categorization is operationally separate from statement import. Imports apply
-rules and historical evidence first, then optionally queue AI categorization for
-remaining unknown rows when the owner has enabled automatic AI queueing from
-Settings. The default is off. Owners can rerun AI manually from Jobs or from an
-uploaded statement. Reruns only target
+rules and historical evidence first, then report remaining unknown rows that can
+be categorized with AI. Owners can run AI manually from Jobs or from an uploaded
+statement after reviewing the token estimate. Reruns only target
 active transactions that are still null or `UNKNOWN`, so existing manual,
 rule-based, historical, transfer, and accepted AI categories are not overwritten.
 

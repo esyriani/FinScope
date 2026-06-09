@@ -19,7 +19,12 @@ from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.categorization import categorize_transactions
 from finance_app.modules.categories.repository import get_category_rules
-from finance_app.modules.categories.service import classify_unknowns_with_llm, get_category_options, save_category_rule
+from finance_app.modules.categories.service import (
+    classify_unknowns_with_llm,
+    estimate_llm_categorization_tokens,
+    get_category_options,
+    save_category_rule,
+)
 from finance_app.modules.categories.sources import (
     category_confidence_label,
     category_source_badge_class,
@@ -34,7 +39,13 @@ from finance_app.modules.categories.taxonomy import (
     get_transaction_tags_by_id,
 )
 from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword
-from finance_app.modules.settings.runtime import get_bool_setting, get_int_setting, get_setting, get_unknown_category
+from finance_app.modules.settings.runtime import (
+    confirm_ai_token_usage_enabled,
+    get_bool_setting,
+    get_int_setting,
+    get_setting,
+    get_unknown_category,
+)
 from finance_app.modules.transactions.constants import (
     CATEGORY_SOURCE_FILTER_OPTIONS,
     IGNORED_FILTER_OPTIONS,
@@ -107,6 +118,7 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
             RUN_TRANSACTION_AI_SETTING_KEY,
             settings.default_transaction_ai_rerun_enabled,
         )
+        confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
 
     return {
         "transactions": rows,
@@ -139,6 +151,7 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "category_descriptions": category_descriptions,
         "tag_options": tag_display_options,
         "run_transaction_ai_enabled": run_transaction_ai_enabled,
+        "confirm_ai_token_usage_enabled": confirm_ai_token_usage,
     }
 
 
@@ -184,6 +197,29 @@ def queue_selected_transaction_recategorization(transaction_ids: Iterable[object
         queue=AI_JOB_QUEUE,
     )
     return {"selected_count": len(ids), "job_id": job_id}
+
+
+def estimate_selected_transaction_recategorization(transaction_ids: Iterable[object] | None) -> dict[str, Any]:
+    """Return a token estimate for selected-transaction recategorization."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return {"ok": False, "message": "Select at least one transaction."}
+
+    with db_core_transaction() as conn:
+        rows = get_transactions_for_recategorization(conn, ids)
+        if not rows:
+            return {"ok": False, "message": "No selected transactions found."}
+
+        unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
+        transactions = categorize_transactions([dict(row) for row in rows], conn=conn, use_llm=False)
+        estimate = estimate_llm_categorization_tokens(
+            conn,
+            transactions,
+            get_category_rules(conn),
+            unknown_category,
+        )
+
+    return ai_token_estimate_result("selected_transactions", len(rows), estimate)
 
 
 def recategorize_selected_transactions_job(transaction_ids: Iterable[object] | None) -> str:
@@ -379,6 +415,34 @@ def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
             unknown_category=unknown_category,
             model_name=get_setting(conn, "openai_model") or settings.default_categorization_model,
         )
+
+
+def estimate_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
+    """Return a token estimate for a one-transaction AI category suggestion."""
+    with db_core_transaction() as conn:
+        if not get_bool_setting(
+            conn,
+            RUN_TRANSACTION_AI_SETTING_KEY,
+            settings.default_transaction_ai_rerun_enabled,
+        ):
+            return disabled_ai_estimate_result()
+
+        row = get_transaction_for_ai_categorization(conn, transaction_id)
+        if row is None:
+            return missing_transaction_ai_estimate_result(transaction_id)
+
+        unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
+        evidence_transaction = dict(row)
+        categorize_transactions([evidence_transaction], conn=conn, use_llm=False)
+        llm_transaction = prepare_single_transaction_llm_payload(evidence_transaction, row, unknown_category)
+        estimate = estimate_llm_categorization_tokens(
+            conn,
+            [llm_transaction],
+            get_category_rules(conn),
+            unknown_category,
+        )
+
+    return ai_token_estimate_result("single_transaction", 1, estimate)
 
 
 def apply_transaction_ai_suggestion(
@@ -610,6 +674,14 @@ def disabled_ai_result() -> dict[str, Any]:
     }
 
 
+def disabled_ai_estimate_result() -> dict[str, Any]:
+    """Return the estimate result shown when single-transaction AI is disabled."""
+    return {
+        "ok": False,
+        "message": "Single-transaction AI is disabled in settings.",
+    }
+
+
 def missing_transaction_ai_result(transaction_id: int) -> dict[str, Any]:
     """Return the result shown when the selected transaction no longer exists."""
     return {
@@ -618,6 +690,15 @@ def missing_transaction_ai_result(transaction_id: int) -> dict[str, Any]:
         "transaction_id": transaction_id,
         "message": "Transaction not found.",
         "request_status_label": "not_found",
+    }
+
+
+def missing_transaction_ai_estimate_result(transaction_id: int) -> dict[str, Any]:
+    """Return the estimate result shown when a transaction no longer exists."""
+    return {
+        "ok": False,
+        "transaction_id": transaction_id,
+        "message": "Transaction not found.",
     }
 
 
@@ -687,3 +768,17 @@ def stringify_date(value: object) -> str:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def ai_token_estimate_result(scope: str, transaction_count: int, estimate: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a JSON-ready token estimate payload for transaction AI actions."""
+    request_count = int(estimate.get("request_count") or 0)
+    return {
+        "ok": True,
+        "scope": scope,
+        "transaction_count": transaction_count,
+        "message": (
+            "No LLM request would be sent for this action." if request_count == 0 else "AI token estimate ready."
+        ),
+        "estimate": dict(estimate),
+    }

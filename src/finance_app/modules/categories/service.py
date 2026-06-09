@@ -14,9 +14,16 @@ from finance_app.modules.categories.llm import (
     request_llm_categories,
     sanitize_openai_error,
 )
+from finance_app.modules.categories.llm_estimation import estimate_llm_categorization_tokens
 from finance_app.modules.categories.llm_prompts import (
+    build_llm_messages,
     build_rule_examples,
     taxonomy_prompt_line,
+)
+from finance_app.modules.categories.llm_tokens import (
+    DEFAULT_EXPECTED_OUTPUT_TOKENS,
+    LlmTokenEstimate,
+    estimate_llm_chat_tokens,
 )
 from finance_app.modules.categories.repository import (
     clean_category_name,
@@ -69,6 +76,9 @@ def classify_unknowns_with_llm(
 
 
 __all__ = [
+    "DEFAULT_EXPECTED_OUTPUT_TOKENS",
+    "LlmTokenEstimate",
+    "build_llm_messages",
     "build_llm_prompt",
     "build_llm_system_prompt",
     "build_rule_examples",
@@ -76,6 +86,8 @@ __all__ = [
     "classify_unknowns_with_llm",
     "clean_category_name",
     "create_category",
+    "estimate_llm_categorization_tokens",
+    "estimate_llm_chat_tokens",
     "fetch_category_names",
     "get_builtin_category_names",
     "get_category_options",

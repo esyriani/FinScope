@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
+from dataclasses import dataclass
 from threading import local
 from typing import Any
 
@@ -24,8 +25,13 @@ from finance_app.modules.categories.decision import (
     evidence_decision_source,
 )
 from finance_app.modules.categories.llm_prompts import (
-    build_llm_prompt,
-    build_llm_system_prompt,
+    build_llm_messages,
+)
+from finance_app.modules.categories.llm_prompts import (
+    build_llm_prompt as build_llm_prompt,
+)
+from finance_app.modules.categories.llm_prompts import (
+    build_llm_system_prompt as build_llm_system_prompt,
 )
 from finance_app.modules.categories.llm_taxonomy import (
     prepare_llm_candidate_taxonomies,
@@ -51,6 +57,21 @@ logger = logging.getLogger(__name__)
 _request_context = local()
 LLM_BATCH_SIZE = 20
 LLM_TIMEOUT_SECONDS = 60
+
+
+@dataclass(frozen=True)
+class LlmCategorizationRequestContext:
+    """Prepared context for an LLM categorization request or estimate."""
+
+    unknown_items: list[MutableMapping[str, Any]]
+    category_options: Sequence[str]
+    tag_options: Sequence[str]
+    category_rows: Sequence[Mapping[str, Any]]
+    tag_rows: Sequence[Mapping[str, Any]]
+    confidence_threshold: float
+    review_threshold: float
+    verify_threshold: float
+    openai_model: str
 
 
 def clear_llm_request_status() -> None:
@@ -149,29 +170,14 @@ def automatic_rule_direction(amount: MoneyValue | None) -> str:
     return CATEGORY_RULE_DIRECTION_CREDIT if amount < 0 else CATEGORY_RULE_DIRECTION_DEBIT
 
 
-def classify_unknowns_with_llm(
+def prepare_llm_categorization_request_context(
     conn: Any,
     transactions: Sequence[MutableMapping[str, Any]],
-    rules: Sequence[Mapping[str, Any]],
     unknown_category: str,
-    save_automatic_rules: bool = True,
-    request_categories: Any = None,
     prepare_candidate_taxonomies: Any = None,
-    batch_size: int | None = None,
-) -> None:
-    """Classify unknowns with LLM.
-
-    When ``save_automatic_rules`` is false, accepted high-confidence results
-    are applied to the provided transaction payloads without creating reusable
-    automatic rules. This supports one-off suggestion previews from transaction
-    detail screens. ``request_categories`` can inject the model request
-    function for tests or alternate callers without replacing module globals.
-    ``prepare_candidate_taxonomies`` and ``batch_size`` provide the same
-    explicit injection points for candidate-taxonomy setup and batching.
-    """
-    request_categories = request_categories or request_llm_categories
+) -> LlmCategorizationRequestContext | None:
+    """Prepare deduplicated unknown items and prompt context for the LLM."""
     prepare_candidate_taxonomies = prepare_candidate_taxonomies or prepare_llm_candidate_taxonomies
-    batch_size = batch_size or LLM_BATCH_SIZE
     unknown_by_key: dict[Any, MutableMapping[str, Any]] = {}
     # Deduplicate by merchant and amount before calling the model; equivalent
     # unknown transactions should receive the same accepted classification.
@@ -185,7 +191,7 @@ def classify_unknowns_with_llm(
             unknown_by_key.setdefault(cache_key, tx)
 
     if not unknown_by_key:
-        return
+        return None
 
     category_options = get_category_options(conn)
     tag_options = get_tag_options(conn)
@@ -225,21 +231,64 @@ def classify_unknowns_with_llm(
         category_rows,
         tag_rows,
     )
+    return LlmCategorizationRequestContext(
+        unknown_items=unknown_items,
+        category_options=category_options,
+        tag_options=tag_options,
+        category_rows=category_rows,
+        tag_rows=tag_rows,
+        confidence_threshold=confidence_threshold,
+        review_threshold=review_threshold,
+        verify_threshold=verify_threshold,
+        openai_model=openai_model,
+    )
+
+
+def classify_unknowns_with_llm(
+    conn: Any,
+    transactions: Sequence[MutableMapping[str, Any]],
+    rules: Sequence[Mapping[str, Any]],
+    unknown_category: str,
+    save_automatic_rules: bool = True,
+    request_categories: Any = None,
+    prepare_candidate_taxonomies: Any = None,
+    batch_size: int | None = None,
+) -> None:
+    """Classify unknowns with LLM.
+
+    When ``save_automatic_rules`` is false, accepted high-confidence results
+    are applied to the provided transaction payloads without creating reusable
+    automatic rules. This supports one-off suggestion previews from transaction
+    detail screens. ``request_categories`` can inject the model request
+    function for tests or alternate callers without replacing module globals.
+    ``prepare_candidate_taxonomies`` and ``batch_size`` provide the same
+    explicit injection points for candidate-taxonomy setup and batching.
+    """
+    request_categories = request_categories or request_llm_categories
+    batch_size = batch_size or LLM_BATCH_SIZE
+    context = prepare_llm_categorization_request_context(
+        conn,
+        transactions,
+        unknown_category,
+        prepare_candidate_taxonomies=prepare_candidate_taxonomies,
+    )
+    if context is None:
+        return
 
     accepted: dict[Any, dict[str, Any]] = {}
     llm_result_count = 0
 
-    for unknown_chunk in chunked(unknown_items, batch_size):
+    for unknown_chunk in chunked(context.unknown_items, batch_size):
         llm_results = request_categories(
             unknown_chunk,
             rules,
-            category_options,
-            tag_options,
-            category_rows,
-            tag_rows,
-            openai_model,
-            verify_threshold,
-            review_threshold,
+            context.category_options,
+            context.tag_options,
+            context.category_rows,
+            context.tag_rows,
+            context.openai_model,
+            context.verify_threshold,
+            context.review_threshold,
         )
         llm_result_count += len(llm_results)
 
@@ -273,13 +322,13 @@ def classify_unknowns_with_llm(
             merchant_key = tx["merchant_key"]
             cache_key = merchant_category_cache_key(merchant_key, tx.get("amount"), tx.get("merchant_id"))
             paired_cache_keys.add(cache_key)
-            candidate_categories = tx.get("llm_candidate_categories") or category_options
-            candidate_tags = tx.get("llm_candidate_tags") or tag_options
-            candidate_category_ids = taxonomy_ids_for_names(category_rows, candidate_categories)
-            candidate_tag_ids = taxonomy_ids_for_names(tag_rows, candidate_tags)
+            candidate_categories = tx.get("llm_candidate_categories") or context.category_options
+            candidate_tags = tx.get("llm_candidate_tags") or context.tag_options
+            candidate_category_ids = taxonomy_ids_for_names(context.category_rows, candidate_categories)
+            candidate_tag_ids = taxonomy_ids_for_names(context.tag_rows, candidate_tags)
             category, category_id, category_id_is_valid = parse_llm_category_id(
                 result.get("category_id"),
-                category_rows,
+                context.category_rows,
                 unknown_category,
             )
             confidence = parse_confidence(result.get("confidence"))
@@ -288,7 +337,7 @@ def classify_unknowns_with_llm(
                 confidence = 0.0
             tags, tag_ids, invalid_tag_ids, tag_ids_payload_is_valid = parse_llm_tag_ids(
                 result.get("tag_ids"),
-                tag_rows,
+                context.tag_rows,
             )
             category_outside_candidate_taxonomy = (
                 category_id_is_valid and category_id is not None and category_id not in set(candidate_category_ids)
@@ -308,8 +357,8 @@ def classify_unknowns_with_llm(
                 tag_drop["tags"],
                 final_confidence,
                 unknown_category,
-                review_threshold,
-                verify_threshold,
+                context.review_threshold,
+                context.verify_threshold,
             )
             if llm_result_needs_forced_review(
                 decision,
@@ -332,7 +381,7 @@ def classify_unknowns_with_llm(
             if (
                 decision.category != unknown_category
                 and decision.confidence is not None
-                and decision.confidence >= confidence_threshold
+                and decision.confidence >= context.confidence_threshold
             ):
                 rule_id = (
                     save_automatic_category_rule(conn, tx, decision.category, decision.tags)
@@ -385,7 +434,7 @@ def classify_unknowns_with_llm(
                     failure_reason="llm_missing_result",
                 )
     logger.info("LLM categorization returned %s result(s).", llm_result_count)
-    cleanup_llm_candidate_taxonomies(unknown_items)
+    cleanup_llm_candidate_taxonomies(context.unknown_items)
     if not accepted:
         return
 
@@ -781,14 +830,15 @@ def request_llm_categories(
             return []
         client_factory = OpenAI
 
-    system_prompt = build_llm_system_prompt(category_rows, tag_rows, verify_threshold, review_threshold)
-    prompt = build_llm_prompt(
+    messages = build_llm_messages(
         unknown_items,
         rules,
         category_options,
         tag_options,
         category_rows,
         tag_rows,
+        verify_threshold,
+        review_threshold,
     )
 
     try:
@@ -797,13 +847,7 @@ def request_llm_categories(
             model=openai_model,
             response_format={"type": "json_object"},
             temperature=0,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {"role": "user", "content": prompt},
-            ],
+            messages=messages,
         )
         content = response.choices[0].message.content
         payload = json.loads(content)

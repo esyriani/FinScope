@@ -2,6 +2,7 @@
 
 from sqlalchemy import text
 from tests.support.database import insert_transaction as insert_test_transaction
+from tests.support.database import set_owner_setting
 from tests.support.html import assert_visible_text
 from tests.support.web import set_csrf_token
 
@@ -334,6 +335,7 @@ def test_batch_transactions_route_queues_selected_recategorization(client, monke
             CSRF_FIELD_NAME: set_csrf_token(client),
             "transaction_ids": ["11", "22"],
             "batch_action": "recategorize",
+            "ai_token_estimate_confirmed": "1",
         },
         follow_redirects=True,
     )
@@ -341,6 +343,106 @@ def test_batch_transactions_route_queues_selected_recategorization(client, monke
     assert response.status_code == 200
     assert captured["transaction_ids"] == ["11", "22"]
     assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
+
+
+def test_batch_recategorization_requires_token_estimate_confirmation(client, monkeypatch):
+    """Verify selected recategorization does not queue without estimate confirmation."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    captured = []
+
+    def queue_for_test(transaction_ids):
+        """Capture accidental recategorization queue requests."""
+        captured.append(list(transaction_ids))
+        return {"selected_count": 2, "job_id": "abcdef123456"}
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "queue_selected_transaction_recategorization",
+        queue_for_test,
+    )
+
+    response = client.post(
+        "/transactions/batch",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "transaction_ids": ["11", "22"],
+            "batch_action": "recategorize",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert captured == []
+    assert_visible_text(response, "Review the token estimate before running AI.")
+
+
+def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(client, core_conn, monkeypatch):
+    """Verify selected recategorization can proceed without modal confirmation when disabled."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
+    captured = []
+
+    def queue_for_test(transaction_ids):
+        """Capture the recategorization queue request."""
+        captured.append(list(transaction_ids))
+        return {"selected_count": 2, "job_id": "abcdef123456"}
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "queue_selected_transaction_recategorization",
+        queue_for_test,
+    )
+
+    response = client.post(
+        "/transactions/batch",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "transaction_ids": ["11", "22"],
+            "batch_action": "recategorize",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert captured == [["11", "22"]]
+    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
+
+
+def test_estimate_batch_transaction_ai_route_returns_json(client, monkeypatch):
+    """Verify selected recategorization estimates return JSON."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    captured = {}
+
+    def estimate_for_test(transaction_ids):
+        """Capture selected ids and return a deterministic estimate."""
+        captured["transaction_ids"] = list(transaction_ids)
+        return {
+            "ok": True,
+            "message": "AI token estimate ready.",
+            "estimate": {"request_count": 2, "input_tokens": 123, "total_tokens": 456},
+        }
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "estimate_selected_transaction_recategorization",
+        estimate_for_test,
+    )
+
+    response = client.post(
+        "/transactions/batch/ai-estimate",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "transaction_ids": ["11", "22"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["transaction_ids"] == ["11", "22"]
+    assert response.get_json()["estimate"]["input_tokens"] == 123
+    assert response.get_json()["message"] == "AI token estimate ready."
 
 
 def test_batch_transactions_route_requires_selection(client):
@@ -411,7 +513,10 @@ def test_suggest_transaction_category_route_shows_result_modal(client, core_conn
 
     response = client.post(
         f"/transactions/{tx_id}/suggest-category",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "ai_token_estimate_confirmed": "1",
+        },
         follow_redirects=True,
     )
 
@@ -425,6 +530,63 @@ def test_suggest_transaction_category_route_shows_result_modal(client, core_conn
         "Apply to transaction",
         "Apply and create rule",
     )
+
+
+def test_suggest_transaction_category_requires_token_estimate_confirmation(client, monkeypatch):
+    """Verify one-off AI suggestions do not run without estimate confirmation."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    captured = []
+
+    def suggest_ai_for_test(transaction_id):
+        """Capture accidental one-off AI suggestion requests."""
+        captured.append(transaction_id)
+        return {"ok": True, "message": "AI suggestion ready."}
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "suggest_transaction_ai_category",
+        suggest_ai_for_test,
+    )
+
+    response = client.post(
+        "/transactions/123/suggest-category",
+        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert captured == []
+    assert_visible_text(response, "Review the token estimate before running AI.")
+
+
+def test_estimate_transaction_category_suggestion_route_returns_json(client, monkeypatch):
+    """Verify one-transaction AI estimates return JSON."""
+    from finance_app.modules.transactions import controller as transaction_controller
+
+    def estimate_for_test(transaction_id):
+        """Return a deterministic single-transaction estimate."""
+        assert transaction_id == 123
+        return {
+            "ok": True,
+            "message": "AI token estimate ready.",
+            "estimate": {"request_count": 1, "input_tokens": 77, "total_tokens": 333},
+        }
+
+    monkeypatch.setattr(
+        transaction_controller.transactions_service,
+        "estimate_transaction_ai_category",
+        estimate_for_test,
+    )
+
+    response = client.post(
+        "/transactions/123/suggest-category/estimate",
+        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["estimate"]["request_count"] == 1
+    assert response.get_json()["message"] == "AI token estimate ready."
 
 
 def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client, core_conn, monkeypatch):

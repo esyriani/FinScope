@@ -173,23 +173,6 @@
                     <div class="settings-subsection-help">{{ _("Thresholds and model used for automated category suggestions.") }}</div>
                     <div class="settings-grid settings-grid-mixed">
                         <div class="settings-field">
-                            <label class="form-label" for="auto_llm_categorization_enabled">{{ _("Automatic AI after import") }}</label>
-                            <div class="form-check form-switch">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    role="switch"
-                                    id="auto_llm_categorization_enabled"
-                                    name="auto_llm_categorization_enabled"
-                                    value="1"
-                                    {% if auto_llm_categorization_enabled %}checked{% endif %}
-                                >
-                                <label class="form-check-label" for="auto_llm_categorization_enabled">{{ _("Queue AI categorization after statement imports") }}</label>
-                            </div>
-                            <div class="form-text">{{ _("Turn this off before bulk imports, then run AI manually from Jobs or Uploaded statements.") }}</div>
-                        </div>
-
-                        <div class="settings-field">
                             <label class="form-label" for="transaction_ai_rerun_enabled">{{ _("Single-transaction AI") }}</label>
                             <div class="form-check form-switch">
                                 <input
@@ -204,6 +187,23 @@
                                 <label class="form-check-label" for="transaction_ai_rerun_enabled">{{ _("Show Suggest category on transaction rows") }}</label>
                             </div>
                             <div class="form-text">{{ _("Use this action to preview an AI category suggestion and choose whether to apply it or save a rule.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label class="form-label" for="confirm_ai_token_usage_enabled">{{ _("Confirm token usage") }}</label>
+                            <div class="form-check form-switch">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    role="switch"
+                                    id="confirm_ai_token_usage_enabled"
+                                    name="confirm_ai_token_usage_enabled"
+                                    value="1"
+                                    {% if confirm_ai_token_usage_enabled %}checked{% endif %}
+                                >
+                                <label class="form-check-label" for="confirm_ai_token_usage_enabled">{{ _("Confirm token usage before AI calls") }}</label>
+                            </div>
+                            <div class="form-text">{{ _("Show a token estimate and require confirmation before an AI request is sent.") }}</div>
                         </div>
 
                         <div class="settings-field">

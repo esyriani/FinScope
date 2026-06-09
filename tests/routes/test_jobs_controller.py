@@ -2,6 +2,8 @@
 
 import pytest
 from sqlalchemy import text
+from tests.support.database import set_owner_setting
+from tests.support.html import assert_has_element, assert_no_element
 from tests.support.web import set_csrf_token
 
 from finance_app.background import runner
@@ -132,6 +134,31 @@ def test_jobs_page_paginates_and_renders_public_job_data(client, core_conn):
     assert oldest_created_at not in body
     assert "Newest job" not in body
     assert "Middle job" not in body
+
+
+def test_jobs_page_renders_ai_estimate_hook_by_default(client):
+    """Verify the Run AI form opens the token estimate modal by default."""
+    response = client.get("/jobs")
+
+    assert response.status_code == 200
+    assert_has_element(
+        response,
+        "form",
+        attrs={
+            "action": "/jobs/ai/categorize-unknowns",
+            "data-ai-token-estimate-url": "/jobs/ai/categorize-unknowns/estimate",
+        },
+    )
+
+
+def test_jobs_page_omits_ai_estimate_hook_when_token_confirmation_disabled(client, core_conn):
+    """Verify disabling token confirmation removes browser estimate hooks."""
+    set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
+
+    response = client.get("/jobs")
+
+    assert response.status_code == 200
+    assert_no_element(response, "form", attrs={"data-ai-token-estimate-url": True})
 
 
 def test_jobs_page_renders_expandable_progress_for_running_ai_job(client):
@@ -310,6 +337,69 @@ def test_categorize_all_unknowns_queues_ai_job(client, core_conn, monkeypatch):
 
     response = client.post(
         "/jobs/ai/categorize-unknowns",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "next": "/jobs",
+            "ai_token_estimate_confirmed": "1",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert submitted == ["queued"]
+    assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
+
+
+def test_categorize_all_unknowns_requires_token_estimate_confirmation(client, core_conn, monkeypatch):
+    """Verify AI categorization is not queued without estimate confirmation."""
+    core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
+        VALUES ('2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 'jobs-ai-unconfirmed')
+        """))
+    core_conn.commit()
+    submitted = []
+
+    def queue_for_test():
+        """Capture accidental all-unknown AI queue requests."""
+        submitted.append("queued")
+        return "aijob12345"
+
+    from finance_app.modules.jobs import controller as jobs_controller
+
+    monkeypatch.setattr(jobs_controller.upload_workflow, "queue_all_unknown_llm_categorization", queue_for_test)
+
+    response = client.post(
+        "/jobs/ai/categorize-unknowns",
+        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/jobs"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert submitted == []
+    assert "Review the token estimate before running AI." in response.get_data(as_text=True)
+
+
+def test_categorize_all_unknowns_runs_without_confirmation_when_setting_disabled(client, core_conn, monkeypatch):
+    """Verify all-unknown AI can queue without confirmation when the setting is off."""
+    core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
+        VALUES ('2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 'jobs-ai-confirm-disabled')
+        """))
+    core_conn.commit()
+    set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
+    submitted = []
+
+    def queue_for_test():
+        """Capture the all-unknown AI queue request."""
+        submitted.append("queued")
+        return "aijob12345"
+
+    from finance_app.modules.jobs import controller as jobs_controller
+
+    monkeypatch.setattr(jobs_controller.upload_workflow, "queue_all_unknown_llm_categorization", queue_for_test)
+
+    response = client.post(
+        "/jobs/ai/categorize-unknowns",
         data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/jobs"},
         follow_redirects=True,
     )
@@ -317,6 +407,31 @@ def test_categorize_all_unknowns_queues_ai_job(client, core_conn, monkeypatch):
     assert response.status_code == 200
     assert submitted == ["queued"]
     assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
+
+
+def test_estimate_categorize_all_unknowns_returns_json(client, monkeypatch):
+    """Verify the all-unknown AI estimate route returns JSON."""
+    from finance_app.modules.jobs import controller as jobs_controller
+
+    monkeypatch.setattr(jobs_controller.upload_workflow, "count_unknown_transactions", lambda conn: 3)
+    monkeypatch.setattr(
+        jobs_controller.upload_service,
+        "estimate_all_unknown_llm_categorization",
+        lambda: {
+            "ok": True,
+            "message": "AI token estimate ready.",
+            "estimate": {"request_count": 3, "input_tokens": 234},
+        },
+    )
+
+    response = client.post(
+        "/jobs/ai/categorize-unknowns/estimate",
+        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["estimate"]["request_count"] == 3
+    assert response.get_json()["message"] == "AI token estimate ready."
 
 
 def test_cancel_queued_ai_jobs_route_clears_only_ai_queue(client):
