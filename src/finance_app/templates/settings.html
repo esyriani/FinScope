@@ -66,7 +66,7 @@
                                 >
                                 <label class="theme-mode-option" for="theme_mode_dark">
                                     <span class="theme-mode-icon" aria-hidden="true">
-                                        <img src="{{ url_for('static', filename='img/dark.png') }}" alt="">
+                                        <img src="{{ url_for('static', filename='img/dark.png') }}" alt="" width="64" height="64">
                                     </span>
                                     <span class="theme-mode-title">{{ _("Dark") }}</span>
                                 </label>
@@ -82,7 +82,7 @@
                                 >
                                 <label class="theme-mode-option" for="theme_mode_light">
                                     <span class="theme-mode-icon" aria-hidden="true">
-                                        <img src="{{ url_for('static', filename='img/light.png') }}" alt="">
+                                        <img src="{{ url_for('static', filename='img/light.png') }}" alt="" width="64" height="64">
                                     </span>
                                     <span class="theme-mode-title">{{ _("Light") }}</span>
                                 </label>
@@ -353,7 +353,7 @@
 
             <div class="settings-actions d-flex gap-2">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-save" aria-hidden="true"></i>{{ _("Save settings") }}</button>
-                <a class="btn btn-outline-secondary" href="/settings"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Reset form") }}</a>
+                <a class="btn btn-outline-secondary" href="{{ url_for('settings_page.settings_page') }}"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Reset form") }}</a>
             </div>
         </form>
     </div>

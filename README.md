@@ -334,16 +334,18 @@ Run code-quality checks after installing `requirements-dev.txt`:
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m black --check .
+.\.venv\Scripts\python.exe -B -m djlint src/finance_app/templates --profile=jinja --lint
 .\.venv\Scripts\python.exe -B -m ruff check .
 .\.venv\Scripts\python.exe -B -m mypy
 npm run lint:frontend
 ```
 
 Python type checking is configured in `pyproject.toml` for `sitecustomize.py`
-and the production application package. Frontend checks are configured in
-`package.json`, `eslint.config.mjs`, `stylelint.config.mjs`, and
-`.prettierrc.json`; they cover first-party static JavaScript and CSS while
-excluding vendored browser libraries.
+and the production application package. Template linting uses djlint in Jinja
+lint-only mode. Frontend checks are configured in `package.json`,
+`eslint.config.mjs`, `stylelint.config.mjs`, and `.prettierrc.json`; they cover
+first-party static JavaScript and CSS while excluding vendored browser
+libraries.
 
 ## Development guidelines
 

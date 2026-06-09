@@ -10,6 +10,11 @@ extend-exclude = '''
 )/
 '''
 
+[tool.djlint]
+profile = "jinja"
+max_line_length = 120
+ignore = "H020,H021,H023,H025,H030,H031,T003,T028"
+
 [tool.ruff]
 line-length = 120
 src = ["src", "tests"]

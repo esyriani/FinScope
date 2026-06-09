@@ -228,7 +228,7 @@
                 {% endif %}
             {% endfor %}
             {% if not suggested_actions %}
-                <a class="btn btn-outline-secondary shortcut-action" href="/transactions">
+                <a class="btn btn-outline-secondary shortcut-action" href="{{ url_for('transactions.transactions') }}">
                     <i class="bi bi-receipt" aria-hidden="true"></i>
                     <span>{{ _("Transactions") }}</span>
                 </a>

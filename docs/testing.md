@@ -55,16 +55,17 @@ Run the current quality checks from the repository root:
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m black --check .
+.\.venv\Scripts\python.exe -B -m djlint src/finance_app/templates --profile=jinja --lint
 .\.venv\Scripts\python.exe -B -m ruff check .
 .\.venv\Scripts\python.exe -B -m mypy
 npm run lint:frontend
 ```
 
 Mypy is configured in `pyproject.toml` for `sitecustomize.py` and the production
-application package. Frontend checks are configured through npm scripts:
-Prettier checks formatting for first-party static JavaScript and CSS, ESLint
-checks browser JavaScript, and Stylelint checks first-party CSS. Vendored
-browser libraries are excluded.
+application package. Djlint checks Jinja templates in lint-only mode. Frontend
+checks are configured through npm scripts: Prettier checks formatting for
+first-party static JavaScript and CSS, ESLint checks browser JavaScript, and
+Stylelint checks first-party CSS. Vendored browser libraries are excluded.
 
 ## Markers
 

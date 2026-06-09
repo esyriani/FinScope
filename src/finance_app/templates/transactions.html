@@ -202,7 +202,7 @@
 
             <div class="col-md-3 filter-actions justify-content-md-end">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                <a class="btn btn-outline-secondary" href="/transactions"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+                <a class="btn btn-outline-secondary" href="{{ url_for('transactions.transactions') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>
         </form>
     </div>
@@ -363,7 +363,7 @@
                         <td class="text-end">
                             {% if can_edit_transactions %}
                             <div class="transaction-row-actions d-flex align-items-center justify-content-end gap-1" data-row-action>
-                                <form method="post" action="/transactions/{{ tx['id'] }}/verify" data-ajax-refresh-form>
+                                <form method="post" action="{{ url_for('transactions.verify_transaction', transaction_id=tx['id']) }}" data-ajax-refresh-form>
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="next" value="{{ request.full_path }}">
                                     {% if not tx["reviewed_at"] %}
@@ -412,7 +412,7 @@
                                             </button>
                                         </li>
                                         <li>
-                                            <form method="post" action="/transactions/{{ tx['id'] }}/ignored" data-ajax-refresh-form>
+                                            <form method="post" action="{{ url_for('transactions.update_transaction_ignored', transaction_id=tx['id']) }}" data-ajax-refresh-form>
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <input type="hidden" name="next" value="{{ request.full_path }}">
                                                 {% if tx["ignored"] %}
@@ -452,7 +452,7 @@
 <div class="modal fade" id="categorize-transaction-{{ tx['id'] }}" tabindex="-1" aria-labelledby="categorize-transaction-{{ tx['id'] }}-title" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-fit-content">
         <div class="modal-content">
-            <form method="post" action="/transactions/{{ tx['id'] }}/category" data-ajax-refresh-form>
+            <form method="post" action="{{ url_for('transactions.update_transaction_category', transaction_id=tx['id']) }}" data-ajax-refresh-form>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path }}">
                 <div class="modal-header">
