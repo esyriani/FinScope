@@ -20,12 +20,10 @@ future imports or other local work.
 
 Jobs move through a small lifecycle:
 
-```text
-queued -> running -> completed
-queued -> running -> failed
-queued -> cancelled
-queued -> running -> cancelled
-```
+- `queued -> running -> completed`
+- `queued -> running -> failed`
+- `queued -> cancelled`
+- `queued -> running -> cancelled`
 
 Each job records its label, payload, status, result, error details, timestamps, and optional undo metadata.
 

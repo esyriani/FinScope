@@ -110,6 +110,22 @@ For iteration, use the smallest useful marker or file selection:
 .\.venv\Scripts\python.exe -B -m pytest -m smoke
 ```
 
+Run the full local quality gate before finishing code changes that affect
+production code, templates, browser assets, tests, or tooling:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m black --check .
+.\.venv\Scripts\python.exe -B -m djlint src/finance_app/templates --profile=jinja --lint
+.\.venv\Scripts\python.exe -B -m ruff check .
+.\.venv\Scripts\python.exe -B -m mypy
+npm run lint:frontend
+.\.venv\Scripts\python.exe -B -m pytest
+```
+
+The GitHub Actions workflow in `.github/workflows/quality.yml` runs the same
+quality gates on every push and pull request. See `docs/testing.md` for
+installation commands and platform-specific variants.
+
 Testing expectations:
 
 - Add or update tests when behavior, schema, security, financial calculations,
@@ -221,5 +237,6 @@ Before finishing a code change, verify:
 - User-facing text is translated in English and French.
 - Frontend behavior uses registered initializers and accessible controls.
 - Related tests were added, updated, or intentionally left unchanged.
-- The relevant pytest command, preferably the full xdist suite, was run and
-  reported.
+- The relevant quality gate was run and reported. Prefer the full local quality
+  gate for code changes; for docs-only or tightly scoped edits, report the
+  narrower command and why it is sufficient.

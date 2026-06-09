@@ -4,12 +4,47 @@
 
 Check the configured database URL and SQLite path:
 
+<details open>
+<summary>Windows PowerShell</summary>
+
 ```powershell
 $env:FINANCE_DATABASE_URL
 $env:FINANCE_DB_PATH
 ```
 
-If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is `runtime/finescope.db`.
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+set FINANCE_DATABASE_URL
+set FINANCE_DB_PATH
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+echo "$FINANCE_DATABASE_URL"
+echo "$FINANCE_DB_PATH"
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+echo "$FINANCE_DATABASE_URL"
+echo "$FINANCE_DB_PATH"
+```
+
+</details>
+
+If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is [runtime/finescope.db](../runtime/finescope.db).
 
 ## LLM categorization does not run
 
@@ -46,7 +81,42 @@ Use Reprocess when you want to remove transactions imported from that statement 
 
 Run on another port:
 
+<details open>
+<summary>Windows PowerShell</summary>
+
 ```powershell
 $env:FINANCE_PORT = "5001"
 .\.venv\Scripts\python.exe -B src\finance_app\app.py
 ```
+
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+set "FINANCE_PORT=5001"
+.venv\Scripts\python.exe -B src\finance_app\app.py
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+export FINANCE_PORT=5001
+.venv/bin/python -B src/finance_app/app.py
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+export FINANCE_PORT=5001
+.venv/bin/python -B src/finance_app/app.py
+```
+
+</details>

@@ -2,11 +2,11 @@
 
 Tests are organized by the layer they primarily exercise:
 
-- `unit/`: isolated helpers, parsers, presenters, and pure domain logic.
-- `integration/`: database-backed workflows, repositories, services, and cross-module behavior.
-- `routes/`: Flask route/controller tests using the test client.
-- `smoke/`: high-value happy-path workflows across routes, background jobs, and persistence.
-- `support/`: shared test helpers for CSRF setup, database row factories, background job capture, and deterministic LLM stubs.
+- [unit/](unit/): isolated helpers, parsers, presenters, and pure domain logic.
+- [integration/](integration/): database-backed workflows, repositories, services, and cross-module behavior.
+- [routes/](routes/): Flask route/controller tests using the test client.
+- [smoke/](smoke/): high-value happy-path workflows across routes, background jobs, and persistence.
+- [support/](support/): shared test helpers for CSRF setup, database row factories, background job capture, and deterministic LLM stubs.
 
 ## Curation strategy
 
@@ -49,7 +49,7 @@ Guardrails for pruning:
   destructive background jobs until equivalent or better coverage exists.
 - Keep presentation, logic, and data concerns separated in tests. Cross-layer
   tests should be intentional route, integration, or smoke coverage.
-- Prefer shared helpers from `tests/support` over ad hoc setup. Raw SQL belongs
+- Prefer shared helpers from [tests/support](support/) over ad hoc setup. Raw SQL belongs
   in repository or schema tests, or inside support helpers used by higher-level
   tests.
 - Prefer behavior-focused assertions over copy, layout, or implementation
@@ -58,9 +58,9 @@ Guardrails for pruning:
 - Record deleted or merged coverage in the curation inventory created in the
   next step so future maintainers understand what replaced it.
 
-The current curation map lives in `CURATION_INVENTORY.md`.
+When a curation inventory is maintained, link it from this section so future maintainers can see what replaced deleted or merged coverage.
 
-Prefer helpers from `tests/support` for common setup. Database helpers there use
+Prefer helpers from [tests/support](support/) for common setup. Database helpers there use
 SQLAlchemy Core table metadata and work with the raw `core_conn` fixture. The
 `data_factory` fixture exposes shared builders for users, accounts, statements,
 transactions, rules, and tags.
@@ -71,9 +71,9 @@ pagination, sorting, and cleanup assertions belong in route or integration
 tests.
 
 For HTML route assertions, prefer parser-backed helpers from
-`tests/support/html.py` over broad `response.data` byte checks. Use raw markup
+[tests/support/html.py](support/html.py) over broad `response.data` byte checks. Use raw markup
 assertions only when exact serialization is what the test is protecting.
-Asset reference assertions should also use `tests/support/html.py` so hashed
+Asset reference assertions should also use [tests/support/html.py](support/html.py) so hashed
 asset checks stay parser-backed and shared across route files.
 
 Route tests that submit forms or JSON should prefer `csrf_client` or
@@ -84,19 +84,22 @@ for common user states: `owner_client`, `editor_client`, `viewer_client`,
 `must_change_password_client`.
 
 Route and workflow tests that assert queued background work should prefer
-`capture_background_jobs` from `tests/support/jobs.py` instead of local
+`capture_background_jobs` from [tests/support/jobs.py](support/jobs.py) instead of local
 monkeypatch recorders.
 
 Pytest markers are assigned automatically from the directory layout. The plain
 full-suite command enforces strict markers, warnings as errors, parallel
-execution, collection from `tests/`, and no coverage run.
+execution, collection from [tests/](./), and no coverage run.
 The suite also blocks socket connections globally; LLM and other external
 integration tests should inject fake clients or request functions.
 
-Quality gates in `tests/unit` keep the curated structure from drifting. They
+Quality gates in [tests/unit](unit/) keep the curated structure from drifting. They
 verify pytest defaults, documented layer directories, the remaining catch-all
 route file size, shared background-job recorder usage in route tests, and
 selected production module size boundaries.
+
+<details open>
+<summary>Windows PowerShell</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m pytest
@@ -106,6 +109,50 @@ selected production module size boundaries.
 .\.venv\Scripts\python.exe -B -m pytest -m "not slow"
 .\.venv\Scripts\python.exe -B -m pytest tests\smoke
 ```
+
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+.venv\Scripts\python.exe -B -m pytest
+.venv\Scripts\python.exe -B -m pytest -m unit
+.venv\Scripts\python.exe -B -m pytest -m integration
+.venv\Scripts\python.exe -B -m pytest -m route
+.venv\Scripts\python.exe -B -m pytest -m "not slow"
+.venv\Scripts\python.exe -B -m pytest tests\smoke
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+.venv/bin/python -B -m pytest
+.venv/bin/python -B -m pytest -m unit
+.venv/bin/python -B -m pytest -m integration
+.venv/bin/python -B -m pytest -m route
+.venv/bin/python -B -m pytest -m "not slow"
+.venv/bin/python -B -m pytest tests/smoke
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+.venv/bin/python -B -m pytest
+.venv/bin/python -B -m pytest -m unit
+.venv/bin/python -B -m pytest -m integration
+.venv/bin/python -B -m pytest -m route
+.venv/bin/python -B -m pytest -m "not slow"
+.venv/bin/python -B -m pytest tests/smoke
+```
+
+</details>
 
 Capability markers are also added automatically:
 

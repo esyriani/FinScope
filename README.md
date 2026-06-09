@@ -26,6 +26,9 @@ FinScope is a single-tenant Flask application with owner-managed user access, sh
 
 ## Quick start
 
+<details open>
+<summary>Windows PowerShell</summary>
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -34,20 +37,92 @@ Copy-Item src\finance_app\config.example.ini src\finance_app\config.ini
 .\.venv\Scripts\python.exe -B src\finance_app\app.py
 ```
 
-Open:
+</details>
 
-```text
-http://127.0.0.1:5000
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install -r requirements.txt
+copy /Y src\finance_app\config.example.ini src\finance_app\config.ini
+.venv\Scripts\python.exe -B src\finance_app\app.py
 ```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp src/finance_app/config.example.ini src/finance_app/config.ini
+.venv/bin/python -B src/finance_app/app.py
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp src/finance_app/config.example.ini src/finance_app/config.ini
+.venv/bin/python -B src/finance_app/app.py
+```
+
+</details>
+
+Open `http://127.0.0.1:5000`.
 
 On first run, create the owner account in the bootstrap page. The owner manages editor and viewer users from Users.
 
 For another port:
 
+<details open>
+<summary>Windows PowerShell</summary>
+
 ```powershell
 $env:FINANCE_PORT = "5001"
 .\.venv\Scripts\python.exe -B src\finance_app\app.py
 ```
+
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+set "FINANCE_PORT=5001"
+.venv\Scripts\python.exe -B src\finance_app\app.py
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+export FINANCE_PORT=5001
+.venv/bin/python -B src/finance_app/app.py
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+export FINANCE_PORT=5001
+.venv/bin/python -B src/finance_app/app.py
+```
+
+</details>
 
 ## Main features
 
@@ -93,28 +168,25 @@ $env:FINANCE_PORT = "5001"
 
 ## Repository layout
 
-```text
-src/
-  finance_app/
-    __init__.py          Flask application factory.
-    app.py               Application entry point.
-    core/                Configuration, constants, SQLAlchemy query helpers, CSRF, filters.
-    database/            SQLAlchemy lifecycle, metadata, schema validation, and initialization seeds.
-    background/          In-memory background job runner and undo orchestration.
-    modules/             Feature modules, including auth, settings, upload, rules, review, and reporting.
-    templates/           Jinja templates.
-    static/              CSS, JavaScript, image assets, and vendored browser libraries.
-    translations/        JSON translation catalogs for user interface text.
-tests/                   Unit, integration, route, smoke, and shared support helpers.
-docs/                    Deeper project documentation.
-runtime/                 Local runtime data, including the default SQLite database.
-```
+- [src/finance_app/__init__.py](src/finance_app/__init__.py): Flask application factory.
+- [src/finance_app/app.py](src/finance_app/app.py): application entry point.
+- [src/finance_app/core/](src/finance_app/core/): configuration, constants, SQLAlchemy query helpers, CSRF, and filters.
+- [src/finance_app/database/](src/finance_app/database/): SQLAlchemy lifecycle, metadata, schema validation, and initialization seeds.
+- [src/finance_app/background/](src/finance_app/background/): in-memory background job runner and undo orchestration.
+- [src/finance_app/modules/](src/finance_app/modules/): feature modules, including auth, settings, upload, rules, review, and reporting.
+- [src/finance_app/templates/](src/finance_app/templates/): Jinja templates.
+- [src/finance_app/static/](src/finance_app/static/): CSS, JavaScript, image assets, and vendored browser libraries.
+- [src/finance_app/translations/](src/finance_app/translations/): JSON translation catalogs for user interface text.
+- [tests/](tests/): unit, integration, route, smoke, and shared support helpers.
+- [docs/](docs/): deeper project documentation.
+- [runtime/](runtime/): local runtime data, including the default SQLite database.
 
 ## Setup
 
 Create a virtual environment and install dependencies.
 
-PowerShell:
+<details open>
+<summary>Windows PowerShell</summary>
 
 ```powershell
 python -m venv .venv
@@ -122,15 +194,10 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-For local development and code-quality checks, install the developer tools.
-Frontend checks require Node.js 20+ with npm:
+</details>
 
-```powershell
-python -m pip install -r requirements-dev.txt
-npm install
-```
-
-cmd.exe:
+<details>
+<summary>Windows cmd</summary>
 
 ```bat
 python -m venv .venv
@@ -138,19 +205,110 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-macOS/Linux:
+</details>
+
+<details>
+<summary>macOS</summary>
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+</details>
+
+For local development and code-quality checks, install the developer tools.
+Frontend checks require Node.js 20+ with npm:
+
+<details open>
+<summary>Windows PowerShell</summary>
+
+```powershell
+python -m pip install -r requirements-dev.txt
+npm install
+```
+
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+python -m pip install -r requirements-dev.txt
+npm install
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+python -m pip install -r requirements-dev.txt
+npm install
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+python -m pip install -r requirements-dev.txt
+npm install
+```
+
+</details>
+
 Copy the example configuration for local development:
+
+<details open>
+<summary>Windows PowerShell</summary>
 
 ```powershell
 Copy-Item src\finance_app\config.example.ini src\finance_app\config.ini
 ```
+
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+copy /Y src\finance_app\config.example.ini src\finance_app\config.ini
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+cp src/finance_app/config.example.ini src/finance_app/config.ini
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+cp src/finance_app/config.example.ini src/finance_app/config.ini
+```
+
+</details>
 
 Common settings:
 
@@ -175,29 +333,23 @@ Common settings:
 | `setting_defaults.transaction_ai_rerun_enabled` | `FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED` | Default visibility for the one-transaction Suggest category action. |
 | `setting_defaults.rule_audit_transaction_limit` | `FINANCE_DEFAULT_RULE_AUDIT_TRANSACTION_LIMIT` | Maximum newest historical transactions analyzed by Rule audit before the limited-audit notice appears. |
 
-FinScope loads `src/finance_app/config.example.ini`, overlays `src/finance_app/config.ini` when present, then applies environment variable overrides.
+FinScope loads [src/finance_app/config.example.ini](src/finance_app/config.example.ini), overlays [src/finance_app/config.ini](src/finance_app/config.ini) when present, then applies environment variable overrides.
 
 ### Database selection
 
-Choose the active database with the SQLAlchemy URL in `database.url`:
-
-```ini
-[database]
-url =
-path = ../../runtime/finescope.db
-```
+Choose the active database with the SQLAlchemy URL in `database.url`. Leave `url` blank under `[database]` and keep the database path pointing at [../../runtime/finescope.db](runtime/finescope.db) for the default SQLite database.
 
 Selection priority:
 
 1. `FINANCE_DATABASE_URL`, when set.
-2. `database.url` in `src/finance_app/config.ini`, when non-empty.
+2. `database.url` in [src/finance_app/config.ini](src/finance_app/config.ini), when non-empty.
 3. A generated SQLite URL from the configured database path.
 
 The database path used for the generated SQLite URL is chosen in this order:
 
 1. `FINANCE_DB_PATH`, when set.
-2. `database.path` in `src/finance_app/config.ini`, when present.
-3. `database.path` in `src/finance_app/config.example.ini`.
+2. `database.path` in [src/finance_app/config.ini](src/finance_app/config.ini), when present.
+3. `database.path` in [src/finance_app/config.example.ini](src/finance_app/config.example.ini).
 
 Leave `database.url` blank for the default SQLite database. Set it to a SQLAlchemy URL such as `sqlite:///D:/path/to/finescope.db` or `mysql+pymysql://user:password@127.0.0.1:3306/finscope` to select that database. When a non-SQLite URL is active, `database.path` is not the active database; it is only used as the fallback path if the URL is later removed.
 
@@ -208,17 +360,49 @@ Supported database backends:
 | SQLite 3.31+ | `sqlite:///D:/path/to/finescope.db` | Default local backend. The current development environment uses SQLite 3.45.1. |
 | MySQL 8.0.16+ | `mysql+pymysql://user:password@host:3306/finscope` | Fully supported through SQLAlchemy Core and PyMySQL 1.1.3. Compatible MariaDB servers use the same URL form. |
 
-Interface language is a user-bound runtime setting stored in `user_settings` and managed from Settings. English source strings are the canonical message ids; French translations live in `src/finance_app/translations/fr.json`.
+Interface language is a user-bound runtime setting stored in `user_settings` and managed from Settings. English source strings are the canonical message ids; French translations live in [src/finance_app/translations/fr.json](src/finance_app/translations/fr.json).
 
 ## Running the app
 
 From the repository root:
 
+<details open>
+<summary>Windows PowerShell</summary>
+
 ```powershell
 .\.venv\Scripts\python.exe -B src\finance_app\app.py
 ```
 
-`src/finance_app/app.py` initializes the database before starting Flask: empty databases are created from Core metadata, existing FinScope databases are validated against the current schema, and runtime defaults are seeded. By default, FinScope uses `runtime/finescope.db`.
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+.venv\Scripts\python.exe -B src\finance_app\app.py
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+.venv/bin/python -B src/finance_app/app.py
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+.venv/bin/python -B src/finance_app/app.py
+```
+
+</details>
+
+[src/finance_app/app.py](src/finance_app/app.py) initializes the database before starting Flask: empty databases are created from Core metadata, existing FinScope databases are validated against the current schema, and runtime defaults are seeded. By default, FinScope uses [runtime/finescope.db](runtime/finescope.db).
 
 Imported transactions normally keep their original statement descriptions for auditability. Ledger uploads create transaction rows; enrichment uploads, such as Interac e-Transfer history, update matched rows without adding duplicate ledger activity. Merchant grouping is persisted separately through `merchants` and `merchant_aliases`, which gives recurring activity, merchant filters, categorization rules, and analytics a stable merchant identity. Rules and recurring patterns can still remain keyword-fuzzy when no merchant ID is stored.
 
@@ -283,7 +467,7 @@ Rule sources are persisted as `manual` or `automatic`. The UI labels these as Ma
 
 AI categorization runs in a separate background queue so OpenAI timeouts do not block statement imports, rule jobs, or review jobs. Automatic AI categorization after imports is off by default; owners can opt in from Settings > Categorization. Unknown transactions remain available for manual reruns from Jobs or from an individual uploaded statement.
 
-External LLM prompts are privacy-minimized. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. The prompt uses normalized merchant text, coarse amount direction and magnitude, transaction kind, taxonomy data, and compact category evidence summaries. The static system-prompt policy is stored as structured JSON in `src/finance_app/modules/categories/llm_system_prompt.json` so prompt changes can be reviewed separately from request code.
+External LLM prompts are privacy-minimized. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. The prompt uses normalized merchant text, coarse amount direction and magnitude, transaction kind, taxonomy data, and compact category evidence summaries. The static system-prompt policy is stored as structured JSON in [src/finance_app/modules/categories/llm_system_prompt.json](src/finance_app/modules/categories/llm_system_prompt.json) so prompt changes can be reviewed separately from request code.
 
 Use Jobs to run AI on all active unknown transactions, cancel a queued or running AI job, or clear queued AI jobs. Running AI jobs stop cooperatively after the current batch. Manual reruns only target active transactions whose category is still unknown, so they do not overwrite manually reviewed or already categorized rows.
 
@@ -311,15 +495,53 @@ For focused review, Settings > Categorization can show a Suggest category action
 ## Testing
 
 Run the full suite. The default pytest configuration enforces strict markers,
-warnings as errors, parallel execution, collection from `tests/`, and no
+warnings as errors, parallel execution, collection from [tests/](tests/), and no
 coverage run:
+
+<details open>
+<summary>Windows PowerShell</summary>
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE = "1"
 .\.venv\Scripts\python.exe -B -m pytest
 ```
 
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+set "PYTHONDONTWRITEBYTECODE=1"
+.venv\Scripts\python.exe -B -m pytest
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1
+.venv/bin/python -B -m pytest
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1
+.venv/bin/python -B -m pytest
+```
+
+</details>
+
 Run a layer during local iteration:
+
+<details open>
+<summary>Windows PowerShell</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m pytest -m unit
@@ -328,9 +550,50 @@ Run a layer during local iteration:
 .\.venv\Scripts\python.exe -B -m pytest -m smoke
 ```
 
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+.venv\Scripts\python.exe -B -m pytest -m unit
+.venv\Scripts\python.exe -B -m pytest -m integration
+.venv\Scripts\python.exe -B -m pytest -m route
+.venv\Scripts\python.exe -B -m pytest -m smoke
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+.venv/bin/python -B -m pytest -m unit
+.venv/bin/python -B -m pytest -m integration
+.venv/bin/python -B -m pytest -m route
+.venv/bin/python -B -m pytest -m smoke
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+.venv/bin/python -B -m pytest -m unit
+.venv/bin/python -B -m pytest -m integration
+.venv/bin/python -B -m pytest -m route
+.venv/bin/python -B -m pytest -m smoke
+```
+
+</details>
+
 See [testing](docs/testing.md) and [tests/README.md](tests/README.md) for marker details and suite structure.
 
-Run code-quality checks after installing `requirements-dev.txt`:
+Run code-quality checks after installing [requirements-dev.txt](requirements-dev.txt):
+
+<details open>
+<summary>Windows PowerShell</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m black --check .
@@ -340,16 +603,57 @@ Run code-quality checks after installing `requirements-dev.txt`:
 npm run lint:frontend
 ```
 
-Python type checking is configured in `pyproject.toml` for `sitecustomize.py`
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+.venv\Scripts\python.exe -B -m black --check .
+.venv\Scripts\python.exe -B -m djlint src/finance_app/templates --profile=jinja --lint
+.venv\Scripts\python.exe -B -m ruff check .
+.venv\Scripts\python.exe -B -m mypy
+npm run lint:frontend
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+.venv/bin/python -B -m black --check .
+.venv/bin/python -B -m djlint src/finance_app/templates --profile=jinja --lint
+.venv/bin/python -B -m ruff check .
+.venv/bin/python -B -m mypy
+npm run lint:frontend
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+.venv/bin/python -B -m black --check .
+.venv/bin/python -B -m djlint src/finance_app/templates --profile=jinja --lint
+.venv/bin/python -B -m ruff check .
+.venv/bin/python -B -m mypy
+npm run lint:frontend
+```
+
+</details>
+
+Python type checking is configured in [pyproject.toml](pyproject.toml) for [sitecustomize.py](sitecustomize.py)
 and the production application package. Template linting uses djlint in Jinja
-lint-only mode. Frontend checks are configured in `package.json`,
-`eslint.config.mjs`, `stylelint.config.mjs`, and `.prettierrc.json`; they cover
+lint-only mode. Frontend checks are configured in [package.json](package.json),
+[eslint.config.mjs](eslint.config.mjs), [stylelint.config.mjs](stylelint.config.mjs), and [.prettierrc.json](.prettierrc.json); they cover
 first-party static JavaScript and CSS while excluding vendored browser
 libraries.
 
 ## Development guidelines
 
-- Keep feature code modular under `src/finance_app/modules/<feature>/`.
+- Keep feature code modular under [src/finance_app/modules/](src/finance_app/modules/).
 - Keep route handlers thin.
 - Put business logic in services, workflows, engines, or presenters.
 - Keep SQL in query/repository helpers.
@@ -379,7 +683,7 @@ Operational recommendations:
 - Keep `FINANCE_SECRET_KEY` private.
 - Change the bootstrap owner password after setup if it was created in a shared environment.
 - Keep `OPENAI_API_KEY` out of source control.
-- Store `runtime/finescope.db`, MySQL credentials, and database backups in protected locations.
+- Store [runtime/finescope.db](runtime/finescope.db), MySQL credentials, and database backups in protected locations.
 - Back up the active database regularly.
 - Do not run with debug mode enabled on a shared network.
 - Review data-sharing implications before running or enabling LLM categorization.

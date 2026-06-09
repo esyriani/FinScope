@@ -1,6 +1,6 @@
 # Taxonomy and categorization
 
-FinScope uses a database-backed taxonomy for categories and tags. The file `src/finance_app/taxonomy.yml` provides the initial user-editable seed taxonomy during application setup, but it is not the runtime source of truth. Once the database has been initialized, categories and tags are managed through the application UI and stored in the database.
+FinScope uses a database-backed taxonomy for categories and tags. The file [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml) provides the initial user-editable seed taxonomy during application setup, but it is not the runtime source of truth. Once the database has been initialized, categories and tags are managed through the application UI and stored in the database.
 
 The taxonomy system is central to FinScope. Categories and tags drive dashboards and analytics, recurring activity detection, categorization rules, merchant review workflows, reporting and filtering, historical categorization, and optional LLM-assisted categorization.
 
@@ -23,10 +23,7 @@ Tags provide additional optional context. Unlike categories, tags are non-exclus
 
 For example:
 
-```text
-Category: Food
-Tags: Work, Travel, Reimbursable
-````
+Category `Food` can coexist with tags such as `Work`, `Travel`, and `Reimbursable`.
 
 Tags are commonly used for, reimbursements, work-related expenses, vacations, medical claims, tax-related purchases, temporary projects or events.
 
@@ -34,27 +31,23 @@ A good category remains meaningful over years of historical data. A good tag add
 
 ## The taxonomy seed file
 
-Before running FinScope for the first time, users may customize:
-
-```text
-src/finance_app/taxonomy.yml
-```
+Before running FinScope for the first time, users may customize [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml).
 
 This file defines the initial user-managed categories and tags inserted into the database during initialization. FinScope-managed built-in categories are defined in code, not in this file.
 
-After the application has been initialized, taxonomy changes can only be performed through the FinScope UI rather than by editing the file directly. Directly modifying `taxonomy.yml` after the database already contains categories and tags does not automatically synchronize existing runtime data.
+After the application has been initialized, taxonomy changes can only be performed through the FinScope UI rather than by editing the file directly. Directly modifying [taxonomy.yml](../src/finance_app/taxonomy.yml) after the database already contains categories and tags does not automatically synchronize existing runtime data.
 
 ## Taxonomy structure
 
 Each category or tag contains: a unique name, a human-readable description, an optional instruction field used by LLM categorization.
 
-Typical structure:
+Typical category or tag fields:
 
-```yaml
-- name: Groceries
-  description: Food and household consumables purchased from grocery stores.
-  instruction: Use for supermarkets, grocery chains, food markets, and recurring food shopping.
-```
+| Field | Example |
+| --- | --- |
+| `name` | `Groceries` |
+| `description` | `Food and household consumables purchased from grocery stores.` |
+| `instruction` | `Use for supermarkets, grocery chains, food markets, and recurring food shopping.` |
 
 ### Naming constraints
 
@@ -184,7 +177,7 @@ Automatic and manual category writes persist compact JSON evidence in `transacti
 LLM categorization is optional and requires `OPENAI_API_KEY`.
 External prompts are privacy-minimized. The LLM receives normalized merchant text, coarse amount direction and magnitude, transaction kind, compact category evidence summaries, the full taxonomy, and transaction-local candidate taxonomy hints. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. Candidate categories and tags are hints, not a gate: the model may choose any active category or tag ID from the full taxonomy when the supplied evidence supports it.
 
-The static system-prompt policy is stored in `src/finance_app/modules/categories/llm_system_prompt.json`. Runtime code renders that structured resource with the current confidence thresholds, while transaction, taxonomy, and rule payloads are still built by the Python prompt builders.
+The static system-prompt policy is stored in [src/finance_app/modules/categories/llm_system_prompt.json](../src/finance_app/modules/categories/llm_system_prompt.json). Runtime code renders that structured resource with the current confidence thresholds, while transaction, taxonomy, and rule payloads are still built by the Python prompt builders.
 
 Returned results are validated conservatively. Invalid JSON, invalid category IDs, invalid tag IDs, invalid confidence values, or inconsistent evidence remain categorized as `Unknown` or are marked for review according to the shared confidence policy.
 

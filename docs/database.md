@@ -1,8 +1,8 @@
 # Database
 
-FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the default local backend at `runtime/finescope.db`; MySQL is selected by setting a `mysql+pymysql://` SQLAlchemy URL. Runtime schema creation is managed by SQLAlchemy Core metadata in `src/finance_app/database/tables.py`.
+FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the default local backend at [runtime/finescope.db](../runtime/finescope.db); MySQL is selected by setting a `mysql+pymysql://` SQLAlchemy URL. Runtime schema creation is managed by SQLAlchemy Core metadata in [src/finance_app/database/tables.py](../src/finance_app/database/tables.py).
 
-The database layer maintains the Core engine/connection lifecycle in `src/finance_app/database/engine.py`. Startup creates empty databases from Core metadata, validates existing FinScope databases against the current schema, and seeds runtime defaults through Core for SQLite and MySQL URLs. `src/finance_app/database/tables.py` remains the schema source of truth for the current clean database shape.
+The database layer maintains the Core engine/connection lifecycle in [src/finance_app/database/engine.py](../src/finance_app/database/engine.py). Startup creates empty databases from Core metadata, validates existing FinScope databases against the current schema, and seeds runtime defaults through Core for SQLite and MySQL URLs. [src/finance_app/database/tables.py](../src/finance_app/database/tables.py) remains the schema source of truth for the current clean database shape.
 
 User-bound runtime settings, statement type management, account persistence, merchant persistence, category/tag taxonomy helpers, taxonomy admin CRUD, category rule repository helpers, imported-rule repository helpers, rule import/export job entry points, rule listing queries, rule create/update/approval/delete/preview/apply workflows, standalone categorization, recurring pattern writes, transaction list queries and route mutations, transaction repository helpers, transaction import deduplication, home summary queries, upload page context queries, upload queue/import/reprocess/undo workflows, dashboard/comparison/calendar reporting read models, review page/workflow queries and mutations, and jobs page settings lookups use SQLAlchemy Core connections.
 
@@ -10,7 +10,7 @@ Runtime-facing persistence helpers require SQLAlchemy Core connections. SQLite u
 
 Money amounts are modeled in SQLAlchemy Core as fixed-scale `Numeric(14, 2)` values. This applies to transaction amounts, category rule amount bounds, and recurring pattern amount settings; probability-style fields such as category confidence remain floating point.
 
-Persisted enum-like text values, such as import statuses, parser types, category sources, rule sources, and recurring pattern statuses, are defined in `src/finance_app/core/constants.py`. The schema derives `CHECK` constraints from those constants so Python validation and database constraints stay aligned across SQLite and MySQL.
+Persisted enum-like text values, such as import statuses, parser types, category sources, rule sources, and recurring pattern statuses, are defined in [src/finance_app/core/constants.py](../src/finance_app/core/constants.py). The schema derives `CHECK` constraints from those constants so Python validation and database constraints stay aligned across SQLite and MySQL.
 
 ## Supported backends
 
@@ -23,51 +23,35 @@ The schema uses generated columns, foreign keys, check constraints, unique const
 
 ## Choosing a database
 
-FinScope selects the active database from a SQLAlchemy database URL. The URL can be provided in `src/finance_app/config.ini` or with an environment variable.
+FinScope selects the active database from a SQLAlchemy database URL. The URL can be provided in [src/finance_app/config.ini](../src/finance_app/config.ini) or with an environment variable.
 
 Database URL priority:
 
 1. `FINANCE_DATABASE_URL`, when set.
-2. `database.url` in `src/finance_app/config.ini`, when non-empty.
+2. `database.url` in [src/finance_app/config.ini](../src/finance_app/config.ini), when non-empty.
 3. A generated SQLite URL from the configured database path.
 
 SQLite path priority, used only when no database URL is provided:
 
 1. `FINANCE_DB_PATH`, when set.
-2. `database.path` in `src/finance_app/config.ini`, when present.
-3. `database.path` in `src/finance_app/config.example.ini`.
+2. `database.path` in [src/finance_app/config.ini](../src/finance_app/config.ini), when present.
+3. `database.path` in [src/finance_app/config.example.ini](../src/finance_app/config.example.ini).
 
-Use the default SQLite database by leaving `database.url` blank:
+Use these [src/finance_app/config.ini](../src/finance_app/config.ini) values for common local setups:
 
-```ini
-[database]
-url =
-path = ../../runtime/finescope.db
-```
-
-Use an explicit SQLite database by setting a SQLite SQLAlchemy URL:
-
-```ini
-[database]
-url = sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finescope.db
-path = ../../runtime/finescope.db
-```
-
-Use MySQL by setting a MySQL SQLAlchemy URL:
-
-```ini
-[database]
-url = mysql+pymysql://user:password@127.0.0.1:3306/finscope
-path = ../../runtime/finescope.db
-```
+| Scenario | `database.url` | `database.path` |
+| --- | --- | --- |
+| Default SQLite | Leave blank | [../../runtime/finescope.db](../runtime/finescope.db) |
+| Explicit SQLite | `sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finescope.db` | [../../runtime/finescope.db](../runtime/finescope.db) |
+| MySQL | `mysql+pymysql://user:password@127.0.0.1:3306/finscope` | [../../runtime/finescope.db](../runtime/finescope.db) |
 
 When `database.url` points to MySQL, `database.path` is not active. FinScope creates the configured MySQL database when the account has server-level `CREATE DATABASE` permission; otherwise create the empty database first, then FinScope initializes tables and seed rows inside it.
 
 ## Interactive schema
 
-The database schema overview is available at [db-schema.html](db-schema.html). It is generated from the SQLAlchemy Core metadata in `src/finance_app/database/tables.py`.
+The database schema overview is available at [db-schema.html](db-schema.html). It is generated from the SQLAlchemy Core metadata in [src/finance_app/database/tables.py](../src/finance_app/database/tables.py).
 
-Use the schema overview when you need to inspect table relationships, indexes, constraints, and column details. Use `src/finance_app/database/tables.py` as the source of truth for runtime schema implementation.
+Use the schema overview when you need to inspect table relationships, indexes, constraints, and column details. Use [src/finance_app/database/tables.py](../src/finance_app/database/tables.py) as the source of truth for runtime schema implementation.
 
 ## Data model
 
@@ -259,22 +243,16 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 - Credit card statements are ledger sources because they contain purchase-level detail. The card purchases count as expenses; card payment rows and matching checking-account payment rows are marked as payments/transfers so spending is not double-counted.
 - Recurring pattern overrides use nullable merchant scope. `recurring_patterns.merchant_id` plus `type` stores merchant-bound overrides when a durable merchant is known. Rows with a null merchant ID remain keyword-fuzzy and are looked up by pattern key.
 
-The default database path is configured in `src/finance_app/config.example.ini`:
-
-```text
-../../runtime/finescope.db
-```
-
-From `src/finance_app`, this resolves to the repository-level `runtime/finescope.db`.
+The default database path configured in [src/finance_app/config.example.ini](../src/finance_app/config.example.ini) is [../../runtime/finescope.db](../runtime/finescope.db). From [src/finance_app/](../src/finance_app/), this resolves to the repository-level [runtime/finescope.db](../runtime/finescope.db).
 
 
 ## Updating the schema documentation
 
 When tables, columns, indexes, or relationships change:
 
-1. Apply the application schema changes in `src/finance_app/database/tables.py`.
-2. Rebuild or initialize a representative `finescope.db`.
-3. Regenerate `docs/db-schema.html` and `docs/diagrams/db-schema.dbs` from the SQLAlchemy Core metadata.
+1. Apply the application schema changes in [src/finance_app/database/tables.py](../src/finance_app/database/tables.py).
+2. Rebuild or initialize a representative [finescope.db](../runtime/finescope.db).
+3. Regenerate [docs/db-schema.html](db-schema.html) and [docs/diagrams/db-schema.dbs](diagrams/db-schema.dbs) from the SQLAlchemy Core metadata.
 4. Update [architecture.md](architecture.md) or this page if the conceptual data model changed.
 
 Do not hand-edit generated schema artifacts; regenerate them from the metadata so the documentation stays consistent with the runtime schema.
