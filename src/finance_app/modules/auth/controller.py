@@ -1,7 +1,11 @@
 """Flask routes for authentication and user administration."""
 
+from collections.abc import Iterable, Mapping
+from typing import Any
+
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
-from flask_login import current_user, login_required, login_user, logout_user
+from flask.typing import ResponseReturnValue
+from flask_login import current_user, login_required, login_user, logout_user  # type: ignore[import-untyped]
 
 from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_VIEWER
 from finance_app.core.i18n import gettext
@@ -32,7 +36,7 @@ TEMPORARY_PASSWORD_MODAL = "temporary_password_modal"
 
 
 @auth_bp.route("/auth/bootstrap", methods=["GET", "POST"])
-def bootstrap():
+def bootstrap() -> ResponseReturnValue:
     """Create the initial owner account when no owner exists.
 
     GET renders the first-run owner form. POST expects username, password, and
@@ -64,7 +68,7 @@ def bootstrap():
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
-def login():
+def login() -> ResponseReturnValue:
     """Log a user in or complete the forced first-login password change."""
     if request.method == "POST" and request.form.get("auth_action") == "force_password_change":
         return complete_forced_password_change()
@@ -99,7 +103,7 @@ def login():
 
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
-def logout():
+def logout() -> ResponseReturnValue:
     """Log out the current user and redirect to the login page."""
     clear_pending_password_change()
     logout_user()
@@ -109,7 +113,7 @@ def logout():
 
 @auth_bp.route("/password", methods=["GET", "POST"])
 @login_required
-def change_password():
+def change_password() -> ResponseReturnValue:
     """Allow an authenticated user to change their own password.
 
     POST expects current password, new password, and confirmation fields. Users
@@ -123,7 +127,7 @@ def change_password():
 
 @auth_bp.route("/account", methods=["GET", "POST"])
 @login_required
-def account():
+def account() -> ResponseReturnValue:
     """Render and process the current user's Account page."""
     if current_user.must_change_password:
         return redirect(url_for("auth.login"))
@@ -161,7 +165,7 @@ def account():
 
 @auth_bp.route("/admin/users")
 @owner_required
-def users():
+def users() -> str:
     """Render owner-only user administration."""
     managed_users = list_managed_users()
     return render_template(
@@ -175,7 +179,7 @@ def users():
 
 @auth_bp.route("/admin/users/create", methods=["POST"])
 @owner_required
-def create_user():
+def create_user() -> ResponseReturnValue:
     """Create an owner-managed editor or viewer account."""
     try:
         user, temporary_password = create_managed_user(
@@ -195,7 +199,7 @@ def create_user():
 
 @auth_bp.route("/admin/users/<int:user_id>/deactivate", methods=["POST"])
 @owner_required
-def deactivate_user(user_id):
+def deactivate_user(user_id: int) -> ResponseReturnValue:
     """Deactivate a user unless doing so would remove the final active owner."""
     try:
         set_user_active(user_id, False, actor=current_user, ip_address=request.remote_addr)
@@ -207,7 +211,7 @@ def deactivate_user(user_id):
 
 @auth_bp.route("/admin/users/<int:user_id>/reactivate", methods=["POST"])
 @owner_required
-def reactivate_user(user_id):
+def reactivate_user(user_id: int) -> ResponseReturnValue:
     """Reactivate a previously deactivated user."""
     try:
         set_user_active(user_id, True, actor=current_user, ip_address=request.remote_addr)
@@ -219,7 +223,7 @@ def reactivate_user(user_id):
 
 @auth_bp.route("/admin/users/<int:user_id>/role", methods=["POST"])
 @owner_required
-def update_user_role(user_id):
+def update_user_role(user_id: int) -> ResponseReturnValue:
     """Change a managed user's role."""
     try:
         change_user_role(
@@ -236,7 +240,7 @@ def update_user_role(user_id):
 
 @auth_bp.route("/admin/users/<int:user_id>/reset-password", methods=["POST"])
 @owner_required
-def reset_password(user_id):
+def reset_password(user_id: int) -> ResponseReturnValue:
     """Generate a temporary password and require a password change."""
     try:
         user, temporary_password = reset_user_password(user_id, actor=current_user, ip_address=request.remote_addr)
@@ -249,7 +253,7 @@ def reset_password(user_id):
 
 @auth_bp.route("/admin/users/handoff-ownership", methods=["POST"])
 @owner_required
-def handoff_ownership():
+def handoff_ownership() -> ResponseReturnValue:
     """Transfer ownership to another active user and demote the actor to viewer."""
     current_owner_id = current_user.id
     try:
@@ -268,7 +272,7 @@ def handoff_ownership():
     return redirect(url_for("auth.account"))
 
 
-def complete_forced_password_change():
+def complete_forced_password_change() -> ResponseReturnValue:
     """Complete the first-login password change without exposing app pages."""
     pending_user_id = forced_password_change_user_id()
     if pending_user_id is None:
@@ -293,18 +297,18 @@ def complete_forced_password_change():
     return redirect(url_for("home.home"))
 
 
-def forced_password_change_user_id():
+def forced_password_change_user_id() -> int | None:
     """Return the authenticated or pending user ID for forced password changes."""
     if current_user.is_authenticated and current_user.must_change_password:
         return int(current_user.id)
     pending = session.get(PENDING_PASSWORD_CHANGE_USER_ID)
     try:
-        return int(pending)
+        return int(str(pending))
     except (TypeError, ValueError):
         return None
 
 
-def render_forced_password_change(error=None):
+def render_forced_password_change(error: str | None = None) -> str:
     """Render the login shell with the forced password-change modal open."""
     forced_user = {
         "username": (
@@ -328,14 +332,14 @@ def render_forced_password_change(error=None):
     )
 
 
-def clear_pending_password_change():
+def clear_pending_password_change() -> None:
     """Remove pending password-change identity from the browser session."""
     session.pop(PENDING_PASSWORD_CHANGE_USER_ID, None)
     session.pop(PENDING_PASSWORD_CHANGE_USERNAME, None)
     session.pop(PENDING_PASSWORD_CHANGE_DISPLAY_NAME, None)
 
 
-def temporary_password_modal_payload(user, temporary_password):
+def temporary_password_modal_payload(user: Mapping[str, Any], temporary_password: str) -> dict[str, str]:
     """Return modal data for showing a generated temporary password once."""
     return {
         "username": user["username"],
@@ -344,12 +348,12 @@ def temporary_password_modal_payload(user, temporary_password):
     }
 
 
-def ownership_handoff_candidates(users):
+def ownership_handoff_candidates(users: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
     """Return active non-owner users eligible to receive ownership."""
     return [user for user in users if user["role"] != "owner" and user["is_active"]]
 
 
-def safe_next_url(value):
+def safe_next_url(value: object) -> str | None:
     """Return a local redirect path or ``None`` for unsafe values."""
     target = str(value or "").strip()
     if target.startswith("/") and not target.startswith("//"):

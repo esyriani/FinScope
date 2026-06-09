@@ -5,6 +5,8 @@ The helpers depend only on database tables and constants so auth and settings
 modules can share them without creating registration-time import cycles.
 """
 
+from typing import Any
+
 from sqlalchemy import func, insert, select, update
 
 from finance_app.core.constants import USER_ROLE_OWNER
@@ -31,7 +33,7 @@ USER_COLUMNS = (
 )
 
 
-def get_first_active_owner(conn):
+def get_first_active_owner(conn: Any) -> Any:
     """Return the active owner row used for non-request settings fallback."""
     return (
         conn.execute(
@@ -48,7 +50,7 @@ def get_first_active_owner(conn):
     )
 
 
-def list_users(conn):
+def list_users(conn: Any) -> Any:
     """Return all users ordered for owner administration and setting seeding."""
     return (
         conn.execute(
@@ -63,7 +65,7 @@ def list_users(conn):
     )
 
 
-def get_user_settings(conn, user_id):
+def get_user_settings(conn: Any, user_id: int) -> dict[str, str]:
     """Return persisted settings for one user as a key/value mapping."""
     rows = (
         conn.execute(
@@ -77,7 +79,7 @@ def get_user_settings(conn, user_id):
     return {row["key"]: row["value"] for row in rows}
 
 
-def get_user_setting(conn, user_id, key):
+def get_user_setting(conn: Any, user_id: int, key: str) -> str | None:
     """Return one persisted user setting value, or ``None`` when absent."""
     row = (
         conn.execute(
@@ -92,7 +94,7 @@ def get_user_setting(conn, user_id, key):
     return None if row is None else row["value"]
 
 
-def upsert_user_setting(conn, user_id, key, value, now):
+def upsert_user_setting(conn: Any, user_id: int, key: str, value: object, now: object) -> None:
     """Insert or update a user-specific setting value."""
     existing = conn.execute(
         select(user_settings_table.c.user_id).where(

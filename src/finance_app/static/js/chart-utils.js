@@ -9,7 +9,7 @@ const financeChartPalette = [
     "#0891b2",
     "#ca8a04",
     "#475569",
-    "#db2777"
+    "#db2777",
 ];
 
 function readFinanceChartJsonScript(id, fallback, root = document) {
@@ -42,9 +42,7 @@ function financeChartTheme(overrides = {}) {
 }
 
 function financeChartFormatMoney(value) {
-    return window.financeFormatMoney
-        ? window.financeFormatMoney(value)
-        : Number(value || 0).toFixed(2);
+    return window.financeFormatMoney ? window.financeFormatMoney(value) : Number(value || 0).toFixed(2);
 }
 
 function financeChartFormatAxisMoney(value) {
@@ -60,23 +58,23 @@ function financeChartTranslate(message, variables) {
 function financeChartAxisLine(theme) {
     return {
         lineStyle: {
-            color: theme.grid
-        }
+            color: theme.grid,
+        },
     };
 }
 
 function financeChartAxisLabel(theme, formatter) {
     return {
         color: theme.text,
-        formatter
+        formatter,
     };
 }
 
 function financeChartSplitLine(theme) {
     return {
         lineStyle: {
-            color: theme.grid
-        }
+            color: theme.grid,
+        },
     };
 }
 
@@ -87,17 +85,17 @@ function financeChartTooltip(theme, extra = {}) {
         borderColor: theme.grid,
         borderWidth: 1,
         textStyle: {
-            color: theme.tooltipText
+            color: theme.tooltipText,
         },
-        ...extra
+        ...extra,
     };
 }
 
 function financeChartLegend(theme) {
     return {
         textStyle: {
-            color: theme.text
-        }
+            color: theme.text,
+        },
     };
 }
 
@@ -108,7 +106,7 @@ function financeChartBaseGrid(extra = {}) {
         right: 24,
         top: 32,
         bottom: 24,
-        ...extra
+        ...extra,
     };
 }
 

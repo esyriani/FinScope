@@ -5,6 +5,9 @@ databases against the current schema, and seeds runtime defaults. Request and
 transaction lifecycle helpers live in `finance_app.database.engine`.
 """
 
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 from sqlalchemy import inspect
 
 from finance_app.database.engine import get_database_engine
@@ -26,12 +29,12 @@ RETIRED_SCHEMA_TABLES = {
 }
 
 
-def init_db():
+def init_db() -> None:
     """Initialize the configured application database."""
     init_core_db()
 
 
-def init_core_db(engine=None):
+def init_core_db(engine: Any | None = None) -> None:
     """Initialize a current-schema database and seed runtime defaults.
 
     Empty databases are created from Core metadata. Existing FinScope databases
@@ -48,7 +51,7 @@ def init_core_db(engine=None):
         seed_category_taxonomy_defaults(conn)
 
 
-def database_has_existing_core_schema(engine):
+def database_has_existing_core_schema(engine: Any) -> bool:
     """Return whether the database already contains FinScope schema tables."""
     finscope_tables = set(metadata.tables) | RETIRED_SCHEMA_TABLES
     with engine.connect() as conn:
@@ -56,7 +59,7 @@ def database_has_existing_core_schema(engine):
     return bool(existing_tables & finscope_tables)
 
 
-def validate_core_schema(conn):
+def validate_core_schema(conn: Any) -> None:
     """Raise RuntimeError when an existing database is not the current schema.
 
     The validator checks table and column presence against SQLAlchemy Core
@@ -68,7 +71,7 @@ def validate_core_schema(conn):
     expected_tables = set(metadata.tables)
     retired_tables = sorted(existing_tables & RETIRED_SCHEMA_TABLES)
     missing_tables = sorted(expected_tables - existing_tables)
-    missing_columns = {}
+    missing_columns: dict[str, list[str]] = {}
 
     for table_name, table in metadata.tables.items():
         if table_name not in existing_tables:
@@ -83,9 +86,13 @@ def validate_core_schema(conn):
         raise RuntimeError(schema_validation_message(retired_tables, missing_tables, missing_columns))
 
 
-def schema_validation_message(retired_tables, missing_tables, missing_columns):
+def schema_validation_message(
+    retired_tables: Sequence[str],
+    missing_tables: Sequence[str],
+    missing_columns: Mapping[str, Sequence[str]],
+) -> str:
     """Build a readable current-schema validation failure message."""
-    details = []
+    details: list[str] = []
     if missing_tables:
         details.append(f"missing tables: {', '.join(missing_tables)}")
     if missing_columns:

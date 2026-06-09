@@ -6,8 +6,10 @@ status, and recency. The categorization workflow uses this module before
 falling back to LLM classification.
 """
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from typing import Any
 
 from sqlalchemy import and_, case, or_, select
 
@@ -16,7 +18,7 @@ from finance_app.core.constants import (
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
-from finance_app.core.money import optional_money_to_float
+from finance_app.core.money import MoneyValue, optional_money_to_float
 from finance_app.database.dates import coerce_date
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.decision import (
@@ -85,17 +87,19 @@ class HistoricalDecision:
     candidates: tuple[HistoricalCandidate, ...]
 
     @property
-    def is_high_confidence(self):
+    def is_high_confidence(self) -> bool:
         """Return whether the decision can be applied without review."""
         return self.confidence >= HIGH_CONFIDENCE_THRESHOLD
 
     @property
-    def is_medium_confidence(self):
+    def is_medium_confidence(self) -> bool:
         """Return whether the decision is usable but should be reviewed."""
         return self.confidence >= MEDIUM_CONFIDENCE_THRESHOLD
 
 
-def retrieve_historical_decision(conn, transaction, unknown_category):
+def retrieve_historical_decision(
+    conn: Any, transaction: Mapping[str, Any], unknown_category: str
+) -> HistoricalDecision:
     """Return historical categorization evidence for one transaction.
 
     The query deliberately retrieves only a bounded candidate pool. Full
@@ -121,7 +125,7 @@ def retrieve_historical_decision(conn, transaction, unknown_category):
     return historical_decision_from_candidates(candidates)
 
 
-def historical_candidate_rows(conn, transaction, unknown_category):
+def historical_candidate_rows(conn: Any, transaction: Mapping[str, Any], unknown_category: str) -> list[Any]:
     """Return a bounded SQL candidate pool for historical similarity scoring."""
     conditions = [
         transactions_table.c.ignored == 0,
@@ -164,9 +168,9 @@ def historical_candidate_rows(conn, transaction, unknown_category):
     )
 
 
-def candidate_pool_filter(conn, transaction):
+def candidate_pool_filter(conn: Any, transaction: Mapping[str, Any]) -> Any:
     """Return coarse SQL filters that keep historical retrieval CPU-friendly."""
-    filters = []
+    filters: list[Any] = []
     merchant_id = transaction.get("merchant_id")
     if merchant_id is not None:
         filters.append(transactions_table.c.merchant_id == int(merchant_id))
@@ -183,7 +187,7 @@ def candidate_pool_filter(conn, transaction):
     return or_(*filters) if filters else None
 
 
-def same_account_amount_window_filter(transaction):
+def same_account_amount_window_filter(transaction: Mapping[str, Any]) -> Any:
     """Return a coarse same-account amount window filter when available."""
     account_id = transaction.get("account_id")
     amount = optional_money_to_float(transaction.get("amount"))
@@ -207,7 +211,12 @@ def same_account_amount_window_filter(transaction):
     return and_(transactions_table.c.account_id == int(account_id), *amount_conditions)
 
 
-def score_historical_candidate(conn, transaction, row, tags):
+def score_historical_candidate(
+    conn: Any,
+    transaction: Mapping[str, Any],
+    row: Mapping[str, Any],
+    tags: Iterable[str],
+) -> HistoricalCandidate:
     """Return a scored historical candidate for one database row."""
     normalized_current = current_merchant_identity(transaction)
     normalized_candidate = normalize_merchant(row["description"], conn=conn)
@@ -248,12 +257,17 @@ def score_historical_candidate(conn, transaction, row, tags):
     )
 
 
-def current_merchant_identity(transaction):
+def current_merchant_identity(transaction: Mapping[str, Any]) -> str:
     """Return the best available normalized merchant text for a transaction."""
     return str(transaction.get("merchant_key") or transaction.get("description") or "").strip()
 
 
-def merchant_similarity(transaction, row, current_merchant, candidate_merchant):
+def merchant_similarity(
+    transaction: Mapping[str, Any],
+    row: Mapping[str, Any],
+    current_merchant: str,
+    candidate_merchant: Any,
+) -> float:
     """Return similarity for merchant identity fields."""
     merchant_id = transaction.get("merchant_id")
     if merchant_id is not None and row["merchant_id"] is not None and int(merchant_id) == int(row["merchant_id"]):
@@ -263,7 +277,7 @@ def merchant_similarity(transaction, row, current_merchant, candidate_merchant):
     return max(text_similarity(current_merchant, candidate) for candidate in candidate_names)
 
 
-def text_similarity(left, right):
+def text_similarity(left: object, right: object) -> float:
     """Return normalized string similarity for short merchant descriptions."""
     left = str(left or "").strip().casefold()
     right = str(right or "").strip().casefold()
@@ -276,7 +290,7 @@ def text_similarity(left, right):
     return SequenceMatcher(None, left, right).ratio()
 
 
-def amount_similarity(left, right):
+def amount_similarity(left: MoneyValue | None, right: MoneyValue | None) -> float:
     """Return absolute amount similarity while respecting transaction direction."""
     left_amount = optional_money_to_float(left)
     right_amount = optional_money_to_float(right)
@@ -289,7 +303,7 @@ def amount_similarity(left, right):
     return max(0.0, 1.0 - min(abs(left_abs - right_abs) / denominator, 1.0))
 
 
-def same_direction(left, right):
+def same_direction(left: MoneyValue | None, right: MoneyValue | None) -> bool:
     """Return whether two signed amounts have the same debit/credit direction."""
     left_amount = optional_money_to_float(left)
     right_amount = optional_money_to_float(right)
@@ -298,14 +312,14 @@ def same_direction(left, right):
     return (left_amount < 0) == (right_amount < 0)
 
 
-def same_optional_value(left, right):
+def same_optional_value(left: object, right: object) -> bool:
     """Return whether two optional integer-like values are both present and equal."""
     if left is None or right is None:
         return False
-    return int(left) == int(right)
+    return int(str(left)) == int(str(right))
 
 
-def date_similarity(left, right):
+def date_similarity(left: object, right: object) -> float:
     """Return a small recency signal relative to the current transaction date."""
     try:
         left_date = coerce_date(left)
@@ -319,7 +333,7 @@ def date_similarity(left, right):
     return 1.0 / (1.0 + days / 365.0)
 
 
-def candidate_authority(row):
+def candidate_authority(row: Mapping[str, Any]) -> float:
     """Return a reliability multiplier for a historical transaction row."""
     if row["category_source"] == CATEGORY_SOURCE_MANUAL:
         return 1.15
@@ -333,12 +347,12 @@ def candidate_authority(row):
     return 0.70
 
 
-def historical_decision_from_candidates(candidates):
+def historical_decision_from_candidates(candidates: list[HistoricalCandidate]) -> HistoricalDecision:
     """Return a category decision from scored historical candidates."""
     if not candidates:
         return HistoricalDecision(None, (), 0.0, (), ())
 
-    vote_totals = {}
+    vote_totals: dict[str, float] = {}
     for candidate in candidates:
         vote_totals[candidate.category] = (
             vote_totals.get(candidate.category, 0.0) + candidate.score * candidate.authority
@@ -373,13 +387,13 @@ def historical_decision_from_candidates(candidates):
     )
 
 
-def supported_tags(winning_candidates, winning_weight):
+def supported_tags(winning_candidates: Iterable[HistoricalCandidate], winning_weight: float) -> list[str]:
     """Return tags sufficiently supported by the winning historical category."""
     if not winning_candidates or winning_weight <= 0:
         return []
 
-    tag_votes = {}
-    tag_counts = {}
+    tag_votes: dict[str, float] = {}
+    tag_counts: dict[str, int] = {}
     for candidate in winning_candidates:
         weight = candidate.score * candidate.authority
         for tag in candidate.tags:

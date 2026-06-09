@@ -1,6 +1,10 @@
 """Flask routes for the upload feature."""
 
+from typing import Any
+
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask.typing import ResponseReturnValue
+from werkzeug.datastructures import FileStorage
 
 from finance_app.background.runner import submit_background_job
 from finance_app.core.config import settings
@@ -40,7 +44,7 @@ upload_bp = Blueprint("upload", __name__)
 
 @upload_bp.route("/upload", methods=["GET", "POST"])
 @permission_required(PERMISSION_IMPORT_STATEMENTS)
-def upload():
+def upload() -> ResponseReturnValue:
     """Render the upload page."""
     if request.method == "POST":
         return handle_statement_upload()
@@ -48,7 +52,7 @@ def upload():
     return render_template("upload.html", **build_upload_context(request.args))
 
 
-def handle_statement_upload():
+def handle_statement_upload() -> ResponseReturnValue:
     """Handle statement upload."""
     uploaded_file = request.files.get("statement")
     account_name = request.form.get("account_name", "Personal").strip() or "Personal"
@@ -71,7 +75,8 @@ def handle_statement_upload():
             flash(gettext("Please choose a statement file."))
             return redirect(url_for("upload.upload"))
 
-        if not allowed_statement_file(uploaded_file.filename):
+        filename = uploaded_file.filename or ""
+        if not allowed_statement_file(filename):
             allowed = ", ".join(sorted(settings.allowed_statement_extensions)).upper()
             flash(gettext("Only {allowed} files are supported.", allowed=allowed))
             return redirect(url_for("upload.upload"))
@@ -93,7 +98,7 @@ def handle_statement_upload():
             )
             return redirect(url_for("upload.upload"))
 
-        extension = get_file_extension(uploaded_file.filename)
+        extension = get_file_extension(filename)
         raw_text = read_statement_text(uploaded_file, extension)
 
         if raw_text is None:
@@ -126,7 +131,7 @@ def handle_statement_upload():
             conn,
             account["id"],
             statement_type["id"],
-            uploaded_file.filename,
+            filename,
             checksum,
             extension,
             interac_direction,
@@ -142,7 +147,7 @@ def handle_statement_upload():
         statement_type["import_mode"],
         extension,
         raw_text,
-        uploaded_file.filename,
+        filename,
         interac_direction=interac_direction,
         date_order=date_order,
     )
@@ -158,7 +163,7 @@ def handle_statement_upload():
 
 @upload_bp.route("/upload/preview", methods=["POST"])
 @permission_required(PERMISSION_IMPORT_STATEMENTS)
-def preview_statement_upload():
+def preview_statement_upload() -> ResponseReturnValue:
     """Return a read-only parsed CSV preview for a submitted statement upload.
 
     The request must include the same multipart fields as the final upload. The
@@ -182,7 +187,8 @@ def preview_statement_upload():
         if uploaded_file is None or uploaded_file.filename == "":
             return preview_error(gettext("Please choose a statement file."))
 
-        if not allowed_statement_file(uploaded_file.filename):
+        filename = uploaded_file.filename or ""
+        if not allowed_statement_file(filename):
             allowed = ", ".join(sorted(settings.allowed_statement_extensions)).upper()
             return preview_error(gettext("Only {allowed} files are supported.", allowed=allowed))
 
@@ -201,7 +207,7 @@ def preview_statement_upload():
                 )
             )
 
-        extension = get_file_extension(uploaded_file.filename)
+        extension = get_file_extension(filename)
         if extension != "csv":
             return preview_error(gettext("Unsupported file type."))
 
@@ -216,28 +222,28 @@ def preview_statement_upload():
     return jsonify({"ok": True, "preview": preview})
 
 
-def preview_error(message, status_code=400):
+def preview_error(message: str, status_code: int = 400) -> ResponseReturnValue:
     """Return a JSON error response for the upload preview endpoint."""
     return jsonify({"ok": False, "message": message}), status_code
 
 
 @upload_bp.route("/upload/<int:statement_id>/retry", methods=["POST"])
 @permission_required(PERMISSION_IMPORT_STATEMENTS)
-def retry_statement_import(statement_id):
+def retry_statement_import(statement_id: int) -> ResponseReturnValue:
     """Queue another import attempt for an existing stored statement."""
     return queue_existing_statement_import(statement_id, reprocess=False)
 
 
 @upload_bp.route("/upload/<int:statement_id>/reprocess", methods=["POST"])
 @permission_required(PERMISSION_IMPORT_STATEMENTS)
-def reprocess_statement_import(statement_id):
+def reprocess_statement_import(statement_id: int) -> ResponseReturnValue:
     """Delete a statement's imported transactions and queue a fresh import."""
     return queue_existing_statement_import(statement_id, reprocess=True)
 
 
 @upload_bp.route("/upload/<int:statement_id>/categorize-unknowns", methods=["POST"])
 @permission_required(PERMISSION_IMPORT_STATEMENTS)
-def categorize_statement_unknowns(statement_id):
+def categorize_statement_unknowns(statement_id: int) -> ResponseReturnValue:
     """Queue AI categorization for one statement's current unknown rows."""
     next_url = upload_redirect_target()
 
@@ -271,7 +277,7 @@ def categorize_statement_unknowns(statement_id):
     return redirect(next_url)
 
 
-def queue_existing_statement_import(statement_id, reprocess=False):
+def queue_existing_statement_import(statement_id: int, reprocess: bool = False) -> ResponseReturnValue:
     """Queue import work from stored statement text without accepting a new file."""
     next_url = upload_redirect_target()
 
@@ -319,21 +325,21 @@ def queue_existing_statement_import(statement_id, reprocess=False):
 
 
 def submit_statement_import_job(
-    statement_id,
-    account_id,
-    parser_type,
-    import_mode,
-    extension,
-    raw_text,
-    filename,
-    label_prefix="Import",
-    interac_direction=INTERAC_DIRECTION_AUTO,
-    date_order=DATE_ORDER_AUTO,
-):
+    statement_id: int,
+    account_id: int,
+    parser_type: str,
+    import_mode: str,
+    extension: str,
+    raw_text: str,
+    filename: str,
+    label_prefix: str = "Import",
+    interac_direction: str = INTERAC_DIRECTION_AUTO,
+    date_order: str = DATE_ORDER_AUTO,
+) -> str:
     """Submit statement import work with upload undo metadata."""
     interac_direction = normalize_interac_direction(interac_direction)
     date_order = normalize_date_order(date_order)
-    undo_state = {}
+    undo_state: dict[str, Any] = {}
     return submit_background_job(
         f"{label_prefix} {filename}",
         import_statement_transactions_job,
@@ -351,7 +357,7 @@ def submit_statement_import_job(
     )
 
 
-def upload_redirect_target():
+def upload_redirect_target() -> str:
     """Return a safe redirect target for upload actions."""
     target = request.form.get("next", "").strip()
     if target.startswith("/upload"):
@@ -360,7 +366,7 @@ def upload_redirect_target():
     return url_for("upload.upload")
 
 
-def read_statement_text(uploaded_file, extension):
+def read_statement_text(uploaded_file: FileStorage, extension: str) -> str | None:
     """Return decoded statement text for supported CSV uploads."""
     if extension == "csv":
         return decode_csv_statement_text(uploaded_file)
@@ -369,7 +375,7 @@ def read_statement_text(uploaded_file, extension):
     return None
 
 
-def decode_csv_statement_text(uploaded_file):
+def decode_csv_statement_text(uploaded_file: FileStorage) -> str:
     """Decode an uploaded CSV stream and restore the stream position."""
     uploaded_file.stream.seek(0)
     raw_bytes = uploaded_file.stream.read()
@@ -378,17 +384,17 @@ def decode_csv_statement_text(uploaded_file):
 
 
 def import_transactions(
-    conn,
-    statement_id,
-    account_id,
-    statement_type,
-    extension,
-    raw_text,
-    undo_state=None,
-    import_mode=None,
-    interac_direction="auto",
-    date_order=DATE_ORDER_AUTO,
-):
+    conn: Any,
+    statement_id: int,
+    account_id: int,
+    statement_type: str,
+    extension: str,
+    raw_text: str,
+    undo_state: dict[str, Any] | None = None,
+    import_mode: str | None = None,
+    interac_direction: str = "auto",
+    date_order: str = DATE_ORDER_AUTO,
+) -> tuple[int, int, int]:
     """Import transactions through the upload workflow with explicit helpers."""
     return upload_workflow.import_transactions(
         conn,

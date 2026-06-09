@@ -1,6 +1,10 @@
 """Flask routes for the jobs feature."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask.typing import ResponseReturnValue
 
 from finance_app.background.runner import (
     AI_JOB_QUEUE,
@@ -25,7 +29,7 @@ jobs_bp = Blueprint("jobs", __name__)
 
 @jobs_bp.route("/jobs")
 @permission_required(PERMISSION_MANAGE_JOBS)
-def jobs():
+def jobs() -> str:
     """Render the background jobs page."""
     page = parse_page(request.args.get("page"))
     with db_core_transaction() as conn:
@@ -50,7 +54,7 @@ def jobs():
 
 @jobs_bp.route("/jobs/<job_id>.json")
 @permission_required(PERMISSION_MANAGE_JOBS)
-def job_status(job_id):
+def job_status(job_id: str) -> ResponseReturnValue:
     """Return the current status for a background job."""
     job = get_background_job(job_id)
     if job is None:
@@ -58,7 +62,7 @@ def job_status(job_id):
     return jsonify(job_status_payload(job))
 
 
-def job_status_payload(job):
+def job_status_payload(job: Mapping[str, Any]) -> dict[str, Any]:
     """Return a JSON-ready job snapshot with formatted log timestamps."""
     payload = dict(job)
     payload["progress_log"] = [
@@ -73,7 +77,7 @@ def job_status_payload(job):
 
 @jobs_bp.route("/jobs/<job_id>/undo", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_JOBS)
-def undo_job(job_id):
+def undo_job(job_id: str) -> ResponseReturnValue:
     """Request undo for a completed background job."""
     next_url = jobs_redirect_target()
 
@@ -102,7 +106,7 @@ def undo_job(job_id):
 
 @jobs_bp.route("/jobs/<job_id>/cancel", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_JOBS)
-def cancel_job(job_id):
+def cancel_job(job_id: str) -> ResponseReturnValue:
     """Request cancellation for a queued or running background job."""
     next_url = jobs_redirect_target()
 
@@ -124,7 +128,7 @@ def cancel_job(job_id):
 
 @jobs_bp.route("/jobs/ai/cancel-queued", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_JOBS)
-def cancel_queued_ai_jobs():
+def cancel_queued_ai_jobs() -> ResponseReturnValue:
     """Cancel all queued AI jobs that have not started yet."""
     next_url = jobs_redirect_target()
     cancelled_count = cancel_queued_background_jobs(queue=AI_JOB_QUEUE)
@@ -139,7 +143,7 @@ def cancel_queued_ai_jobs():
 
 @jobs_bp.route("/jobs/ai/categorize-unknowns", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_JOBS)
-def categorize_all_unknowns():
+def categorize_all_unknowns() -> ResponseReturnValue:
     """Queue AI categorization for all active unknown transactions."""
     next_url = jobs_redirect_target()
     with db_core_transaction() as conn:
@@ -164,7 +168,7 @@ def categorize_all_unknowns():
     return redirect(next_url)
 
 
-def jobs_redirect_target():
+def jobs_redirect_target() -> str:
     """Return a safe redirect target for jobs actions."""
     target = request.form.get("next", "").strip()
     if target.startswith("/jobs"):

@@ -5,9 +5,9 @@ from urllib.parse import urlencode
 from flask import url_for
 
 
-def build_comparison_url(**params):
-    """Build comparison URL."""
-    cleaned = {}
+def build_comparison_url(**params: object) -> str:
+    """Build comparison URL with blank query values removed."""
+    cleaned: dict[str, object] = {}
     for key, value in params.items():
         if isinstance(value, (list, tuple)):
             values = [item for item in value if item not in (None, "")]

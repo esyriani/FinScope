@@ -1,0 +1,24 @@
+{
+    "name": "finscope",
+    "version": "0.0.0",
+    "private": true,
+    "description": "Frontend quality checks for FinScope static assets.",
+    "engines": {
+        "node": ">=20"
+    },
+    "scripts": {
+        "format:frontend": "prettier --write \"src/finance_app/static/**/*.{css,js}\"",
+        "format:frontend:check": "prettier --check \"src/finance_app/static/**/*.{css,js}\"",
+        "lint:frontend:css": "stylelint \"src/finance_app/static/css/**/*.css\"",
+        "lint:frontend:js": "eslint \"src/finance_app/static/js/**/*.js\"",
+        "lint:frontend": "npm run format:frontend:check && npm run lint:frontend:js && npm run lint:frontend:css"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.0.0",
+        "eslint": "^9.0.0",
+        "globals": "^16.0.0",
+        "prettier": "^3.0.0",
+        "stylelint": "^16.0.0",
+        "stylelint-config-recommended": "^16.0.0"
+    }
+}

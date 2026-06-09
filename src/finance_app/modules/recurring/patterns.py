@@ -1,5 +1,8 @@
 """Helpers for recurring."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from sqlalchemy import func, insert, select, update
 
 from finance_app.core.constants import (
@@ -25,7 +28,7 @@ VALID_RECURRING_FREQUENCIES = {
 }
 
 
-def recurring_pattern_select():
+def recurring_pattern_select() -> Any:
     """Return the shared recurring pattern column projection."""
     return select(
         recurring_patterns_table.c.pattern_key,
@@ -44,15 +47,15 @@ def recurring_pattern_select():
     )
 
 
-def recurring_pattern_key(merchant, tx_type):
+def recurring_pattern_key(merchant: object, tx_type: object) -> str:
     """Build pattern key."""
     return f"{str(merchant or '').strip()}::{str(tx_type or '').strip()}"
 
 
-def get_recurring_pattern_metadata(conn):
+def get_recurring_pattern_metadata(conn: Any) -> dict[str, dict[str, Any]]:
     """Return recurring pattern metadata."""
     rows = conn.execute(recurring_pattern_select()).mappings().fetchall()
-    metadata = {}
+    metadata: dict[str, dict[str, Any]] = {}
     for row in rows:
         pattern = recurring_pattern_from_row(row)
         metadata[row["pattern_key"]] = pattern
@@ -61,7 +64,7 @@ def get_recurring_pattern_metadata(conn):
     return metadata
 
 
-def get_recurring_pattern(conn, pattern_key):
+def get_recurring_pattern(conn: Any, pattern_key: object) -> dict[str, Any] | None:
     """Return recurring pattern."""
     row = (
         conn.execute(recurring_pattern_select().where(recurring_patterns_table.c.pattern_key == pattern_key))
@@ -73,7 +76,7 @@ def get_recurring_pattern(conn, pattern_key):
     return recurring_pattern_from_row(row)
 
 
-def get_recurring_pattern_by_merchant_type(conn, merchant_id, tx_type):
+def get_recurring_pattern_by_merchant_type(conn: Any, merchant_id: object, tx_type: object) -> dict[str, Any] | None:
     """Return recurring pattern by durable merchant and cash-flow type."""
     row = (
         conn.execute(
@@ -90,7 +93,7 @@ def get_recurring_pattern_by_merchant_type(conn, merchant_id, tx_type):
     return recurring_pattern_from_row(row)
 
 
-def recurring_pattern_from_row(row):
+def recurring_pattern_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
     """Return a recurring pattern mapping with presentation-compatible amounts."""
     pattern = dict(row)
     pattern["match_type"] = "merchant" if row["merchant_id"] else "keyword"
@@ -101,10 +104,17 @@ def recurring_pattern_from_row(row):
     return pattern
 
 
-def upsert_recurring_pattern(conn, pattern_key, merchant, tx_type, merchant_id=None, **values):
+def upsert_recurring_pattern(
+    conn: Any,
+    pattern_key: object,
+    merchant: object,
+    tx_type: object,
+    merchant_id: object | None = None,
+    **values: Any,
+) -> None:
     """Insert or update recurring pattern."""
     identity = recurring_pattern_identity(conn, pattern_key, merchant, tx_type, merchant_id)
-    current = (
+    current: dict[str, Any] = (
         (
             get_recurring_pattern_by_merchant_type(conn, identity["merchant_id"], tx_type)
             if identity["merchant_id"]
@@ -181,7 +191,13 @@ def upsert_recurring_pattern(conn, pattern_key, merchant, tx_type, merchant_id=N
     )
 
 
-def recurring_pattern_identity(conn, pattern_key, merchant, tx_type, merchant_id=None):
+def recurring_pattern_identity(
+    conn: Any,
+    pattern_key: object,
+    merchant: object,
+    tx_type: object,
+    merchant_id: object | None = None,
+) -> dict[str, Any]:
     """Resolve a recurring pattern identity to a durable merchant when possible."""
     merchant_row = find_merchant_by_id(conn, merchant_id)
     if merchant_id and merchant_row is None:
@@ -202,31 +218,31 @@ def recurring_pattern_identity(conn, pattern_key, merchant, tx_type, merchant_id
     }
 
 
-def normalize_user_status(value):
+def normalize_user_status(value: object) -> str:
     """Normalize user status."""
     text = str(value or RECURRING_USER_STATUS_DETECTED).strip().lower()
     return text if text in VALID_RECURRING_USER_STATUSES else RECURRING_USER_STATUS_DETECTED
 
 
-def normalize_frequency(value):
+def normalize_frequency(value: object) -> str | None:
     """Normalize frequency."""
     text = str(value or "").strip()
     return text if text in VALID_RECURRING_FREQUENCIES else None
 
 
-def normalize_active(value):
+def normalize_active(value: object) -> int:
     """Normalize active."""
     if isinstance(value, str):
         return 0 if value.strip().lower() in {"0", "false", "inactive", "no"} else 1
     return 1 if value else 0
 
 
-def normalize_optional_int(value, minimum=None, maximum=None):
+def normalize_optional_int(value: object, minimum: int | None = None, maximum: int | None = None) -> int | None:
     """Normalize optional int."""
     if value in (None, ""):
         return None
     try:
-        parsed = int(value)
+        parsed = value if isinstance(value, int) else int(str(value))
     except (TypeError, ValueError):
         return None
     if minimum is not None and parsed < minimum:
@@ -236,12 +252,12 @@ def normalize_optional_int(value, minimum=None, maximum=None):
     return parsed
 
 
-def normalize_optional_float(value, minimum=None):
+def normalize_optional_float(value: object, minimum: float | None = None) -> float | None:
     """Normalize optional float."""
     if value in (None, ""):
         return None
     try:
-        parsed = float(value)
+        parsed = float(str(value))
     except (TypeError, ValueError):
         return None
     if minimum is not None and parsed < minimum:

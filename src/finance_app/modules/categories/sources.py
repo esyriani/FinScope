@@ -1,8 +1,10 @@
 """Category assignment source metadata helpers."""
 
 import json
+from collections.abc import Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from finance_app.core.constants import (
     CATEGORY_SOURCE_AI,
@@ -49,7 +51,7 @@ class CategoryAssignmentMetadata:
     categorized_at: str | None = None
     reviewed_at: str | None = None
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Return this assignment metadata as a database-column mapping."""
         return {
             "category_source": self.category_source,
@@ -77,7 +79,7 @@ class TransactionCategoryState:
     tags: tuple[str, ...] = ()
     category_id: int | None = None
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Return this state as the transaction payload fields it controls."""
         return {
             "category": self.category,
@@ -87,7 +89,7 @@ class TransactionCategoryState:
             "tags": list(self.tags),
         }
 
-    def apply_to(self, transaction):
+    def apply_to(self, transaction: MutableMapping[str, Any]) -> None:
         """Apply this category state to a mutable transaction mapping."""
         transaction.update(self.to_dict())
 
@@ -109,7 +111,7 @@ class TransactionCategorySnapshot:
     category_id: int | None = None
 
     @classmethod
-    def from_row(cls, row, tags=()):
+    def from_row(cls, row: Mapping[str, Any], tags: Iterable[str] = ()) -> "TransactionCategorySnapshot":
         """Build a snapshot from a database row containing transaction category fields."""
         return cls(
             category=row["category"],
@@ -127,7 +129,7 @@ class TransactionCategorySnapshot:
             category_id=row.get("category_id"),
         )
 
-    def prefixed_dict(self, prefix):
+    def prefixed_dict(self, prefix: str) -> dict[str, Any]:
         """Return this snapshot with the undo-state key prefix applied."""
         return {
             f"{prefix}_category": self.category,
@@ -152,7 +154,7 @@ class TransactionCategoryChange:
     old_state: TransactionCategorySnapshot
     new_state: TransactionCategorySnapshot
 
-    def to_undo_dict(self):
+    def to_undo_dict(self) -> dict[str, Any]:
         """Return this change in the legacy background-job undo payload shape."""
         return {
             "transaction_id": self.transaction_id,
@@ -161,12 +163,12 @@ class TransactionCategoryChange:
         }
 
 
-def utc_timestamp():
+def utc_timestamp() -> str:
     """Return the current UTC timestamp for category metadata."""
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def category_metadata_json(metadata):
+def category_metadata_json(metadata: object) -> str | None:
     """Return deterministic JSON text for persisted categorization evidence.
 
     Callers may pass a mapping/list payload or an already serialized JSON
@@ -194,7 +196,7 @@ def category_metadata_json(metadata):
     )
 
 
-def normalize_category_metadata(metadata):
+def normalize_category_metadata(metadata: Any) -> Any:
     """Return metadata with controlled JSON audit source values.
 
     The helper leaves unrelated payload fields untouched and only normalizes
@@ -210,7 +212,14 @@ def normalize_category_metadata(metadata):
     return metadata
 
 
-def category_assignment(category, unknown_category, source, confidence=None, rule_id=None, metadata=None):
+def category_assignment(
+    category: object,
+    unknown_category: object,
+    source: object,
+    confidence: float | None = None,
+    rule_id: int | None = None,
+    metadata: object | None = None,
+) -> CategoryAssignmentMetadata:
     """Build typed metadata for an automatic or manual category assignment.
 
     Unknown or empty categories intentionally clear assignment provenance and
@@ -235,7 +244,14 @@ def category_assignment(category, unknown_category, source, confidence=None, rul
     )
 
 
-def category_assignment_metadata(category, unknown_category, source, confidence=None, rule_id=None, metadata=None):
+def category_assignment_metadata(
+    category: object,
+    unknown_category: object,
+    source: object,
+    confidence: float | None = None,
+    rule_id: int | None = None,
+    metadata: object | None = None,
+) -> dict[str, Any]:
     """Build normalized metadata mapping for a category assignment."""
     return category_assignment(
         category,
@@ -247,25 +263,25 @@ def category_assignment_metadata(category, unknown_category, source, confidence=
     ).to_dict()
 
 
-def normalize_category_source(source):
+def normalize_category_source(source: object) -> str:
     """Return a valid persisted category assignment source."""
     text = str(source or CATEGORY_SOURCE_UNKNOWN).strip().lower()
     return text if text in CATEGORY_SOURCES else CATEGORY_SOURCE_UNKNOWN
 
 
-def category_source_label(source):
+def category_source_label(source: object) -> str:
     """Return a compact display label for a persisted category source."""
     normalized_source = normalize_category_source(source)
     return CATEGORY_SOURCE_LABELS[normalized_source]
 
 
-def category_source_badge_class(source):
+def category_source_badge_class(source: object) -> str:
     """Return the Bootstrap badge class for a persisted category source."""
     normalized_source = normalize_category_source(source)
     return CATEGORY_SOURCE_BADGE_CLASSES[normalized_source]
 
 
-def category_confidence_label(confidence):
+def category_confidence_label(confidence: Any) -> str:
     """Return a compact percentage label for optional category confidence."""
     if confidence is None:
         return ""
@@ -276,7 +292,7 @@ def category_confidence_label(confidence):
     return f"{value:.0%}"
 
 
-def manual_category_assignment(metadata=None):
+def manual_category_assignment(metadata: object | None = None) -> CategoryAssignmentMetadata:
     """Build typed metadata for a user-confirmed category assignment."""
     assigned_at = utc_timestamp()
     category_metadata = metadata or {"decision_source": DECISION_SOURCE_MANUAL}
@@ -290,6 +306,6 @@ def manual_category_assignment(metadata=None):
     )
 
 
-def manual_category_assignment_metadata(metadata=None):
+def manual_category_assignment_metadata(metadata: object | None = None) -> dict[str, Any]:
     """Build metadata mapping for a user-confirmed category assignment."""
     return manual_category_assignment(metadata=metadata).to_dict()

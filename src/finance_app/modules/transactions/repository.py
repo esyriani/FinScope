@@ -1,6 +1,8 @@
 """Persistence helpers for the transactions feature."""
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import case, select, update
 
@@ -13,7 +15,7 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_TRANSFER,
     TRANSFER_CATEGORY,
 )
-from finance_app.core.money import money_to_float, optional_money_to_float
+from finance_app.core.money import MoneyValue, money_to_float, optional_money_to_float
 from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.repository import resolve_category_id
@@ -31,7 +33,7 @@ class ManualCategoryAssignment:
     transaction_changed: bool = False
 
 
-def get_transaction_for_category_update(conn, transaction_id):
+def get_transaction_for_category_update(conn: Any, transaction_id: int) -> dict[str, Any] | None:
     """Return transaction for category update."""
     row = (
         conn.execute(
@@ -53,7 +55,7 @@ def get_transaction_for_category_update(conn, transaction_id):
     return transaction
 
 
-def get_transaction_for_ai_categorization(conn, transaction_id):
+def get_transaction_for_ai_categorization(conn: Any, transaction_id: int) -> dict[str, Any] | None:
     """Return a transaction row with category fields needed for a one-off AI rerun."""
     row = (
         conn.execute(
@@ -99,15 +101,15 @@ def get_transaction_for_ai_categorization(conn, transaction_id):
 
 
 def assign_manual_category(
-    conn,
-    transaction_id,
-    category,
-    tag_names=None,
-    rule_keyword=None,
-    amount_min=None,
-    amount_max=None,
-    rule_merchant_id=None,
-):
+    conn: Any,
+    transaction_id: int,
+    category: str,
+    tag_names: Iterable[str] | None = None,
+    rule_keyword: str | None = None,
+    amount_min: MoneyValue | None = None,
+    amount_max: MoneyValue | None = None,
+    rule_merchant_id: object | None = None,
+) -> ManualCategoryAssignment:
     """Handle a transaction category form submission.
 
     The transaction is marked manually verified when the submitted category or
@@ -192,7 +194,7 @@ def assign_manual_category(
     )
 
 
-def mark_transaction_verified(conn, transaction_id, reviewed_at=None):
+def mark_transaction_verified(conn: Any, transaction_id: int, reviewed_at: str | None = None) -> bool:
     """Mark transaction verified."""
     reviewed_at = reviewed_at or utc_timestamp()
     cursor = conn.execute(
@@ -203,7 +205,7 @@ def mark_transaction_verified(conn, transaction_id, reviewed_at=None):
     return cursor.rowcount > 0
 
 
-def mark_transactions_verified(conn, transaction_ids, reviewed_at=None):
+def mark_transactions_verified(conn: Any, transaction_ids: Iterable[object], reviewed_at: str | None = None) -> int:
     """Mark selected transactions verified and return the updated row count."""
     ids = normalized_transaction_ids(transaction_ids)
     if not ids:
@@ -218,7 +220,7 @@ def mark_transactions_verified(conn, transaction_ids, reviewed_at=None):
     return cursor.rowcount
 
 
-def set_transaction_ignored(conn, transaction_id, ignored):
+def set_transaction_ignored(conn: Any, transaction_id: int, ignored: object) -> bool:
     """Set transaction ignored."""
     ignored = 1 if ignored else 0
     values = {"ignored": ignored}
@@ -228,7 +230,7 @@ def set_transaction_ignored(conn, transaction_id, ignored):
     return cursor.rowcount > 0
 
 
-def set_transactions_ignored(conn, transaction_ids, ignored):
+def set_transactions_ignored(conn: Any, transaction_ids: Iterable[object], ignored: object) -> int:
     """Set the ignored flag for selected transactions and return updated count."""
     ids = normalized_transaction_ids(transaction_ids)
     if not ids:
@@ -242,7 +244,12 @@ def set_transactions_ignored(conn, transaction_ids, ignored):
     return cursor.rowcount
 
 
-def apply_ai_category_update(conn, transaction_id, transaction, unknown_category):
+def apply_ai_category_update(
+    conn: Any,
+    transaction_id: int,
+    transaction: Mapping[str, Any],
+    unknown_category: str,
+) -> bool:
     """Persist one AI categorization result to a single transaction row.
 
     The update intentionally does not create or modify category rules. Callers
@@ -284,7 +291,7 @@ def apply_ai_category_update(conn, transaction_id, transaction, unknown_category
     return True
 
 
-def get_transactions_for_recategorization(conn, transaction_ids):
+def get_transactions_for_recategorization(conn: Any, transaction_ids: Iterable[object]) -> list[dict[str, Any]]:
     """Return selected transaction rows needed by the categorization workflow."""
     ids = normalized_transaction_ids(transaction_ids)
     if not ids:
@@ -322,7 +329,7 @@ def get_transactions_for_recategorization(conn, transaction_ids):
     ]
 
 
-def update_recategorized_transaction(conn, transaction, unknown_category):
+def update_recategorized_transaction(conn: Any, transaction: Mapping[str, Any], unknown_category: str) -> bool:
     """Persist one complete workflow categorization result to its transaction."""
     transaction_id = transaction["id"]
     category = transaction.get("category") or unknown_category
@@ -361,13 +368,13 @@ def update_recategorized_transaction(conn, transaction, unknown_category):
     return True
 
 
-def normalized_transaction_ids(transaction_ids):
+def normalized_transaction_ids(transaction_ids: Iterable[object] | None) -> list[int]:
     """Return de-duplicated positive transaction IDs preserving input order."""
-    ids = []
-    seen = set()
+    ids: list[int] = []
+    seen: set[int] = set()
     for value in transaction_ids or ():
         try:
-            transaction_id = int(value)
+            transaction_id = int(str(value))
         except (TypeError, ValueError):
             continue
         if transaction_id <= 0 or transaction_id in seen:
@@ -377,7 +384,7 @@ def normalized_transaction_ids(transaction_ids):
     return ids
 
 
-def ai_transaction_kind(category, amount, current_kind=None):
+def ai_transaction_kind(category: object, amount: MoneyValue | None, current_kind: object | None = None) -> str:
     """Return the transaction kind implied by a one-off AI category update."""
     if category == TRANSFER_CATEGORY:
         return TRANSACTION_KIND_TRANSFER

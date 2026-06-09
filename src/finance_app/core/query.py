@@ -7,7 +7,30 @@ repository/query functions.
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
+
+
+class QueryArgs(Protocol):
+    """Represent the request-argument methods used by parser helpers."""
+
+    def get(self, key: str, default: object | None = None) -> object:
+        """Return one query value for a key."""
+        ...
+
+    def getlist(self, key: str) -> list[object]:
+        """Return all query values for a repeated key."""
+        ...
+
+
+def query_value(args: QueryArgs, key: str, default: str = "") -> str:
+    """Return one query argument as normalized text."""
+    value = args.get(key, default)
+    return default if value in (None, "") else str(value)
+
+
+def query_values(args: QueryArgs, key: str) -> list[str]:
+    """Return repeated query arguments as normalized text values."""
+    return [str(value) for value in args.getlist(key)]
 
 
 @dataclass

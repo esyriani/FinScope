@@ -4,6 +4,8 @@ Builds paginated, searchable, and sortable table contexts for rule audit pages.
 The helpers depend on Flask URL generation and read-only presented audit rows.
 """
 
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 from urllib.parse import urlencode
 
 from flask import url_for
@@ -27,9 +29,18 @@ AUDIT_TABLE_OPEN_SECTIONS = {
     "shadowed": "shadowed-rule-findings",
     "stale": "stale-rule-findings",
 }
+SortOptions = Mapping[str, Callable[[Mapping[str, Any]], Any]]
 
 
-def build_audit_table_context(args, table_name, rows, page_size, sort_options, default_sort, default_direction):
+def build_audit_table_context(
+    args: Any,
+    table_name: str,
+    rows: Sequence[Mapping[str, Any]],
+    page_size: int,
+    sort_options: SortOptions,
+    default_sort: str,
+    default_direction: str,
+) -> dict[str, Any]:
     """Return paginated and sorted display context for one audit table.
 
     Args:
@@ -88,7 +99,13 @@ def build_audit_table_context(args, table_name, rows, page_size, sort_options, d
     }
 
 
-def build_overlap_transaction_table_context(args, rule_a_id, rule_b_id, rows, page_size):
+def build_overlap_transaction_table_context(
+    args: Any,
+    rule_a_id: int,
+    rule_b_id: int,
+    rows: Sequence[Mapping[str, Any]],
+    page_size: int,
+) -> dict[str, Any]:
     """Return paginated and sorted context for overlap detail transactions."""
     sort_options = overlap_transaction_sort_options()
     sort = parse_audit_table_sort(request_arg(args, "shared_sort"), sort_options, "date")
@@ -134,32 +151,32 @@ def build_overlap_transaction_table_context(args, rule_a_id, rule_b_id, rows, pa
     }
 
 
-def request_arg(args, name, default=None):
+def request_arg(args: Any, name: str, default: object | None = None) -> object:
     """Return one query argument value from Flask or plain mappings."""
     if hasattr(args, "get"):
         return args.get(name, default)
     return default
 
 
-def parse_audit_open_section(value):
+def parse_audit_open_section(value: object) -> str:
     """Return a whitelisted Rule Audit section id to expand after navigation."""
     allowed = set(audit_table_open_section_id(name) for name in AUDIT_TABLE_OPEN_SECTIONS)
     normalized = str(value or "").strip()
     return normalized if normalized in allowed else ""
 
 
-def audit_table_open_section_id(table_name):
+def audit_table_open_section_id(table_name: str) -> str:
     """Return the collapse id associated with one audit table prefix."""
     return AUDIT_TABLE_OPEN_SECTIONS.get(table_name, "")
 
 
-def parse_audit_table_sort(value, sort_options, default):
+def parse_audit_table_sort(value: object, sort_options: Mapping[str, Any], default: str) -> str:
     """Return a whitelisted audit table sort key."""
     sort = str(value or default).strip()
     return sort if sort in sort_options else default
 
 
-def parse_overlap_filter(value):
+def parse_overlap_filter(value: object) -> str:
     """Return the selected overlap severity filter for the main audit page."""
     allowed_filters = {
         "all",
@@ -172,32 +189,36 @@ def parse_overlap_filter(value):
     return normalized if normalized in allowed_filters else "all"
 
 
-def clean_overlap_search_query(value):
+def clean_overlap_search_query(value: object) -> str:
     """Return a normalized rule-audit search query for display and matching."""
     return " ".join(str(value or "").split())
 
 
-def search_overlap_rows(rows, query):
+def search_overlap_rows(rows: Sequence[Mapping[str, Any]], query: object) -> Sequence[Mapping[str, Any]]:
     """Return overlap rows matching every term in the search query."""
     return search_audit_rows(rows, query, overlap_search_text)
 
 
-def search_specificity_warning_rows(rows, query):
+def search_specificity_warning_rows(rows: Sequence[Mapping[str, Any]], query: object) -> Sequence[Mapping[str, Any]]:
     """Return specificity warning rows matching every search term."""
     return search_audit_rows(rows, query, specificity_warning_search_text)
 
 
-def search_shadowed_rows(rows, query):
+def search_shadowed_rows(rows: Sequence[Mapping[str, Any]], query: object) -> Sequence[Mapping[str, Any]]:
     """Return shadowed-rule rows matching every search term."""
     return search_audit_rows(rows, query, shadowed_rule_search_text)
 
 
-def search_stale_rows(rows, query):
+def search_stale_rows(rows: Sequence[Mapping[str, Any]], query: object) -> Sequence[Mapping[str, Any]]:
     """Return stale or unused rule rows matching every search term."""
     return search_audit_rows(rows, query, stale_rule_search_text)
 
 
-def search_audit_rows(rows, query, text_builder):
+def search_audit_rows(
+    rows: Sequence[Mapping[str, Any]],
+    query: object,
+    text_builder: Callable[[Mapping[str, Any]], str],
+) -> Sequence[Mapping[str, Any]]:
     """Return audit rows whose searchable text contains every query term.
 
     Args:
@@ -214,7 +235,7 @@ def search_audit_rows(rows, query, text_builder):
     return [row for row in rows if all(term in text_builder(row) for term in terms)]
 
 
-def overlap_search_text(row):
+def overlap_search_text(row: Mapping[str, Any]) -> str:
     """Return searchable text for one overlap row."""
     parts = [
         row.get("severity_label"),
@@ -243,7 +264,7 @@ def overlap_search_text(row):
     return " ".join(str(part or "") for part in parts).casefold()
 
 
-def specificity_warning_search_text(row):
+def specificity_warning_search_text(row: Mapping[str, Any]) -> str:
     """Return searchable text for one specificity warning row."""
     parts = [
         rule_search_text(row.get("broad_rule") or {}),
@@ -258,7 +279,7 @@ def specificity_warning_search_text(row):
     return " ".join(str(part or "") for part in parts).casefold()
 
 
-def shadowed_rule_search_text(row):
+def shadowed_rule_search_text(row: Mapping[str, Any]) -> str:
     """Return searchable text for one shadowed-rule row."""
     parts = [
         "Shadowed",
@@ -275,7 +296,7 @@ def shadowed_rule_search_text(row):
     return " ".join(str(part or "") for part in parts).casefold()
 
 
-def stale_rule_search_text(row):
+def stale_rule_search_text(row: Mapping[str, Any]) -> str:
     """Return searchable text for one stale or unused rule row."""
     parts = [
         row.get("status"),
@@ -293,7 +314,7 @@ def stale_rule_search_text(row):
     return " ".join(str(part or "") for part in parts).casefold()
 
 
-def rule_search_text(rule):
+def rule_search_text(rule: Mapping[str, Any]) -> str:
     """Return searchable text for one presented rule mapping."""
     parts = [
         rule.get("label"),
@@ -313,7 +334,7 @@ def rule_search_text(rule):
     return " ".join(str(part or "") for part in parts).casefold()
 
 
-def filter_overlap_rows(rows, overlap_filter):
+def filter_overlap_rows(rows: Sequence[Mapping[str, Any]], overlap_filter: str) -> Sequence[Mapping[str, Any]]:
     """Return overlap rows matching the selected severity filter."""
     if overlap_filter == "all":
         return rows
@@ -322,7 +343,7 @@ def filter_overlap_rows(rows, overlap_filter):
     return [row for row in rows if row["severity"] == overlap_filter]
 
 
-def overlap_filter_options(args, rows):
+def overlap_filter_options(args: Any, rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Return filter controls and counts for the main overlap findings table."""
     counts = {
         "all": len(rows),
@@ -381,16 +402,16 @@ def overlap_filter_options(args, rows):
     ]
 
 
-def next_audit_sort_direction(sort_name, current_sort, current_direction, default_direction):
+def next_audit_sort_direction(sort_name: str, current_sort: str, current_direction: str, default_direction: str) -> str:
     """Return the next direction for an audit table sort link."""
     if sort_name != current_sort:
         return default_direction
     return "desc" if current_direction == "asc" else "asc"
 
 
-def audit_table_url(args, updates):
+def audit_table_url(args: Any, updates: Mapping[str, object]) -> str:
     """Build a Rule Audit URL while preserving unrelated query parameters."""
-    query_pairs = []
+    query_pairs: list[tuple[Any, Any]] = []
     if hasattr(args, "lists"):
         for key, values in args.lists():
             if key in updates:
@@ -411,9 +432,9 @@ def audit_table_url(args, updates):
     return f"{base_url}?{query}" if query else base_url
 
 
-def overlap_transaction_table_url(args, rule_a_id, rule_b_id, updates):
+def overlap_transaction_table_url(args: Any, rule_a_id: int, rule_b_id: int, updates: Mapping[str, object]) -> str:
     """Build an overlap detail URL while preserving unrelated query parameters."""
-    query_pairs = []
+    query_pairs: list[tuple[Any, Any]] = []
     if hasattr(args, "lists"):
         for key, values in args.lists():
             if key in updates:
@@ -438,7 +459,7 @@ def overlap_transaction_table_url(args, rule_a_id, rule_b_id, updates):
     return f"{base_url}?{query}" if query else base_url
 
 
-def overlap_sort_options():
+def overlap_sort_options() -> dict[str, Callable[[Mapping[str, Any]], Any]]:
     """Return sort functions for overlap-style audit rows."""
     return {
         "rule_a": lambda row: sortable_text(row["rule_a"]["label"]),
@@ -456,7 +477,7 @@ def overlap_sort_options():
     }
 
 
-def tag_difference_sort_options():
+def tag_difference_sort_options() -> dict[str, Callable[[Mapping[str, Any]], Any]]:
     """Return sort functions for tag-difference audit rows."""
     options = overlap_sort_options()
     options["tags"] = lambda row: sortable_text(
@@ -465,7 +486,7 @@ def tag_difference_sort_options():
     return options
 
 
-def overlap_transaction_sort_options():
+def overlap_transaction_sort_options() -> dict[str, Callable[[Mapping[str, Any]], Any]]:
     """Return sort functions for overlap detail transaction rows."""
     return {
         "date": lambda row: sortable_text(row["transaction"].get("tx_date")),
@@ -481,7 +502,7 @@ def overlap_transaction_sort_options():
     }
 
 
-def specificity_warning_sort_options():
+def specificity_warning_sort_options() -> dict[str, Callable[[Mapping[str, Any]], Any]]:
     """Return sort functions for specificity warning rows."""
     return {
         "broad_rule": lambda row: sortable_text(row["broad_rule"]["label"]),
@@ -493,7 +514,7 @@ def specificity_warning_sort_options():
     }
 
 
-def shadowed_rule_sort_options():
+def shadowed_rule_sort_options() -> dict[str, Callable[[Mapping[str, Any]], Any]]:
     """Return sort functions for shadowed-rule rows."""
     return {
         "rule": lambda row: sortable_text(row["rule"]["label"]),
@@ -508,7 +529,7 @@ def shadowed_rule_sort_options():
     }
 
 
-def stale_rule_sort_options():
+def stale_rule_sort_options() -> dict[str, Callable[[Mapping[str, Any]], Any]]:
     """Return sort functions for stale and unused rule rows."""
     return {
         "rule": lambda row: sortable_text(row["rule"]["label"]),
@@ -520,19 +541,22 @@ def stale_rule_sort_options():
     }
 
 
-def stale_status_rank(status):
+def stale_status_rank(status: object) -> int:
     """Return a deterministic sort rank for stale-rule status badges."""
+    status_key = str(status or "")
     return {
         STALE_UNUSED: 0,
         STALE_STALE: 1,
-    }.get(status, 2)
+    }.get(status_key, 2)
 
 
-def sortable_text(value):
+def sortable_text(value: object) -> str:
     """Return a normalized text value for audit table sorting."""
     return str(value or "").casefold()
 
 
-def sortable_number(value):
+def sortable_number(value: object) -> int:
     """Return a numeric value for audit table sorting."""
-    return int(value or 0)
+    if isinstance(value, (int, float, str)):
+        return int(value or 0)
+    return 0

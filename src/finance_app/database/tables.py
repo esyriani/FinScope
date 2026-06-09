@@ -5,6 +5,9 @@ schema. Runtime initialization creates the clean schema through SQLAlchemy Core
 for SQLite and MySQL deployments.
 """
 
+from collections.abc import Iterable
+from typing import Any
+
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -65,12 +68,12 @@ CONSTRAINT_NAMING_CONVENTION = {
 
 metadata = MetaData(naming_convention=CONSTRAINT_NAMING_CONVENTION)
 
-MYSQL_TABLE_OPTIONS = {
+MYSQL_TABLE_OPTIONS: dict[str, Any] = {
     "mysql_engine": "InnoDB",
     "mysql_charset": "utf8mb4",
     "mysql_collate": "utf8mb4_unicode_ci",
 }
-AUTOINCREMENT_TABLE_OPTIONS = {
+AUTOINCREMENT_TABLE_OPTIONS: dict[str, Any] = {
     **MYSQL_TABLE_OPTIONS,
     "sqlite_autoincrement": True,
 }
@@ -90,18 +93,18 @@ PASSWORD_HASH_TYPE = PASSWORD_HASH_TYPE.with_variant(
 )
 
 
-def allowed_values_check_sql(column_name, values):
+def allowed_values_check_sql(column_name: str, values: Iterable[str]) -> str:
     """Return a SQL CHECK expression for enum-like persisted text values."""
     allowed_values = ", ".join(f"'{value}'" for value in sorted(values))
     return f"{column_name} IN ({allowed_values})"
 
 
-def allowed_values_constraint(column_name, values, name):
+def allowed_values_constraint(column_name: str, values: Iterable[str], name: str) -> CheckConstraint:
     """Return a named CHECK constraint for a constrained text column."""
     return CheckConstraint(allowed_values_check_sql(column_name, values), name=name)
 
 
-def non_empty_constraint(column_name, name):
+def non_empty_constraint(column_name: str, name: str) -> CheckConstraint:
     """Return a named CHECK constraint that rejects blank text values."""
     return CheckConstraint(func.trim(column(column_name)) != "", name=name)
 

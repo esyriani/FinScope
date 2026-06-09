@@ -1,8 +1,10 @@
 .venv/
 .vscode/
+node_modules/
 __pycache__/
 *.py[cod]
 .coverage
+npm-debug.log*
 
 report.md
 code review.txt

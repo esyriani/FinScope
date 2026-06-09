@@ -164,7 +164,7 @@ CLIENT_TRANSLATION_MESSAGES = (
 )
 
 
-def create_app():
+def create_app() -> Flask:
     """Create and configure the Flask application."""
     app = Flask(
         __name__,
@@ -185,7 +185,7 @@ def create_app():
     register_auth(app)
 
     @app.before_request
-    def load_runtime_language():
+    def load_runtime_language() -> None:
         """Load the selected UI language for the current request."""
         if request.endpoint == "static":
             g.ui_language = normalize_language(settings.locale)
@@ -194,7 +194,7 @@ def create_app():
         g.ui_language = normalize_language(language)
 
     @app.context_processor
-    def inject_runtime_settings():
+    def inject_runtime_settings() -> dict[str, object]:
         """Expose runtime UI settings to every template render."""
         theme_mode = get_setting_with_fallback("theme_mode", THEME_MODE_DARK)
         ui_language = normalize_language(getattr(g, "ui_language", settings.locale))

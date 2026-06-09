@@ -1,5 +1,7 @@
 """Application orchestration for the categories feature."""
 
+from typing import Any
+
 from finance_app.modules.categories import llm as _llm
 from finance_app.modules.categories.categorization import categorize_transactions
 from finance_app.modules.categories.llm import (
@@ -43,13 +45,13 @@ from finance_app.modules.merchants.normalization import normalize_merchant_descr
 
 
 def classify_unknowns_with_llm(
-    conn,
-    transactions,
-    rules,
-    unknown_category,
-    save_automatic_rules=True,
-    request_categories=None,
-):
+    conn: Any,
+    transactions: Any,
+    rules: Any,
+    unknown_category: str,
+    save_automatic_rules: bool = True,
+    request_categories: Any = None,
+) -> Any:
     """Classify unknowns with LLM.
 
     ``save_automatic_rules`` controls whether no-review AI decisions should

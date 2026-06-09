@@ -8,6 +8,6 @@ dashboard_bp = Blueprint("dashboard", __name__)
 
 
 @dashboard_bp.route("/dashboard")
-def dashboard():
+def dashboard() -> str:
     """Render the dashboard page."""
     return render_template("dashboard.html", **build_dashboard_context(request.args))

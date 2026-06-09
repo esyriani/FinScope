@@ -7,7 +7,15 @@ function setupUploadAccountBehavior() {
     const interacDirectionSelect = form?.querySelector('select[name="interac_direction"]');
     const interacWarning = form?.querySelector("[data-interac-warning]");
 
-    if (!form || !statementTypeSelect || !accountTypeSelect || !paidFromField || !interacDirectionField || !interacDirectionSelect || !interacWarning) {
+    if (
+        !form ||
+        !statementTypeSelect ||
+        !accountTypeSelect ||
+        !paidFromField ||
+        !interacDirectionField ||
+        !interacDirectionSelect ||
+        !interacWarning
+    ) {
         return;
     }
 
@@ -67,9 +75,7 @@ function setupUploadPreview(root = document) {
 
     form.dataset.uploadPreviewReady = "true";
 
-    const modal = window.bootstrap?.Modal
-        ? window.bootstrap.Modal.getOrCreateInstance(modalElement)
-        : null;
+    const modal = window.bootstrap?.Modal ? window.bootstrap.Modal.getOrCreateInstance(modalElement) : null;
     const errorAlert = modalElement.querySelector("[data-upload-preview-error]");
     const countNode = modalElement.querySelector("[data-upload-preview-count]");
     const ignoredNode = modalElement.querySelector("[data-upload-preview-ignored]");
@@ -85,9 +91,8 @@ function setupUploadPreview(root = document) {
     let currentPreview = null;
     let selectedDateOrder = "";
 
-    const translate = (message, variables) => (
-        window.financeTranslate ? window.financeTranslate(message, variables) : message
-    );
+    const translate = (message, variables) =>
+        window.financeTranslate ? window.financeTranslate(message, variables) : message;
 
     const showError = (message) => {
         if (!errorAlert) {
@@ -144,9 +149,10 @@ function setupUploadPreview(root = document) {
         }
         if (dateRangeNode) {
             const range = currentPreview?.date_ranges?.[dateOrder] || currentPreview?.date_range;
-            dateRangeNode.textContent = currentPreview?.date_format?.requires_choice && !dateOrder
-                ? translate("Choose date format")
-                : formatDateRange(range);
+            dateRangeNode.textContent =
+                currentPreview?.date_format?.requires_choice && !dateOrder
+                    ? translate("Choose date format")
+                    : formatDateRange(range);
         }
 
         modalElement.querySelectorAll("[data-upload-preview-parsed-date]").forEach((cell) => {
@@ -175,30 +181,32 @@ function setupUploadPreview(root = document) {
         }
 
         emptyNode.classList.add("d-none");
-        rowsNode.replaceChildren(...rows.map((row) => {
-            const tableRow = document.createElement("tr");
-            const rawDate = document.createElement("td");
-            rawDate.textContent = row.raw_date || "";
+        rowsNode.replaceChildren(
+            ...rows.map((row) => {
+                const tableRow = document.createElement("tr");
+                const rawDate = document.createElement("td");
+                rawDate.textContent = row.raw_date || "";
 
-            const parsedDate = document.createElement("td");
-            parsedDate.dataset.uploadPreviewParsedDate = "";
-            parsedDate.dataset.autoDate = row.parsed_date || "";
-            parsedDate.dataset.monthFirstDate = row.month_first_date || "";
-            parsedDate.dataset.dayFirstDate = row.day_first_date || "";
-            parsedDate.textContent = rowDateForOrder(
-                row,
-                selectedDateOrder || currentPreview?.date_format?.effective_order || ""
-            );
+                const parsedDate = document.createElement("td");
+                parsedDate.dataset.uploadPreviewParsedDate = "";
+                parsedDate.dataset.autoDate = row.parsed_date || "";
+                parsedDate.dataset.monthFirstDate = row.month_first_date || "";
+                parsedDate.dataset.dayFirstDate = row.day_first_date || "";
+                parsedDate.textContent = rowDateForOrder(
+                    row,
+                    selectedDateOrder || currentPreview?.date_format?.effective_order || ""
+                );
 
-            const description = document.createElement("td");
-            description.textContent = row.description || "";
-            const amount = document.createElement("td");
-            amount.className = "text-end";
-            amount.textContent = row.amount || "";
+                const description = document.createElement("td");
+                description.textContent = row.description || "";
+                const amount = document.createElement("td");
+                amount.className = "text-end";
+                amount.textContent = row.amount || "";
 
-            tableRow.append(rawDate, parsedDate, description, amount);
-            return tableRow;
-        }));
+                tableRow.append(rawDate, parsedDate, description, amount);
+                return tableRow;
+            })
+        );
     };
 
     const updateDateChoice = () => {

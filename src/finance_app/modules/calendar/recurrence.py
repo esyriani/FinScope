@@ -1,12 +1,14 @@
 """Recurring transaction inference helpers."""
 
 from calendar import monthrange
+from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from statistics import median
+from typing import Any
 
-from finance_app.core.money import money_to_decimal, rounded_money_decimal, rounded_money_float
+from finance_app.core.money import MoneyValue, money_to_decimal, rounded_money_decimal, rounded_money_float
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.recurring.patterns import recurring_pattern_key
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
@@ -16,18 +18,18 @@ from .urls import transactions_url
 
 
 def infer_recurring_items(
-    rows,
-    month_start,
-    month_end,
-    month_transactions,
-    recurrence_settings=None,
-    recurring_pattern_metadata=None,
-    conn=None,
-):
+    rows: Iterable[Mapping[str, Any]],
+    month_start: date,
+    month_end: date,
+    month_transactions: Iterable[Mapping[str, Any]],
+    recurrence_settings: Any = None,
+    recurring_pattern_metadata: Mapping[str, Mapping[str, Any]] | None = None,
+    conn: Any = None,
+) -> list[dict[str, Any]]:
     """Infer recurring items."""
     recurrence_settings = recurrence_settings or RECURRENCE_DETECTION_DEFAULTS
     recurring_pattern_metadata = recurring_pattern_metadata or {}
-    groups = {}
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
     # First group historical transactions by normalized merchant and cash-flow
     # direction; recurrence is inferred from this merchant/type history.
     for row in rows:
@@ -79,7 +81,7 @@ def infer_recurring_items(
             }
         )
 
-    month_transactions_by_key = {}
+    month_transactions_by_key: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     # Current-month transactions are pre-normalized by the calendar presenter,
     # so matching can stay focused on date and amount tolerances.
     for transaction in month_transactions:
@@ -88,7 +90,7 @@ def infer_recurring_items(
             [],
         ).append(transaction)
 
-    recurring = []
+    recurring: list[dict[str, Any]] = []
     last_day = monthrange(month_start.year, month_start.month)[1]
     evaluation_date = recurrence_evaluation_date(month_start, month_end)
 
@@ -166,7 +168,10 @@ def infer_recurring_items(
     return recurring
 
 
-def recurring_pattern_metadata_for_group(group, recurring_pattern_metadata):
+def recurring_pattern_metadata_for_group(
+    group: Mapping[str, Any],
+    recurring_pattern_metadata: Mapping[str, Mapping[str, Any]],
+) -> tuple[str, Mapping[str, Any], str]:
     """Return matching recurring metadata for a merchant/type group.
 
     Merchant-bound metadata wins when a durable merchant exists. Keyword-fuzzy
@@ -174,7 +179,7 @@ def recurring_pattern_metadata_for_group(group, recurring_pattern_metadata):
     influence recurrence rows after merchant identities are introduced.
     """
     tx_type = group["type"]
-    candidates = []
+    candidates: list[tuple[str, str]] = []
     if group["merchant_id"]:
         candidates.append((recurring_pattern_key(group["merchant_key"], tx_type), "merchant"))
     candidates.append((recurring_pattern_key(group["merchant"], tx_type), "keyword"))
@@ -192,9 +197,9 @@ def recurring_pattern_metadata_for_group(group, recurring_pattern_metadata):
     return candidates[0][0], {}, candidates[0][1]
 
 
-def recurrence_settings_for_pattern(recurrence_settings, pattern_metadata):
+def recurrence_settings_for_pattern(recurrence_settings: Any, pattern_metadata: Mapping[str, Any]) -> Any:
     """Build settings for pattern."""
-    overrides = {}
+    overrides: dict[str, Any] = {}
     if pattern_metadata.get("date_tolerance_days") is not None:
         overrides["date_tolerance_days"] = pattern_metadata["date_tolerance_days"]
     if pattern_metadata.get("amount_tolerance") is not None:
@@ -203,7 +208,10 @@ def recurrence_settings_for_pattern(recurrence_settings, pattern_metadata):
     return replace(recurrence_settings, **overrides) if overrides else recurrence_settings
 
 
-def recurring_amount_change_details(typical_amount, match):
+def recurring_amount_change_details(
+    typical_amount: MoneyValue | None,
+    match: Mapping[str, Any],
+) -> dict[str, Any] | None:
     """Build amount change details."""
     if match.get("status") != "amount_changed" or match.get("matched_amount") is None:
         return None
@@ -220,7 +228,7 @@ def recurring_amount_change_details(typical_amount, match):
     }
 
 
-def recurrence_evaluation_date(month_start, month_end):
+def recurrence_evaluation_date(month_start: date, month_end: date) -> date:
     # For historical months, judge missing recurring items at month end; for the
     # active month, judge them as of today; future months cannot be overdue yet.
     """Build evaluation date."""
@@ -233,14 +241,14 @@ def recurrence_evaluation_date(month_start, month_end):
 
 
 def classify_recurring_status(
-    candidates,
-    expected_date,
-    typical_amount,
-    evaluation_date,
-    recurrence_settings=None,
-    last_seen=None,
-    frequency=None,
-):
+    candidates: Iterable[Mapping[str, Any]],
+    expected_date: date,
+    typical_amount: MoneyValue | None,
+    evaluation_date: date,
+    recurrence_settings: Any = None,
+    last_seen: date | None = None,
+    frequency: str | None = None,
+) -> str:
     """Classify recurring status."""
     return classify_recurring_match(
         candidates,
@@ -254,14 +262,14 @@ def classify_recurring_status(
 
 
 def classify_recurring_match(
-    candidates,
-    expected_date,
-    typical_amount,
-    evaluation_date,
-    recurrence_settings=None,
-    last_seen=None,
-    frequency=None,
-):
+    candidates: Iterable[Mapping[str, Any]],
+    expected_date: date,
+    typical_amount: MoneyValue | None,
+    evaluation_date: date,
+    recurrence_settings: Any = None,
+    last_seen: date | None = None,
+    frequency: str | None = None,
+) -> dict[str, Any]:
     """Classify current-month recurrence evidence using deterministic tolerances.
 
     A candidate already has the same normalized merchant and transaction direction.
@@ -305,9 +313,9 @@ def classify_recurring_match(
             "status": "overdue" if evaluation_date > overdue_after else "expected",
         }
 
-    strict_matches = []
-    date_matches = []
-    all_matches = []
+    strict_matches: list[dict[str, Any]] = []
+    date_matches: list[dict[str, Any]] = []
+    all_matches: list[dict[str, Any]] = []
 
     for candidate in candidates:
         candidate_date = datetime.strptime(candidate["date"], "%Y-%m-%d").date()
@@ -345,7 +353,7 @@ def classify_recurring_match(
     return {**best, "status": "likely_occurred"}
 
 
-def recurring_match_sort_key(match):
+def recurring_match_sort_key(match: Mapping[str, Any]) -> tuple[int, float, str]:
     """Build match sort key."""
     return (
         abs(match["date_difference_days"] or 0),
@@ -354,7 +362,7 @@ def recurring_match_sort_key(match):
     )
 
 
-def recurrence_amount_tolerance(typical_amount, recurrence_settings=None):
+def recurrence_amount_tolerance(typical_amount: MoneyValue | None, recurrence_settings: Any = None) -> Decimal:
     """Build amount tolerance."""
     recurrence_settings = recurrence_settings or RECURRENCE_DETECTION_DEFAULTS
     typical_amount = abs(money_to_decimal(typical_amount))
@@ -364,7 +372,13 @@ def recurrence_amount_tolerance(typical_amount, recurrence_settings=None):
     )
 
 
-def possible_inactive_details(expected_date, evaluation_date, last_seen, frequency, recurrence_settings):
+def possible_inactive_details(
+    expected_date: date,
+    evaluation_date: date,
+    last_seen: date | None,
+    frequency: str | None,
+    recurrence_settings: Any,
+) -> dict[str, Any] | None:
     """Return deterministic inactive details when a missing pattern looks stale.
 
     A row can become possibly inactive only after its expected date plus the date
@@ -389,7 +403,7 @@ def possible_inactive_details(expected_date, evaluation_date, last_seen, frequen
     return None
 
 
-def missed_recurring_cycles(last_seen, expected_date, frequency):
+def missed_recurring_cycles(last_seen: date, expected_date: date, frequency: str | None) -> int:
     """Handle missed recurring cycles."""
     if last_seen >= expected_date:
         return 0
@@ -404,11 +418,11 @@ def missed_recurring_cycles(last_seen, expected_date, frequency):
         "Weekly": 7,
         "Biweekly": 14,
         "Quarterly": 91,
-    }.get(frequency, 30)
+    }.get(frequency or "", 30)
     return max(0, (expected_date - last_seen).days // interval_days)
 
 
-def recurring_confidence_label(observed_months, recurrence_settings=None):
+def recurring_confidence_label(observed_months: int, recurrence_settings: Any = None) -> str:
     """Return an explainable confidence label without exposing raw scores.
 
     This first implementation uses only the recurrence evidence already computed:
@@ -425,7 +439,7 @@ def recurring_confidence_label(observed_months, recurrence_settings=None):
     return "Low"
 
 
-def recent_recurring_occurrences(occurrences):
+def recent_recurring_occurrences(occurrences: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
     """Handle recent recurring occurrences."""
     return sorted(
         occurrences,
@@ -434,7 +448,7 @@ def recent_recurring_occurrences(occurrences):
     )[:12]
 
 
-def recurring_frequency_label(dates, months):
+def recurring_frequency_label(dates: Iterable[date], months: Iterable[str]) -> str:
     """Classify recurrence frequency with deterministic interval rules.
 
     The row eligibility remains unchanged; this only labels the existing pattern.
@@ -475,16 +489,18 @@ def recurring_frequency_label(dates, months):
     return "Irregular recurring"
 
 
-def interval_match_ratio(intervals, minimum, maximum):
+def interval_match_ratio(intervals: Iterable[int], minimum: int, maximum: int) -> float:
     """Handle interval match ratio."""
+    intervals = list(intervals)
     if not intervals:
         return 0
     matches = len([interval for interval in intervals if minimum <= interval <= maximum])
     return matches / len(intervals)
 
 
-def month_gap_match_ratio(month_gaps, expected_gaps):
+def month_gap_match_ratio(month_gaps: Iterable[int], expected_gaps: set[int]) -> float:
     """Return gap match ratio."""
+    month_gaps = list(month_gaps)
     if not month_gaps:
         return 0
     matches = len([gap for gap in month_gaps if gap in expected_gaps])

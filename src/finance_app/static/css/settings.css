@@ -109,8 +109,7 @@
 
 .ownership-handoff-section {
     background:
-        linear-gradient(0deg, rgba(var(--app-danger-rgb), 0.05), rgba(var(--app-danger-rgb), 0.05)),
-        var(--app-surface);
+        linear-gradient(0deg, rgba(var(--app-danger-rgb), 0.05), rgba(var(--app-danger-rgb), 0.05)), var(--app-surface);
 }
 
 .ownership-handoff-section .settings-section-header {

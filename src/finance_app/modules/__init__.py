@@ -1,4 +1,6 @@
-"""Package marker for   init  .py."""
+"""Application module registration."""
+
+from typing import Any
 
 from finance_app.modules.auth.controller import auth_bp
 from finance_app.modules.calendar.controller import calendar_bp
@@ -15,7 +17,7 @@ from finance_app.modules.transactions.controller import transactions_bp
 from finance_app.modules.upload.controller import upload_bp
 
 
-def register_blueprints(app):
+def register_blueprints(app: Any) -> None:
     """Register blueprints."""
     app.register_blueprint(auth_bp)
     app.register_blueprint(home_bp)

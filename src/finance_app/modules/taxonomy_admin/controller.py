@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
+from flask.typing import ResponseReturnValue
 
 from finance_app.core.i18n import gettext
 from finance_app.modules.auth.permissions import PERMISSION_MANAGE_TAXONOMY, permission_required
@@ -23,14 +24,14 @@ taxonomy_admin_bp = Blueprint("taxonomy_admin", __name__)
 
 @taxonomy_admin_bp.route("/taxonomy")
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def taxonomy():
+def taxonomy() -> str:
     """Render the taxonomy page."""
     return render_template("taxonomy.html", **build_taxonomy_context())
 
 
 @taxonomy_admin_bp.route("/taxonomy/export.yml")
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def export_taxonomy():
+def export_taxonomy() -> Response:
     """Download category and tag metadata as a YAML taxonomy file."""
     return Response(
         export_taxonomy_yaml(),
@@ -43,7 +44,7 @@ def export_taxonomy():
 
 @taxonomy_admin_bp.route("/taxonomy/import", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def import_taxonomy():
+def import_taxonomy() -> ResponseReturnValue:
     """Import category and tag metadata from an uploaded YAML taxonomy file.
 
     Requires a manage-taxonomy session and a CSRF-protected multipart POST with
@@ -56,7 +57,7 @@ def import_taxonomy():
         flash(gettext("Choose a YAML file to import."))
         return redirect(url_for("taxonomy_admin.taxonomy"))
 
-    filename = Path(uploaded_file.filename).name
+    filename = Path(uploaded_file.filename or "").name
     if not filename.lower().endswith((".yml", ".yaml")):
         flash(gettext("Taxonomy import currently supports YAML files."))
         return redirect(url_for("taxonomy_admin.taxonomy"))
@@ -88,7 +89,7 @@ def import_taxonomy():
 
 @taxonomy_admin_bp.route("/taxonomy/categories/create", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def create_category():
+def create_category() -> ResponseReturnValue:
     """Create category."""
     try:
         category = create_category_from_form(request.form)
@@ -100,7 +101,7 @@ def create_category():
 
 @taxonomy_admin_bp.route("/taxonomy/categories/update", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def update_category():
+def update_category() -> ResponseReturnValue:
     """Update category."""
     try:
         category = update_category_from_form(request.form)
@@ -112,7 +113,7 @@ def update_category():
 
 @taxonomy_admin_bp.route("/taxonomy/tags/create", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def create_tag():
+def create_tag() -> ResponseReturnValue:
     """Create tag."""
     try:
         tag = create_tag_from_form(request.form)
@@ -124,7 +125,7 @@ def create_tag():
 
 @taxonomy_admin_bp.route("/taxonomy/tags/update", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def update_tag():
+def update_tag() -> ResponseReturnValue:
     """Update tag."""
     try:
         tag = update_tag_from_form(request.form)
@@ -136,7 +137,7 @@ def update_tag():
 
 @taxonomy_admin_bp.route("/taxonomy/categories/delete", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def delete_category():
+def delete_category() -> ResponseReturnValue:
     """Delete category."""
     try:
         category = delete_category_from_form(request.form)
@@ -148,7 +149,7 @@ def delete_category():
 
 @taxonomy_admin_bp.route("/taxonomy/tags/delete", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_TAXONOMY)
-def delete_tag():
+def delete_tag() -> ResponseReturnValue:
     """Delete tag."""
     try:
         tag = delete_tag_from_form(request.form)

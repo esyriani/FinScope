@@ -4,7 +4,10 @@ Provides a lightweight authenticated user object backed by SQLAlchemy Core
 rows. It deliberately does not introduce SQLAlchemy ORM state.
 """
 
-from flask_login import UserMixin
+from collections.abc import Mapping
+from typing import Any
+
+from flask_login import UserMixin  # type: ignore[import-untyped]
 
 from finance_app.core.constants import normalize_user_role
 
@@ -19,7 +22,7 @@ class AuthenticatedUser(UserMixin):
     fresh user details should be read from the repository inside transactions.
     """
 
-    def __init__(self, row):
+    def __init__(self, row: Mapping[str, Any]) -> None:
         """Build a login user object from a persisted user row."""
         self.id = int(row["id"])
         self.username = row["username"]
@@ -29,10 +32,10 @@ class AuthenticatedUser(UserMixin):
         self.must_change_password = bool(row["must_change_password"])
 
     @property
-    def is_active(self):
+    def is_active(self) -> bool:
         """Return whether Flask-Login should treat the user as active."""
         return self.active
 
-    def get_id(self):
+    def get_id(self) -> str:
         """Return the stable string identifier stored in the session."""
         return str(self.id)

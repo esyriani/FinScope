@@ -1,5 +1,8 @@
 """Application orchestration for the upload feature."""
 
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 from sqlalchemy import func, select
 
 from finance_app.core.config import settings
@@ -63,7 +66,7 @@ DATE_ORDER_OPTION_LABELS = {
 }
 
 
-def build_upload_context(args):
+def build_upload_context(args: Any) -> dict[str, Any]:
     """Build upload context."""
     page = parse_page(args.get("page"))
     with db_core_transaction() as conn:
@@ -176,7 +179,7 @@ def build_upload_context(args):
     }
 
 
-def present_statement(statement):
+def present_statement(statement: Any) -> dict[str, Any]:
     """Return a template-friendly representation of an uploaded statement row.
 
     The statement list only needs a bounded preview of the stored text. The full
@@ -194,12 +197,12 @@ def present_statement(statement):
 
 
 def build_statement_preview(
-    raw_text,
-    statement_type,
-    interac_direction=INTERAC_DIRECTION_AUTO,
-    date_order=DATE_ORDER_AUTO,
-    preview_limit=STATEMENT_PREVIEW_ROW_LIMIT,
-):
+    raw_text: str,
+    statement_type: str,
+    interac_direction: str = INTERAC_DIRECTION_AUTO,
+    date_order: str = DATE_ORDER_AUTO,
+    preview_limit: int = STATEMENT_PREVIEW_ROW_LIMIT,
+) -> dict[str, Any]:
     """Return a read-only import preview for an uploaded statement CSV.
 
     Args:
@@ -235,7 +238,7 @@ def build_statement_preview(
     )
     parsed_dates = [tx["tx_date"] for tx in parse_result["transactions"]]
     date_range = preview_date_range(parsed_dates)
-    date_ranges = {}
+    date_ranges: dict[str, dict[str, str]] = {}
     if date_analysis["has_slash_dates"]:
         date_ranges = {
             DATE_ORDER_MONTH_FIRST: preview_date_range_for_order(
@@ -267,7 +270,7 @@ def build_statement_preview(
     }
 
 
-def preview_date_range(parsed_dates):
+def preview_date_range(parsed_dates: Sequence[str]) -> dict[str, str]:
     """Return a JSON-ready date range for parsed transaction dates."""
     return {
         "earliest": min(parsed_dates) if parsed_dates else "",
@@ -275,7 +278,12 @@ def preview_date_range(parsed_dates):
     }
 
 
-def preview_date_range_for_order(raw_text, statement_type, interac_direction, date_order):
+def preview_date_range_for_order(
+    raw_text: str,
+    statement_type: str,
+    interac_direction: str,
+    date_order: str,
+) -> dict[str, str]:
     """Return the parsed date range for one slash-date order option."""
     parse_result = parse_csv_transactions(
         raw_text,
@@ -286,7 +294,7 @@ def preview_date_range_for_order(raw_text, statement_type, interac_direction, da
     return preview_date_range([tx["tx_date"] for tx in parse_result["transactions"]])
 
 
-def preview_date_format_payload(date_analysis):
+def preview_date_format_payload(date_analysis: Mapping[str, Any]) -> dict[str, Any]:
     """Return date-format metadata for the upload preview modal."""
     effective_order = date_analysis["effective_order"]
     if effective_order not in {DATE_ORDER_MONTH_FIRST, DATE_ORDER_DAY_FIRST}:
@@ -299,18 +307,23 @@ def preview_date_format_payload(date_analysis):
     }
 
 
-def statement_preview_records(raw_text, statement_type, interac_direction=INTERAC_DIRECTION_AUTO):
+def statement_preview_records(
+    raw_text: str,
+    statement_type: str,
+    interac_direction: str = INTERAC_DIRECTION_AUTO,
+) -> list[dict[str, Any]]:
     """Return normalized source rows needed for statement preview parsing."""
     if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
         return interac_preview_records(raw_text, interac_direction=interac_direction)
     return ledger_preview_records(raw_text)
 
 
-def ledger_preview_records(raw_text):
+def ledger_preview_records(raw_text: str) -> list[dict[str, Any]]:
     """Return source-row fields for bank and card statement previews."""
     rows = csv_rows(raw_text)
     header_index, header = detect_csv_header(rows)
     if header is not None:
+        header_index = header_index or 0
         header_map = {normalize_header(cell): cell for cell in header if normalize_header(cell)}
         date_col = find_column(header_map, DATE_COLUMNS)
         description_col = find_column(header_map, DESCRIPTION_COLUMNS)
@@ -323,8 +336,8 @@ def ledger_preview_records(raw_text):
             record = dict(zip(header, padded_row))
             records.append(
                 {
-                    "raw_date": record.get(date_col),
-                    "description": record.get(description_col),
+                    "raw_date": record.get(date_col or ""),
+                    "description": record.get(description_col or ""),
                     "raw_debit": record.get(debit_col) if debit_col else None,
                     "raw_credit": record.get(credit_col) if credit_col else None,
                     "raw_amount": record.get(amount_col) if amount_col else None,
@@ -332,11 +345,11 @@ def ledger_preview_records(raw_text):
             )
         return records
 
-    records = []
+    fallback_records: list[dict[str, Any]] = []
     for row in rows:
         if len(row) < 3:
             continue
-        records.append(
+        fallback_records.append(
             {
                 "raw_date": row[0],
                 "description": row[1],
@@ -345,10 +358,13 @@ def ledger_preview_records(raw_text):
                 "raw_amount": row[2] if len(row) == 3 else None,
             }
         )
-    return records
+    return fallback_records
 
 
-def interac_preview_records(raw_text, interac_direction=INTERAC_DIRECTION_AUTO):
+def interac_preview_records(
+    raw_text: str,
+    interac_direction: str = INTERAC_DIRECTION_AUTO,
+) -> list[dict[str, Any]]:
     """Return source-row fields for Interac statement previews."""
     rows = csv_rows(raw_text)
     if not rows:
@@ -380,14 +396,14 @@ def interac_preview_records(raw_text, interac_direction=INTERAC_DIRECTION_AUTO):
         date_col = find_column(header_map, DATE_COLUMNS)
         counterparty_col = find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
 
-    records = []
+    records: list[dict[str, Any]] = []
     for row in rows[1:]:
         padded_row = row + [""] * max(0, len(header) - len(row))
         record = dict(zip(header, padded_row))
         records.append(
             {
-                "raw_date": record.get(date_col),
-                "description": record.get(counterparty_col),
+                "raw_date": record.get(date_col or ""),
+                "description": record.get(counterparty_col or ""),
                 "raw_amount": record.get(amount_col) if amount_col else None,
                 "method": record.get(method_col) if method_col else None,
                 "status": record.get(status_col) if status_col else None,
@@ -397,13 +413,13 @@ def interac_preview_records(raw_text, interac_direction=INTERAC_DIRECTION_AUTO):
 
 
 def preview_rows_for_records(
-    records,
-    statement_type,
-    interac_direction,
-    date_formats,
-    preview_limit,
-    prefer_ambiguous_dates=False,
-):
+    records: Sequence[Mapping[str, Any]],
+    statement_type: str,
+    interac_direction: str,
+    date_formats: Sequence[str],
+    preview_limit: int,
+    prefer_ambiguous_dates: bool = False,
+) -> list[dict[str, Any]]:
     """Return parsed preview rows for transaction-like records.
 
     Args:
@@ -419,8 +435,8 @@ def preview_rows_for_records(
     Returns:
         A list of JSON-ready preview rows. The source statement is not mutated.
     """
-    preview_rows = []
-    fallback_rows = []
+    preview_rows: list[dict[str, Any]] = []
+    fallback_rows: list[dict[str, Any]] = []
     for record in records:
         tx = preview_transaction(record, statement_type, interac_direction, date_formats)
         if tx is None:
@@ -446,14 +462,19 @@ def preview_rows_for_records(
     return preview_rows
 
 
-def preview_row_has_ambiguous_date(row):
+def preview_row_has_ambiguous_date(row: Mapping[str, Any]) -> bool:
     """Return whether a preview row has conflicting slash-date interpretations."""
     month_first_date = row.get("month_first_date") or ""
     day_first_date = row.get("day_first_date") or ""
     return bool(month_first_date and day_first_date and month_first_date != day_first_date)
 
 
-def preview_transaction(record, statement_type, interac_direction, date_formats):
+def preview_transaction(
+    record: Mapping[str, Any],
+    statement_type: str,
+    interac_direction: str,
+    date_formats: Sequence[str],
+) -> dict[str, Any] | None:
     """Parse one preview source row using the selected statement parser."""
     if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
         direction = normalize_interac_direction(interac_direction)
@@ -481,7 +502,7 @@ def preview_transaction(record, statement_type, interac_direction, date_formats)
     )
 
 
-def preview_row_payload(record, tx):
+def preview_row_payload(record: Mapping[str, Any], tx: Mapping[str, Any]) -> dict[str, Any]:
     """Return a JSON-ready row for the statement preview modal."""
     raw_date = record.get("raw_date")
     return {
@@ -503,7 +524,7 @@ def preview_row_payload(record, tx):
     }
 
 
-def preview_raw_amount(record):
+def preview_raw_amount(record: Mapping[str, Any]) -> str:
     """Return the most useful original amount text for one preview record."""
     if record.get("raw_debit"):
         return str(record.get("raw_debit"))

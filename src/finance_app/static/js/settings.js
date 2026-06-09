@@ -17,14 +17,23 @@ function setupStatementTypesEditor() {
             return "";
         }
 
-        return Array.from(sourceSelect.options).map((option) => `
+        return Array.from(sourceSelect.options)
+            .map(
+                (option) => `
             <option value="${escapeHtml(option.value)}" ${option.value === selectedValue ? "selected" : ""}>
                 ${escapeHtml(option.textContent)}
             </option>
-        `).join("");
+        `
+            )
+            .join("");
     }
 
-    function statementTypeRow(name = "", parserType = "credit_card", importMode = "ledger", defaultAccountType = "credit_card") {
+    function statementTypeRow(
+        name = "",
+        parserType = "credit_card",
+        importMode = "ledger",
+        defaultAccountType = "credit_card"
+    ) {
         return `
             <tr>
                 <td>

@@ -3,7 +3,9 @@
 import csv
 import io
 import re
+from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import case, delete, func, select, update
 
@@ -14,7 +16,7 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_MANUAL,
     IMPORTABLE_CATEGORY_RULE_SOURCES,
 )
-from finance_app.core.money import money_to_float
+from finance_app.core.money import MoneyValue, money_to_float
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -85,14 +87,14 @@ class RuleImportPreview:
 
     mode: str
     total_rows: int
-    proposed_rules: tuple[dict, ...]
+    proposed_rules: tuple[dict[str, Any], ...]
     skipped_existing: int = 0
     skipped_duplicate: int = 0
     replaced_rules: int = 0
     cleared_transaction_rule_refs: int = 0
 
 
-def export_rules_csv(conn=None):
+def export_rules_csv(conn: Any = None) -> str:
     """Export rules CSV."""
     if conn is None:
         with db_core_transaction() as conn:
@@ -124,12 +126,12 @@ def export_rules_csv(conn=None):
     return output.getvalue()
 
 
-def format_export_amount(value):
+def format_export_amount(value: MoneyValue | None) -> str:
     """Return the legacy CSV amount representation for optional rule bounds."""
     return "" if value is None else str(money_to_float(value))
 
 
-def export_rule_rows(conn):
+def export_rule_rows(conn: Any) -> list[dict[str, Any]]:
     """Return rule rows formatted for CSV export."""
     rows = (
         conn.execute(
@@ -174,7 +176,7 @@ def export_rule_rows(conn):
     return [dict(row) for row in rows]
 
 
-def import_rules_job(raw_text, mode, undo_state):
+def import_rules_job(raw_text: str, mode: str, undo_state: MutableMapping[str, Any]) -> str:
     """Import rules job."""
     imported_rules = parse_rules_csv(raw_text)
     if not imported_rules:
@@ -187,7 +189,7 @@ def import_rules_job(raw_text, mode, undo_state):
         return import_rules_add(conn, imported_rules, undo_state)
 
 
-def preview_rules_import(conn, raw_text, mode):
+def preview_rules_import(conn: Any, raw_text: str, mode: str) -> RuleImportPreview:
     """Return a read-only import plan using the normal import parser.
 
     Args:
@@ -216,12 +218,12 @@ def preview_rules_import(conn, raw_text, mode):
     return preview_rules_import_add(conn, imported_rules)
 
 
-def preview_rules_import_add(conn, imported_rules):
+def preview_rules_import_add(conn: Any, imported_rules: Sequence[Mapping[str, Any]]) -> RuleImportPreview:
     """Return a read-only add-mode import plan."""
-    proposed_rules = []
+    proposed_rules: list[dict[str, Any]] = []
     skipped_existing = 0
     skipped_duplicate = 0
-    seen_keys = set()
+    seen_keys: set[tuple[Any, ...]] = set()
 
     for index, rule in enumerate(imported_rules, start=1):
         key = rule_import_key(rule)
@@ -245,11 +247,11 @@ def preview_rules_import_add(conn, imported_rules):
     )
 
 
-def preview_rules_import_override(conn, imported_rules):
+def preview_rules_import_override(conn: Any, imported_rules: Sequence[Mapping[str, Any]]) -> RuleImportPreview:
     """Return a read-only override-mode import plan."""
-    proposed_rules = []
+    proposed_rules: list[dict[str, Any]] = []
     skipped_duplicate = 0
-    seen_keys = set()
+    seen_keys: set[tuple[Any, ...]] = set()
 
     for index, rule in enumerate(imported_rules, start=1):
         key = rule_import_key(rule)
@@ -273,7 +275,7 @@ def preview_rules_import_override(conn, imported_rules):
     )
 
 
-def preview_imported_rule(conn, rule, synthetic_id):
+def preview_imported_rule(conn: Any, rule: Mapping[str, Any], synthetic_id: int) -> dict[str, Any]:
     """Return an import rule mapping suitable for read-only matching.
 
     Merchant-bound imports that reference a new merchant receive a synthetic
@@ -301,14 +303,16 @@ def preview_imported_rule(conn, rule, synthetic_id):
     }
 
 
-def import_rules_add(conn, imported_rules, undo_state):
+def import_rules_add(
+    conn: Any, imported_rules: Sequence[Mapping[str, Any]], undo_state: MutableMapping[str, Any]
+) -> str:
     """Import rules add."""
-    inserted_rules = []
+    inserted_rules: list[dict[str, Any] | None] = []
     skipped_existing = 0
     skipped_duplicate = 0
-    seen_keys = set()
+    seen_keys: set[tuple[Any, ...]] = set()
     existing_categories = existing_category_names(conn)
-    created_categories = []
+    created_categories: list[str] = []
 
     # Track duplicate import keys inside this file separately from rules that
     # already exist in the database so the final job message is actionable.
@@ -342,15 +346,17 @@ def import_rules_add(conn, imported_rules, undo_state):
     return message
 
 
-def import_rules_override(conn, imported_rules, undo_state):
+def import_rules_override(
+    conn: Any, imported_rules: Sequence[Mapping[str, Any]], undo_state: MutableMapping[str, Any]
+) -> str:
     """Import rules override."""
     before_rules = snapshot_category_rules(conn)
     before_transaction_refs = snapshot_transaction_rule_refs(conn)
     inserted_count = 0
     skipped_duplicate = 0
-    seen_keys = set()
+    seen_keys: set[tuple[Any, ...]] = set()
     existing_categories = existing_category_names(conn)
-    created_categories = []
+    created_categories: list[str] = []
 
     # Clear references before replacing rules so transaction rows cannot point
     # at deleted rule IDs while the override is in progress.
@@ -392,7 +398,7 @@ def import_rules_override(conn, imported_rules, undo_state):
     return message
 
 
-def undo_import_rules_job(undo_state):
+def undo_import_rules_job(undo_state: Mapping[str, Any]) -> str:
     """Undo import rules job."""
     mode = undo_state.get("mode")
     if mode == RULE_IMPORT_MODE_OVERRIDE:
@@ -403,7 +409,7 @@ def undo_import_rules_job(undo_state):
     return "No imported rules were recorded for undo."
 
 
-def undo_rules_add_import(undo_state):
+def undo_rules_add_import(undo_state: Mapping[str, Any]) -> str:
     """Undo rules add import."""
     inserted_rules = undo_state.get("inserted_rules") or []
     if not inserted_rules:
@@ -446,7 +452,7 @@ def undo_rules_add_import(undo_state):
     return message
 
 
-def undo_rules_override_import(undo_state):
+def undo_rules_override_import(undo_state: Mapping[str, Any]) -> str:
     """Undo rules override import."""
     before_rules = undo_state.get("before_rules") or []
     after_rules = undo_state.get("after_rules") or []
@@ -503,13 +509,13 @@ def undo_rules_override_import(undo_state):
     return message
 
 
-def parse_rules_csv(raw_text):
+def parse_rules_csv(raw_text: str) -> list[dict[str, Any]]:
     """Parse rules CSV."""
     reader = csv.DictReader(io.StringIO(raw_text))
     if not reader.fieldnames:
         raise ValueError("The rules CSV needs a header row.")
 
-    rules = []
+    rules: list[dict[str, Any]] = []
     for line_number, row in enumerate(reader, start=2):
         if not any(str(value or "").strip() for value in row.values()):
             continue
@@ -518,7 +524,7 @@ def parse_rules_csv(raw_text):
     return rules
 
 
-def parse_rules_csv_row(row, line_number):
+def parse_rules_csv_row(row: Mapping[str, Any], line_number: int) -> dict[str, Any]:
     """Parse rules CSV row."""
     normalized_row = {normalize_import_header(key): value for key, value in row.items() if key is not None}
     keyword = normalize_merchant_description(rule_import_value(normalized_row, "keyword", "merchant", "rule_keyword"))
@@ -595,12 +601,12 @@ def parse_rules_csv_row(row, line_number):
     }
 
 
-def normalize_import_header(value):
+def normalize_import_header(value: object) -> str:
     """Normalize import header."""
     return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
 
 
-def rule_import_value(row, *keys):
+def rule_import_value(row: Mapping[str, Any], *keys: str) -> Any:
     """Build import value."""
     for key in keys:
         if key in row:
@@ -608,7 +614,7 @@ def rule_import_value(row, *keys):
     return ""
 
 
-def parse_optional_rule_amount(value):
+def parse_optional_rule_amount(value: object) -> float | None:
     """Parse optional rule amount."""
     text = str(value or "").strip()
     if not text or text.casefold() in {"any", "none", "null"}:
@@ -621,7 +627,7 @@ def parse_optional_rule_amount(value):
         raise ValueError(f"Invalid amount: {value}") from exc
 
 
-def parse_rule_amount_range(value, line_number):
+def parse_rule_amount_range(value: object, line_number: int) -> tuple[float | None, float | None]:
     """Parse rule amount range."""
     text = str(value or "").strip()
     if not text or text.casefold() == "any":
@@ -635,7 +641,7 @@ def parse_rule_amount_range(value, line_number):
     return amount, amount
 
 
-def rule_import_key(rule):
+def rule_import_key(rule: Mapping[str, Any]) -> tuple[Any, ...]:
     """Build import key."""
     return (
         str(rule.get("merchant_name") or "").strip().casefold(),

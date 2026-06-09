@@ -13,6 +13,13 @@ FinScope is a single-tenant Flask application with owner-managed user access, sh
 > License: [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`)  
 > Last modification: 2026-05-28
 
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Flask](https://img.shields.io/badge/flask-3.1.3-lightgrey)
+![Tests](https://img.shields.io/badge/tests-pytest-blue)
+![Coverage](docs/coverage.svg)
+![Database](https://img.shields.io/badge/database-SQLite%20%7C%20MySQL-blue)
+![License](https://img.shields.io/badge/license-GPL--3.0--only-green)
+
 ![FinScope splash screen](docs/img/splash.png)
 
 [Quick start](#quick-start) | [Features](#main-features) | [Setup](#setup) | [Run](#running-the-app) | [Workflows](#typical-user-workflows) | [Docs](#project-docs) | [Testing](#testing) | [License](#license)
@@ -115,10 +122,12 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-For local development and code-quality checks, install the developer tools:
+For local development and code-quality checks, install the developer tools.
+Frontend checks require Node.js 20+ with npm:
 
 ```powershell
 python -m pip install -r requirements-dev.txt
+npm install
 ```
 
 cmd.exe:
@@ -327,10 +336,14 @@ Run code-quality checks after installing `requirements-dev.txt`:
 .\.venv\Scripts\python.exe -B -m black --check .
 .\.venv\Scripts\python.exe -B -m ruff check .
 .\.venv\Scripts\python.exe -B -m mypy
+npm run lint:frontend
 ```
 
-Type checking is intentionally gradual. The current mypy target list lives in
-`pyproject.toml`; expand it as modules gain annotations and clean boundaries.
+Python type checking is configured in `pyproject.toml` for `sitecustomize.py`
+and the production application package. Frontend checks are configured in
+`package.json`, `eslint.config.mjs`, `stylelint.config.mjs`, and
+`.prettierrc.json`; they cover first-party static JavaScript and CSS while
+excluding vendored browser libraries.
 
 ## Development guidelines
 

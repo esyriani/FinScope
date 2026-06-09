@@ -1,9 +1,12 @@
 """Form parsing and validation helpers for the taxonomy admin feature."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from finance_app.modules.categories.taxonomy import clean_color, clean_label, tag_color_for_name
 
 
-def parse_category_form(form):
+def parse_category_form(form: Mapping[str, Any]) -> dict[str, object]:
     """Parse category form."""
     name = clean_label(form.get("name") or form.get("category"))
     if not name:
@@ -17,7 +20,7 @@ def parse_category_form(form):
     }
 
 
-def parse_tag_form(form):
+def parse_tag_form(form: Mapping[str, Any]) -> dict[str, object]:
     """Parse tag form."""
     name = clean_label(form.get("name") or form.get("tag"))
     if not name:
@@ -33,7 +36,7 @@ def parse_tag_form(form):
     }
 
 
-def parse_required_int(value, label):
+def parse_required_int(value: object, label: str) -> int:
     """Parse required int."""
     parsed = parse_optional_int(value)
     if parsed is None:
@@ -41,7 +44,7 @@ def parse_required_int(value, label):
     return parsed
 
 
-def parse_optional_int(value):
+def parse_optional_int(value: object) -> int | None:
     """Parse optional int."""
     try:
         parsed = int(str(value or "").strip())

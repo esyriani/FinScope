@@ -5,10 +5,12 @@ paths. Callers pass unique-key selects so concurrent unique conflicts can be
 handled without relying on dialect-specific upsert syntax.
 """
 
+from typing import Any
+
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 
 
-def insert_or_select_unique_row(conn, insert_statement, select_statement):
+def insert_or_select_unique_row(conn: Any, insert_statement: Any, select_statement: Any) -> tuple[Any, bool]:
     """Insert a row or reselect it after a concurrent unique conflict.
 
     Args:
@@ -37,7 +39,7 @@ def insert_or_select_unique_row(conn, insert_statement, select_statement):
     return conn.execute(select_statement).mappings().fetchone(), True
 
 
-def execute_conflict_safe_insert(conn, insert_statement):
+def execute_conflict_safe_insert(conn: Any, insert_statement: Any) -> Any:
     """Execute an insert so expected duplicates do not poison transactions.
 
     PostgreSQL aborts a transaction after an integrity error until a rollback, so
@@ -52,7 +54,7 @@ def execute_conflict_safe_insert(conn, insert_statement):
         return conn.execute(insert_statement)
 
 
-def connection_dialect_name(conn):
+def connection_dialect_name(conn: Any) -> str:
     """Return the SQLAlchemy dialect name for a Core connection-like object."""
     dialect = getattr(conn, "dialect", None)
     if dialect is None and hasattr(conn, "_conn"):

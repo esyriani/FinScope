@@ -53,6 +53,14 @@ def test_quantize_money_is_idempotent_and_sign_symmetric_for_generated_values():
         assert money.quantize_money(-value) == -rounded
 
 
+def test_rounded_money_decimal_uses_default_for_blank_values():
+    """Verify rounded money defaults are honored for absent scalar values."""
+    default = Decimal("7.50")
+
+    assert money.rounded_money_decimal(None, default=default) == default
+    assert money.rounded_money_decimal("", default=default) == default
+
+
 def test_money_formatting_uses_configured_currency_symbol(monkeypatch):
     """Verify Python money display helpers use the configured currency symbol."""
     monkeypatch.setattr(money, "settings", SimpleNamespace(currency_symbol="€"))

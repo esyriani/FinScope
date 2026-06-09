@@ -4,6 +4,9 @@ Provides reusable EXISTS filters for transaction and category-rule tag link
 tables. Callers keep ownership of the query being built.
 """
 
+from collections.abc import Iterable
+from typing import Any
+
 from sqlalchemy import exists, or_, select
 
 from finance_app.database.tables import (
@@ -22,9 +25,9 @@ from finance_app.database.tables import (
 UNTAGGED_TAG_FILTER = "__untagged__"
 
 
-def split_tag_filter_values(selected_tags):
+def split_tag_filter_values(selected_tags: Iterable[object]) -> tuple[list[str], bool]:
     """Return concrete tag names and whether the virtual untagged option is selected."""
-    tags = []
+    tags: list[str] = []
     include_untagged = False
     for tag in selected_tags:
         text = str(tag or "").strip()
@@ -37,13 +40,17 @@ def split_tag_filter_values(selected_tags):
     return tags, include_untagged
 
 
-def has_concrete_tag_filter(selected_tags):
+def has_concrete_tag_filter(selected_tags: Iterable[object]) -> bool:
     """Return whether selected filter values contain at least one real tag name."""
     tags, _ = split_tag_filter_values(selected_tags)
     return bool(tags)
 
 
-def transaction_tag_condition(selected_tags, transaction_id_column=None, include=True):
+def transaction_tag_condition(
+    selected_tags: Iterable[object],
+    transaction_id_column: Any | None = None,
+    include: bool = True,
+) -> Any | None:
     """Return a Core EXISTS condition for transaction tag filtering."""
     tags, include_untagged = split_tag_filter_values(selected_tags)
     if not tags and not include_untagged:
@@ -69,7 +76,7 @@ def transaction_tag_condition(selected_tags, transaction_id_column=None, include
             transaction_tags_table.c.transaction_id == transaction_id_column,
         )
     )
-    selected_conditions = []
+    selected_conditions: list[Any] = []
     if tags:
         selected_conditions.append(has_selected_tag)
     if include_untagged:
@@ -79,7 +86,7 @@ def transaction_tag_condition(selected_tags, transaction_id_column=None, include
     return selected if include else ~selected
 
 
-def rule_tag_condition(selected_tags, rule_id_column, include=True):
+def rule_tag_condition(selected_tags: Iterable[object], rule_id_column: Any, include: bool = True) -> Any | None:
     """Return a Core EXISTS condition for category-rule tag filtering."""
     tags, include_untagged = split_tag_filter_values(selected_tags)
     if not tags and not include_untagged:
@@ -99,7 +106,7 @@ def rule_tag_condition(selected_tags, rule_id_column, include=True):
         )
     )
     has_any_tag = exists(select(1).where(category_rule_tags_table.c.rule_id == rule_id_column))
-    selected_conditions = []
+    selected_conditions: list[Any] = []
     if tags:
         selected_conditions.append(has_selected_tag)
     if include_untagged:

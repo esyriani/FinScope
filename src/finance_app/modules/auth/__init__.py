@@ -4,14 +4,16 @@ Registers Flask-Login with Core-backed user loading and exposes the auth
 blueprint for login, logout, bootstrap, password, and user-management routes.
 """
 
-from flask_login import LoginManager
+from typing import Any
+
+from flask_login import LoginManager  # type: ignore[import-untyped]
 
 from finance_app.modules.auth.controller import auth_bp as auth_bp
 from finance_app.modules.auth.permissions import register_authorization_guards
 from finance_app.modules.auth.service import has_owner_account, load_login_user
 
 
-def register_auth(app):
+def register_auth(app: Any) -> None:
     """Configure Flask-Login and global authentication guards for the app."""
     login_manager = LoginManager()
     login_manager.login_view = "auth.login"

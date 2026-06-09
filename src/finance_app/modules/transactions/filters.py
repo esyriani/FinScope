@@ -1,5 +1,8 @@
 """Filter parsing helpers for the transactions feature."""
 
+from collections.abc import Mapping
+from typing import Any, TypedDict
+
 from sqlalchemy import String, case, cast, false, func, or_, select
 
 from finance_app.core.constants import (
@@ -12,8 +15,22 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_PAYMENT,
     TRANSACTION_KIND_TRANSFER,
 )
-from finance_app.core.periods import DEFAULT_DATE_PERIOD, normalize_date_period, parse_iso_date, period_start_date
-from finance_app.core.query import CoreFilters, parse_page, parse_sort_direction, resolve_sort
+from finance_app.core.periods import (
+    DEFAULT_DATE_PERIOD,
+    DatePeriod,
+    normalize_date_period,
+    parse_iso_date,
+    period_start_date,
+)
+from finance_app.core.query import (
+    CoreFilters,
+    QueryArgs,
+    parse_page,
+    parse_sort_direction,
+    query_value,
+    query_values,
+    resolve_sort,
+)
 from finance_app.core.reporting import spending_impact_clause
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -59,22 +76,45 @@ from finance_app.modules.transactions.constants import (
 )
 
 
-def parse_transaction_filters(args, conn):
+class TransactionFilters(TypedDict):
+    """Represent normalized transaction-list query parameters."""
+
+    search: str
+    category: str
+    selected_categories: list[str]
+    selected_tags: list[str]
+    filter_mode: str
+    review: str
+    category_status: str
+    category_source: str
+    amount_type: str
+    merchant: str
+    merchant_key: str
+    date_from: str
+    date_to: str
+    ignored: str
+    period: DatePeriod
+    sort: str
+    direction: str
+    page: int
+
+
+def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilters:
     """Parse transaction filters."""
-    selected_categories = [value.strip() for value in args.getlist("categories") if value.strip()]
-    legacy_category = args.get("category", "").strip()
+    selected_categories = [value.strip() for value in query_values(args, "categories") if value.strip()]
+    legacy_category = query_value(args, "category").strip()
     if legacy_category and legacy_category not in selected_categories:
         selected_categories.append(legacy_category)
-    selected_tags = [value.strip() for value in args.getlist("tags") if value.strip()]
-    filter_mode = args.get("filter_mode", FILTER_MODE_INCLUDE).strip()
+    selected_tags = [value.strip() for value in query_values(args, "tags") if value.strip()]
+    filter_mode = query_value(args, "filter_mode", FILTER_MODE_INCLUDE).strip()
     if filter_mode not in FILTER_MODES:
         filter_mode = FILTER_MODE_INCLUDE
 
-    category_status = args.get("category_status", "").strip()
+    category_status = query_value(args, "category_status").strip()
     if category_status not in CATEGORY_STATUS_FILTERS:
         category_status = ""
 
-    category_source = args.get("category_source", "").strip()
+    category_source = query_value(args, "category_source").strip()
     if category_source not in {
         "",
         CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED,
@@ -84,22 +124,22 @@ def parse_transaction_filters(args, conn):
     }:
         category_source = ""
 
-    amount_type = args.get("amount_type", "").strip()
+    amount_type = query_value(args, "amount_type").strip()
     if amount_type not in AMOUNT_TYPE_FILTERS:
         amount_type = ""
 
-    ignored = args.get("ignored", IGNORED_FILTER_ACTIVE).strip()
+    ignored = query_value(args, "ignored", IGNORED_FILTER_ACTIVE).strip()
     if ignored not in IGNORED_FILTERS:
         ignored = IGNORED_FILTER_ACTIVE
 
-    period = normalize_date_period(args.get("period", DEFAULT_DATE_PERIOD).strip())
+    period = normalize_date_period(query_value(args, "period", DEFAULT_DATE_PERIOD).strip())
 
-    review = args.get("review", "").strip()
+    review = query_value(args, "review").strip()
     if review not in REVIEW_FILTERS:
         review = ""
 
     return {
-        "search": args.get("search", "").strip(),
+        "search": query_value(args, "search").strip(),
         "category": legacy_category,
         "selected_categories": selected_categories,
         "selected_tags": selected_tags,
@@ -108,19 +148,19 @@ def parse_transaction_filters(args, conn):
         "category_status": category_status,
         "category_source": category_source,
         "amount_type": amount_type,
-        "merchant": args.get("merchant", "").strip(),
-        "merchant_key": canonicalize_merchant_key(args.get("merchant_key", ""), conn=conn),
-        "date_from": parse_iso_date(args.get("date_from")),
-        "date_to": parse_iso_date(args.get("date_to")),
+        "merchant": query_value(args, "merchant").strip(),
+        "merchant_key": canonicalize_merchant_key(query_value(args, "merchant_key"), conn=conn),
+        "date_from": parse_iso_date(query_value(args, "date_from")),
+        "date_to": parse_iso_date(query_value(args, "date_to")),
         "ignored": ignored,
         "period": period,
-        "sort": args.get("sort", "date").strip(),
-        "direction": parse_sort_direction(args.get("direction"), default="desc"),
-        "page": parse_page(args.get("page")),
+        "sort": query_value(args, "sort", "date").strip(),
+        "direction": parse_sort_direction(query_value(args, "direction"), default="desc"),
+        "page": parse_page(query_value(args, "page")),
     }
 
 
-def transaction_sort(filters, unknown_category):
+def transaction_sort(filters: TransactionFilters | Mapping[str, Any], unknown_category: str) -> tuple[str, Any]:
     """Build transaction sort metadata."""
     sort_columns = {
         TRANSACTION_SORT_DATE: transactions_table.c.tx_date,
@@ -138,7 +178,11 @@ def transaction_sort(filters, unknown_category):
     return resolve_sort(filters["sort"], sort_columns, TRANSACTION_SORT_DATE)
 
 
-def build_transaction_core_filters(filters, unknown_category, conn=None):
+def build_transaction_core_filters(
+    filters: TransactionFilters,
+    unknown_category: str,
+    conn: object | None = None,
+) -> CoreFilters:
     """Build transaction SQLAlchemy Core filters."""
     category_value = func.coalesce(transactions_table.c.category, unknown_category)
     core_filters = CoreFilters()
@@ -213,7 +257,7 @@ def build_transaction_core_filters(filters, unknown_category, conn=None):
     return core_filters
 
 
-def search_condition(search, unknown_category):
+def search_condition(search: object, unknown_category: str) -> Any | None:
     """Return a case-insensitive search condition."""
     text = str(search or "").strip().casefold()
     if not text:
@@ -243,7 +287,7 @@ def search_condition(search, unknown_category):
     return or_(*[func.lower(cast(expression, String)).like(pattern) for expression in expressions])
 
 
-def merchant_key_condition(conn, merchant_key):
+def merchant_key_condition(conn: object | None, merchant_key: str) -> Any:
     """Return a condition that matches transactions for a canonical merchant key."""
     if conn is None:
         return false()
@@ -254,7 +298,7 @@ def merchant_key_condition(conn, merchant_key):
     return transactions_table.c.id.in_(transaction_ids)
 
 
-def matching_transaction_ids_for_merchant_key(conn, merchant_key):
+def matching_transaction_ids_for_merchant_key(conn: Any, merchant_key: str) -> list[int]:
     """Return transaction ids whose resolved merchant name matches a key."""
     merchant_ids, description_candidates = merchant_identity_candidates(conn, merchant_key)
     candidate_conditions = []
@@ -287,7 +331,7 @@ def matching_transaction_ids_for_merchant_key(conn, merchant_key):
     return [row["id"] for row in rows if merchant_identity_from_row(row, conn=conn)["name"] == merchant_key]
 
 
-def category_source_value(source):
+def category_source_value(source: str) -> str:
     """Build source value."""
     return {
         CATEGORY_SOURCE_RULE: CATEGORY_SOURCE_RULE,

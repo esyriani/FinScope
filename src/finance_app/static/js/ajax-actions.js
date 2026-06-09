@@ -92,11 +92,7 @@ function updateAjaxRefreshUrl(url) {
         return;
     }
 
-    window.history.replaceState(
-        window.history.state,
-        "",
-        `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
-    );
+    window.history.replaceState(window.history.state, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
 }
 
 function runAjaxRefreshInitializers(root = document) {
@@ -131,9 +127,11 @@ function replaceAjaxRefreshTargets(selector, html, responseUrl) {
     updateAjaxRefreshUrl(responseUrl);
     cleanupAjaxRefreshModals();
     replacements.forEach((replacement) => runAjaxRefreshInitializers(replacement));
-    document.dispatchEvent(new CustomEvent("finance:ajax-refreshed", {
-        detail: { selector, targets: replacements },
-    }));
+    document.dispatchEvent(
+        new CustomEvent("finance:ajax-refreshed", {
+            detail: { selector, targets: replacements },
+        })
+    );
 }
 
 function showAjaxRefreshError(form, selector, message) {
@@ -238,11 +236,7 @@ async function submitAjaxRefreshForm(form, submitter) {
         const response = await fetch(actionUrl, fetchOptions);
         await handleAjaxRefreshResponse(response, form, selector);
     } catch (error) {
-        showAjaxRefreshError(
-            form,
-            selector,
-            error?.message || "The action could not be completed."
-        );
+        showAjaxRefreshError(form, selector, error?.message || "The action could not be completed.");
     } finally {
         if (document.body.contains(form)) {
             controls.forEach((control) => {
@@ -265,14 +259,14 @@ function setupAjaxRefreshLinks(root = document) {
         link.dataset.ajaxRefreshLinkReady = "true";
         link.addEventListener("click", async (event) => {
             if (
-                event.defaultPrevented
-                || event.button !== 0
-                || event.metaKey
-                || event.ctrlKey
-                || event.shiftKey
-                || event.altKey
-                || link.target
-                || link.hasAttribute("download")
+                event.defaultPrevented ||
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey ||
+                link.target ||
+                link.hasAttribute("download")
             ) {
                 return;
             }

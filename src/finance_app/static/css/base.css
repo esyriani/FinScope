@@ -197,9 +197,10 @@ a:focus {
     margin-bottom: 0.5rem;
     max-height: 18rem;
     overflow: auto;
+    overflow-wrap: anywhere;
     padding: 1rem;
     white-space: pre-wrap;
-    word-break: break-word;
+    word-break: normal;
 }
 
 .app-layout {
@@ -282,7 +283,9 @@ a:focus {
 
 .brand-copy,
 .sidebar .nav-link span {
-    transition: opacity 120ms ease, width 160ms ease;
+    transition:
+        opacity 120ms ease,
+        width 160ms ease;
     white-space: nowrap;
 }
 

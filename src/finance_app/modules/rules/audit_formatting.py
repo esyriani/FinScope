@@ -5,6 +5,8 @@ text for Flask templates. The helpers are presentation-only and do not mutate
 database state.
 """
 
+from typing import Any
+
 from flask import url_for
 
 from finance_app.core.constants import (
@@ -85,7 +87,7 @@ IMPACT_GROUP_BADGE_CLASSES = {
 }
 
 
-def present_overlap(overlap, rule_by_id):
+def present_overlap(overlap: Any, rule_by_id: Any) -> Any:
     """Return a display mapping for one overlapping rule pair."""
     rule_a_id = overlap.rule_a["id"]
     rule_b_id = overlap.rule_b["id"]
@@ -130,7 +132,7 @@ def present_overlap(overlap, rule_by_id):
     }
 
 
-def present_shared_transaction(audit, winning_rule_id, losing_rule_id, rule_by_id):
+def present_shared_transaction(audit: Any, winning_rule_id: Any, losing_rule_id: Any, rule_by_id: Any) -> Any:
     """Return a display mapping for one shared matching transaction."""
     match_by_rule_id = {rule_id_from_match(match): match for match in audit.matches}
     winning_rule_match = match_by_rule_id[winning_rule_id]
@@ -153,7 +155,7 @@ def present_shared_transaction(audit, winning_rule_id, losing_rule_id, rule_by_i
     }
 
 
-def present_match(match):
+def present_match(match: Any) -> Any:
     """Return a display mapping for one scored rule match."""
     return {
         "category": match.category,
@@ -165,7 +167,7 @@ def present_match(match):
     }
 
 
-def present_rule_with_specificity_comparison(rule, other_rule):
+def present_rule_with_specificity_comparison(rule: Any, other_rule: Any) -> Any:
     """Return a presented rule with a human-readable specificity comparison."""
     presented = present_rule(rule)
     other_specificity = compute_rule_specificity_score(other_rule)
@@ -181,7 +183,7 @@ def present_rule_with_specificity_comparison(rule, other_rule):
     return presented
 
 
-def present_rule_interactions(interactions, rule_by_id):
+def present_rule_interactions(interactions: Any, rule_by_id: Any) -> Any:
     """Return display rows for per-rule win/loss interactions."""
     return [
         {
@@ -197,7 +199,7 @@ def present_rule_interactions(interactions, rule_by_id):
     ]
 
 
-def present_specificity_warning(warning):
+def present_specificity_warning(warning: Any) -> Any:
     """Return a display mapping for one specificity or precedence warning."""
     action_label = suggested_action_label(warning.suggested_action)
     return {
@@ -213,7 +215,7 @@ def present_specificity_warning(warning):
     }
 
 
-def present_impact_group(key, impacts):
+def present_impact_group(key: Any, impacts: Any) -> Any:
     """Return a display mapping for a preview impact group."""
     return {
         "key": key,
@@ -224,7 +226,7 @@ def present_impact_group(key, impacts):
     }
 
 
-def present_rule_change_impact(impact):
+def present_rule_change_impact(impact: Any) -> Any:
     """Return a display mapping for one transaction-level preview impact."""
     return {
         "transaction": impact.transaction,
@@ -237,7 +239,7 @@ def present_rule_change_impact(impact):
     }
 
 
-def present_preview_match(match):
+def present_preview_match(match: Any) -> Any:
     """Return a compact display mapping for a preview winner."""
     if match is None:
         return {
@@ -256,7 +258,7 @@ def present_preview_match(match):
     }
 
 
-def present_shadowed_rule(finding, rule_by_id):
+def present_shadowed_rule(finding: Any, rule_by_id: Any) -> Any:
     """Return a display mapping for one shadowed-rule finding."""
     shadowing_rule = rule_by_id.get(finding.most_common_shadowing_rule_id, {})
     action_label = suggested_action_label(finding.suggested_action)
@@ -274,7 +276,7 @@ def present_shadowed_rule(finding, rule_by_id):
     }
 
 
-def present_stale_rule(finding):
+def present_stale_rule(finding: Any) -> Any:
     """Return a display mapping for one stale or unused rule finding."""
     action_label = suggested_action_label(finding.suggested_action)
     return {
@@ -294,17 +296,17 @@ def present_stale_rule(finding):
     }
 
 
-def suggested_action_label(action):
+def suggested_action_label(action: Any) -> Any:
     """Return clearer user-facing wording for an advisory audit action."""
     return SUGGESTED_ACTION_LABELS.get(action, action)
 
 
-def suggested_action_badge_class(label):
+def suggested_action_badge_class(label: Any) -> Any:
     """Return a consistent badge class for one suggested action label."""
     return SUGGESTED_ACTION_BADGE_CLASSES.get(label, "text-bg-secondary")
 
 
-def overlap_action_reason(overlap):
+def overlap_action_reason(overlap: Any) -> Any:
     """Return a short reason explaining the recommended overlap action."""
     rule_a_category = overlap.rule_a.get("category") or ""
     rule_b_category = overlap.rule_b.get("category") or ""
@@ -330,7 +332,7 @@ def overlap_action_reason(overlap):
     return gettext("Review the shared transactions before changing either rule.")
 
 
-def shadowed_action_reason(finding, shadowing_rule):
+def shadowed_action_reason(finding: Any, shadowing_rule: Any) -> Any:
     """Return a short reason explaining a shadowed-rule recommendation."""
     reason = gettext(
         "This rule matched {matches} historical transactions and won {wins}.",
@@ -346,7 +348,7 @@ def shadowed_action_reason(finding, shadowing_rule):
     return reason
 
 
-def stale_action_reason(finding):
+def stale_action_reason(finding: Any) -> Any:
     """Return a short reason explaining a stale or unused rule recommendation."""
     if finding.status == STALE_UNUSED:
         return gettext("No historical transaction matches this rule.")
@@ -358,13 +360,13 @@ def stale_action_reason(finding):
     return gettext("This rule has not matched recently.")
 
 
-def rule_tags_label(rule):
+def rule_tags_label(rule: Any) -> Any:
     """Return a readable tag label for a raw or presented rule."""
     tags = rule.get("tags") or []
     return ", ".join(tags) or "-"
 
 
-def recommended_next_step(summary, shadowed_rows):
+def recommended_next_step(summary: Any, shadowed_rows: Any) -> Any:
     """Return the highest-priority recommended next step for the audit page."""
     if summary.get("critical_conflict_overlaps", 0):
         return {
@@ -404,7 +406,7 @@ def recommended_next_step(summary, shadowed_rows):
     return None
 
 
-def build_win_explanation(shared_audits, winning_rule_id, losing_rule_id, rule_by_id):
+def build_win_explanation(shared_audits: Any, winning_rule_id: Any, losing_rule_id: Any, rule_by_id: Any) -> Any:
     """Return a readable explanation of why the displayed overlap winner wins."""
     for audit in shared_audits:
         match_by_rule_id = {rule_id_from_match(match): match for match in audit.matches}
@@ -436,7 +438,7 @@ def build_win_explanation(shared_audits, winning_rule_id, losing_rule_id, rule_b
     return {}
 
 
-def win_explanation_sentence(winning_rule, reason):
+def win_explanation_sentence(winning_rule: Any, reason: Any) -> Any:
     """Return one sentence explaining the winning rule decision."""
     label = rule_label(winning_rule)
     return {
@@ -462,7 +464,7 @@ def win_explanation_sentence(winning_rule, reason):
     )
 
 
-def specificity_comparison_label(left, right):
+def specificity_comparison_label(left: Any, right: Any) -> Any:
     """Return a readable specificity comparison between two specificity tuples."""
     if left > right:
         return "More specific"
@@ -471,7 +473,14 @@ def specificity_comparison_label(left, right):
     return "Same specificity"
 
 
-def build_rule_assessment(total_matches, total_wins, total_losses, shadowed, stale, overlaps):
+def build_rule_assessment(
+    total_matches: Any,
+    total_wins: Any,
+    total_losses: Any,
+    shadowed: Any,
+    stale: Any,
+    overlaps: Any,
+) -> Any:
     """Return summary paragraphs and a recommended action for a rule detail page."""
     category_conflicts = [
         overlap for overlap in overlaps if overlap.severity in {OVERLAP_CATEGORY_CONFLICT, OVERLAP_CRITICAL_CONFLICT}
@@ -553,7 +562,7 @@ def build_rule_assessment(total_matches, total_wins, total_losses, shadowed, sta
     }
 
 
-def present_rule(rule):
+def present_rule(rule: Any) -> Any:
     """Return a display mapping for a category rule."""
     specificity = compute_rule_specificity_score(rule)
     scope_label = rule_scope_label(rule)
@@ -588,7 +597,7 @@ def present_rule(rule):
     }
 
 
-def attach_rule_action_flags(presented_rules, transaction_reference_counts):
+def attach_rule_action_flags(presented_rules: Any, transaction_reference_counts: Any) -> Any:
     """Attach direct-action safety metadata to presented rule mappings."""
     for rule in presented_rules:
         reference_count = transaction_reference_counts.get(rule.get("id"), 0)
@@ -597,7 +606,7 @@ def attach_rule_action_flags(presented_rules, transaction_reference_counts):
     return presented_rules
 
 
-def import_mode_label(mode):
+def import_mode_label(mode: Any) -> Any:
     """Return the display label for a rule import mode."""
     return {
         RULE_IMPORT_MODE_ADD: "Add new rules only",
@@ -605,7 +614,7 @@ def import_mode_label(mode):
     }.get(mode, "Import rules")
 
 
-def rule_label(rule):
+def rule_label(rule: Any) -> Any:
     """Return the primary display label for a rule."""
     merchant_name = rule.get("merchant_name")
     if merchant_name:
@@ -613,26 +622,26 @@ def rule_label(rule):
     return rule.get("keyword") or f"Rule {rule.get('id')}"
 
 
-def rule_scope_label(rule):
+def rule_scope_label(rule: Any) -> Any:
     """Return the primary match scope label for a rule."""
     if rule.get("merchant_id"):
         return "Merchant"
     return "Keyword"
 
 
-def rule_scope_value(rule):
+def rule_scope_value(rule: Any) -> Any:
     """Return the display value that explains the rule's primary match scope."""
     if rule.get("merchant_id"):
         return rule.get("merchant_name") or rule_label(rule)
     return rule.get("keyword") or rule_label(rule)
 
 
-def specificity_label(specificity):
+def specificity_label(specificity: Any) -> Any:
     """Return a compact display label for a matcher specificity tuple."""
     return " / ".join(str(part) for part in specificity)
 
 
-def specificity_factors(specificity):
+def specificity_factors(specificity: Any) -> Any:
     """Return readable rule-level specificity factors for display."""
     return [
         {"label": "Merchant bound", "value": "Yes" if specificity[0] else "No"},
@@ -643,9 +652,9 @@ def specificity_factors(specificity):
     ]
 
 
-def win_interactions_for_rule(rule_id, wins):
+def win_interactions_for_rule(rule_id: Any, wins: Any) -> Any:
     """Return rules that lost on transactions won by the selected rule."""
-    interactions = {}
+    interactions: dict[Any, dict[str, int]] = {}
     for audit in wins:
         winning_match = audit.winning_match
         for losing_match in audit.losing_matches:
@@ -662,9 +671,9 @@ def win_interactions_for_rule(rule_id, wins):
     return interactions
 
 
-def loss_interactions_for_rule(rule_id, losses):
+def loss_interactions_for_rule(rule_id: Any, losses: Any) -> Any:
     """Return rules that beat the selected rule on shared transactions."""
-    interactions = {}
+    interactions: dict[Any, dict[str, int]] = {}
     for audit in losses:
         winning_rule_id = rule_id_from_match(audit.winning_match)
         if winning_rule_id is None or winning_rule_id == rule_id:
@@ -687,14 +696,14 @@ def loss_interactions_for_rule(rule_id, losses):
     return interactions
 
 
-def win_rate_label(wins, matches):
+def win_rate_label(wins: Any, matches: Any) -> Any:
     """Return a percentage label for rule win rate."""
     if not matches:
         return "-"
     return f"{(wins / matches) * 100:.0f}%"
 
 
-def amount_constraint_label(rule):
+def amount_constraint_label(rule: Any) -> Any:
     """Return a human-friendly amount constraint label for a rule."""
     amount_min = rule.get("amount_min")
     amount_max = rule.get("amount_max")
@@ -713,7 +722,7 @@ def amount_constraint_label(rule):
     )
 
 
-def rule_direction_label(direction):
+def rule_direction_label(direction: Any) -> Any:
     """Return the display label for a rule direction constraint."""
     return CATEGORY_RULE_DIRECTION_LABELS.get(
         direction or CATEGORY_RULE_DIRECTION_ANY,
@@ -721,7 +730,7 @@ def rule_direction_label(direction):
     )
 
 
-def rule_source_label(source):
+def rule_source_label(source: Any) -> Any:
     """Return the display label for a rule source."""
     return {
         CATEGORY_RULE_SOURCE_MANUAL: "Manual",
@@ -729,7 +738,7 @@ def rule_source_label(source):
     }.get(source, str(source or "").strip() or "Unknown")
 
 
-def rule_source_badge_class(source):
+def rule_source_badge_class(source: Any) -> Any:
     """Return the Bootstrap badge class for a rule source."""
     return {
         CATEGORY_RULE_SOURCE_MANUAL: "text-bg-primary",
@@ -737,35 +746,35 @@ def rule_source_badge_class(source):
     }.get(source, "text-bg-secondary")
 
 
-def rule_status_label(rule):
+def rule_status_label(rule: Any) -> Any:
     """Return the user-facing audit status for a rule."""
     if rule.get("source") != CATEGORY_RULE_SOURCE_AUTOMATIC:
         return "Manual"
     return "Approved" if rule.get("ai_approved") else "Suggested"
 
 
-def rule_status_badge_class(rule):
+def rule_status_badge_class(rule: Any) -> Any:
     """Return the Bootstrap badge class for a rule audit status."""
     if rule.get("source") != CATEGORY_RULE_SOURCE_AUTOMATIC:
         return "text-bg-primary"
     return "text-bg-success" if rule.get("ai_approved") else "text-bg-warning"
 
 
-def rule_approval_label(rule):
+def rule_approval_label(rule: Any) -> Any:
     """Return the approval label for a rule when approval applies."""
     if rule.get("source") != CATEGORY_RULE_SOURCE_AUTOMATIC:
         return "-"
     return "Approved" if rule.get("ai_approved") else "Suggested"
 
 
-def rule_approval_badge_class(rule):
+def rule_approval_badge_class(rule: Any) -> Any:
     """Return the Bootstrap badge class for an approval label."""
     if rule.get("source") != CATEGORY_RULE_SOURCE_AUTOMATIC:
         return "text-bg-secondary"
     return "text-bg-success" if rule.get("ai_approved") else "text-bg-warning"
 
 
-def joined_rule_count_labels(rule_counts, rule_by_id):
+def joined_rule_count_labels(rule_counts: Any, rule_by_id: Any) -> Any:
     """Return comma-separated rule labels with transaction counts."""
     labels = []
     for rule_id, count in sorted(
@@ -778,7 +787,7 @@ def joined_rule_count_labels(rule_counts, rule_by_id):
     return ", ".join(labels) or "-"
 
 
-def overlap_winning_side_label(rule_counts, rule_a_id, rule_b_id):
+def overlap_winning_side_label(rule_counts: Any, rule_a_id: Any, rule_b_id: Any) -> Any:
     """Return whether Rule A, Rule B, or a mixed set wins an overlap."""
     winner_ids = {rule_id for rule_id, count in rule_counts.items() if count > 0}
     if winner_ids == {rule_a_id}:
@@ -788,7 +797,7 @@ def overlap_winning_side_label(rule_counts, rule_a_id, rule_b_id):
     return "Mixed"
 
 
-def overlap_display_rule_ids(overlap, rule_a_id, rule_b_id):
+def overlap_display_rule_ids(overlap: Any, rule_a_id: Any, rule_b_id: Any) -> Any:
     """Return rule IDs ordered as dominant winner then losing rule for detail pages."""
     winner_ids = [
         rule_id
@@ -803,7 +812,7 @@ def overlap_display_rule_ids(overlap, rule_a_id, rule_b_id):
     return winning_rule_id, losing_rule_id
 
 
-def joined_rule_labels(rule_ids, rule_by_id):
+def joined_rule_labels(rule_ids: Any, rule_by_id: Any) -> Any:
     """Return comma-separated rule labels for rule IDs."""
     labels = [rule_label(rule_by_id[rule_id]) for rule_id in rule_ids if rule_id in rule_by_id]
     return ", ".join(labels)

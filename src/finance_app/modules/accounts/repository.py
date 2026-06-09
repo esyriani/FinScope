@@ -5,6 +5,8 @@ and account-aware reporting. Callers manage database transactions and pass
 Core connections bound to the application metadata.
 """
 
+from typing import Any
+
 from sqlalchemy import insert, select, update
 from sqlalchemy.engine import Connection as CoreConnection
 
@@ -13,19 +15,24 @@ from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.upsert import insert_or_select_unique_row
 
 
-def require_core_connection(conn):
+def require_core_connection(conn: object) -> None:
     """Validate that an account repository caller passed a Core connection."""
     if not isinstance(conn, CoreConnection):
         raise TypeError("Account repository helpers require a SQLAlchemy Core connection.")
 
 
-def normalize_account_type(value):
+def normalize_account_type(value: object) -> str:
     """Return a supported account role, falling back to checking."""
     text = str(value or "").strip()
     return text if text in ACCOUNT_TYPES else ACCOUNT_TYPE_CHECKING
 
 
-def get_or_create_account(conn, name, account_type=ACCOUNT_TYPE_CHECKING, paid_from_account_name=None):
+def get_or_create_account(
+    conn: CoreConnection,
+    name: object,
+    account_type: object = ACCOUNT_TYPE_CHECKING,
+    paid_from_account_name: object | None = None,
+) -> Any:
     """Return an account row, creating or updating role metadata as needed.
 
     Args:
@@ -68,7 +75,7 @@ def get_or_create_account(conn, name, account_type=ACCOUNT_TYPE_CHECKING, paid_f
             account_id_select,
         )
 
-    values = {"account_type": normalized_account_type}
+    values: dict[str, object] = {"account_type": normalized_account_type}
     if update_paid_from:
         values["paid_from_account_id"] = paid_from_id
 

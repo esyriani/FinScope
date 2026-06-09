@@ -176,10 +176,7 @@ function setupTransactionBatchActions(root = document) {
             bar.hidden = selectedCount === 0;
 
             if (countLabel) {
-                countLabel.textContent = financeTranslate(
-                    "{count} selected",
-                    { count: selectedCount }
-                );
+                countLabel.textContent = financeTranslate("{count} selected", { count: selectedCount });
             }
             syncHiddenInputs();
         }
@@ -285,9 +282,7 @@ function openAuditSectionFromLocation(root = document) {
         return;
     }
 
-    const escapedSectionId = window.CSS?.escape
-        ? CSS.escape(sectionId)
-        : sectionId.replaceAll('"', '\\"');
+    const escapedSectionId = window.CSS?.escape ? CSS.escape(sectionId) : sectionId.replaceAll('"', '\\"');
     const target = root.querySelector(`#${escapedSectionId}`) || document.getElementById(sectionId);
     if (!target || !target.classList.contains("collapse")) {
         return;
@@ -478,14 +473,11 @@ function setupPaginatedTables(root = document) {
         }
 
         function renderControls(control, pageCount, startIndex, endIndex, totalRows) {
-            control.status.textContent = translateTableMessage(
-                "Showing {start}-{end} of {total} rows",
-                {
-                    start: startIndex + 1,
-                    end: endIndex,
-                    total: totalRows,
-                }
-            );
+            control.status.textContent = translateTableMessage("Showing {start}-{end} of {total} rows", {
+                start: startIndex + 1,
+                end: endIndex,
+                total: totalRows,
+            });
             control.pagination.replaceChildren();
             addPageButton(control.pagination, translateTableMessage("Previous"), state.page - 1, {
                 disabled: state.page <= 1,

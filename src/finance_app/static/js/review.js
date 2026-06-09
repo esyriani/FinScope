@@ -33,10 +33,9 @@ function setupReviewTransactionSelectors(root = document) {
 
             if (status) {
                 status.textContent = hasSelection
-                    ? financeTranslate(
-                        "{count} selected. The category will apply only to selected transactions.",
-                        { count: selectedCount }
-                    )
+                    ? financeTranslate("{count} selected. The category will apply only to selected transactions.", {
+                          count: selectedCount,
+                      })
                     : financeTranslate("No transactions selected. The category will apply to the whole group.");
             }
 

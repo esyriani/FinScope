@@ -4,7 +4,9 @@ Classifies imported rows as reportable transactions or account movements and
 updates linked payment rows. Callers provide an active SQLAlchemy connection.
 """
 
-from datetime import timedelta
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from datetime import date, timedelta
+from typing import Any
 
 from sqlalchemy import select, update
 
@@ -49,14 +51,17 @@ PAYMENT_DESCRIPTION_MARKERS = (
 )
 
 
-def default_import_mode(statement_type):
+def default_import_mode(statement_type: object) -> str:
     """Return the legacy-compatible import mode for a parser type."""
     if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
         return STATEMENT_IMPORT_MODE_ENRICHMENT
     return STATEMENT_IMPORT_MODE_LEDGER
 
 
-def apply_transaction_kind_categories(transactions, unknown_category=UNKNOWN_CATEGORY):
+def apply_transaction_kind_categories(
+    transactions: Iterable[MutableMapping[str, Any]],
+    unknown_category: str = UNKNOWN_CATEGORY,
+) -> None:
     """Set category metadata for payment and transfer transactions."""
     for tx in transactions:
         if tx.get("transaction_kind") not in {TRANSACTION_KIND_PAYMENT, TRANSACTION_KIND_TRANSFER}:
@@ -83,7 +88,7 @@ def apply_transaction_kind_categories(transactions, unknown_category=UNKNOWN_CAT
         state.apply_to(tx)
 
 
-def classify_transaction_kind(conn, account_id, transaction):
+def classify_transaction_kind(conn: Any, account_id: object, transaction: Mapping[str, Any]) -> str:
     """Classify a transaction as reportable spending/income or balance movement."""
     amount = transaction.get("amount") or 0
     account = account_row(conn, account_id)
@@ -101,7 +106,7 @@ def classify_transaction_kind(conn, account_id, transaction):
     return TRANSACTION_KIND_INCOME if amount < 0 else TRANSACTION_KIND_EXPENSE
 
 
-def account_row(conn, account_id):
+def account_row(conn: Any, account_id: object) -> Mapping[str, Any] | None:
     """Return account metadata for import classification."""
     if account_id is None:
         return None
@@ -119,13 +124,13 @@ def account_row(conn, account_id):
     )
 
 
-def is_payment_description(description):
+def is_payment_description(description: object) -> bool:
     """Return whether a description clearly denotes a card/account payment."""
     normalized = " ".join(str(description or "").upper().split())
     return any(marker in normalized for marker in PAYMENT_DESCRIPTION_MARKERS)
 
 
-def is_payment_to_linked_credit_account(conn, paid_from_account_id, description):
+def is_payment_to_linked_credit_account(conn: Any, paid_from_account_id: object, description: object) -> bool:
     """Return whether a checking row appears to pay a linked credit account."""
     normalized_description = " ".join(str(description or "").upper().split())
     if not normalized_description:
@@ -150,7 +155,12 @@ def is_payment_to_linked_credit_account(conn, paid_from_account_id, description)
     return False
 
 
-def mark_linked_account_payments(conn, account_id, imported_transactions, undo_state=None):
+def mark_linked_account_payments(
+    conn: Any,
+    account_id: object,
+    imported_transactions: Iterable[Mapping[str, Any]],
+    undo_state: MutableMapping[str, Any] | None = None,
+) -> int:
     """Mark existing funding-account rows as payments for a credit card import."""
     credit_account = account_row(conn, account_id)
     if (
@@ -174,6 +184,7 @@ def mark_linked_account_payments(conn, account_id, imported_transactions, undo_s
         if match is None or match == "ambiguous":
             continue
 
+        assert isinstance(match, Mapping)
         record_transaction_undo_state(conn, match, undo_state)
         mark_transaction_as_payment(conn, match["id"])
         updated_count += 1
@@ -181,7 +192,12 @@ def mark_linked_account_payments(conn, account_id, imported_transactions, undo_s
     return updated_count
 
 
-def find_linked_payment_match(conn, credit_account, amount, tx_date):
+def find_linked_payment_match(
+    conn: Any,
+    credit_account: Mapping[str, Any],
+    amount: float,
+    tx_date: object,
+) -> Mapping[str, Any] | str | None:
     """Return the unique funding-account row that matches a card payment."""
     rows = (
         conn.execute(
@@ -207,7 +223,7 @@ def find_linked_payment_match(conn, credit_account, amount, tx_date):
     )
 
 
-def transaction_snapshot_select():
+def transaction_snapshot_select() -> Any:
     """Return a Core select for transaction fields needed by upload undo and matching."""
     return select(
         transactions_table.c.id,
@@ -231,7 +247,7 @@ def transaction_snapshot_select():
     )
 
 
-def nearest_unique_match(rows, target_date):
+def nearest_unique_match(rows: Sequence[Mapping[str, Any]], target_date: object) -> Mapping[str, Any] | str | None:
     """Return the nearest transaction row or the ambiguity sentinel."""
     if not rows:
         return None
@@ -243,17 +259,23 @@ def nearest_unique_match(rows, target_date):
     return nearest_rows[0]
 
 
-def date_window_start(value, tolerance_days):
+def date_window_start(value: object, tolerance_days: int) -> date:
     """Return the inclusive start date for a date-tolerance window."""
-    return coerce_date(value) - timedelta(days=tolerance_days)
+    parsed = coerce_date(value)
+    if parsed is None:
+        raise ValueError("Invalid transaction date.")
+    return parsed - timedelta(days=tolerance_days)
 
 
-def date_window_end(value, tolerance_days):
+def date_window_end(value: object, tolerance_days: int) -> date:
     """Return the inclusive end date for a date-tolerance window."""
-    return coerce_date(value) + timedelta(days=tolerance_days)
+    parsed = coerce_date(value)
+    if parsed is None:
+        raise ValueError("Invalid transaction date.")
+    return parsed + timedelta(days=tolerance_days)
 
 
-def is_linked_payment_description(description, credit_account_name):
+def is_linked_payment_description(description: object, credit_account_name: object) -> bool:
     """Return whether a funding row description points to a credit account."""
     normalized_description = " ".join(str(description or "").upper().split())
     normalized_account = " ".join(str(credit_account_name or "").upper().split())
@@ -263,7 +285,7 @@ def is_linked_payment_description(description, credit_account_name):
     return "CREDIT CARD" in normalized_description or " CIBC MC" in f" {normalized_description}"
 
 
-def mark_transaction_as_payment(conn, transaction_id):
+def mark_transaction_as_payment(conn: Any, transaction_id: object) -> None:
     """Mark a transaction as a non-reportable account payment."""
     metadata = category_assignment(
         TRANSFER_CATEGORY,
@@ -297,17 +319,29 @@ def mark_transaction_as_payment(conn, transaction_id):
     )
 
 
-def abs_date_delta(left, right):
+def abs_date_delta(left: object, right: object) -> int:
     """Return absolute date distance in days."""
-    return abs((coerce_date(left) - coerce_date(right)).days)
+    left_date = coerce_date(left)
+    right_date = coerce_date(right)
+    if left_date is None or right_date is None:
+        raise ValueError("Invalid transaction date.")
+    return abs((left_date - right_date).days)
 
 
-def record_interac_undo_state(conn, transaction, undo_state):
+def record_interac_undo_state(
+    conn: Any,
+    transaction: Mapping[str, Any],
+    undo_state: MutableMapping[str, Any] | None,
+) -> None:
     """Capture original transaction state before Interac enrichment."""
     record_transaction_undo_state(conn, transaction, undo_state)
 
 
-def record_transaction_undo_state(conn, transaction, undo_state):
+def record_transaction_undo_state(
+    conn: Any,
+    transaction: Mapping[str, Any],
+    undo_state: MutableMapping[str, Any] | None,
+) -> None:
     """Capture original transaction state before cross-account enrichment."""
     if undo_state is None:
         return

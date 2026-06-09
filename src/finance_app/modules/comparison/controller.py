@@ -8,6 +8,6 @@ comparison_bp = Blueprint("comparison", __name__)
 
 
 @comparison_bp.route("/comparison")
-def comparison():
+def comparison() -> str:
     """Render the comparison page."""
     return render_template("comparison.html", **build_comparison_context(request.args))

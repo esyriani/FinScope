@@ -1,6 +1,8 @@
 """Persistence helpers for the categories feature."""
 
 import re
+from collections.abc import Iterable
+from typing import Any
 
 from sqlalchemy import and_, case, func, insert, or_, select, update
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
@@ -35,7 +37,7 @@ from finance_app.modules.categories.taxonomy import (
     set_rule_tags,
 )
 
-CATEGORY_DATABASE_UNAVAILABLE_ERRORS = (
+CATEGORY_DATABASE_UNAVAILABLE_ERRORS: tuple[type[Exception], ...] = (
     SqlAlchemyOperationalError,
     SqlAlchemyProgrammingError,
 )
@@ -48,18 +50,18 @@ CATEGORY_TABLE_MISSING_MARKERS = (
 
 
 def save_category_rule(
-    conn,
-    keyword,
-    category,
-    source=CATEGORY_RULE_SOURCE_MANUAL,
-    amount_min=None,
-    amount_max=None,
-    tags=None,
-    merchant_id=None,
-    account_id=None,
-    direction=CATEGORY_RULE_DIRECTION_ANY,
-    protect_user_rule=False,
-):
+    conn: Any,
+    keyword: object,
+    category: object,
+    source: str = CATEGORY_RULE_SOURCE_MANUAL,
+    amount_min: object | None = None,
+    amount_max: object | None = None,
+    tags: Iterable[object] | str | None = None,
+    merchant_id: object | None = None,
+    account_id: object | None = None,
+    direction: object = CATEGORY_RULE_DIRECTION_ANY,
+    protect_user_rule: bool = False,
+) -> int | None:
     """Create or update a category rule for a merchant scope and amount bounds.
 
     When `protect_user_rule` is true, an existing manual rule with the
@@ -122,14 +124,14 @@ def save_category_rule(
 
 
 def find_existing_rule(
-    conn,
-    keyword,
-    amount_min=None,
-    amount_max=None,
-    merchant_id=None,
-    account_id=None,
-    direction=CATEGORY_RULE_DIRECTION_ANY,
-):
+    conn: Any,
+    keyword: object,
+    amount_min: object | None = None,
+    amount_max: object | None = None,
+    merchant_id: object | None = None,
+    account_id: object | None = None,
+    direction: object = CATEGORY_RULE_DIRECTION_ANY,
+) -> Any:
     """Return the existing Core rule for a merchant or keyword scope."""
     return (
         conn.execute(
@@ -148,13 +150,13 @@ def find_existing_rule(
 
 
 def existing_rule_select(
-    keyword,
-    amount_min=None,
-    amount_max=None,
-    merchant_id=None,
-    account_id=None,
-    direction=CATEGORY_RULE_DIRECTION_ANY,
-):
+    keyword: object,
+    amount_min: object | None = None,
+    amount_max: object | None = None,
+    merchant_id: object | None = None,
+    account_id: object | None = None,
+    direction: object = CATEGORY_RULE_DIRECTION_ANY,
+) -> Any:
     """Return the unique-key select for one category rule scope."""
     account_id = normalize_optional_account_id(account_id)
     direction = normalize_rule_direction(direction)
@@ -199,7 +201,7 @@ def existing_rule_select(
     )
 
 
-def get_category_options(conn=None):
+def get_category_options(conn: Any | None = None) -> list[str]:
     """Return category options.
 
     Missing taxonomy tables fall back to UNKNOWN during early database
@@ -223,7 +225,7 @@ def get_category_options(conn=None):
     return categories or [UNKNOWN_CATEGORY]
 
 
-def fetch_category_names(conn):
+def fetch_category_names(conn: Any) -> list[str]:
     """Fetch category names."""
     rows = (
         conn.execute(
@@ -239,7 +241,7 @@ def fetch_category_names(conn):
     return [row["name"] for row in rows]
 
 
-def get_builtin_category_names(conn=None):
+def get_builtin_category_names(conn: Any | None = None) -> list[str]:
     """Return persisted category names managed by FinScope.
 
     Args:
@@ -273,7 +275,7 @@ def get_builtin_category_names(conn=None):
     return categories or list(fallback_builtin_category_names())
 
 
-def fetch_builtin_category_names(conn):
+def fetch_builtin_category_names(conn: Any) -> list[str]:
     """Fetch category names whose rows are marked with a built-in key."""
     rows = (
         conn.execute(
@@ -290,7 +292,7 @@ def fetch_builtin_category_names(conn):
     return [row["name"] for row in rows]
 
 
-def is_missing_categories_table_error(exc):
+def is_missing_categories_table_error(exc: BaseException) -> bool:
     """Return whether a database error means the categories table is absent.
 
     Args:
@@ -306,7 +308,7 @@ def is_missing_categories_table_error(exc):
     return any(marker in message for marker in CATEGORY_TABLE_MISSING_MARKERS)
 
 
-def create_category(conn, name):
+def create_category(conn: Any, name: object) -> str | None:
     """Create category."""
     category = clean_category_name(name)
     if not category:
@@ -323,7 +325,7 @@ def create_category(conn, name):
     return category
 
 
-def resolve_category_id(conn, category):
+def resolve_category_id(conn: Any, category: object) -> int | None:
     """Return the persisted category ID for a category label.
 
     The resolver only links to an existing taxonomy row; callers that accept
@@ -352,7 +354,7 @@ def resolve_category_id(conn, category):
     return None
 
 
-def rename_category(conn, old_name, new_name):
+def rename_category(conn: Any, old_name: object, new_name: object) -> str | None:
     """Rename category."""
     old_category = normalize_category(old_name, get_category_options(conn))
     new_category = clean_category_name(new_name)
@@ -388,7 +390,7 @@ def rename_category(conn, old_name, new_name):
     return new_category
 
 
-def get_category_rules(conn=None):
+def get_category_rules(conn: Any | None = None) -> list[dict[str, Any]]:
     """Return category rules."""
     if conn is None:
         with db_core_transaction() as conn:
@@ -452,7 +454,7 @@ def get_category_rules(conn=None):
     return rules
 
 
-def normalize_category(category, allowed_categories=None):
+def normalize_category(category: object, allowed_categories: Iterable[str] | None = None) -> str:
     """Normalize category."""
     text = str(category or "").strip()
 
@@ -462,34 +464,34 @@ def normalize_category(category, allowed_categories=None):
     return UNKNOWN_CATEGORY
 
 
-def clean_category_name(value):
+def clean_category_name(value: object) -> str:
     """Clean category name."""
     return re.sub(r"\s+", " ", str(value or "").strip())
 
 
-def normalize_optional_merchant_id(value):
+def normalize_optional_merchant_id(value: object) -> int | None:
     """Return an optional positive merchant ID."""
     if value in (None, ""):
         return None
     try:
-        parsed = int(value)
+        parsed = int(str(value))
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
 
 
-def normalize_optional_account_id(value):
+def normalize_optional_account_id(value: object) -> int | None:
     """Return an optional positive account ID."""
     if value in (None, ""):
         return None
     try:
-        parsed = int(value)
+        parsed = int(str(value))
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
 
 
-def normalize_rule_direction(value):
+def normalize_rule_direction(value: object) -> str:
     """Return a valid category-rule direction constraint."""
     text = str(value or CATEGORY_RULE_DIRECTION_ANY).strip().lower()
     return text if text in CATEGORY_RULE_DIRECTIONS else CATEGORY_RULE_DIRECTION_ANY

@@ -18,9 +18,7 @@ function setupCalendarDayModal(root = document) {
     const transactionBody = modalElement.querySelector("[data-calendar-modal-transactions]");
     const link = modalElement.querySelector("[data-calendar-modal-link]");
     function formatMoney(value) {
-        return window.financeFormatMoney
-            ? window.financeFormatMoney(value)
-            : Number(value || 0).toFixed(2);
+        return window.financeFormatMoney ? window.financeFormatMoney(value) : Number(value || 0).toFixed(2);
     }
 
     function transactionRow(item) {
@@ -52,7 +50,7 @@ function setupCalendarDayModal(root = document) {
         summary.textContent = [
             `${financeTranslate("Spending")} ${formatMoney(day.spending)}`,
             `${financeTranslate("Income")} ${formatMoney(day.income)}`,
-            `${financeTranslate("Net cash flow")} ${formatMoney(day.net)}`
+            `${financeTranslate("Net cash flow")} ${formatMoney(day.net)}`,
         ].join(" / ");
         link.href = day.url || "#";
 
@@ -81,8 +79,9 @@ function setupCalendarDayModal(root = document) {
 }
 
 function setupCalendarHeatmapControls(root = document) {
-    const controls = root.querySelector("[data-calendar-heatmap-controls]")
-        || document.querySelector("[data-calendar-heatmap-controls]");
+    const controls =
+        root.querySelector("[data-calendar-heatmap-controls]") ||
+        document.querySelector("[data-calendar-heatmap-controls]");
     if (!controls) return;
     if (controls.dataset.calendarHeatmapReady === "true") return;
     controls.dataset.calendarHeatmapReady = "true";
@@ -95,7 +94,8 @@ function setupCalendarHeatmapControls(root = document) {
 
     function applyHeatmap(metric) {
         days.forEach((day) => {
-            const heatClass = day.dataset[`heatmap${metric[0].toUpperCase()}${metric.slice(1)}Class`] || "calendar-heat-spending";
+            const heatClass =
+                day.dataset[`heatmap${metric[0].toUpperCase()}${metric.slice(1)}Class`] || "calendar-heat-spending";
             const alpha = day.dataset[`heatmap${metric[0].toUpperCase()}${metric.slice(1)}Alpha`] || "0";
             day.classList.remove(...heatmapClasses);
             day.classList.add(heatClass);

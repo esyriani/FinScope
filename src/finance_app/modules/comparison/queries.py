@@ -1,5 +1,8 @@
 """SQLAlchemy Core query helpers for the comparison feature."""
 
+from collections.abc import Iterable
+from typing import Any
+
 from sqlalchemy import case, func, select
 
 from finance_app.core.reporting import (
@@ -13,24 +16,28 @@ from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 
 
-def non_transfer_clause():
+def non_transfer_clause() -> Any:
     """Return the comparison Core filter for reportable transaction kinds."""
     return reportable_transaction_clause()
 
 
-def transaction_year():
+def transaction_year() -> Any:
     """Return a Core expression for a transaction year."""
     return date_year(transactions_table.c.tx_date)
 
 
-def transaction_month():
+def transaction_month() -> Any:
     """Return a Core expression for a transaction month."""
     return date_month(transactions_table.c.tx_date)
 
 
-def build_category_conditions(selected_categories, selected_tags, unknown_category):
+def build_category_conditions(
+    selected_categories: Iterable[str],
+    selected_tags: Iterable[str],
+    unknown_category: str,
+) -> tuple[Any, ...]:
     """Build Core category and tag filter conditions."""
-    conditions = []
+    conditions: list[Any] = []
     if selected_categories:
         conditions.append(func.coalesce(transactions_table.c.category, unknown_category).in_(selected_categories))
 
@@ -41,7 +48,7 @@ def build_category_conditions(selected_categories, selected_tags, unknown_catego
     return tuple(conditions)
 
 
-def fetch_available_years(conn):
+def fetch_available_years(conn: Any) -> list[int]:
     """Fetch available years."""
     year = transaction_year()
     rows = (
@@ -61,7 +68,7 @@ def fetch_available_years(conn):
     return [row["year"] for row in rows if row["year"]]
 
 
-def fetch_monthly_spending(conn, filters):
+def fetch_monthly_spending(conn: Any, filters: Iterable[Any]) -> list[Any]:
     """Fetch monthly spending."""
     year = transaction_year()
     month = transaction_month()
@@ -96,7 +103,7 @@ def fetch_monthly_spending(conn, filters):
     )
 
 
-def fetch_category_comparison(conn, filters, unknown_category):
+def fetch_category_comparison(conn: Any, filters: Iterable[Any], unknown_category: str) -> list[Any]:
     """Fetch category comparison."""
     year = transaction_year()
     category = func.coalesce(transactions_table.c.category, unknown_category)
@@ -132,13 +139,13 @@ def fetch_category_comparison(conn, filters, unknown_category):
 
 
 def fetch_period_summary(
-    conn,
-    date_from,
-    date_to,
-    category_filters,
-    unknown_category,
-    include_transfer_credits=False,
-):
+    conn: Any,
+    date_from: str,
+    date_to: str,
+    category_filters: Iterable[Any],
+    unknown_category: str,
+    include_transfer_credits: bool = False,
+) -> Any:
     """Fetch period summary, optionally including filtered transfer credits."""
     del unknown_category
     return (
@@ -183,7 +190,13 @@ def fetch_period_summary(
     )
 
 
-def fetch_period_category_spending(conn, date_from, date_to, category_filters, unknown_category):
+def fetch_period_category_spending(
+    conn: Any,
+    date_from: str,
+    date_to: str,
+    category_filters: Iterable[Any],
+    unknown_category: str,
+) -> list[Any]:
     """Fetch period category spending."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
     return (
@@ -206,7 +219,13 @@ def fetch_period_category_spending(conn, date_from, date_to, category_filters, u
     )
 
 
-def fetch_period_merchant_transactions(conn, date_from, date_to, category_filters, unknown_category):
+def fetch_period_merchant_transactions(
+    conn: Any,
+    date_from: str,
+    date_to: str,
+    category_filters: Iterable[Any],
+    unknown_category: str,
+) -> list[Any]:
     """Fetch period merchant transactions."""
     return (
         conn.execute(
@@ -227,7 +246,12 @@ def fetch_period_merchant_transactions(conn, date_from, date_to, category_filter
     )
 
 
-def fetch_historical_monthly_category_spending(conn, date_before, category_filters, unknown_category):
+def fetch_historical_monthly_category_spending(
+    conn: Any,
+    date_before: str,
+    category_filters: Iterable[Any],
+    unknown_category: str,
+) -> list[Any]:
     """Fetch monthly category spending before a comparison period."""
     year = transaction_year()
     month = transaction_month()
@@ -254,7 +278,12 @@ def fetch_historical_monthly_category_spending(conn, date_before, category_filte
     )
 
 
-def fetch_historical_monthly_merchant_transactions(conn, date_before, category_filters, unknown_category):
+def fetch_historical_monthly_merchant_transactions(
+    conn: Any,
+    date_before: str,
+    category_filters: Iterable[Any],
+    unknown_category: str,
+) -> list[Any]:
     """Fetch merchant transaction rows before a comparison period for monthly grouping."""
     year = transaction_year()
     month = transaction_month()

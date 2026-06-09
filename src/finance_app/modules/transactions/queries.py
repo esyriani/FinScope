@@ -1,5 +1,8 @@
 """SQLAlchemy Core query helpers for the transactions feature."""
 
+from collections.abc import Iterable
+from typing import Any
+
 from sqlalchemy import func, select
 
 from finance_app.database.tables import (
@@ -10,7 +13,7 @@ from finance_app.database.tables import (
 )
 
 
-def transaction_list_select():
+def transaction_list_select() -> Any:
     """Return the shared transaction list projection."""
     return select(
         transactions_table.c.id,
@@ -35,7 +38,7 @@ def transaction_list_select():
     )
 
 
-def count_transactions(conn, filters):
+def count_transactions(conn: Any, filters: Iterable[Any]) -> int:
     """Count transactions."""
     return conn.execute(
         select(func.count())
@@ -49,7 +52,14 @@ def count_transactions(conn, filters):
     ).scalar_one()
 
 
-def fetch_transactions(conn, filters, sort_expression, direction, page_size, offset):
+def fetch_transactions(
+    conn: Any,
+    filters: Iterable[Any],
+    sort_expression: Any,
+    direction: str,
+    page_size: int,
+    offset: int,
+) -> Any:
     """Fetch transactions."""
     sort_order = sort_expression.desc() if direction == "desc" else sort_expression.asc()
     return (
@@ -65,7 +75,7 @@ def fetch_transactions(conn, filters, sort_expression, direction, page_size, off
     )
 
 
-def fetch_transaction_ids(conn, filters, sort_expression, direction):
+def fetch_transaction_ids(conn: Any, filters: Iterable[Any], sort_expression: Any, direction: str) -> list[int]:
     """Fetch IDs for all transactions matching the current list filters."""
     sort_order = sort_expression.desc() if direction == "desc" else sort_expression.asc()
     return [
@@ -76,7 +86,7 @@ def fetch_transaction_ids(conn, filters, sort_expression, direction):
     ]
 
 
-def fetch_distinct_categories(conn):
+def fetch_distinct_categories(conn: Any) -> Any:
     """Fetch distinct categories."""
     return (
         conn.execute(

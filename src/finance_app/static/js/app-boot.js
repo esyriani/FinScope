@@ -53,7 +53,4 @@ if (financeBootSidebarCollapsed()) {
     financeDocument.classList.add("sidebar-collapsed");
 }
 
-financeDocument.setAttribute(
-    "data-bs-theme",
-    financeDocument.dataset.bsTheme === "dark" ? "dark" : "light"
-);
+financeDocument.setAttribute("data-bs-theme", financeDocument.dataset.bsTheme === "dark" ? "dark" : "light");

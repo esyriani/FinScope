@@ -5,6 +5,7 @@ state decisions for rule, historical, and LLM categorization paths. Callers
 provide source-specific evidence and persist the returned decision fields.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 MEDIUM_CONFIDENCE_THRESHOLD = 0.85
@@ -57,16 +58,16 @@ class FinalCategoryDecision:
     assigned_unknown: bool
 
 
-def clamp_confidence(value):
+def clamp_confidence(value: object) -> float | None:
     """Return a probability value clamped to the inclusive 0..1 range."""
     try:
-        confidence = float(value)
+        confidence = float(str(value))
     except (TypeError, ValueError):
         return None
     return max(0.0, min(1.0, confidence))
 
 
-def normalize_decision_source(source):
+def normalize_decision_source(source: object) -> str:
     """Return a valid JSON audit decision source value.
 
     `category_source` remains the persisted UI/reporting provenance. This
@@ -83,7 +84,12 @@ def normalize_decision_source(source):
     return text if text in DECISION_SOURCES else DECISION_SOURCE_UNKNOWN
 
 
-def evidence_decision_source(rule=False, retrieval=False, llm=False, manual=False):
+def evidence_decision_source(
+    rule: bool = False,
+    retrieval: bool = False,
+    llm: bool = False,
+    manual: bool = False,
+) -> str:
     """Return the controlled decision source for the evidence used.
 
     The order reflects the final arbiter of the decision while still
@@ -108,11 +114,11 @@ def evidence_decision_source(rule=False, retrieval=False, llm=False, manual=Fals
 
 
 def combine_confidence(
-    base_confidence,
-    agreement_confidences=(),
-    disagreement_confidences=(),
-    supported_by_similar=False,
-):
+    base_confidence: object,
+    agreement_confidences: Iterable[object] = (),
+    disagreement_confidences: Iterable[object] = (),
+    supported_by_similar: bool = False,
+) -> float | None:
     """Return final confidence after agreement and disagreement adjustments.
 
     Agreement with another evidence source raises confidence toward the
@@ -137,13 +143,18 @@ def combine_confidence(
         confidence += SIMILAR_SUPPORT_BONUS
     if disagreement_values:
         confidence = min(confidence - DISAGREEMENT_PENALTY, HIGH_CONFIDENCE_THRESHOLD - DISAGREEMENT_PENALTY)
-        if base_confidence >= MEDIUM_CONFIDENCE_THRESHOLD:
+        if confidence >= MEDIUM_CONFIDENCE_THRESHOLD:
             confidence = max(MEDIUM_CONFIDENCE_THRESHOLD, confidence)
 
     return round(max(0.0, min(0.99, confidence)), 4)
 
 
-def apply_review_policy(category, tags, confidence, unknown_category):
+def apply_review_policy(
+    category: str | None,
+    tags: Iterable[str] | None,
+    confidence: object,
+    unknown_category: str,
+) -> FinalCategoryDecision:
     """Return the final assignment and review state for a proposed category.
 
     The shared policy assigns unknown when confidence is below the medium

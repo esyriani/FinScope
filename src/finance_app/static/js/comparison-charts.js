@@ -10,17 +10,17 @@ function comparisonChartOption(chartType = "line") {
 
     return {
         textStyle: {
-            color: comparisonTheme.text
+            color: comparisonTheme.text,
         },
         legend: comparisonChartUtils.legend(comparisonTheme),
         tooltip: comparisonChartUtils.tooltip(comparisonTheme, {
             trigger: "axis",
             formatter(items) {
-                const rows = items.map(item => (
-                    `${item.marker}${item.seriesName}: ${formatComparisonMoney(item.value)}`
-                ));
+                const rows = items.map(
+                    (item) => `${item.marker}${item.seriesName}: ${formatComparisonMoney(item.value)}`
+                );
                 return [items[0]?.axisValue, ...rows].join("<br>");
-            }
+            },
         }),
         grid: comparisonChartUtils.baseGrid(),
         xAxis: {
@@ -30,14 +30,14 @@ function comparisonChartOption(chartType = "line") {
             axisLine: comparisonChartUtils.axisLine(comparisonTheme),
             axisLabel: comparisonChartUtils.axisLabel(comparisonTheme),
             splitLine: {
-                show: false
-            }
+                show: false,
+            },
         },
         yAxis: {
             type: "value",
             axisLine: comparisonChartUtils.axisLine(comparisonTheme),
             axisLabel: comparisonChartUtils.axisLabel(comparisonTheme, formatComparisonAxisMoney),
-            splitLine: comparisonChartUtils.splitLine(comparisonTheme)
+            splitLine: comparisonChartUtils.splitLine(comparisonTheme),
         },
         series: (comparisonCharts.monthlySpending || []).map((row, index) => {
             const color = comparisonSeriesColor(index);
@@ -46,19 +46,19 @@ function comparisonChartOption(chartType = "line") {
                 type: isBarChart ? "bar" : "line",
                 data: row.totals || [],
                 itemStyle: {
-                    color
+                    color,
                 },
                 lineStyle: {
-                    color
+                    color,
                 },
                 barMaxWidth: 34,
                 smooth: false,
                 symbolSize: isBarChart ? 0 : 8,
                 emphasis: {
-                    focus: "series"
-                }
+                    focus: "series",
+                },
             };
-        })
+        }),
     };
 }
 
@@ -71,9 +71,7 @@ function comparisonSeriesColor(index) {
 }
 
 function comparisonColorAlpha(color, alpha) {
-    return window.echarts?.color?.modifyAlpha
-        ? window.echarts.color.modifyAlpha(color, alpha)
-        : color;
+    return window.echarts?.color?.modifyAlpha ? window.echarts.color.modifyAlpha(color, alpha) : color;
 }
 
 function comparisonBoxplotDataItem(row, index) {
@@ -83,13 +81,13 @@ function comparisonBoxplotDataItem(row, index) {
         mean: row.statistics?.mean,
         itemStyle: {
             borderColor: color,
-            color: comparisonColorAlpha(color, 0.22)
+            color: comparisonColorAlpha(color, 0.22),
         },
         emphasis: {
             itemStyle: {
-                borderColor: color
-            }
-        }
+                borderColor: color,
+            },
+        },
     };
 }
 
@@ -104,7 +102,7 @@ function comparisonBoxplotOption() {
 
     return {
         textStyle: {
-            color: comparisonTheme.text
+            color: comparisonTheme.text,
         },
         tooltip: comparisonChartUtils.tooltip(comparisonTheme, {
             trigger: "item",
@@ -117,13 +115,15 @@ function comparisonBoxplotOption() {
                     ["Median", values[2]],
                     ["Mean", mean],
                     ["Q3", values[3]],
-                    ["Max", values[4]]
+                    ["Max", values[4]],
                 ];
-                const rows = labels.filter(([, value]) => value !== null && value !== undefined).map(([label, value]) => (
-                    `${comparisonChartUtils.translate(label)}: ${formatComparisonMoney(value)}`
-                ));
+                const rows = labels
+                    .filter(([, value]) => value !== null && value !== undefined)
+                    .map(
+                        ([label, value]) => `${comparisonChartUtils.translate(label)}: ${formatComparisonMoney(value)}`
+                    );
                 return [params.name, ...rows].join("<br>");
-            }
+            },
         }),
         grid: comparisonChartUtils.baseGrid({ top: 24 }),
         xAxis: {
@@ -132,22 +132,22 @@ function comparisonBoxplotOption() {
             axisLine: comparisonChartUtils.axisLine(comparisonTheme),
             axisLabel: comparisonChartUtils.axisLabel(comparisonTheme),
             splitLine: {
-                show: false
-            }
+                show: false,
+            },
         },
         yAxis: {
             type: "value",
             axisLine: comparisonChartUtils.axisLine(comparisonTheme),
             axisLabel: comparisonChartUtils.axisLabel(comparisonTheme, formatComparisonAxisMoney),
-            splitLine: comparisonChartUtils.splitLine(comparisonTheme)
+            splitLine: comparisonChartUtils.splitLine(comparisonTheme),
         },
         series: [
             {
                 name: comparisonChartUtils.translate("Monthly spending distribution"),
                 type: "boxplot",
-                data: rows.map(comparisonBoxplotDataItem)
-            }
-        ]
+                data: rows.map(comparisonBoxplotDataItem),
+            },
+        ],
     };
 }
 
@@ -179,11 +179,7 @@ function renderComparisonBoxplotChart() {
     if (element.dataset.comparisonBoxplotReady === "true") return;
     element.dataset.comparisonBoxplotReady = "true";
 
-    comparisonChartUtils.create(
-        element,
-        comparisonBoxplotOption(),
-        { handlerKey: "comparisonBoxplotResizeHandler" }
-    );
+    comparisonChartUtils.create(element, comparisonBoxplotOption(), { handlerKey: "comparisonBoxplotResizeHandler" });
 }
 
 window.financeApp?.registerInitializer("comparison.chart", renderComparisonChart);

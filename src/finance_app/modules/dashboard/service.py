@@ -1,6 +1,7 @@
 """Application orchestration for the dashboard feature."""
 
 from dataclasses import dataclass
+from typing import Any, Protocol
 
 from finance_app.core.constants import FILTER_MODE_INCLUDE, UNKNOWN_CATEGORY
 from finance_app.core.money import money_to_float, rounded_money_float
@@ -11,7 +12,7 @@ from finance_app.core.periods import (
     get_period_label,
     period_start_date,
 )
-from finance_app.core.query import CoreFilters
+from finance_app.core.query import CoreFilters, QueryArgs
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.service import get_category_options
@@ -28,6 +29,7 @@ from .constants import (
     DASHBOARD_TABLE_MERCHANT,
 )
 from .filters import (
+    DashboardRequest,
     apply_dashboard_dimension_filters,
     apply_quick_view_core_filter,
     parse_dashboard_request,
@@ -54,7 +56,11 @@ from .queries import (
     fetch_spending_by_tag,
     fetch_summary,
 )
-from .urls import dashboard_month_url, dashboard_table_sort_url, dashboard_url
+from .urls import QueryStringArgs, dashboard_month_url, dashboard_table_sort_url, dashboard_url
+
+
+class DashboardArgs(QueryArgs, QueryStringArgs, Protocol):
+    """Represent request args used by dashboard parsers and URL builders."""
 
 
 @dataclass(frozen=True)
@@ -67,18 +73,18 @@ class DashboardQueryData:
 
     unknown_category: str
     include_transfer_credits: bool
-    category_options: list
-    tag_options: list
-    quick_view_counts: dict
-    data_quality: dict
-    spending_by_category_all: list
-    spending_by_tag: list
-    monthly_expenses: list
-    monthly_income: list
-    spending_income: dict
-    monthly_net: list
-    merchant_rows: list
-    summary: dict
+    category_options: list[str]
+    tag_options: list[dict[str, Any]]
+    quick_view_counts: dict[str, Any]
+    data_quality: dict[str, Any]
+    spending_by_category_all: list[Any]
+    spending_by_tag: list[dict[str, Any]]
+    monthly_expenses: list[dict[str, Any]]
+    monthly_income: list[dict[str, Any]]
+    spending_income: dict[str, Any]
+    monthly_net: list[dict[str, Any]]
+    merchant_rows: list[dict[str, Any]]
+    summary: Any
 
 
 @dataclass(frozen=True)
@@ -87,16 +93,16 @@ class PreparedDashboardData:
 
     total_spending: float
     total_income: float
-    cash_flow_summary: dict
-    category_rows: list
-    chart_category_rows: list
-    dashboard_links: dict
-    dashboard_insights: dict
-    data_quality: dict
+    cash_flow_summary: dict[str, Any]
+    category_rows: list[dict[str, Any]]
+    chart_category_rows: list[dict[str, Any]]
+    dashboard_links: dict[str, str]
+    dashboard_insights: dict[str, Any]
+    data_quality: dict[str, Any]
     income_amount_type: str
 
 
-def build_dashboard_context(args):
+def build_dashboard_context(args: Any) -> dict[str, Any]:
     """Build the dashboard template context for request query arguments."""
     dashboard_request = parse_dashboard_request(args)
     query_data = fetch_dashboard_query_data(dashboard_request)
@@ -104,7 +110,7 @@ def build_dashboard_context(args):
     return dashboard_context_payload(args, dashboard_request, query_data, prepared_data)
 
 
-def fetch_dashboard_query_data(dashboard_request):
+def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> DashboardQueryData:
     """Fetch all database-backed dashboard aggregates for one request.
 
     Args:
@@ -218,7 +224,7 @@ def fetch_dashboard_query_data(dashboard_request):
     )
 
 
-def dashboard_base_filters(dashboard_request):
+def dashboard_base_filters(dashboard_request: DashboardRequest) -> CoreFilters:
     """Return the date-scoped base filters shared by dashboard queries."""
     filters = CoreFilters()
     filters.add(transactions_table.c.ignored == 0)
@@ -233,7 +239,11 @@ def dashboard_base_filters(dashboard_request):
     return filters
 
 
-def prepare_dashboard_data(args, dashboard_request, query_data):
+def prepare_dashboard_data(
+    args: DashboardArgs,
+    dashboard_request: DashboardRequest,
+    query_data: DashboardQueryData,
+) -> PreparedDashboardData:
     """Prepare presentation rows and derived totals for the dashboard context."""
     period = dashboard_request.period
     filter_mode = dashboard_request.filter_mode
@@ -325,7 +335,11 @@ def prepare_dashboard_data(args, dashboard_request, query_data):
     )
 
 
-def dashboard_breakdown_rows(dashboard_request, query_data, total_spending):
+def dashboard_breakdown_rows(
+    dashboard_request: DashboardRequest,
+    query_data: DashboardQueryData,
+    total_spending: float,
+) -> tuple[list[Any], float]:
     """Return rows and denominator for the selected dashboard breakdown."""
     income_category_name = DASHBOARD_INCOME_CATEGORY.casefold()
     income_category_spending = sum(
@@ -364,7 +378,12 @@ def dashboard_breakdown_rows(dashboard_request, query_data, total_spending):
     return spending_breakdown, breakdown_total
 
 
-def dashboard_context_payload(args, dashboard_request, query_data, prepared_data):
+def dashboard_context_payload(
+    args: DashboardArgs,
+    dashboard_request: DashboardRequest,
+    query_data: DashboardQueryData,
+    prepared_data: PreparedDashboardData,
+) -> dict[str, Any]:
     """Assemble the full template context from query and prepared view data."""
     return {
         **dashboard_period_context(dashboard_request),
@@ -377,7 +396,7 @@ def dashboard_context_payload(args, dashboard_request, query_data, prepared_data
     }
 
 
-def dashboard_period_context(dashboard_request):
+def dashboard_period_context(dashboard_request: DashboardRequest) -> dict[str, Any]:
     """Return date-period context values for the dashboard template."""
     return {
         "selected_period": dashboard_request.period,
@@ -395,7 +414,7 @@ def dashboard_period_context(dashboard_request):
     }
 
 
-def dashboard_filter_context(dashboard_request, query_data):
+def dashboard_filter_context(dashboard_request: DashboardRequest, query_data: DashboardQueryData) -> dict[str, Any]:
     """Return filter and quick-view context values for the dashboard template."""
     return {
         "category_options": query_data.category_options,
@@ -412,7 +431,7 @@ def dashboard_filter_context(dashboard_request, query_data):
     }
 
 
-def dashboard_breakdown_context(args, dashboard_request):
+def dashboard_breakdown_context(args: DashboardArgs, dashboard_request: DashboardRequest) -> dict[str, Any]:
     """Return breakdown control labels, URLs, and selected state."""
     breakdown_is_tag = dashboard_request.breakdown_mode == DASHBOARD_BREAKDOWN_TAG
     return {
@@ -451,7 +470,7 @@ def dashboard_breakdown_context(args, dashboard_request):
     }
 
 
-def dashboard_summary_context(query_data, prepared_data):
+def dashboard_summary_context(query_data: DashboardQueryData, prepared_data: PreparedDashboardData) -> dict[str, Any]:
     """Return total, insight, and data-quality context values."""
     summary = query_data.summary
     return {
@@ -469,7 +488,7 @@ def dashboard_summary_context(query_data, prepared_data):
     }
 
 
-def dashboard_category_context(prepared_data):
+def dashboard_category_context(prepared_data: PreparedDashboardData) -> dict[str, Any]:
     """Return chart and table rows for the selected spending breakdown."""
     return {
         "category_labels": [row["category"] for row in prepared_data.chart_category_rows],
@@ -479,7 +498,11 @@ def dashboard_category_context(prepared_data):
     }
 
 
-def dashboard_month_context(dashboard_request, query_data, prepared_data):
+def dashboard_month_context(
+    dashboard_request: DashboardRequest,
+    query_data: DashboardQueryData,
+    prepared_data: PreparedDashboardData,
+) -> dict[str, Any]:
     """Return monthly chart series and drill-down URLs."""
     return {
         "expense_month_labels": [row["month"] for row in query_data.monthly_expenses],
@@ -519,7 +542,11 @@ def dashboard_month_context(dashboard_request, query_data, prepared_data):
     }
 
 
-def dashboard_month_urls(rows, dashboard_request, amount_type):
+def dashboard_month_urls(
+    rows: list[dict[str, Any]],
+    dashboard_request: DashboardRequest,
+    amount_type: str,
+) -> list[str]:
     """Return dashboard drill-down URLs for rows containing a month key."""
     return dashboard_month_urls_for_labels(
         [row["month"] for row in rows],
@@ -528,7 +555,11 @@ def dashboard_month_urls(rows, dashboard_request, amount_type):
     )
 
 
-def dashboard_month_urls_for_labels(months, dashboard_request, amount_type):
+def dashboard_month_urls_for_labels(
+    months: list[str],
+    dashboard_request: DashboardRequest,
+    amount_type: str | None,
+) -> list[str]:
     """Return dashboard drill-down URLs for month labels."""
     return [
         dashboard_month_url(
@@ -546,7 +577,11 @@ def dashboard_month_urls_for_labels(months, dashboard_request, amount_type):
     ]
 
 
-def dashboard_table_context(args, dashboard_request, query_data):
+def dashboard_table_context(
+    args: DashboardArgs,
+    dashboard_request: DashboardRequest,
+    query_data: DashboardQueryData,
+) -> dict[str, Any]:
     """Return merchant and category table controls for the dashboard template."""
     return {
         "merchant_rows": query_data.merchant_rows,

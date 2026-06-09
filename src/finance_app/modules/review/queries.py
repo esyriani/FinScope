@@ -1,5 +1,7 @@
 """SQL query helpers for the review feature."""
 
+from typing import Any
+
 from sqlalchemy import case, select
 
 from finance_app.core.constants import CATEGORY_RULE_DIRECTION_ANY, CATEGORY_RULE_SOURCE_MANUAL
@@ -19,9 +21,9 @@ from finance_app.modules.merchants.sql_filters import (
 )
 
 
-def review_candidate_rows(conn, unknown_category, merchant_candidate=""):
+def review_candidate_rows(conn: Any, unknown_category: str, merchant_candidate: object = "") -> Any:
     """Render candidate rows."""
-    filters = [
+    filters: list[Any] = [
         transactions_table.c.ignored == 0,
         (
             (transactions_table.c.needs_review == 1)
@@ -70,7 +72,12 @@ def review_candidate_rows(conn, unknown_category, merchant_candidate=""):
     )
 
 
-def find_review_rule(conn, merchant_key, amount_min=None, amount_max=None):
+def find_review_rule(
+    conn: Any,
+    merchant_key: str,
+    amount_min: object | None = None,
+    amount_max: object | None = None,
+) -> dict[str, Any] | None:
     """Find review rule."""
     row = (
         conn.execute(
@@ -95,7 +102,7 @@ def find_review_rule(conn, merchant_key, amount_min=None, amount_max=None):
     return rule_snapshot(conn, row["id"]) if row else None
 
 
-def rule_snapshot(conn, rule_id):
+def rule_snapshot(conn: Any, rule_id: int) -> dict[str, Any] | None:
     """Build snapshot."""
     row = (
         conn.execute(
@@ -125,6 +132,6 @@ def rule_snapshot(conn, rule_id):
     return snapshot
 
 
-def optional_amount_condition(column, value):
+def optional_amount_condition(column: Any, value: object | None) -> Any:
     """Return a Core predicate for nullable amount-bound comparisons."""
     return column.is_(None) if value is None else column == value

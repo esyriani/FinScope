@@ -18,10 +18,7 @@ function busyOverlayTranslate(message) {
 }
 
 function busyOverlayWantsOverlay(element, submitter = null) {
-    return Boolean(
-        submitter?.hasAttribute?.("data-busy-overlay")
-        || element?.hasAttribute?.("data-busy-overlay")
-    );
+    return Boolean(submitter?.hasAttribute?.("data-busy-overlay") || element?.hasAttribute?.("data-busy-overlay"));
 }
 
 function busyOverlayOption(element, submitter, name, fallback) {
@@ -39,12 +36,7 @@ function busyOverlayOption(element, submitter, name, fallback) {
 }
 
 function busyOverlayOptions(element, submitter = null) {
-    const message = busyOverlayOption(
-        element,
-        submitter,
-        "busyMessage",
-        busyOverlayTranslate("Processing...")
-    );
+    const message = busyOverlayOption(element, submitter, "busyMessage", busyOverlayTranslate("Processing..."));
     const delayText = busyOverlayOption(element, submitter, "busyDelayMs", "300");
     const delayMs = Math.max(0, Number.parseInt(delayText, 10) || 0);
 
@@ -117,14 +109,17 @@ function showBusyOverlay(options = {}) {
     }
 
     clearBusyOverlayTimer();
-    busyOverlayState.showTimer = window.setTimeout(() => {
-        busyOverlayState.showTimer = null;
-        const activeTokens = Array.from(busyOverlayState.activeTokens);
-        const activeToken = activeTokens[activeTokens.length - 1];
-        if (activeToken) {
-            renderBusyOverlay(activeToken);
-        }
-    }, Math.max(0, options.delayMs || 0));
+    busyOverlayState.showTimer = window.setTimeout(
+        () => {
+            busyOverlayState.showTimer = null;
+            const activeTokens = Array.from(busyOverlayState.activeTokens);
+            const activeToken = activeTokens[activeTokens.length - 1];
+            if (activeToken) {
+                renderBusyOverlay(activeToken);
+            }
+        },
+        Math.max(0, options.delayMs || 0)
+    );
 
     return token;
 }
@@ -194,15 +189,15 @@ function setupBusyOverlayNavigation() {
     document.addEventListener("click", (event) => {
         const link = event.target?.closest?.("a[data-busy-overlay]");
         if (
-            !link
-            || event.defaultPrevented
-            || event.button !== 0
-            || event.metaKey
-            || event.ctrlKey
-            || event.shiftKey
-            || event.altKey
-            || link.target
-            || link.hasAttribute("download")
+            !link ||
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey ||
+            link.target ||
+            link.hasAttribute("download")
         ) {
             return;
         }

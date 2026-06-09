@@ -2,6 +2,7 @@
 
 from calendar import monthrange
 from datetime import date
+from typing import Any
 
 from finance_app.core.config import settings
 from finance_app.core.constants import UNKNOWN_CATEGORY
@@ -31,7 +32,7 @@ from .recurrence import infer_recurring_items
 from .urls import calendar_url, transactions_url
 
 
-def build_calendar_context(args):
+def build_calendar_context(args: Any) -> dict[str, Any]:
     """Build calendar context."""
     selected_month = parse_month(args.get("month")) or default_month()
     heatmap_metric = parse_heatmap_metric(args.get("heatmap"))
@@ -73,7 +74,11 @@ def build_calendar_context(args):
     )
 
 
-def build_recurring_activity_context(selected_month=None, selected_categories=None, selected_tags=None):
+def build_recurring_activity_context(
+    selected_month: date | None = None,
+    selected_categories: list[str] | None = None,
+    selected_tags: list[str] | None = None,
+) -> dict[str, Any]:
     """Build recurring activity context."""
     selected_month = selected_month or default_month()
     selected_categories = selected_categories or []

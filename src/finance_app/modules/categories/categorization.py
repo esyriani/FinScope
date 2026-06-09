@@ -1,5 +1,8 @@
 """Transaction categorization workflow helpers."""
 
+from collections.abc import Iterable, Mapping, MutableMapping
+from typing import Any
+
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.money import optional_money_to_float
 from finance_app.database.engine import db_core_transaction
@@ -37,7 +40,11 @@ from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.settings.runtime import get_unknown_category
 
 
-def categorize_transactions(transactions, conn=None, use_llm=True):
+def categorize_transactions(
+    transactions: list[MutableMapping[str, Any]],
+    conn: Any | None = None,
+    use_llm: bool = True,
+) -> list[MutableMapping[str, Any]]:
     """Categorize transactions.
 
     The workflow applies high-confidence rules directly, then consults
@@ -52,7 +59,7 @@ def categorize_transactions(transactions, conn=None, use_llm=True):
     unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
     category_options = get_category_options(conn)
     rules = get_category_rules(conn)
-    merchant_categorizations = {}
+    merchant_categorizations: dict[object, TransactionCategoryState] = {}
 
     for tx in transactions:
         tx["amount"] = optional_money_to_float(tx.get("amount"))
@@ -104,7 +111,14 @@ def categorize_transactions(transactions, conn=None, use_llm=True):
     return transactions
 
 
-def category_state_from_evidence(conn, transaction, scored_rule, category_options, unknown_category, use_llm=True):
+def category_state_from_evidence(
+    conn: Any,
+    transaction: MutableMapping[str, Any],
+    scored_rule: Any,
+    category_options: Iterable[str],
+    unknown_category: str,
+    use_llm: bool = True,
+) -> TransactionCategoryState:
     """Return the category state for one transaction from rule/history evidence."""
     rule_category = (
         normalize_category(scored_rule.category, category_options) if scored_rule is not None else unknown_category
@@ -127,10 +141,10 @@ def category_state_from_evidence(conn, transaction, scored_rule, category_option
         normalize_category(historical.category, category_options) if historical.category else unknown_category
     )
     if historical.is_medium_confidence and history_category != unknown_category:
-        confidence = historical.confidence
+        confidence: float | None = historical.confidence
         rule_id = None
-        agreement_confidences = ()
-        disagreement_confidences = ()
+        agreement_confidences: tuple[object, ...] = ()
+        disagreement_confidences: tuple[object, ...] = ()
         if scored_rule is not None and rule_category == history_category:
             agreement_confidences = (scored_rule.confidence,)
             rule_id = rule_id_from_match(scored_rule)
@@ -190,7 +204,13 @@ def category_state_from_evidence(conn, transaction, scored_rule, category_option
     )
 
 
-def rule_category_state(conn, scored_rule, category, unknown_category, needs_review):
+def rule_category_state(
+    conn: Any,
+    scored_rule: Any,
+    category: str,
+    unknown_category: str,
+    needs_review: bool,
+) -> TransactionCategoryState:
     """Build a transaction category state from scored rule evidence."""
     decision = apply_review_policy(
         category,
@@ -221,7 +241,15 @@ def rule_category_state(conn, scored_rule, category, unknown_category, needs_rev
     )
 
 
-def historical_category_state(conn, category, tags, unknown_category, confidence, rule_id=None, metadata=None):
+def historical_category_state(
+    conn: Any,
+    category: str,
+    tags: Iterable[str],
+    unknown_category: str,
+    confidence: object,
+    rule_id: int | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> TransactionCategoryState:
     """Build a transaction category state from historical transaction evidence."""
     decision = apply_review_policy(category, tags, confidence, unknown_category)
     return TransactionCategoryState(
@@ -240,7 +268,11 @@ def historical_category_state(conn, category, tags, unknown_category, confidence
     )
 
 
-def unknown_category_state(conn, unknown_category, metadata=None):
+def unknown_category_state(
+    conn: Any,
+    unknown_category: str,
+    metadata: Mapping[str, Any] | None = None,
+) -> TransactionCategoryState:
     """Build the default unknown category state for unresolved transactions."""
     return TransactionCategoryState(
         category=unknown_category,
@@ -258,14 +290,20 @@ def unknown_category_state(conn, unknown_category, metadata=None):
     )
 
 
-def rule_id_from_match(scored_rule):
+def rule_id_from_match(scored_rule: Any) -> int | None:
     """Return the matched rule ID from scored rule evidence when available."""
     if scored_rule is None:
         return None
-    return scored_rule.rule["id"] if "id" in scored_rule.rule.keys() else scored_rule.rule.get("id")
+    value = scored_rule.rule["id"] if "id" in scored_rule.rule.keys() else scored_rule.rule.get("id")
+    if value in (None, ""):
+        return None
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
-def rule_evidence_payload(scored_rule, category):
+def rule_evidence_payload(scored_rule: Any, category: str | None) -> dict[str, Any]:
     """Return JSON-ready rule evidence for later LLM fallback prompts."""
     rule = scored_rule.rule
     return {
@@ -283,7 +321,7 @@ def rule_evidence_payload(scored_rule, category):
     }
 
 
-def rule_category_metadata(scored_rule, category, decision):
+def rule_category_metadata(scored_rule: Any, category: str, decision: Any) -> dict[str, Any]:
     """Return persisted audit metadata for a rule-only categorization."""
     return {
         "decision_source": DECISION_SOURCE_RULE,
@@ -300,8 +338,14 @@ def rule_category_metadata(scored_rule, category, decision):
 
 
 def historical_category_metadata(
-    historical, category, tags, confidence, unknown_category, scored_rule=None, rule_category=None
-):
+    historical: Any,
+    category: str,
+    tags: Iterable[str],
+    confidence: object,
+    unknown_category: str,
+    scored_rule: Any = None,
+    rule_category: str | None = None,
+) -> dict[str, Any]:
     """Return persisted audit metadata for a historical categorization."""
     decision = apply_review_policy(category, tags, confidence, unknown_category)
     metadata = {
@@ -327,7 +371,12 @@ def historical_category_metadata(
     return metadata
 
 
-def unknown_category_metadata(reason, final_category=UNKNOWN_CATEGORY, rule_evidence=None, historical_evidence=None):
+def unknown_category_metadata(
+    reason: str,
+    final_category: str = UNKNOWN_CATEGORY,
+    rule_evidence: Mapping[str, Any] | None = None,
+    historical_evidence: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Return persisted audit metadata for unresolved automatic categorization."""
     metadata = {
         "decision_source": DECISION_SOURCE_UNKNOWN,
@@ -347,7 +396,7 @@ def unknown_category_metadata(reason, final_category=UNKNOWN_CATEGORY, rule_evid
     return metadata
 
 
-def historical_evidence_payload(historical):
+def historical_evidence_payload(historical: Any) -> dict[str, Any]:
     """Return JSON-ready historical retrieval evidence for LLM prompts."""
     return {
         "category": historical.category,

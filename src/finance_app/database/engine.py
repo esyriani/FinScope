@@ -4,23 +4,25 @@ Provides the central SQLAlchemy Core engine factory, request-scoped
 connections, and transaction helpers for configured database URLs.
 """
 
+from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 from flask import g, has_request_context
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy.engine import URL, Connection, Engine, make_url
 
 from finance_app.core.config import settings
 
 CORE_DB_CONTEXT_KEY = "finance_core_db"
 CORE_DB_TRANSACTION_DEPTH_KEY = "finance_core_transaction_depth"
 
-_DATABASE_ENGINE = None
-_DATABASE_ENGINE_URL = None
+_DATABASE_ENGINE: Engine | None = None
+_DATABASE_ENGINE_URL: str | None = None
 AUTO_CREATE_DATABASE_DIALECTS = {"mariadb", "mysql"}
 
 
-def create_database_engine(database_url=None):
+def create_database_engine(database_url: str | None = None) -> Engine:
     """Create a SQLAlchemy engine for the configured database URL.
 
     Args:
@@ -40,7 +42,7 @@ def create_database_engine(database_url=None):
     return engine
 
 
-def ensure_database_exists(database_url):
+def ensure_database_exists(database_url: str) -> None:
     """Create the configured server-level database when the dialect requires it."""
     url = make_url(database_url)
     dialect_name = url.drivername.split("+", 1)[0].lower()
@@ -65,7 +67,7 @@ def ensure_database_exists(database_url):
         server_engine.dispose()
 
 
-def server_database_url(url):
+def server_database_url(url: URL) -> URL:
     """Return a URL that connects to the database server without a schema path."""
     return URL.create(
         drivername=url.drivername,
@@ -77,11 +79,11 @@ def server_database_url(url):
     )
 
 
-def register_sqlite_foreign_keys(engine):
+def register_sqlite_foreign_keys(engine: Engine) -> None:
     """Enable SQLite foreign-key enforcement for new driver connections."""
 
     @event.listens_for(engine, "connect")
-    def enable_foreign_keys(dbapi_connection, connection_record):
+    def enable_foreign_keys(dbapi_connection: Any, connection_record: Any) -> None:
         """Enable SQLite foreign keys on each pooled driver connection."""
         del connection_record
         cursor = dbapi_connection.cursor()
@@ -91,7 +93,7 @@ def register_sqlite_foreign_keys(engine):
             cursor.close()
 
 
-def get_database_engine():
+def get_database_engine() -> Engine:
     """Return the cached SQLAlchemy engine for the configured database URL."""
     global _DATABASE_ENGINE, _DATABASE_ENGINE_URL
 
@@ -101,10 +103,11 @@ def get_database_engine():
         _DATABASE_ENGINE = create_database_engine(database_url)
         _DATABASE_ENGINE_URL = database_url
 
+    assert _DATABASE_ENGINE is not None
     return _DATABASE_ENGINE
 
 
-def dispose_database_engine():
+def dispose_database_engine() -> None:
     """Dispose the cached SQLAlchemy engine, if one exists."""
     global _DATABASE_ENGINE, _DATABASE_ENGINE_URL
 
@@ -114,12 +117,12 @@ def dispose_database_engine():
     _DATABASE_ENGINE_URL = None
 
 
-def connect_core_db():
+def connect_core_db() -> Connection:
     """Open a SQLAlchemy Core connection from the configured engine."""
     return get_database_engine().connect()
 
 
-def get_core_connection():
+def get_core_connection() -> Connection:
     """Return a SQLAlchemy Core connection for the current execution context."""
     if not has_request_context():
         return connect_core_db()
@@ -132,12 +135,12 @@ def get_core_connection():
     return conn
 
 
-def is_request_scoped_core_connection(conn):
+def is_request_scoped_core_connection(conn: object) -> bool:
     """Return whether a Core connection is owned by the active Flask request."""
     return has_request_context() and getattr(g, CORE_DB_CONTEXT_KEY, None) is conn
 
 
-def close_core_db(error=None):
+def close_core_db(error: object | None = None) -> None:
     """Close the request-scoped SQLAlchemy Core connection, rolling back work."""
     del error
     conn = g.pop(CORE_DB_CONTEXT_KEY, None)
@@ -151,13 +154,13 @@ def close_core_db(error=None):
         conn.close()
 
 
-def register_core_db(app):
+def register_core_db(app: Any) -> None:
     """Register SQLAlchemy Core database cleanup with a Flask application."""
     app.teardown_appcontext(close_core_db)
 
 
 @contextmanager
-def db_core_connection():
+def db_core_connection() -> Iterator[Connection]:
     """Yield a Core connection and close it when not request scoped.
 
     Runtime write paths should use db_core_transaction() so commits and
@@ -172,7 +175,7 @@ def db_core_connection():
 
 
 @contextmanager
-def db_core_transaction(conn=None):
+def db_core_transaction(conn: Connection | None = None) -> Iterator[Connection]:
     """Yield a Core connection inside a managed transaction.
 
     When the connection is already inside either a database transaction or an

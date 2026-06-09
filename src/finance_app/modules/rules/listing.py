@@ -1,5 +1,7 @@
 """List-page orchestration for the rules feature."""
 
+from collections.abc import Sequence
+from typing import Any
 from urllib.parse import urlencode
 
 from flask import url_for
@@ -56,7 +58,7 @@ RULE_SOURCE_FILTER_OPTIONS = (
 )
 
 
-def build_rules_context(args):
+def build_rules_context(args: Any) -> dict[str, Any]:
     """Build rules context."""
     search = args.get("search", "").strip()
     selected_categories = [category.strip() for category in args.getlist("categories") if category.strip()]
@@ -147,7 +149,7 @@ def build_rules_context(args):
     }
 
 
-def rules_select_base(*columns):
+def rules_select_base(*columns: Any) -> Any:
     """Return the base rule listing selectable with merchant labels joined."""
     return select(*columns).select_from(
         category_rules_table.outerjoin(
@@ -160,7 +162,7 @@ def rules_select_base(*columns):
     )
 
 
-def resolve_rules_sort(sort):
+def resolve_rules_sort(sort: object) -> tuple[str, Any]:
     """Return the normalized sort name and Core expression for rule listings."""
     source_priority = case(
         (category_rules_table.c.source == CATEGORY_RULE_SOURCE_MANUAL, 0),
@@ -183,9 +185,15 @@ def resolve_rules_sort(sort):
     return sort, sort_columns[sort]
 
 
-def build_rule_filters(search, approval, selected_categories, selected_source, selected_tags):
+def build_rule_filters(
+    search: str,
+    approval: str,
+    selected_categories: Sequence[str],
+    selected_source: str,
+    selected_tags: Sequence[str],
+) -> list[Any]:
     """Build Core conditions for the rule listing filters."""
-    filters = []
+    filters: list[Any] = []
     if search:
         filters.append(rule_search_filter(search))
 
@@ -206,7 +214,7 @@ def build_rule_filters(search, approval, selected_categories, selected_source, s
     return filters
 
 
-def rule_search_filter(search):
+def rule_search_filter(search: str) -> Any:
     """Return a case-insensitive Core search condition for rule rows."""
     pattern = f"%{search.lower()}%"
     approval_text = case(
@@ -228,19 +236,26 @@ def rule_search_filter(search):
     return or_(*[func.lower(expression).like(pattern) for expression in expressions])
 
 
-def rule_tag_filter(selected_tags):
+def rule_tag_filter(selected_tags: Sequence[str]) -> Any:
     """Return a Core EXISTS condition for selected rule tags."""
     return rule_tag_condition(selected_tags, category_rules_table.c.id)
 
 
-def rules_count(conn, filters):
+def rules_count(conn: Any, filters: Sequence[Any]) -> int:
     """Return the count of rules matching the listing filters."""
     query = rules_select_base(func.count().label("count"))
     query = apply_rule_filters(query, filters)
     return conn.execute(query).scalar_one()
 
 
-def rule_rows(conn, filters, sort_expression, direction, page_size, offset):
+def rule_rows(
+    conn: Any,
+    filters: Sequence[Any],
+    sort_expression: Any,
+    direction: str,
+    page_size: int,
+    offset: int,
+) -> list[dict[str, Any]]:
     """Return paginated rule rows matching the listing filters."""
     query = rules_select_base(
         category_rules_table.c.id,
@@ -279,12 +294,12 @@ def rule_rows(conn, filters, sort_expression, direction, page_size, offset):
     return rows
 
 
-def apply_rule_filters(query, filters):
+def apply_rule_filters(query: Any, filters: Sequence[Any]) -> Any:
     """Apply non-empty Core rule listing filters to a query."""
     return query.where(*[condition for condition in filters if condition is not None])
 
 
-def decorate_rule_rows(conn, rows):
+def decorate_rule_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
     """Attach tag and display metadata expected by the rules template."""
     tags_by_rule_id = get_rule_tags_by_rule_id(conn, [row["id"] for row in rows])
     tag_colors = get_tag_color_map(conn)
@@ -312,7 +327,16 @@ def decorate_rule_rows(conn, rows):
         row["can_delete_without_preview"] = row["transaction_reference_count"] == 0
 
 
-def rules_list_url(search, selected_categories, selected_source, approval, selected_tags, sort, direction, page):
+def rules_list_url(
+    search: str,
+    selected_categories: Sequence[str],
+    selected_source: str,
+    approval: str,
+    selected_tags: Sequence[str],
+    sort: str,
+    direction: str,
+    page: int,
+) -> str:
     """Build a rules list URL while preserving filter state."""
     params = {
         "search": search,
@@ -324,7 +348,7 @@ def rules_list_url(search, selected_categories, selected_source, approval, selec
         "direction": direction,
         "page": page,
     }
-    cleaned = {}
+    cleaned: dict[str, Any] = {}
     for key, value in params.items():
         if isinstance(value, (list, tuple)):
             values = [item for item in value if item not in (None, "")]
@@ -337,31 +361,34 @@ def rules_list_url(search, selected_categories, selected_source, approval, selec
     return url_for("rules.rules") + (f"?{query}" if query else "")
 
 
-def rule_source_label(source):
+def rule_source_label(source: object) -> str:
     """Return the display label for a rule source."""
+    source_key = str(source or "")
     return {
         CATEGORY_RULE_SOURCE_MANUAL: "Manual",
         CATEGORY_RULE_SOURCE_AUTOMATIC: "Auto",
-    }.get(source, str(source or "").strip() or "Unknown")
+    }.get(source_key, source_key.strip() or "Unknown")
 
 
-def rule_source_badge_class(source):
+def rule_source_badge_class(source: object) -> str:
     """Return the Bootstrap badge class for a rule source."""
+    source_key = str(source or "")
     return {
         CATEGORY_RULE_SOURCE_MANUAL: "text-bg-primary",
         CATEGORY_RULE_SOURCE_AUTOMATIC: "text-bg-info",
-    }.get(source, "text-bg-secondary")
+    }.get(source_key, "text-bg-secondary")
 
 
-def rule_direction_label(direction):
+def rule_direction_label(direction: object) -> str:
     """Return the display label for a rule direction constraint."""
+    direction_key = str(direction or CATEGORY_RULE_DIRECTION_ANY)
     return CATEGORY_RULE_DIRECTION_LABELS.get(
-        direction or CATEGORY_RULE_DIRECTION_ANY,
+        direction_key,
         CATEGORY_RULE_DIRECTION_LABELS[CATEGORY_RULE_DIRECTION_ANY],
     )
 
 
-def account_option_rows(conn):
+def account_option_rows(conn: Any) -> list[dict[str, Any]]:
     """Return available account constraints for rule forms."""
     return [
         dict(row)

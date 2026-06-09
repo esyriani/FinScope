@@ -5,6 +5,9 @@ Merchant rows are deterministic keys derived from transaction descriptions;
 there is no user-managed alias or display-name layer.
 """
 
+from collections.abc import Mapping
+from typing import Any
+
 from sqlalchemy import insert, select
 
 from finance_app.database.tables import merchants as merchants_table
@@ -12,7 +15,7 @@ from finance_app.database.upsert import insert_or_select_unique_row
 from finance_app.modules.merchants.normalization import normalize_merchant
 
 
-def get_or_create_merchant_for_description(conn, description):
+def get_or_create_merchant_for_description(conn: Any, description: object) -> Any:
     """Return a merchant row for an imported transaction description.
 
     The raw description is cleaned into a deterministic merchant key. The
@@ -23,7 +26,7 @@ def get_or_create_merchant_for_description(conn, description):
     return get_or_create_merchant(conn, normalized.merchant_key)
 
 
-def get_or_create_merchant_for_name(conn, merchant_name):
+def get_or_create_merchant_for_name(conn: Any, merchant_name: object) -> Any:
     """Return a merchant row for a merchant key or raw merchant label.
 
     This is used by features, such as recurring pattern edits, that receive a
@@ -39,10 +42,10 @@ def get_or_create_merchant_for_name(conn, merchant_name):
 
 
 def get_or_create_merchant(
-    conn,
-    merchant_key,
-    **_ignored_legacy_fields,
-):
+    conn: Any,
+    merchant_key: object,
+    **_ignored_legacy_fields: object,
+) -> Any:
     """Return a merchant row, inserting a deterministic merchant key if needed.
 
     Extra keyword parameters are accepted for older callers but ignored because
@@ -66,7 +69,7 @@ def get_or_create_merchant(
     return find_merchant_by_id(conn, merchant_id)
 
 
-def find_merchant_by_id(conn, merchant_id):
+def find_merchant_by_id(conn: Any, merchant_id: object) -> Any:
     """Return a merchant row by ID."""
     if merchant_id in (None, ""):
         return None
@@ -74,7 +77,7 @@ def find_merchant_by_id(conn, merchant_id):
     return conn.execute(merchant_select().where(merchants_table.c.id == merchant_id)).mappings().fetchone()
 
 
-def find_merchant_by_key(conn, merchant_key):
+def find_merchant_by_key(conn: Any, merchant_key: object) -> Any:
     """Return a merchant row by deterministic merchant key."""
     merchant_key = normalize_merchant(merchant_key).merchant_key
     if not merchant_key:
@@ -82,12 +85,12 @@ def find_merchant_by_key(conn, merchant_key):
     return conn.execute(merchant_select_by_key(merchant_key)).mappings().fetchone()
 
 
-def merchant_select_by_key(merchant_key):
+def merchant_select_by_key(merchant_key: str) -> Any:
     """Return the shared unique-key select for one merchant key."""
     return merchant_select().where(merchants_table.c.merchant_key == merchant_key)
 
 
-def merchant_select():
+def merchant_select() -> Any:
     """Return the shared merchant select."""
     return select(
         merchants_table.c.id,
@@ -97,12 +100,12 @@ def merchant_select():
     )
 
 
-def find_merchant_by_name(conn, merchant_name):
+def find_merchant_by_name(conn: Any, merchant_name: object) -> Any:
     """Return a merchant row matching a deterministic merchant key."""
     return find_merchant_by_key(conn, merchant_name)
 
 
-def merchant_identity_from_row(row, conn=None):
+def merchant_identity_from_row(row: Mapping[str, Any], conn: Any | None = None) -> dict[str, Any]:
     """Return merchant identity metadata for a transaction query row.
 
     Query rows that include `merchant_id` and merchant labels use the durable
@@ -129,12 +132,12 @@ def merchant_identity_from_row(row, conn=None):
     }
 
 
-def merchant_identity_key(merchant_id):
+def merchant_identity_key(merchant_id: object) -> str:
     """Return the stable in-memory grouping key for a merchant ID."""
     return f"merchant:{merchant_id}"
 
 
-def row_value(row, key, default=None):
+def row_value(row: Mapping[str, Any], key: str, default: object | None = None) -> Any:
     """Return a row value when the row supports the requested key."""
     try:
         if key in row.keys():

@@ -37,12 +37,12 @@ BUILTIN_CATEGORIES = (
 )
 
 
-def builtin_category_names():
+def builtin_category_names() -> tuple[str, ...]:
     """Return the names reserved for built-in category rows."""
     return tuple(category["name"] for category in BUILTIN_CATEGORIES)
 
 
-def is_builtin_category_name(name):
+def is_builtin_category_name(name: object) -> bool:
     """Return whether a submitted category name is reserved by FinScope."""
     normalized = str(name or "").strip().casefold()
     return normalized in {category_name.casefold() for category_name in builtin_category_names()}

@@ -35,7 +35,7 @@ USER_ROLES = (
 )
 
 
-def normalize_user_role(role):
+def normalize_user_role(role: object) -> str:
     """Return a normalized role value for persisted or submitted input."""
     return str(role or "").strip().lower()
 

@@ -1,5 +1,8 @@
 """View-model builders for the review feature."""
 
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
+
 from finance_app.core.money import money_to_float
 from finance_app.modules.categories.sources import (
     category_confidence_label,
@@ -10,9 +13,13 @@ from finance_app.modules.review.normalization import review_merchant_key
 from finance_app.modules.review.urls import build_review_url
 
 
-def build_review_groups(rows, transaction_tags, unknown_category):
+def build_review_groups(
+    rows: Iterable[Mapping[str, Any]],
+    transaction_tags: Mapping[int, Iterable[str]],
+    unknown_category: str,
+) -> list[dict[str, Any]]:
     """Build review groups from candidate rows and tag mappings."""
-    groups_by_key = {}
+    groups_by_key: dict[str, dict[str, Any]] = {}
 
     for row in rows:
         key = review_merchant_key(row["description"])
@@ -83,7 +90,7 @@ def build_review_groups(rows, transaction_tags, unknown_category):
     return groups
 
 
-def selected_review_category(categories, unknown_category):
+def selected_review_category(categories: Iterable[str], unknown_category: str) -> str:
     """Return the category that should prefill the review modal."""
     known_categories = {category for category in categories if not is_unknown_category(category, unknown_category)}
     if len(known_categories) == 1:
@@ -91,7 +98,7 @@ def selected_review_category(categories, unknown_category):
     return unknown_category
 
 
-def selected_review_tags(transactions):
+def selected_review_tags(transactions: list[Mapping[str, Any]]) -> list[str]:
     """Return tags that should prefill the review modal.
 
     A grouped review action applies the selected tags to every transaction in
@@ -107,10 +114,14 @@ def selected_review_tags(transactions):
     return [tag for tag in transactions[0].get("tags", []) if tag in common_tags]
 
 
-def review_display_rows(groups, ungrouped_keys, unknown_category):
+def review_display_rows(
+    groups: Iterable[dict[str, Any]],
+    ungrouped_keys: Iterable[str],
+    unknown_category: str,
+) -> list[dict[str, Any]]:
     """Render display rows."""
     ungrouped = set(ungrouped_keys)
-    rows = []
+    rows: list[dict[str, Any]] = []
 
     for group in groups:
         if group["merchant_key"] in ungrouped and group["count"] > 1:
@@ -122,7 +133,7 @@ def review_display_rows(groups, ungrouped_keys, unknown_category):
     return rows
 
 
-def sort_review_groups(groups, sort, direction):
+def sort_review_groups(groups: list[dict[str, Any]], sort: str, direction: str) -> None:
     """Sort review groups."""
     if sort == "merchant":
         groups.sort(key=review_group_default_sort_key)
@@ -139,7 +150,7 @@ def sort_review_groups(groups, sort, direction):
     )
 
 
-def review_group_default_sort_key(group):
+def review_group_default_sort_key(group: Mapping[str, Any]) -> tuple[int, float, str, str]:
     """Render group default sort key."""
     return (
         -group["count"],
@@ -149,12 +160,12 @@ def review_group_default_sort_key(group):
     )
 
 
-def sortable_text(value):
+def sortable_text(value: object) -> str:
     """Return sortable text."""
     return str(value or "").casefold()
 
 
-def review_transaction_row(row, tags=None):
+def review_transaction_row(row: Mapping[str, Any], tags: Iterable[str] | None = None) -> dict[str, Any]:
     """Return a review transaction row with category source display fields."""
     row_dict = dict(row)
     row_dict["amount"] = money_to_float(row["amount"])
@@ -169,7 +180,7 @@ def review_transaction_row(row, tags=None):
     return row_dict
 
 
-def review_group_display_row(group):
+def review_group_display_row(group: Mapping[str, Any]) -> dict[str, Any]:
     """Render group display row."""
     row = {key: value for key, value in group.items()}
     row.update(
@@ -188,7 +199,11 @@ def review_group_display_row(group):
     return row
 
 
-def review_transaction_display_row(group, tx, unknown_category):
+def review_transaction_display_row(
+    group: Mapping[str, Any],
+    tx: Mapping[str, Any],
+    unknown_category: str,
+) -> dict[str, Any]:
     """Render transaction display row."""
     category = tx["category"] or unknown_category
     amount = tx["amount"]
@@ -225,7 +240,14 @@ def review_transaction_display_row(group, tx, unknown_category):
     }
 
 
-def attach_review_row_urls(rows, page, ungrouped_keys, sort, direction, merchant_search=""):
+def attach_review_row_urls(
+    rows: Iterable[dict[str, Any]],
+    page: int,
+    ungrouped_keys: Iterable[str],
+    sort: str,
+    direction: str,
+    merchant_search: str = "",
+) -> None:
     """Attach review row URLs."""
     for row in rows:
         if row["is_ungrouped"]:
@@ -252,10 +274,10 @@ def attach_review_row_urls(rows, page, ungrouped_keys, sort, direction, merchant
             )
 
 
-def selected_ungroup_keys(values):
+def selected_ungroup_keys(values: Iterable[object]) -> list[str]:
     """Handle selected ungroup keys."""
-    keys = []
-    seen = set()
+    keys: list[str] = []
+    seen: set[str] = set()
 
     for value in values:
         key = review_merchant_key(value)
@@ -266,25 +288,25 @@ def selected_ungroup_keys(values):
     return keys
 
 
-def active_ungroup_keys(ungrouped_keys, groups):
+def active_ungroup_keys(ungrouped_keys: Iterable[str], groups: Iterable[Mapping[str, Any]]) -> list[str]:
     """Handle active ungroup keys."""
     splitable_keys = {group["merchant_key"] for group in groups if group["count"] > 1}
     return [key for key in ungrouped_keys if key in splitable_keys]
 
 
-def with_ungroup_key(ungrouped_keys, merchant_key):
+def with_ungroup_key(ungrouped_keys: Iterable[str], merchant_key: str) -> list[str]:
     """Return ungroup key."""
     if merchant_key in ungrouped_keys:
         return list(ungrouped_keys)
     return list(ungrouped_keys) + [merchant_key]
 
 
-def without_ungroup_key(ungrouped_keys, merchant_key):
+def without_ungroup_key(ungrouped_keys: Iterable[str], merchant_key: str) -> list[str]:
     """Return ungroup key."""
     return [key for key in ungrouped_keys if key != merchant_key]
 
 
-def review_summary(groups):
+def review_summary(groups: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Render summary."""
     largest_group = groups[0] if groups else None
 
@@ -297,12 +319,12 @@ def review_summary(groups):
     }
 
 
-def is_unknown_category(category, unknown_category):
+def is_unknown_category(category: object, unknown_category: str) -> bool:
     """Return whether unknown category."""
     return category is None or category == unknown_category
 
 
-def short_label(value, limit=48):
+def short_label(value: object, limit: int = 48) -> str:
     """Return a shortened label."""
     text = str(value or "").strip()
     if len(text) <= limit:

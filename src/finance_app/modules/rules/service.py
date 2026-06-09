@@ -1,5 +1,8 @@
 """Application orchestration for the rules feature."""
 
+from collections.abc import Iterable, Mapping
+from typing import Any
+
 from sqlalchemy import delete, func, select, union_all, update
 
 from finance_app.core.constants import CATEGORY_RULE_SOURCE_AUTOMATIC, CATEGORY_RULE_SOURCE_MANUAL
@@ -29,7 +32,7 @@ from finance_app.modules.categories.taxonomy import (
 from finance_app.modules.rules.forms import parse_amount_bounds, parse_rule_account_id, parse_rule_direction
 
 
-def create_rule_from_form(conn, form):
+def create_rule_from_form(conn: Any, form: Any) -> str:
     """Create rule from form."""
     tag_options = get_tag_options(conn)
     keyword = normalize_merchant_description(form.get("keyword", ""))
@@ -60,7 +63,7 @@ def create_rule_from_form(conn, form):
     return keyword
 
 
-def preview_rule_from_form(conn, form):
+def preview_rule_from_form(conn: Any, form: Any) -> dict[str, Any]:
     """Preview rule from form."""
     tag_options = get_tag_options(conn)
     keyword = normalize_merchant_description(form.get("keyword", ""))
@@ -88,7 +91,7 @@ def preview_rule_from_form(conn, form):
     }
 
 
-def update_rule_from_form(conn, rule_id, form):
+def update_rule_from_form(conn: Any, rule_id: int, form: Any) -> None:
     """Update rule from form."""
     tag_options = get_tag_options(conn)
     keyword = normalize_merchant_description(form.get("keyword", ""))
@@ -136,7 +139,7 @@ def update_rule_from_form(conn, rule_id, form):
     set_rule_tags(conn, rule_id, tags)
 
 
-def fetch_rule_source(conn, rule_id):
+def fetch_rule_source(conn: Any, rule_id: int) -> Mapping[str, Any] | None:
     """Return the merchant scope and source for a category rule."""
     return (
         conn.execute(
@@ -152,7 +155,7 @@ def fetch_rule_source(conn, rule_id):
     )
 
 
-def approve_automatic_rule(conn, rule_id):
+def approve_automatic_rule(conn: Any, rule_id: int) -> tuple[str, bool]:
     """Mark an automatic category rule as approved.
 
     Args:
@@ -178,7 +181,7 @@ def approve_automatic_rule(conn, rule_id):
     return row["keyword"], True
 
 
-def fetch_rule_approval(conn, rule_id):
+def fetch_rule_approval(conn: Any, rule_id: int) -> Mapping[str, Any] | None:
     """Return rule fields needed by the approval workflow."""
     return (
         conn.execute(
@@ -193,7 +196,7 @@ def fetch_rule_approval(conn, rule_id):
     )
 
 
-def count_rule_transaction_references(conn, rule_id):
+def count_rule_transaction_references(conn: Any, rule_id: int) -> int:
     """Return distinct transactions currently linked to one rule.
 
     Counts category assignments and rule-applied tags. The caller owns the
@@ -203,7 +206,7 @@ def count_rule_transaction_references(conn, rule_id):
     return count_rule_transaction_references_by_rule_id(conn, [rule_id]).get(rule_id, 0)
 
 
-def count_rule_transaction_references_by_rule_id(conn, rule_ids):
+def count_rule_transaction_references_by_rule_id(conn: Any, rule_ids: Iterable[object]) -> dict[int, int]:
     """Return transaction reference counts keyed by category rule id.
 
     A rule is considered applied when an existing transaction stores the rule
@@ -211,7 +214,7 @@ def count_rule_transaction_references_by_rule_id(conn, rule_ids):
     rule. Counts are distinct per transaction so a tagged category assignment
     is counted once.
     """
-    rule_ids = [int(rule_id) for rule_id in rule_ids if rule_id is not None]
+    rule_ids = [int(str(rule_id)) for rule_id in rule_ids if rule_id is not None]
     if not rule_ids:
         return {}
 
@@ -239,7 +242,7 @@ def count_rule_transaction_references_by_rule_id(conn, rule_ids):
     return {int(row["rule_id"]): int(row["count"]) for row in rows}
 
 
-def get_rule_for_apply(conn, rule_id):
+def get_rule_for_apply(conn: Any, rule_id: int) -> dict[str, Any] | None:
     """Return rule for apply."""
     row = (
         conn.execute(
@@ -271,7 +274,7 @@ def get_rule_for_apply(conn, rule_id):
     return rule
 
 
-def delete_rule(conn, rule_id):
+def delete_rule(conn: Any, rule_id: int) -> bool:
     """Delete a category rule and return whether a row was removed."""
     result = conn.execute(delete(category_rules_table).where(category_rules_table.c.id == rule_id))
     return (result.rowcount or 0) > 0

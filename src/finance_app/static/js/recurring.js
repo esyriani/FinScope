@@ -53,9 +53,8 @@ function setupRecurringActivityDetailModal() {
     } catch (_error) {
         recurringDayData = [];
     }
-    const dayModal = dayModalElement && window.bootstrap?.Modal
-        ? bootstrap.Modal.getOrCreateInstance(dayModalElement)
-        : null;
+    const dayModal =
+        dayModalElement && window.bootstrap?.Modal ? bootstrap.Modal.getOrCreateInstance(dayModalElement) : null;
     const dayModalTitle = dayModalElement?.querySelector("#recurring-calendar-day-modal-title");
     const dayModalSummary = dayModalElement?.querySelector("[data-recurring-calendar-day-summary]");
     const dayModalList = dayModalElement?.querySelector("[data-recurring-calendar-day-list]");
@@ -65,9 +64,7 @@ function setupRecurringActivityDetailModal() {
     const ignoredRecurringIds = new Set();
 
     function formatMoneyLocal(value) {
-        return window.financeFormatMoney
-            ? window.financeFormatMoney(value)
-            : Number(value || 0).toFixed(2);
+        return window.financeFormatMoney ? window.financeFormatMoney(value) : Number(value || 0).toFixed(2);
     }
 
     function formatDateLocal(value) {
@@ -180,10 +177,10 @@ function setupRecurringActivityDetailModal() {
             return financeTranslate("No action needed unless the pattern changed.");
         }
         if (
-            item.status === "overdue"
-            || item.status === "amount_changed"
-            || item.status === "possibly_inactive"
-            || item.confidence === "Low"
+            item.status === "overdue" ||
+            item.status === "amount_changed" ||
+            item.status === "possibly_inactive" ||
+            item.confidence === "Low"
         ) {
             return financeTranslate("Review this pattern before relying on it.");
         }
@@ -220,13 +217,16 @@ function setupRecurringActivityDetailModal() {
     function matchText(item) {
         const details = item.matchDetails || {};
         if (item.status === "possibly_inactive") {
-            return detailValue(details, "inactive_reason", "inactiveReason")
-                || financeTranslate("This pattern has missed multiple expected cycles.");
+            return (
+                detailValue(details, "inactive_reason", "inactiveReason") ||
+                financeTranslate("This pattern has missed multiple expected cycles.")
+            );
         }
         const matchedDate = detailValue(details, "matched_date", "matchedDate");
         const dateDifferenceDays = detailValue(details, "date_difference_days", "dateDifferenceDays");
         const amountDifference = detailValue(details, "amount_difference", "amountDifference");
-        const dateToleranceDays = detailValue(details, "date_tolerance_days", "dateToleranceDays") || fallbackDateToleranceDays;
+        const dateToleranceDays =
+            detailValue(details, "date_tolerance_days", "dateToleranceDays") || fallbackDateToleranceDays;
         const amountTolerance = detailValue(details, "amount_tolerance", "amountTolerance");
         if (!matchedDate) {
             return financeTranslate(
@@ -237,15 +237,14 @@ function setupRecurringActivityDetailModal() {
 
         return [
             financeTranslate("Best current-month match: {date}.", { date: formatDateLocal(matchedDate) }),
-            financeTranslate("Date difference: {difference}.", { difference: signedNumber(dateDifferenceDays, ` ${financeTranslate("days")}`) }),
+            financeTranslate("Date difference: {difference}.", {
+                difference: signedNumber(dateDifferenceDays, ` ${financeTranslate("days")}`),
+            }),
             financeTranslate("Amount difference: {difference}.", { difference: formatMoneyLocal(amountDifference) }),
-            financeTranslate(
-                "Tolerances: +/-{days} days and +/-{amount}.",
-                {
-                    days: dateToleranceDays,
-                    amount: formatMoneyLocal(amountTolerance)
-                }
-            )
+            financeTranslate("Tolerances: +/-{days} days and +/-{amount}.", {
+                days: dateToleranceDays,
+                amount: formatMoneyLocal(amountTolerance),
+            }),
         ].join(" ");
     }
 
@@ -273,9 +272,7 @@ function setupRecurringActivityDetailModal() {
         amountChangePanel.classList.toggle("d-none", !change);
         if (!change) return;
 
-        const percentText = Number.isFinite(Number(change.percent))
-            ? ` (${signedNumber(change.percent, "%")})`
-            : "";
+        const percentText = Number.isFinite(Number(change.percent)) ? ` (${signedNumber(change.percent, "%")})` : "";
         if (amountChangeTypical) amountChangeTypical.textContent = formatMoneyLocal(change.typical_amount);
         if (amountChangeActual) amountChangeActual.textContent = formatMoneyLocal(change.actual_amount);
         if (amountChangeDifference) {
@@ -300,8 +297,9 @@ function setupRecurringActivityDetailModal() {
     }
 
     function recurringElements(item) {
-        return Array.from(document.querySelectorAll("[data-recurring-id]"))
-            .filter((element) => element.dataset.recurringId === item.id);
+        return Array.from(document.querySelectorAll("[data-recurring-id]")).filter(
+            (element) => element.dataset.recurringId === item.id
+        );
     }
 
     function syncVisibleRecurringState(item) {
@@ -341,7 +339,7 @@ function setupRecurringActivityDetailModal() {
             merchantId: item.merchantId,
             matchType: item.matchType,
             merchant: item.merchant,
-            type: item.type
+            type: item.type,
         };
     }
 
@@ -350,9 +348,9 @@ function setupRecurringActivityDetailModal() {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "X-CSRF-Token": getCsrfToken()
+                "X-CSRF-Token": getCsrfToken(),
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.ok === false) {
@@ -428,7 +426,8 @@ function setupRecurringActivityDetailModal() {
         const items = visibleRecurringItems(day?.all_recurring_items);
         if (!day || !items.length) return;
 
-        if (dayModalTitle) dayModalTitle.textContent = financeTranslate("Recurring items - {date}", { date: formatDateLocal(date) });
+        if (dayModalTitle)
+            dayModalTitle.textContent = financeTranslate("Recurring items - {date}", { date: formatDateLocal(date) });
         if (dayModalSummary) {
             dayModalSummary.textContent = financeTranslate(
                 items.length === 1 ? "{count} recurring item" : "{count} recurring items",
@@ -504,7 +503,7 @@ function setupRecurringActivityDetailModal() {
             typicalAmount: editAmount?.value,
             dateToleranceDays: editDateTolerance?.value,
             amountTolerance: editAmountTolerance?.value,
-            active: editActive?.value || "active"
+            active: editActive?.value || "active",
         };
         try {
             const result = await postRecurringPattern("/recurring/patterns/edit", payload);
@@ -516,7 +515,7 @@ function setupRecurringActivityDetailModal() {
             item.matchDetails = {
                 ...(item.matchDetails || {}),
                 date_tolerance_days: Number(payload.dateToleranceDays || fallbackDateToleranceDays),
-                amount_tolerance: Number(payload.amountTolerance || 0)
+                amount_tolerance: Number(payload.amountTolerance || 0),
             };
             setEditPanelVisible(false);
             frequency.textContent = financeTranslate(item.frequency || "Irregular recurring");
@@ -633,7 +632,7 @@ function setupRecurringAjaxNavigation() {
         setDynamicBusy(true);
         try {
             const response = await fetch(url.toString(), {
-                headers: { "X-Requested-With": "XMLHttpRequest" }
+                headers: { "X-Requested-With": "XMLHttpRequest" },
             });
             if (!response.ok) throw new Error("Recurring refresh failed.");
 

@@ -1,5 +1,7 @@
 function normalizeExportText(value) {
-    return String(value || "").replace(/\s+/g, " ").trim();
+    return String(value || "")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 function slugifyExportName(value) {
@@ -269,10 +271,7 @@ async function exportTableCsv(table, filenameBase) {
         .map((row) => row.map(csvEscape).join(","))
         .join("\r\n");
 
-    downloadBlob(
-        new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }),
-        `${filenameBase}.csv`
-    );
+    downloadBlob(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), `${filenameBase}.csv`);
 }
 
 function xmlEscape(value) {
@@ -284,7 +283,7 @@ function xmlEscape(value) {
 }
 
 function excelSheetName(value) {
-    const cleaned = normalizeExportText(value).replace(/[:\\/?*\[\]]/g, " ");
+    const cleaned = normalizeExportText(value).replace(/[:\\/?*[\]]/g, " ");
     return cleaned.slice(0, 31) || "Export";
 }
 
@@ -294,9 +293,7 @@ async function exportTableExcel(table, filenameBase, sheetName) {
 
     const rows = tableMatrix(table, scope)
         .map((row) => {
-            const cells = row
-                .map((value) => `<Cell><Data ss:Type="String">${xmlEscape(value)}</Data></Cell>`)
-                .join("");
+            const cells = row.map((value) => `<Cell><Data ss:Type="String">${xmlEscape(value)}</Data></Cell>`).join("");
 
             return `<Row>${cells}</Row>`;
         })
@@ -341,10 +338,7 @@ function insertTableExportToolbar(table, toolbar) {
 }
 
 function exportElements(root, selector) {
-    return [
-        ...(root.matches?.(selector) ? [root] : []),
-        ...Array.from(root.querySelectorAll(selector)),
-    ];
+    return [...(root.matches?.(selector) ? [root] : []), ...Array.from(root.querySelectorAll(selector))];
 }
 
 function setupTableExports(root = document) {
@@ -354,11 +348,18 @@ function setupTableExports(root = document) {
 
         table.dataset.exportReady = "true";
         const title = elementExportTitle(table, financeTranslate("Table {number}", { number: index + 1 }));
-        const filenameBase = table.dataset.exportFilenameBase || `${slugifyExportName(title)}-${index + 1}-${exportDateStamp()}`;
+        const filenameBase =
+            table.dataset.exportFilenameBase || `${slugifyExportName(title)}-${index + 1}-${exportDateStamp()}`;
         const toolbar = createExportToolbar();
 
-        toolbar.appendChild(createExportButton(financeTranslate("CSV"), "download", () => exportTableCsv(table, filenameBase)));
-        toolbar.appendChild(createExportButton(financeTranslate("Excel"), "download", () => exportTableExcel(table, filenameBase, title)));
+        toolbar.appendChild(
+            createExportButton(financeTranslate("CSV"), "download", () => exportTableCsv(table, filenameBase))
+        );
+        toolbar.appendChild(
+            createExportButton(financeTranslate("Excel"), "download", () =>
+                exportTableExcel(table, filenameBase, title)
+            )
+        );
         insertTableExportToolbar(table, toolbar);
     });
 }

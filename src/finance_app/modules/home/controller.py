@@ -8,6 +8,6 @@ home_bp = Blueprint("home", __name__)
 
 
 @home_bp.route("/")
-def home():
+def home() -> str:
     """Render the home page."""
     return render_template("home.html", **build_home_context())

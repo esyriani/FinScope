@@ -1,10 +1,11 @@
 """Application orchestration for the home feature."""
 
 from datetime import date, datetime
+from typing import Any
 from urllib.parse import urlencode
 
 from flask import has_request_context
-from flask_login import current_user
+from flask_login import current_user  # type: ignore[import-untyped]
 from sqlalchemy import case, func, select
 
 from finance_app.background.runner import list_background_jobs
@@ -58,12 +59,12 @@ HOME_QUICK_INSIGHT_LIMIT = 3
 HOME_QUICK_INSIGHT_COMPARISON = "month_previous"
 
 
-def current_year_start():
+def current_year_start() -> Any:
     """Return the first date of the current local calendar year."""
     return date.today().replace(month=1, day=1)
 
 
-def build_home_context():
+def build_home_context() -> Any:
     """Build the Home command-center context.
 
     The Home page is a lightweight operational read model. It keeps financial
@@ -173,7 +174,7 @@ def build_home_context():
     }
 
 
-def build_home_greeting():
+def build_home_greeting() -> Any:
     """Return the personalized Home greeting message and display name."""
     display_name = "there"
     if has_request_context() and getattr(current_user, "is_authenticated", False):
@@ -189,7 +190,7 @@ def build_home_greeting():
     return {"message": message, "name": display_name}
 
 
-def build_user_sharing_context(conn):
+def build_user_sharing_context(conn: Any) -> Any:
     """Return subtle shared-access copy for the Home title area."""
     if not has_request_context() or not getattr(current_user, "is_authenticated", False):
         return {"message": "", "params": {}}
@@ -214,7 +215,7 @@ def build_user_sharing_context(conn):
     )
 
 
-def sharing_names_or_count(users):
+def sharing_names_or_count(users: Any) -> Any:
     """Return shared-with message parts for a compact user list."""
     names = [display_name_for_user(user) for user in users]
     if len(names) <= 2:
@@ -222,7 +223,7 @@ def sharing_names_or_count(users):
     return {"message": "Shared with {count} users", "params": {"count": len(names)}}
 
 
-def sharing_context(message, names="", count=0, owner=""):
+def sharing_context(message: Any, names: Any = "", count: Any = 0, owner: Any = "") -> Any:
     """Return a complete Home sharing message object for templates."""
     return {
         "message": message,
@@ -234,12 +235,12 @@ def sharing_context(message, names="", count=0, owner=""):
     }
 
 
-def display_name_for_user(user):
+def display_name_for_user(user: Any) -> Any:
     """Return a user's display label for collaborative context."""
     return (user or {}).get("display_name") or (user or {}).get("username") or ""
 
 
-def home_permissions():
+def home_permissions() -> Any:
     """Return current-user permissions that affect Home links and actions."""
     if not has_request_context():
         return {
@@ -256,7 +257,7 @@ def home_permissions():
     }
 
 
-def visible_home_attention_counts(attention_counts, permissions):
+def visible_home_attention_counts(attention_counts: Any, permissions: Any) -> Any:
     """Return Home attention counts for workflows visible to the current user."""
     counts = dict(attention_counts)
     if not permissions["can_edit_transactions"]:
@@ -271,7 +272,7 @@ def visible_home_attention_counts(attention_counts, permissions):
     return counts
 
 
-def fetch_home_overview(conn, unknown_category, start_date):
+def fetch_home_overview(conn: Any, unknown_category: Any, start_date: Any) -> Any:
     """Return current-year transaction totals for the financial pulse.
 
     Args:
@@ -336,7 +337,7 @@ def fetch_home_overview(conn, unknown_category, start_date):
     )
 
 
-def fetch_attention_summary(conn, unknown_category):
+def fetch_attention_summary(conn: Any, unknown_category: Any) -> Any:
     """Return active ledger counts that should remain visible until resolved."""
     category_value = func.coalesce(transactions_table.c.category, unknown_category)
     return (
@@ -358,22 +359,22 @@ def fetch_attention_summary(conn, unknown_category):
     )
 
 
-def fetch_statement_count(conn):
+def fetch_statement_count(conn: Any) -> Any:
     """Return the total number of uploaded statements."""
     return conn.execute(select(func.count()).select_from(statements_table)).scalar_one()
 
 
-def fetch_latest_statement(conn):
+def fetch_latest_statement(conn: Any) -> Any:
     """Return the most recently uploaded statement with its account label."""
     return conn.execute(latest_statement_query().limit(1)).mappings().fetchone()
 
 
-def fetch_recent_statements(conn, limit=2):
+def fetch_recent_statements(conn: Any, limit: Any = 2) -> Any:
     """Return recent statement uploads for the activity feed."""
     return conn.execute(latest_statement_query().limit(limit)).mappings().fetchall()
 
 
-def latest_statement_query():
+def latest_statement_query() -> Any:
     """Build the shared statement query used by Home activity widgets."""
     return (
         select(
@@ -393,7 +394,7 @@ def latest_statement_query():
     )
 
 
-def fetch_failed_imports(conn, limit=3):
+def fetch_failed_imports(conn: Any, limit: Any = 3) -> Any:
     """Return failed import count and latest failed statement rows."""
     count = conn.execute(
         select(func.count())
@@ -415,7 +416,7 @@ def fetch_failed_imports(conn, limit=3):
     }
 
 
-def fetch_rule_suggestion_count(conn):
+def fetch_rule_suggestion_count(conn: Any) -> Any:
     """Return the number of automatic rules still awaiting approval."""
     return conn.execute(
         select(func.count())
@@ -427,13 +428,13 @@ def fetch_rule_suggestion_count(conn):
     ).scalar_one()
 
 
-def build_review_work_summary(conn, unknown_category):
+def build_review_work_summary(conn: Any, unknown_category: Any) -> Any:
     """Return grouped review work for uncategorized merchant action cards."""
     groups = review_groups(conn, unknown_category)
     return review_summary(groups)
 
 
-def fetch_top_categories(conn, unknown_category, start_date, limit):
+def fetch_top_categories(conn: Any, unknown_category: Any, start_date: Any, limit: Any) -> Any:
     """Return top current-year spending categories for compact Home insights."""
     return (
         conn.execute(
@@ -456,7 +457,7 @@ def fetch_top_categories(conn, unknown_category, start_date, limit):
     )
 
 
-def fetch_recent_reviewed_transactions(conn, limit=2):
+def fetch_recent_reviewed_transactions(conn: Any, limit: Any = 2) -> Any:
     """Return recently reviewed transactions for the activity feed."""
     return (
         conn.execute(
@@ -480,7 +481,7 @@ def fetch_recent_reviewed_transactions(conn, limit=2):
     )
 
 
-def fetch_recent_categorizations(conn, limit=2):
+def fetch_recent_categorizations(conn: Any, limit: Any = 2) -> Any:
     """Return recent categorization events that were not already reviewed."""
     return (
         conn.execute(
@@ -506,7 +507,7 @@ def fetch_recent_categorizations(conn, limit=2):
     )
 
 
-def fetch_recent_rules(conn, limit=2):
+def fetch_recent_rules(conn: Any, limit: Any = 2) -> Any:
     """Return recently created category rules for the activity feed."""
     return (
         conn.execute(
@@ -532,7 +533,9 @@ def fetch_recent_rules(conn, limit=2):
     )
 
 
-def build_financial_pulse(overview, ytd_income, ytd_spending, ytd_cashflow, attention_counts):
+def build_financial_pulse(
+    overview: Any, ytd_income: Any, ytd_spending: Any, ytd_cashflow: Any, attention_counts: Any
+) -> Any:
     """Build the short semantic financial-state summary for Home."""
     transaction_count = overview["transaction_count"] or 0
     operational_count = open_attention_count(attention_counts)
@@ -566,7 +569,7 @@ def build_financial_pulse(overview, ytd_income, ytd_spending, ytd_cashflow, atte
     }
 
 
-def build_pulse_kpis(ytd_spending, ytd_cashflow, attention_counts, permissions):
+def build_pulse_kpis(ytd_spending: Any, ytd_cashflow: Any, attention_counts: Any, permissions: Any) -> Any:
     """Build compact KPI cards for the command-center header."""
     return [
         {
@@ -596,7 +599,7 @@ def build_pulse_kpis(ytd_spending, ytd_cashflow, attention_counts, permissions):
     ]
 
 
-def open_attention_href(attention_counts, permissions):
+def open_attention_href(attention_counts: Any, permissions: Any) -> Any:
     """Return an allowed destination for the Home open-attention KPI."""
     if (
         attention_counts["unknown_transactions"]
@@ -617,7 +620,7 @@ def open_attention_href(attention_counts, permissions):
     return "/transactions"
 
 
-def open_attention_count(attention_counts):
+def open_attention_count(attention_counts: Any) -> Any:
     """Return a compact count of operational work without double-counting review rows."""
     review_count = max(
         attention_counts["unknown_transactions"],
@@ -633,7 +636,7 @@ def open_attention_count(attention_counts):
     )
 
 
-def build_attention_items(attention_counts, failed_imports, failed_jobs, permissions):
+def build_attention_items(attention_counts: Any, failed_imports: Any, failed_jobs: Any, permissions: Any) -> Any:
     """Build prioritized operational items that need user attention."""
     items = []
     if attention_counts["unknown_transactions"]:
@@ -732,7 +735,9 @@ def build_attention_items(attention_counts, failed_imports, failed_jobs, permiss
     return items
 
 
-def attention_item(key, title, detail, count, href, icon, tone, latest=""):
+def attention_item(
+    key: Any, title: Any, detail: Any, count: Any, href: Any, icon: Any, tone: Any, latest: Any = ""
+) -> Any:
     """Return one normalized attention item for the Home template."""
     return {
         "key": key,
@@ -747,15 +752,15 @@ def attention_item(key, title, detail, count, href, icon, tone, latest=""):
 
 
 def build_recent_activity(
-    recent_statements,
-    recent_reviewed,
-    recent_categorizations,
-    recent_rules,
-    recurring_items,
-    permissions,
-):
+    recent_statements: Any,
+    recent_reviewed: Any,
+    recent_categorizations: Any,
+    recent_rules: Any,
+    recurring_items: Any,
+    permissions: Any,
+) -> Any:
     """Build a small mixed activity feed from existing operational sources."""
-    items = []
+    items: list[Any] = []
     if permissions["can_import_statements"]:
         items.extend(statement_activity_item(row) for row in recent_statements)
     items.extend(reviewed_activity_item(row) for row in recent_reviewed)
@@ -768,7 +773,7 @@ def build_recent_activity(
     return items[:RECENT_ACTIVITY_LIMIT]
 
 
-def statement_activity_item(row):
+def statement_activity_item(row: Any) -> Any:
     """Return an activity-feed item for a statement upload."""
     return {
         "type": "statement",
@@ -783,7 +788,7 @@ def statement_activity_item(row):
     }
 
 
-def reviewed_activity_item(row):
+def reviewed_activity_item(row: Any) -> Any:
     """Return an activity-feed item for a reviewed transaction."""
     return {
         "type": "reviewed",
@@ -798,7 +803,7 @@ def reviewed_activity_item(row):
     }
 
 
-def categorization_activity_item(row):
+def categorization_activity_item(row: Any) -> Any:
     """Return an activity-feed item for a transaction categorization."""
     return {
         "type": "categorized",
@@ -813,7 +818,7 @@ def categorization_activity_item(row):
     }
 
 
-def rule_activity_item(row):
+def rule_activity_item(row: Any) -> Any:
     """Return an activity-feed item for a created rule."""
     label = row["merchant_name"] or row["keyword"]
     return {
@@ -829,7 +834,7 @@ def rule_activity_item(row):
     }
 
 
-def recurring_activity_items(recurring_items, limit=2):
+def recurring_activity_items(recurring_items: Any, limit: Any = 2) -> Any:
     """Return activity-feed items for recent current-month recurring signals."""
     priority = {
         "overdue": 0,
@@ -857,7 +862,7 @@ def recurring_activity_items(recurring_items, limit=2):
     ]
 
 
-def build_suggested_actions(attention_counts, permissions):
+def build_suggested_actions(attention_counts: Any, permissions: Any) -> Any:
     """Return primary Home actions with links into the existing workflow."""
     recurring_count = attention_counts["overdue_recurring"] + attention_counts["amount_changes"]
     actions = [
@@ -914,13 +919,13 @@ def build_suggested_actions(attention_counts, permissions):
     return actions[:SUGGESTED_ACTION_LIMIT]
 
 
-def build_primary_action(suggested_actions):
+def build_primary_action(suggested_actions: Any) -> Any:
     """Return the most important Home shortcut for the pulse banner."""
     primary_actions = [action for action in suggested_actions if action["primary"]]
     return primary_actions[0] if primary_actions else suggested_actions[0]
 
 
-def fetch_ranked_comparison_quick_insights(conn, unknown_category, merchant_table_limit):
+def fetch_ranked_comparison_quick_insights(conn: Any, unknown_category: Any, merchant_table_limit: Any) -> Any:
     """Return ranked comparison insight candidates adapted for Home."""
     period_context = build_period_comparison(
         conn,
@@ -942,7 +947,7 @@ def fetch_ranked_comparison_quick_insights(conn, unknown_category, merchant_tabl
     ]
 
 
-def home_quick_insight_from_comparison_card(card, period_context, comparison_key):
+def home_quick_insight_from_comparison_card(card: Any, period_context: Any, comparison_key: Any) -> Any:
     """Adapt a comparison insight card to the compact Home quick-insight row."""
     return {
         **card,
@@ -954,7 +959,7 @@ def home_quick_insight_from_comparison_card(card, period_context, comparison_key
     }
 
 
-def home_quick_insight_detail(card):
+def home_quick_insight_detail(card: Any) -> Any:
     """Return a short detail line for a Home insight row."""
     entity = insight_entity(card)
     title = card.get("title") or ""
@@ -972,7 +977,7 @@ def home_quick_insight_detail(card):
     return card.get("detail") or ""
 
 
-def comparison_card_has_entity(card):
+def comparison_card_has_entity(card: Any) -> Any:
     """Return whether a comparison card detail contains category or merchant user data."""
     group = card.get("group")
     insight_type = str(card.get("insight_type") or "")
@@ -981,7 +986,7 @@ def comparison_card_has_entity(card):
     )
 
 
-def home_quick_insight_href(card, period_context, comparison_key):
+def home_quick_insight_href(card: Any, period_context: Any, comparison_key: Any) -> Any:
     """Return the most useful existing page link for a Home insight card."""
     group = card.get("group")
     insight_type = str(card.get("insight_type") or "")
@@ -999,7 +1004,7 @@ def home_quick_insight_href(card, period_context, comparison_key):
     return comparison_period_url(comparison_key)
 
 
-def insight_entity(card):
+def insight_entity(card: Any) -> Any:
     """Return the category or merchant entity represented by a comparison card."""
     metrics = card.get("selection_metrics") or {}
     if metrics.get("entity_key"):
@@ -1013,7 +1018,7 @@ def insight_entity(card):
     return title
 
 
-def comparison_period_url(comparison_key, categories=None):
+def comparison_period_url(comparison_key: Any, categories: Any = None) -> Any:
     """Return a comparison URL for the Home insight preview."""
     params = {"period_comparison": comparison_key}
     if categories:
@@ -1023,7 +1028,7 @@ def comparison_period_url(comparison_key, categories=None):
     return query_url("/comparison", **params)
 
 
-def current_period_transactions_url(period_context, *, merchant_key=""):
+def current_period_transactions_url(period_context: Any, *, merchant_key: Any = "") -> Any:
     """Return a current-period transactions URL for merchant insight drill-downs."""
     date_from = period_context["current_start"]
     date_to = period_context["current_end"]
@@ -1050,14 +1055,14 @@ def current_period_transactions_url(period_context, *, merchant_key=""):
 
 
 def build_quick_insights(
-    overview,
-    latest_statement,
-    statement_count,
-    top_categories,
-    recurring_summary,
-    permissions,
-    comparison_quick_insights=None,
-):
+    overview: Any,
+    latest_statement: Any,
+    statement_count: Any,
+    top_categories: Any,
+    recurring_summary: Any,
+    permissions: Any,
+    comparison_quick_insights: Any = None,
+) -> Any:
     """Return compact insight rows that avoid dashboard-style analytics."""
     fallback_insights = build_operational_quick_insights(
         overview,
@@ -1073,13 +1078,13 @@ def build_quick_insights(
 
 
 def build_operational_quick_insights(
-    overview,
-    latest_statement,
-    statement_count,
-    top_categories,
-    recurring_summary,
-    permissions,
-):
+    overview: Any,
+    latest_statement: Any,
+    statement_count: Any,
+    top_categories: Any,
+    recurring_summary: Any,
+    permissions: Any,
+) -> Any:
     """Return fallback operational quick-insight rows for sparse ledgers."""
     insights = []
     insights.append(
@@ -1131,7 +1136,7 @@ def build_operational_quick_insights(
     return insights
 
 
-def query_url(path, **params):
+def query_url(path: Any, **params: Any) -> Any:
     """Return a local URL with non-empty query parameters."""
     cleaned = {}
     for key, value in params.items():
@@ -1146,19 +1151,19 @@ def query_url(path, **params):
     return f"{path}?{query}" if query else path
 
 
-def date_part(value):
+def date_part(value: Any) -> Any:
     """Return the ISO date portion of a database date or timestamp value."""
     if not value:
         return ""
     return str(value).replace(" ", "T").split("T", 1)[0]
 
 
-def sortable_timestamp(value):
+def sortable_timestamp(value: Any) -> Any:
     """Return a lexicographically sortable timestamp string."""
     return str(value or "").replace(" ", "T")
 
 
-def recurring_status_title(status):
+def recurring_status_title(status: Any) -> Any:
     """Return the display label for recurring activity status values."""
     return {
         "occurred": "Occurred",

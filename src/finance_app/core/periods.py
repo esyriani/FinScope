@@ -2,18 +2,21 @@
 
 from calendar import monthrange
 from datetime import date, datetime, timedelta
+from typing import Literal, TypeAlias
 
 from finance_app.core.i18n import gettext, month_abbreviation
 
-PERIOD_WEEK = "week"
-PERIOD_MONTH = "month"
-PERIOD_90_DAYS = "90d"
-PERIOD_6_MONTHS = "6m"
-PERIOD_YEAR_TO_DATE = "ytd"
-PERIOD_YEAR = "year"
-PERIOD_ALL = "all"
-PERIOD_CUSTOM = "custom"
-DATE_PERIODS = (
+DatePeriod: TypeAlias = Literal["week", "month", "90d", "6m", "ytd", "year", "all", "custom"]
+
+PERIOD_WEEK: DatePeriod = "week"
+PERIOD_MONTH: DatePeriod = "month"
+PERIOD_90_DAYS: DatePeriod = "90d"
+PERIOD_6_MONTHS: DatePeriod = "6m"
+PERIOD_YEAR_TO_DATE: DatePeriod = "ytd"
+PERIOD_YEAR: DatePeriod = "year"
+PERIOD_ALL: DatePeriod = "all"
+PERIOD_CUSTOM: DatePeriod = "custom"
+DATE_PERIODS: tuple[DatePeriod, ...] = (
     PERIOD_WEEK,
     PERIOD_MONTH,
     PERIOD_90_DAYS,
@@ -23,8 +26,8 @@ DATE_PERIODS = (
     PERIOD_ALL,
     PERIOD_CUSTOM,
 )
-DEFAULT_DATE_PERIOD = PERIOD_YEAR_TO_DATE
-DATE_PERIOD_OPTIONS = (
+DEFAULT_DATE_PERIOD: DatePeriod = PERIOD_YEAR_TO_DATE
+DATE_PERIOD_OPTIONS: tuple[tuple[DatePeriod, str], ...] = (
     (PERIOD_WEEK, "Last 7 days"),
     (PERIOD_MONTH, "Last month"),
     (PERIOD_90_DAYS, "Last 90 days"),
@@ -36,12 +39,14 @@ DATE_PERIOD_OPTIONS = (
 )
 
 
-def normalize_date_period(period):
+def normalize_date_period(period: str | None) -> DatePeriod:
     """Return a supported reporting date period."""
-    return period if period in DATE_PERIODS else DEFAULT_DATE_PERIOD
+    if period in DATE_PERIODS:
+        return period
+    return DEFAULT_DATE_PERIOD
 
 
-def shift_months(value, months):
+def shift_months(value: date, months: int) -> date:
     """Return a date shifted by whole calendar months."""
     month_index = (value.year * 12) + (value.month - 1) + months
     year = month_index // 12
@@ -50,14 +55,14 @@ def shift_months(value, months):
     return value.replace(year=year, month=month, day=day)
 
 
-def shift_years(value, years):
+def shift_years(value: date, years: int) -> date:
     """Return a date shifted by whole calendar years."""
     year = value.year + years
     day = min(value.day, monthrange(year, value.month)[1])
     return value.replace(year=year, day=day)
 
 
-def period_start_date(period, today=None):
+def period_start_date(period: str | None, today: date | None = None) -> date | None:
     """Return the inclusive start date for a reporting period."""
     period = normalize_date_period(period)
     today = today or date.today()
@@ -83,7 +88,7 @@ def period_start_date(period, today=None):
     return None
 
 
-def previous_period_date_range(period, today=None):
+def previous_period_date_range(period: str | None, today: date | None = None) -> tuple[date | None, date | None]:
     """Return the previous-period inclusive start and exclusive end dates."""
     period = normalize_date_period(period)
     today = today or date.today()
@@ -109,7 +114,7 @@ def previous_period_date_range(period, today=None):
     return None, None
 
 
-def parse_iso_date(value):
+def parse_iso_date(value: object) -> str:
     """Parse an ISO date string into the canonical date format."""
     value = str(value or "").strip()
     if not value:
@@ -123,7 +128,7 @@ def parse_iso_date(value):
     return value
 
 
-def format_date_label(value):
+def format_date_label(value: object) -> str:
     """Format an ISO date for display in page labels."""
     value = parse_iso_date(value)
     if not value:
@@ -133,8 +138,9 @@ def format_date_label(value):
     return f"{date_obj.day:02d}-{month_abbreviation(date_obj.month)}-{date_obj.year}"
 
 
-def get_period_label(period, date_from="", date_to=""):
+def get_period_label(period: str | None, date_from: object = "", date_to: object = "") -> str:
     """Return a human-readable label for a selected reporting period."""
+    period = normalize_date_period(period)
     if period == PERIOD_CUSTOM:
         from_label = format_date_label(date_from)
         to_label = format_date_label(date_to)
@@ -146,5 +152,5 @@ def get_period_label(period, date_from="", date_to=""):
             return gettext("through {date}", date=to_label)
         return gettext("custom range")
 
-    labels = dict(DATE_PERIOD_OPTIONS)
-    return gettext(labels.get(period, labels[DEFAULT_DATE_PERIOD]))
+    labels: dict[DatePeriod, str] = dict(DATE_PERIOD_OPTIONS)
+    return gettext(labels[period])

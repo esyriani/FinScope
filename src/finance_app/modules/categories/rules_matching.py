@@ -1,8 +1,10 @@
 """Category rule matching helpers."""
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import InvalidOperation
 from difflib import SequenceMatcher
+from typing import Any
 
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
@@ -11,7 +13,7 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_AUTOMATIC,
     CATEGORY_RULE_SOURCE_MANUAL,
 )
-from finance_app.core.money import money_to_float, quantize_money
+from finance_app.core.money import MoneyValue, money_to_float, quantize_money
 from finance_app.core.text import strip_accents
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
@@ -29,14 +31,14 @@ class ScoredRuleMatch:
         tags: Rule tag labels.
     """
 
-    rule: dict
+    rule: dict[str, Any]
     match_score: float
     confidence: float
     category: str
     tags: tuple[str, ...]
 
     @property
-    def specificity(self):
+    def specificity(self) -> tuple[int, int, int, int, int]:
         """Return the rule specificity tuple used to break equivalent matches."""
         return rule_specificity(self.rule)
 
@@ -47,15 +49,15 @@ FUZZY_RULE_MATCH_THRESHOLD = 0.86
 
 
 def match_category_rule(
-    merchant_key,
-    amount,
-    rules,
-    merchant_candidate=None,
-    raw_description=None,
-    merchant_id=None,
-    account_id=None,
-    transaction_kind=None,
-):
+    merchant_key: object,
+    amount: MoneyValue | None,
+    rules: Iterable[Mapping[str, Any]],
+    merchant_candidate: object | None = None,
+    raw_description: object | None = None,
+    merchant_id: object | None = None,
+    account_id: object | None = None,
+    transaction_kind: object | None = None,
+) -> dict[str, Any] | None:
     """Return the deterministic rule match for a transaction, if any."""
     scored = score_category_rule_match(
         merchant_key,
@@ -72,16 +74,16 @@ def match_category_rule(
 
 
 def score_category_rule_match(
-    merchant_key,
-    amount,
-    rules,
-    merchant_candidate=None,
-    raw_description=None,
-    merchant_id=None,
-    account_id=None,
-    transaction_kind=None,
-    include_fuzzy=True,
-):
+    merchant_key: object,
+    amount: MoneyValue | None,
+    rules: Iterable[Mapping[str, Any]],
+    merchant_candidate: object | None = None,
+    raw_description: object | None = None,
+    merchant_id: object | None = None,
+    account_id: object | None = None,
+    transaction_kind: object | None = None,
+    include_fuzzy: bool = True,
+) -> ScoredRuleMatch | None:
     """Return the best matching rule with a confidence score.
 
     Existing deterministic matching semantics are preserved for callers of
@@ -104,25 +106,26 @@ def score_category_rule_match(
 
 
 def score_category_rule_matches(
-    merchant_key,
-    amount,
-    rules,
-    merchant_candidate=None,
-    raw_description=None,
-    merchant_id=None,
-    account_id=None,
-    transaction_kind=None,
-    include_fuzzy=True,
-):
+    merchant_key: object,
+    amount: MoneyValue | None,
+    rules: Iterable[Mapping[str, Any]],
+    merchant_candidate: object | None = None,
+    raw_description: object | None = None,
+    merchant_id: object | None = None,
+    account_id: object | None = None,
+    transaction_kind: object | None = None,
+    include_fuzzy: bool = True,
+) -> list[ScoredRuleMatch]:
     """Return all category rules matching a transaction with deterministic scores."""
     candidates = merchant_match_candidates(
         merchant_key,
         merchant_candidate,
         raw_description=raw_description,
     )
-    matches = []
+    amount_value = money_to_float(amount) if amount is not None else None
+    matches: list[ScoredRuleMatch] = []
     for rule in rules:
-        if rule["category"] == "Income" and (amount is None or amount >= 0):
+        if rule["category"] == "Income" and (amount_value is None or amount_value >= 0):
             continue
         if not rule_direction_matches(rule, amount, transaction_kind=transaction_kind):
             continue
@@ -133,7 +136,7 @@ def score_category_rule_matches(
 
         rule_merchant_id = rule["merchant_id"] if "merchant_id" in rule.keys() else rule.get("merchant_id")
         if rule_merchant_id is not None:
-            if merchant_id is not None and int(merchant_id) == int(rule_merchant_id):
+            if merchant_id is not None and int(str(merchant_id)) == int(str(rule_merchant_id)):
                 matches.append(
                     scored_rule_match(
                         rule,
@@ -167,8 +170,9 @@ def score_category_rule_matches(
     return matches
 
 
-def select_winning_rule_match(matches):
+def select_winning_rule_match(matches: Iterable[ScoredRuleMatch]) -> ScoredRuleMatch | None:
     """Return the winning match using the existing rule precedence model."""
+    matches = list(matches)
     if not matches:
         return None
     return max(
@@ -177,7 +181,7 @@ def select_winning_rule_match(matches):
     )
 
 
-def rule_match_precedence_key(match):
+def rule_match_precedence_key(match: ScoredRuleMatch) -> tuple[float, float, tuple[int, int, int, int, int]]:
     """Return the precedence tuple used to select the winning rule match."""
     return (
         match.confidence,
@@ -186,9 +190,13 @@ def rule_match_precedence_key(match):
     )
 
 
-def merchant_match_candidates(merchant_key, merchant_candidate=None, raw_description=None):
+def merchant_match_candidates(
+    merchant_key: object,
+    merchant_candidate: object | None = None,
+    raw_description: object | None = None,
+) -> list[str]:
     """Build normalized and raw-text candidates for keyword matching."""
-    candidates = []
+    candidates: list[str] = []
     for value in (merchant_key, merchant_candidate):
         text = normalize_merchant_description(value)
         if text and text not in candidates:
@@ -201,7 +209,7 @@ def merchant_match_candidates(merchant_key, merchant_candidate=None, raw_descrip
     return candidates
 
 
-def raw_description_candidate(raw_description):
+def raw_description_candidate(raw_description: object) -> str:
     """Return a lossless uppercase transaction-description match candidate."""
     text = str(raw_description or "").strip()
     if not text:
@@ -210,13 +218,13 @@ def raw_description_candidate(raw_description):
 
 
 def scored_rule_match(
-    rule,
-    amount,
-    match_score,
-    merchant_id_matched=False,
-    account_id=None,
-    transaction_kind=None,
-):
+    rule: Mapping[str, Any],
+    amount: MoneyValue | None,
+    match_score: float,
+    merchant_id_matched: bool = False,
+    account_id: object | None = None,
+    transaction_kind: object | None = None,
+) -> ScoredRuleMatch:
     """Build a scored rule match from match quality and rule specificity."""
     confidence = rule_confidence(
         rule,
@@ -235,15 +243,23 @@ def scored_rule_match(
     )
 
 
-def best_rule_text_score(keyword, candidates, manual_rule=False, include_fuzzy=True):
+def best_rule_text_score(
+    keyword: object,
+    candidates: Iterable[object],
+    manual_rule: bool = False,
+    include_fuzzy: bool = True,
+) -> float | None:
     """Return the strongest keyword score for normalized merchant candidates."""
+    keyword = str(keyword or "")
     if not keyword:
         return None
 
-    best_score = None
-    for candidate in candidates:
+    best_score: float | None = None
+    for raw_candidate in candidates:
+        candidate = str(raw_candidate or "")
         if not candidate:
             continue
+        score: float | None
         if candidate == keyword:
             score = 0.94
         elif manual_rule and is_strong_prefix_match(keyword, candidate):
@@ -263,14 +279,14 @@ def best_rule_text_score(keyword, candidates, manual_rule=False, include_fuzzy=T
     return best_score
 
 
-def is_strong_prefix_match(keyword, candidate):
+def is_strong_prefix_match(keyword: str, candidate: str) -> bool:
     """Return whether a manual keyword is a strong full-word merchant prefix."""
     if not prefix_matches_full_word(keyword, candidate):
         return False
     return keyword_has_prefix_match_signal(keyword)
 
 
-def prefix_matches_full_word(keyword, candidate):
+def prefix_matches_full_word(keyword: str, candidate: str) -> bool:
     """Return whether the keyword starts the candidate without splitting a token."""
     if not keyword or not candidate.startswith(keyword) or candidate == keyword:
         return False
@@ -279,13 +295,20 @@ def prefix_matches_full_word(keyword, candidate):
     return not next_character.isalnum()
 
 
-def keyword_has_prefix_match_signal(keyword):
+def keyword_has_prefix_match_signal(keyword: str) -> bool:
     """Return whether a keyword is specific enough for prefix auto-approval."""
     tokens = [token for token in keyword.split() if token]
     return len(tokens) >= 2 or len("".join(tokens)) >= 12
 
 
-def rule_confidence(rule, amount, match_score, merchant_id_matched=False, account_id=None, transaction_kind=None):
+def rule_confidence(
+    rule: Mapping[str, Any],
+    amount: MoneyValue | None,
+    match_score: float,
+    merchant_id_matched: bool = False,
+    account_id: object | None = None,
+    transaction_kind: object | None = None,
+) -> float:
     """Return deterministic confidence for a matched category rule."""
     confidence = match_score
 
@@ -303,13 +326,14 @@ def rule_confidence(rule, amount, match_score, merchant_id_matched=False, accoun
     confidence += rule_source_adjustment(rule)
     confidence += amount_specificity_adjustment(rule, amount)
 
-    if rule["category"] == "Income" and amount is not None and amount < 0:
+    amount_value = money_to_float(amount) if amount is not None else None
+    if rule["category"] == "Income" and amount_value is not None and amount_value < 0:
         confidence += 0.06
 
     return max(0.0, min(1.0, round(confidence, 4)))
 
 
-def rule_source_adjustment(rule):
+def rule_source_adjustment(rule: Mapping[str, Any]) -> float:
     """Return confidence adjustment for the rule's origin."""
     return {
         CATEGORY_RULE_SOURCE_MANUAL: 0.02,
@@ -317,12 +341,12 @@ def rule_source_adjustment(rule):
     }.get(rule_source(rule), 0.0)
 
 
-def rule_source(rule):
+def rule_source(rule: Mapping[str, Any]) -> Any:
     """Return the source value for a category rule mapping."""
     return rule["source"] if "source" in rule.keys() else rule.get("source")
 
 
-def amount_specificity_adjustment(rule, amount):
+def amount_specificity_adjustment(rule: Mapping[str, Any], amount: MoneyValue | None) -> float:
     """Return confidence adjustment for amount constraints on a rule."""
     amount_min = rule["amount_min"] if "amount_min" in rule.keys() else None
     amount_max = rule["amount_max"] if "amount_max" in rule.keys() else None
@@ -331,19 +355,19 @@ def amount_specificity_adjustment(rule, amount):
     if amount is None:
         return -0.05
 
-    amount = abs(money_to_float(amount))
+    amount_value = abs(money_to_float(amount))
     parsed_min = money_to_float(amount_min) if amount_min is not None else None
     parsed_max = money_to_float(amount_max) if amount_max is not None else None
     if parsed_min is not None and parsed_max is not None:
         if parsed_min == parsed_max:
             return 0.08
         width = abs(parsed_max - parsed_min)
-        return 0.08 if width <= max(amount, 10.0) else 0.04
+        return 0.08 if width <= max(amount_value, 10.0) else 0.04
 
     return 0.03
 
 
-def rule_specificity(rule):
+def rule_specificity(rule: Mapping[str, Any]) -> tuple[int, int, int, int, int]:
     """Return a stable specificity score for ordering equivalent rule matches."""
     keyword = normalize_merchant_description(rule["keyword"])
     has_merchant = rule["merchant_id"] if "merchant_id" in rule.keys() else rule.get("merchant_id")
@@ -361,12 +385,12 @@ def rule_specificity(rule):
     )
 
 
-def rule_account_id(rule):
+def rule_account_id(rule: Mapping[str, Any]) -> Any:
     """Return the optional account constraint for a category rule."""
     return rule["account_id"] if "account_id" in rule.keys() else rule.get("account_id")
 
 
-def rule_direction(rule):
+def rule_direction(rule: Mapping[str, Any]) -> str:
     """Return the normalized direction constraint for a category rule."""
     direction = rule["direction"] if "direction" in rule.keys() else rule.get("direction")
     direction = str(direction or CATEGORY_RULE_DIRECTION_ANY).strip().lower()
@@ -375,17 +399,21 @@ def rule_direction(rule):
     return CATEGORY_RULE_DIRECTION_ANY
 
 
-def rule_account_matches(rule, account_id):
+def rule_account_matches(rule: Mapping[str, Any], account_id: object | None) -> bool:
     """Return whether a transaction account satisfies a rule constraint."""
     rule_account = rule_account_id(rule)
     if rule_account is None:
         return True
     if account_id is None:
         return False
-    return int(rule_account) == int(account_id)
+    return int(str(rule_account)) == int(str(account_id))
 
 
-def rule_direction_matches(rule, amount, transaction_kind=None):
+def rule_direction_matches(
+    rule: Mapping[str, Any],
+    amount: MoneyValue | None,
+    transaction_kind: object | None = None,
+) -> bool:
     """Return whether a transaction direction satisfies a rule constraint."""
     direction = rule_direction(rule)
     if direction == CATEGORY_RULE_DIRECTION_ANY:
@@ -401,7 +429,7 @@ def rule_direction_matches(rule, amount, transaction_kind=None):
     return True
 
 
-def rule_amount_matches(rule, amount):
+def rule_amount_matches(rule: Mapping[str, Any], amount: MoneyValue | None) -> bool:
     """Build amount matches."""
     amount_min = rule["amount_min"] if "amount_min" in rule.keys() else None
     amount_max = rule["amount_max"] if "amount_max" in rule.keys() else None
@@ -425,13 +453,17 @@ def rule_amount_matches(rule, amount):
     return True
 
 
-def merchant_category_cache_key(merchant_key, amount, merchant_id=None):
+def merchant_category_cache_key(
+    merchant_key: object,
+    amount: MoneyValue | None,
+    merchant_id: object | None = None,
+) -> tuple[Any, str | None]:
     """Build an amount-aware category cache key for equivalent transactions."""
     merchant_part = f"merchant:{merchant_id}" if merchant_id else merchant_key
     return merchant_part, amount_cache_key(amount)
 
 
-def amount_cache_key(amount):
+def amount_cache_key(amount: MoneyValue | None) -> str | None:
     """Return a stable signed cents key for category cache comparisons."""
     try:
         normalized = quantize_money(amount)

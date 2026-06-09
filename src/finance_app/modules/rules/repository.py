@@ -1,5 +1,8 @@
 """Persistence helpers for the rules feature."""
 
+from collections.abc import Iterable, Mapping, MutableSequence, Sequence
+from typing import Any
+
 from sqlalchemy import and_, delete, func, insert, select
 
 from finance_app.core.money import optional_money_to_float
@@ -29,12 +32,17 @@ from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, se
 from finance_app.modules.merchants.repository import find_merchant_by_name, get_or_create_merchant_for_name
 
 
-def existing_category_names(conn):
+def existing_category_names(conn: Any) -> set[str]:
     """Return existing category names."""
     return {row["name"] for row in conn.execute(select(categories_table.c.name)).mappings().fetchall()}
 
 
-def ensure_import_category(conn, category, existing_categories, created_categories):
+def ensure_import_category(
+    conn: Any,
+    category: str,
+    existing_categories: set[str],
+    created_categories: MutableSequence[str],
+) -> None:
     """Ensure import category."""
     if category in existing_categories:
         return
@@ -44,7 +52,7 @@ def ensure_import_category(conn, category, existing_categories, created_categori
     created_categories.append(category)
 
 
-def category_rule_exists(conn, rule):
+def category_rule_exists(conn: Any, rule: Mapping[str, Any]) -> bool:
     """Build rule exists."""
     merchant_id = resolve_rule_merchant_id(conn, rule)
     account_id = resolve_rule_account_id(conn, rule)
@@ -95,7 +103,7 @@ def category_rule_exists(conn, rule):
     )
 
 
-def insert_imported_rule(conn, rule):
+def insert_imported_rule(conn: Any, rule: Mapping[str, Any]) -> int:
     """Handle insert imported rule."""
     merchant_id = resolve_rule_merchant_id(conn, rule, create=True)
     account_id = resolve_rule_account_id(conn, rule, require_existing=True)
@@ -120,7 +128,7 @@ def insert_imported_rule(conn, rule):
     return rule_id
 
 
-def resolve_rule_merchant_id(conn, rule, create=False):
+def resolve_rule_merchant_id(conn: Any, rule: Mapping[str, Any], create: bool = False) -> int | None:
     """Resolve an imported or snapshotted rule to an optional merchant ID."""
     merchant_id = normalize_optional_merchant_id(rule.get("merchant_id"))
     if merchant_id is not None:
@@ -136,7 +144,7 @@ def resolve_rule_merchant_id(conn, rule, create=False):
     return merchant["id"] if merchant else None
 
 
-def resolve_rule_account_id(conn, rule, require_existing=False):
+def resolve_rule_account_id(conn: Any, rule: Mapping[str, Any], require_existing: bool = False) -> int | None:
     """Resolve an imported or snapshotted rule to an optional account ID.
 
     When ``require_existing`` is true, an explicit account name must already
@@ -159,7 +167,7 @@ def resolve_rule_account_id(conn, rule, require_existing=False):
     return None
 
 
-def snapshot_category_rules(conn):
+def snapshot_category_rules(conn: Any) -> list[dict[str, Any]]:
     """Handle snapshot category rules."""
     rows = [
         dict(row)
@@ -200,7 +208,7 @@ def snapshot_category_rules(conn):
     return [rule_snapshot(row) for row in rows]
 
 
-def snapshot_rule_by_id(conn, rule_id):
+def snapshot_rule_by_id(conn: Any, rule_id: int) -> dict[str, Any] | None:
     """Handle snapshot rule by ID."""
     row = (
         conn.execute(
@@ -241,7 +249,7 @@ def snapshot_rule_by_id(conn, rule_id):
     return rule_snapshot(row)
 
 
-def rule_snapshot(row):
+def rule_snapshot(row: Mapping[str, Any]) -> dict[str, Any]:
     """Build snapshot."""
     return {
         "id": row["id"],
@@ -262,7 +270,7 @@ def rule_snapshot(row):
     }
 
 
-def rule_snapshots_equal(left, right):
+def rule_snapshots_equal(left: Sequence[Mapping[str, Any]], right: Sequence[Mapping[str, Any]]) -> bool:
     """Build snapshots equal."""
     columns = (
         "id",
@@ -283,7 +291,7 @@ def rule_snapshots_equal(left, right):
     ]
 
 
-def snapshot_transaction_rule_refs(conn):
+def snapshot_transaction_rule_refs(conn: Any) -> list[dict[str, Any]]:
     """Handle snapshot transaction rule refs."""
     rows = (
         conn.execute(
@@ -306,7 +314,7 @@ def snapshot_transaction_rule_refs(conn):
     ]
 
 
-def rule_reference_count(conn, rule_ids):
+def rule_reference_count(conn: Any, rule_ids: int | Iterable[object]) -> int:
     """Build reference count."""
     if isinstance(rule_ids, int):
         rule_ids = [rule_ids]
@@ -322,7 +330,7 @@ def rule_reference_count(conn, rule_ids):
     ).scalar_one()
 
 
-def restore_category_rules(conn, rules):
+def restore_category_rules(conn: Any, rules: Sequence[Mapping[str, Any]]) -> None:
     """Restore category rules."""
     for rule in rules:
         category_id = rule.get("category_id")
@@ -348,7 +356,7 @@ def restore_category_rules(conn, rules):
         set_rule_tags(conn, rule["id"], rule.get("tags", []))
 
 
-def remove_imported_categories(conn, categories):
+def remove_imported_categories(conn: Any, categories: Sequence[str]) -> int:
     """Remove imported categories."""
     removed = 0
 

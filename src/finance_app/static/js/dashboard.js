@@ -101,7 +101,9 @@ function setupDashboardQualityPanel(root = document) {
     if (!button || button.dataset.dashboardQualityReady === "true") return;
 
     const targetSelector = button.getAttribute("data-bs-target");
-    const collapseElement = targetSelector ? root.querySelector(targetSelector) || document.querySelector(targetSelector) : null;
+    const collapseElement = targetSelector
+        ? root.querySelector(targetSelector) || document.querySelector(targetSelector)
+        : null;
     if (!collapseElement) return;
 
     button.dataset.dashboardQualityReady = "true";

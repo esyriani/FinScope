@@ -1,7 +1,9 @@
 """Category and tag taxonomy helpers."""
 
+from collections.abc import Iterable, Mapping
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import case, delete, func, insert, literal, select, update
 
@@ -57,14 +59,14 @@ TAG_COLOR_PALETTE = (
 )
 
 
-def load_category_seed(path=CATEGORY_SEED_PATH):
+def load_category_seed(path: str | Path = CATEGORY_SEED_PATH) -> dict[str, list[dict[str, str]]]:
     """Load category seed."""
     if not Path(path).exists():
         return {"categories": [], "tags": []}
 
-    sections = {"categories": [], "tags": []}
-    current_section = None
-    current_item = None
+    sections: dict[str, list[dict[str, str]]] = {"categories": [], "tags": []}
+    current_section: str | None = None
+    current_item: dict[str, str] | None = None
 
     for raw_line in Path(path).read_text(encoding="utf-8").splitlines():
         line = raw_line.rstrip()
@@ -100,17 +102,17 @@ def load_category_seed(path=CATEGORY_SEED_PATH):
 
 
 @lru_cache(maxsize=1)
-def builtin_tag_names():
+def builtin_tag_names() -> tuple[str, ...]:
     """Return seed-defined tag names used for built-in tag ordering."""
     return tuple(tag["name"] for tag in load_category_seed()["tags"])
 
 
-def is_builtin_tag_name(name):
+def is_builtin_tag_name(name: object) -> bool:
     """Return whether a tag name comes from the bundled taxonomy seed."""
     return clean_label(name) in set(builtin_tag_names())
 
 
-def builtin_tag_order_expression():
+def builtin_tag_order_expression() -> Any:
     """Return a Core expression that sorts seed-defined tags after user tags."""
     names = builtin_tag_names()
     if not names:
@@ -118,14 +120,14 @@ def builtin_tag_order_expression():
     return case((tags_table.c.name.in_(names), 1), else_=0)
 
 
-def unquote_yaml_scalar(value):
+def unquote_yaml_scalar(value: str) -> str:
     """Unquote yaml scalar."""
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         return value[1:-1]
     return value
 
 
-def clean_taxonomy_item(item):
+def clean_taxonomy_item(item: Mapping[str, Any]) -> dict[str, str]:
     """Clean taxonomy item."""
     return {
         "name": clean_label(item.get("name")),
@@ -135,12 +137,12 @@ def clean_taxonomy_item(item):
     }
 
 
-def clean_label(value):
+def clean_label(value: object) -> str:
     """Clean label."""
     return " ".join(str(value or "").strip().split())
 
 
-def clean_color(value):
+def clean_color(value: object) -> str:
     """Clean color."""
     color = str(value or "").strip()
     hex_digits = "0123456789abcdefABCDEF"
@@ -149,7 +151,7 @@ def clean_color(value):
     return ""
 
 
-def tag_color_for_name(name):
+def tag_color_for_name(name: object) -> str:
     """Build color for name."""
     tag = clean_label(name)
     if not tag:
@@ -161,7 +163,7 @@ def tag_color_for_name(name):
     return TAG_COLOR_PALETTE[checksum % len(TAG_COLOR_PALETTE)]
 
 
-def seed_category_taxonomy(conn):
+def seed_category_taxonomy(conn: Any) -> None:
     """Seed built-in categories plus user-editable taxonomy rows."""
     seed = load_category_seed()
     categories = seed["categories"]
@@ -197,7 +199,13 @@ def seed_category_taxonomy(conn):
         )
 
 
-def upsert_category_metadata(conn, name, description="", instruction="", builtin_key=None):
+def upsert_category_metadata(
+    conn: Any,
+    name: object,
+    description: object = "",
+    instruction: object = "",
+    builtin_key: object | None = None,
+) -> str | None:
     """Insert or update category metadata."""
     category = clean_label(name)
     if not category:
@@ -250,7 +258,13 @@ def upsert_category_metadata(conn, name, description="", instruction="", builtin
     return category
 
 
-def upsert_tag_metadata(conn, name, description="", instruction="", color=None):
+def upsert_tag_metadata(
+    conn: Any,
+    name: object,
+    description: object = "",
+    instruction: object = "",
+    color: object | None = None,
+) -> str | None:
     """Insert or update tag metadata."""
     tag = clean_label(name)
     if not tag:
@@ -286,7 +300,7 @@ def upsert_tag_metadata(conn, name, description="", instruction="", color=None):
     return tag
 
 
-def get_category_rows(conn):
+def get_category_rows(conn: Any) -> list[Mapping[str, Any]]:
     """Return category rows."""
     return (
         conn.execute(
@@ -306,12 +320,12 @@ def get_category_rows(conn):
     )
 
 
-def get_category_description_map(conn):
+def get_category_description_map(conn: Any) -> dict[str, str]:
     """Return category descriptions keyed by category name."""
     return {row["name"]: row["description"] or "" for row in get_category_rows(conn)}
 
 
-def get_tag_rows(conn):
+def get_tag_rows(conn: Any) -> list[Mapping[str, Any]]:
     """Return tag rows."""
     return (
         conn.execute(
@@ -332,12 +346,12 @@ def get_tag_rows(conn):
     )
 
 
-def get_tag_options(conn):
+def get_tag_options(conn: Any) -> list[str]:
     """Return tag options."""
     return [row["name"] for row in get_tag_rows(conn)]
 
 
-def get_tag_option_rows(conn):
+def get_tag_option_rows(conn: Any) -> list[dict[str, str]]:
     """Return tag option rows."""
     return [
         {
@@ -350,12 +364,12 @@ def get_tag_option_rows(conn):
     ]
 
 
-def get_tag_color_map(conn):
+def get_tag_color_map(conn: Any) -> dict[str, str]:
     """Return tag color map."""
     return {row["name"]: clean_color(row["color"]) or tag_color_for_name(row["name"]) for row in get_tag_rows(conn)}
 
 
-def normalize_tag_names(values, allowed_tags=None):
+def normalize_tag_names(values: Iterable[object] | str | None, allowed_tags: Iterable[str] | None = None) -> list[str]:
     """Normalize tag names."""
     if values is None:
         values = []
@@ -363,8 +377,8 @@ def normalize_tag_names(values, allowed_tags=None):
         values = split_tag_text(values)
 
     allowed_by_fold = {str(tag).casefold(): tag for tag in (allowed_tags or [])}
-    normalized = []
-    seen = set()
+    normalized: list[str] = []
+    seen: set[str] = set()
 
     for value in values:
         text = clean_label(value)
@@ -379,12 +393,12 @@ def normalize_tag_names(values, allowed_tags=None):
     return normalized
 
 
-def split_tag_text(value):
+def split_tag_text(value: object) -> list[str]:
     """Split tag text."""
     return [chunk.strip() for chunk in str(value or "").replace("|", ",").replace(";", ",").split(",") if chunk.strip()]
 
 
-def tag_ids_by_name(conn, tag_names):
+def tag_ids_by_name(conn: Any, tag_names: Iterable[object] | str | None) -> dict[str, int]:
     """Build ids by name."""
     normalized = normalize_tag_names(tag_names, get_tag_options(conn))
     if not normalized:
@@ -398,7 +412,7 @@ def tag_ids_by_name(conn, tag_names):
     return {row["name"]: row["id"] for row in rows}
 
 
-def set_rule_tags(conn, rule_id, tag_names):
+def set_rule_tags(conn: Any, rule_id: object, tag_names: Iterable[object] | str | None) -> None:
     """Set rule tags."""
     conn.execute(delete(category_rule_tags_table).where(category_rule_tags_table.c.rule_id == rule_id))
     tag_ids = tag_ids_by_name(conn, tag_names)
@@ -406,7 +420,7 @@ def set_rule_tags(conn, rule_id, tag_names):
         conn.execute(insert(category_rule_tags_table).values(rule_id=rule_id, tag_id=tag_id))
 
 
-def get_rule_tags_by_rule_id(conn, rule_ids):
+def get_rule_tags_by_rule_id(conn: Any, rule_ids: Iterable[object]) -> dict[Any, list[str]]:
     """Return rule tags by rule ID."""
     rule_ids = [rule_id for rule_id in rule_ids if rule_id is not None]
     if not rule_ids:
@@ -423,13 +437,19 @@ def get_rule_tags_by_rule_id(conn, rule_ids):
         .fetchall()
     )
 
-    result = {rule_id: [] for rule_id in rule_ids}
+    result: dict[Any, list[str]] = {rule_id: [] for rule_id in rule_ids}
     for row in rows:
         result.setdefault(row["rule_id"], []).append(row["name"])
     return result
 
 
-def set_transaction_tags(conn, transaction_id, tag_names, source=CATEGORY_SOURCE_UNKNOWN, rule_id=None):
+def set_transaction_tags(
+    conn: Any,
+    transaction_id: object,
+    tag_names: Iterable[object] | str | None,
+    source: object = CATEGORY_SOURCE_UNKNOWN,
+    rule_id: object | None = None,
+) -> None:
     """Set transaction tags."""
     normalized_source = normalize_transaction_tag_source(source)
     conn.execute(delete(transaction_tags_table).where(transaction_tags_table.c.transaction_id == transaction_id))
@@ -446,13 +466,13 @@ def set_transaction_tags(conn, transaction_id, tag_names, source=CATEGORY_SOURCE
         )
 
 
-def normalize_transaction_tag_source(source):
+def normalize_transaction_tag_source(source: object) -> str:
     """Return a valid persisted transaction-tag assignment source."""
     text = str(source or CATEGORY_SOURCE_UNKNOWN).strip().lower()
     return text if text in TRANSACTION_TAG_SOURCES else CATEGORY_SOURCE_UNKNOWN
 
 
-def get_transaction_tag_names(conn, transaction_id):
+def get_transaction_tag_names(conn: Any, transaction_id: object) -> list[str]:
     """Return transaction tag names."""
     rows = (
         conn.execute(
@@ -467,7 +487,7 @@ def get_transaction_tag_names(conn, transaction_id):
     return [row["name"] for row in rows]
 
 
-def get_transaction_tags_by_id(conn, transaction_ids):
+def get_transaction_tags_by_id(conn: Any, transaction_ids: Iterable[object]) -> dict[Any, list[str]]:
     """Return transaction tags by ID."""
     transaction_ids = [tx_id for tx_id in transaction_ids if tx_id is not None]
     if not transaction_ids:
@@ -484,7 +504,7 @@ def get_transaction_tags_by_id(conn, transaction_ids):
         .fetchall()
     )
 
-    result = {tx_id: [] for tx_id in transaction_ids}
+    result: dict[Any, list[str]] = {tx_id: [] for tx_id in transaction_ids}
     for row in rows:
         result.setdefault(row["transaction_id"], []).append(row["name"])
     return result

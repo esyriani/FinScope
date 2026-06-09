@@ -10,9 +10,7 @@ function setupRuleSaveModeControls(root = document) {
         const form = control.closest("form");
         const saveValue = control.dataset.ruleSaveValue || "";
         const modeInputs = Array.from(control.querySelectorAll("[data-rule-save-mode]"));
-        const ruleOnlySections = form
-            ? Array.from(form.querySelectorAll("[data-rule-save-only]"))
-            : [];
+        const ruleOnlySections = form ? Array.from(form.querySelectorAll("[data-rule-save-only]")) : [];
 
         if (!form || !saveValue || !modeInputs.length || !ruleOnlySections.length) {
             return;

@@ -1,5 +1,8 @@
 """View-model builders for the transactions feature."""
 
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
+
 from finance_app.core.constants import TRANSACTION_KINDS
 from finance_app.core.money import money_to_float
 from finance_app.modules.categories.sources import (
@@ -10,13 +13,18 @@ from finance_app.modules.categories.sources import (
 from finance_app.modules.merchants.normalization import normalize_merchant
 
 
-def build_transaction_rows(rows, tag_map, tag_colors, conn):
-    """Build transaction rows."""
-    result = []
+def build_transaction_rows(
+    rows: Iterable[Mapping[str, Any]],
+    tag_map: Mapping[int, Sequence[str]],
+    tag_colors: Mapping[str, str],
+    conn: object,
+) -> list[dict[str, Any]]:
+    """Build transaction row view models for list rendering."""
+    result: list[dict[str, Any]] = []
     for row in rows:
         normalized_merchant = normalize_merchant(row["description"], conn=conn)
         merchant_key = normalized_merchant.merchant_key
-        tags = tag_map.get(row["id"], [])
+        tags = list(tag_map.get(row["id"], ()))
         result.append(
             {
                 **dict(row),

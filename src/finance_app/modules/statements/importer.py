@@ -4,7 +4,9 @@ import csv
 import hashlib
 import io
 import re
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
+from typing import Any
 
 from finance_app.core.config import settings
 from finance_app.core.constants import (
@@ -30,7 +32,7 @@ from finance_app.core.constants import (
 from finance_app.core.text import normalize_header, strip_accents
 
 
-def file_checksum(file_storage):
+def file_checksum(file_storage: Any) -> str:
     """Calculate checksum."""
     hasher = hashlib.sha256()
 
@@ -42,7 +44,7 @@ def file_checksum(file_storage):
     return hasher.hexdigest()
 
 
-def allowed_statement_file(filename):
+def allowed_statement_file(filename: str) -> bool:
     """Return whether statement file."""
     if "." not in filename:
         return False
@@ -51,12 +53,12 @@ def allowed_statement_file(filename):
     return extension in settings.allowed_statement_extensions
 
 
-def get_file_extension(filename):
+def get_file_extension(filename: str) -> str:
     """Return file extension."""
     return filename.rsplit(".", 1)[1].lower()
 
 
-def normalize_date_text(value):
+def normalize_date_text(value: object) -> str:
     """Normalize date text."""
     text = strip_accents(value).replace(",", " ")
     tokens = []
@@ -78,7 +80,7 @@ SUPPORTED_DATE_ORDERS = {
 }
 
 
-def parse_date(value, date_formats=None):
+def parse_date(value: object, date_formats: Iterable[str] | None = None) -> str | None:
     """Parse a statement date value to the application's ISO date format."""
     raw_value = str(value).strip()
 
@@ -101,7 +103,7 @@ def parse_date(value, date_formats=None):
     return None
 
 
-def normalize_date_order(value):
+def normalize_date_order(value: object) -> str:
     """Return a supported statement date-order override."""
     normalized = str(value or DATE_ORDER_AUTO).strip().lower()
     if normalized in SUPPORTED_DATE_ORDERS:
@@ -109,13 +111,16 @@ def normalize_date_order(value):
     return DATE_ORDER_AUTO
 
 
-def preferred_date_formats_for_values(values, date_order=DATE_ORDER_AUTO):
+def preferred_date_formats_for_values(
+    values: Iterable[object],
+    date_order: object = DATE_ORDER_AUTO,
+) -> tuple[str, ...]:
     """Return date formats ordered by the selected or inferred slash-date pattern."""
     analysis = analyze_slash_date_order(values, date_order=date_order)
     return date_formats_for_order(analysis["effective_order"])
 
 
-def date_formats_for_order(date_order):
+def date_formats_for_order(date_order: object) -> tuple[str, ...]:
     """Return parser formats with the requested slash-date order first."""
     normalized = normalize_date_order(date_order)
     if normalized == DATE_ORDER_MONTH_FIRST:
@@ -128,12 +133,12 @@ def date_formats_for_order(date_order):
     return preferred_formats + tuple(fmt for fmt in DATE_FORMATS if fmt not in preferred_formats)
 
 
-def infer_slash_date_order(values):
+def infer_slash_date_order(values: Iterable[object]) -> str | None:
     """Infer whether slash dates in one statement are month-first or day-first."""
     return analyze_slash_date_order(values)["inferred_order"]
 
 
-def analyze_slash_date_order(values, date_order=DATE_ORDER_AUTO):
+def analyze_slash_date_order(values: Iterable[object], date_order: object = DATE_ORDER_AUTO) -> dict[str, Any]:
     """Return slash-date order evidence and the effective order for parsing."""
     selected_order = normalize_date_order(date_order)
     month_first_count, day_first_count, ambiguous_count, slash_count = slash_date_order_counts(values)
@@ -173,7 +178,7 @@ def analyze_slash_date_order(values, date_order=DATE_ORDER_AUTO):
     }
 
 
-def slash_date_order_counts(values):
+def slash_date_order_counts(values: Iterable[object]) -> tuple[int, int, int, int]:
     """Return evidence counts for month-first, day-first, and ambiguous slash dates."""
     month_first_count = 0
     day_first_count = 0
@@ -198,7 +203,7 @@ def slash_date_order_counts(values):
     return month_first_count, day_first_count, ambiguous_count, slash_count
 
 
-def parse_money(value):
+def parse_money(value: object) -> float | None:
     """Parse money."""
     if value is None:
         return None
@@ -248,7 +253,7 @@ def parse_money(value):
     return -amount if negative else amount
 
 
-def csv_rows(raw_text):
+def csv_rows(raw_text: str) -> list[list[str]]:
     """Parse non-empty CSV rows using a detected dialect when possible."""
     sample = raw_text[:4096]
     delimiter = detect_csv_delimiter_from_header(raw_text)
@@ -265,7 +270,7 @@ def csv_rows(raw_text):
     return [row for row in reader if any(cell.strip() for cell in row)]
 
 
-def detect_csv_delimiter_from_header(raw_text):
+def detect_csv_delimiter_from_header(raw_text: str) -> str | None:
     """Detect a delimiter by finding a plausible transaction header row."""
     for delimiter in (",", ";", "\t", "|"):
         rows = csv.reader(io.StringIO(raw_text), delimiter=delimiter)
@@ -279,7 +284,7 @@ def detect_csv_delimiter_from_header(raw_text):
     return None
 
 
-def is_transaction_header_row(row):
+def is_transaction_header_row(row: Iterable[str]) -> bool:
     """Return whether a parsed row contains transaction CSV header columns."""
     header_map = {normalize_header(cell): cell for cell in row if normalize_header(cell)}
     has_date = find_column(header_map, DATE_COLUMNS)
@@ -292,7 +297,7 @@ def is_transaction_header_row(row):
     return bool(has_date and has_description and has_amount)
 
 
-def find_column(header_map, candidates):
+def find_column(header_map: Mapping[str, str], candidates: Iterable[str]) -> str | None:
     """Find column."""
     for candidate in candidates:
         if candidate in header_map:
@@ -305,7 +310,7 @@ def find_column(header_map, candidates):
     return None
 
 
-def detect_csv_header(rows):
+def detect_csv_header(rows: Sequence[list[str]]) -> tuple[int | None, list[str] | None]:
     """Detect the first plausible CSV header row in a statement export."""
     # Some financial exports include report titles or blank leading rows before
     # the real header, so inspect the first few rows for required columns.
@@ -316,7 +321,7 @@ def detect_csv_header(rows):
     return None, None
 
 
-def normalize_signed_amount(raw_amount, statement_type):
+def normalize_signed_amount(raw_amount: float | None, statement_type: str) -> float | None:
     """Normalize signed amount."""
     if raw_amount is None:
         return None
@@ -328,14 +333,14 @@ def normalize_signed_amount(raw_amount, statement_type):
 
 
 def build_transaction(
-    raw_date,
-    description,
-    statement_type,
-    raw_debit=None,
-    raw_credit=None,
-    raw_amount=None,
-    date_formats=None,
-):
+    raw_date: object,
+    description: object,
+    statement_type: str,
+    raw_debit: object | None = None,
+    raw_credit: object | None = None,
+    raw_amount: object | None = None,
+    date_formats: Iterable[str] | None = None,
+) -> dict[str, Any] | None:
     """Build transaction."""
     tx_date = parse_date(raw_date, date_formats=date_formats)
     description = str(description or "").strip()
@@ -352,7 +357,10 @@ def build_transaction(
     elif credit is not None and abs(credit) > 0.004:
         amount = -abs(credit)
     elif signed_amount is not None and abs(signed_amount) > 0.004:
-        amount = normalize_signed_amount(signed_amount, statement_type)
+        normalized_amount = normalize_signed_amount(signed_amount, statement_type)
+        if normalized_amount is None:
+            return None
+        amount = normalized_amount
     else:
         return None
 
@@ -368,15 +376,15 @@ def build_transaction(
 
 
 def build_interac_transfer(
-    raw_date,
-    counterparty,
-    raw_amount,
-    direction,
-    method=None,
-    status=None,
-    require_deposited_status=True,
-    date_formats=None,
-):
+    raw_date: object,
+    counterparty: object,
+    raw_amount: object,
+    direction: str,
+    method: object | None = None,
+    status: object | None = None,
+    require_deposited_status: bool = True,
+    date_formats: Iterable[str] | None = None,
+) -> dict[str, Any] | None:
     """Build an Interac e-Transfer history row.
 
     Interac history files are enrichment sources for checking-account ledger
@@ -409,7 +417,7 @@ def build_interac_transfer(
     }
 
 
-def normalize_interac_direction(direction):
+def normalize_interac_direction(direction: object) -> str:
     """Return a supported Interac direction override value."""
     normalized = str(direction or INTERAC_DIRECTION_AUTO).strip().lower()
     if normalized in INTERAC_DIRECTIONS:
@@ -418,10 +426,10 @@ def normalize_interac_direction(direction):
 
 
 def parse_interac_transactions(
-    raw_text,
-    interac_direction=INTERAC_DIRECTION_AUTO,
-    date_order=DATE_ORDER_AUTO,
-):
+    raw_text: str,
+    interac_direction: object = INTERAC_DIRECTION_AUTO,
+    date_order: object = DATE_ORDER_AUTO,
+) -> dict[str, Any]:
     """Parse Interac e-Transfer sent or received history CSV rows."""
     interac_direction = normalize_interac_direction(interac_direction)
     rows = csv_rows(raw_text)
@@ -467,7 +475,7 @@ def parse_interac_transactions(
             "ignored_rows": max(0, len(rows) - 1),
         }
 
-    records = []
+    records: list[dict[str, str]] = []
     for row in rows[1:]:
         padded_row = row + [""] * max(0, len(header) - len(row))
         records.append(dict(zip(header, padded_row)))
@@ -476,7 +484,7 @@ def parse_interac_transactions(
         (record.get(date_col) for record in records),
         date_order=date_order,
     )
-    transactions = []
+    transactions: list[dict[str, Any]] = []
     ignored_rows = 0
     for record in records:
         tx = build_interac_transfer(
@@ -501,11 +509,11 @@ def parse_interac_transactions(
 
 
 def parse_csv_transactions(
-    raw_text,
-    statement_type=STATEMENT_TYPE_PARSER_CREDIT_CARD,
-    interac_direction=INTERAC_DIRECTION_AUTO,
-    date_order=DATE_ORDER_AUTO,
-):
+    raw_text: str,
+    statement_type: str = STATEMENT_TYPE_PARSER_CREDIT_CARD,
+    interac_direction: object = INTERAC_DIRECTION_AUTO,
+    date_order: object = DATE_ORDER_AUTO,
+) -> dict[str, Any]:
     """Parse csv transactions."""
     if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
         return parse_interac_transactions(
@@ -520,6 +528,7 @@ def parse_csv_transactions(
     ignored_rows = 0
 
     if header is not None:
+        assert header_index is not None
         # Header-based imports are preferred because bank and card exports use
         # different debit/credit conventions and column names.
         header_map = {normalize_header(cell): cell for cell in header if normalize_header(cell)}
@@ -528,8 +537,10 @@ def parse_csv_transactions(
         debit_col = find_column(header_map, DEBIT_COLUMNS)
         credit_col = find_column(header_map, CREDIT_COLUMNS)
         amount_col = find_column(header_map, AMOUNT_COLUMNS)
+        assert date_col is not None
+        assert description_col is not None
 
-        records = []
+        records: list[dict[str, str]] = []
         for row in rows[header_index + 1 :]:
             padded_row = row + [""] * max(0, len(header) - len(row))
             records.append(dict(zip(header, padded_row)))
@@ -585,7 +596,7 @@ def parse_csv_transactions(
     }
 
 
-def transaction_fingerprint(tx, account_id=None):
+def transaction_fingerprint(tx: Mapping[str, Any], account_id: object | None = None) -> str:
     """Build fingerprint."""
     raw = f"{account_id}|{tx['tx_date']}|{tx['description']}|{tx['amount']}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()

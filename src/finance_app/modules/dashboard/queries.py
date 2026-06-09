@@ -1,8 +1,11 @@
 """SQLAlchemy Core query helpers for the dashboard feature."""
 
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 from sqlalchemy import case, exists, func, select
 
-from finance_app.core.periods import previous_period_date_range
+from finance_app.core.periods import DatePeriod, previous_period_date_range
 from finance_app.core.query import CoreFilters
 from finance_app.core.reporting import (
     income_or_tagged_transfer_credit_clause,
@@ -43,12 +46,17 @@ from .presenter import (
 from .urls import dashboard_transactions_url
 
 
-def non_transfer_clause():
+def non_transfer_clause() -> Any:
     """Return the dashboard Core filter for reportable transaction kinds."""
     return reportable_transaction_clause()
 
 
-def fetch_spending_by_category(conn, filters, unknown_category, include_income_category=False):
+def fetch_spending_by_category(
+    conn: Any,
+    filters: Sequence[Any],
+    unknown_category: str,
+    include_income_category: bool = False,
+) -> list[Mapping[str, Any]]:
     """Fetch spending by category, optionally retaining rows categorized as income."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
     total = func.sum(transactions_table.c.amount)
@@ -74,7 +82,11 @@ def fetch_spending_by_category(conn, filters, unknown_category, include_income_c
     )
 
 
-def fetch_spending_by_tag(conn, filters, include_income_category=False):
+def fetch_spending_by_tag(
+    conn: Any,
+    filters: Sequence[Any],
+    include_income_category: bool = False,
+) -> list[dict[str, Any]]:
     """Fetch spending totals associated with each transaction tag.
 
     Tagged totals intentionally count the full transaction amount for every tag
@@ -140,7 +152,7 @@ def fetch_spending_by_tag(conn, filters, include_income_category=False):
     return rows
 
 
-def fetch_monthly_expenses(conn, filters):
+def fetch_monthly_expenses(conn: Any, filters: Sequence[Any]) -> list[dict[str, Any]]:
     """Fetch monthly expenses."""
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
@@ -166,7 +178,11 @@ def fetch_monthly_expenses(conn, filters):
     return month_total_rows(rows)
 
 
-def fetch_monthly_income(conn, filters, include_transfer_credits=False):
+def fetch_monthly_income(
+    conn: Any,
+    filters: Sequence[Any],
+    include_transfer_credits: bool = False,
+) -> list[dict[str, Any]]:
     """Fetch monthly income, optionally including filtered transfer credits."""
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
@@ -193,7 +209,11 @@ def fetch_monthly_income(conn, filters, include_transfer_credits=False):
     return month_total_rows(rows)
 
 
-def fetch_monthly_net(conn, filters, include_transfer_credits=False):
+def fetch_monthly_net(
+    conn: Any,
+    filters: Sequence[Any],
+    include_transfer_credits: bool = False,
+) -> list[dict[str, Any]]:
     """Fetch monthly net, optionally including filtered transfer credits."""
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
@@ -218,7 +238,7 @@ def fetch_monthly_net(conn, filters, include_transfer_credits=False):
     return month_total_rows(rows)
 
 
-def month_total_rows(rows):
+def month_total_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Return dashboard month total rows with YYYY-MM labels."""
     return [
         {
@@ -230,19 +250,19 @@ def month_total_rows(rows):
 
 
 def fetch_merchant_analytics(
-    conn,
-    period,
-    filters,
-    filter_mode,
-    selected_categories,
-    selected_tags,
-    unknown_category,
-    date_from="",
-    date_to="",
-    quick_view=QUICK_VIEW_ALL,
-    merchant_table_limit=10,
-    merchant_search="",
-):
+    conn: Any,
+    period: DatePeriod,
+    filters: Sequence[Any],
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    selected_tags: Sequence[str],
+    unknown_category: str,
+    date_from: str = "",
+    date_to: str = "",
+    quick_view: str = QUICK_VIEW_ALL,
+    merchant_table_limit: int = 10,
+    merchant_search: str = "",
+) -> list[dict[str, Any]]:
     """Fetch merchant analytics."""
     current_rows = fetch_merchant_transaction_rows(conn, filters, unknown_category)
     aggregates = build_merchant_aggregates(current_rows, conn=conn)
@@ -257,7 +277,7 @@ def fetch_merchant_analytics(
         merchant_search,
     )
     rules = get_category_rules(conn)
-    merchant_rows = []
+    merchant_rows: list[dict[str, Any]] = []
     top_merchants = sorted(aggregates.values(), key=lambda item: item["total"], reverse=True)[:merchant_table_limit]
     max_total = top_merchants[0]["total"] if top_merchants else 0
 
@@ -297,7 +317,7 @@ def fetch_merchant_analytics(
     return merchant_rows
 
 
-def fetch_merchant_transaction_rows(conn, filters, unknown_category):
+def fetch_merchant_transaction_rows(conn: Any, filters: Sequence[Any], unknown_category: str) -> Any:
     """Fetch merchant transaction rows."""
     return (
         conn.execute(
@@ -327,15 +347,15 @@ def fetch_merchant_transaction_rows(conn, filters, unknown_category):
 
 
 def fetch_previous_merchant_totals(
-    conn,
-    period,
-    filter_mode,
-    selected_categories,
-    selected_tags,
-    unknown_category,
-    quick_view=QUICK_VIEW_ALL,
-    merchant_search="",
-):
+    conn: Any,
+    period: DatePeriod,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    selected_tags: Sequence[str],
+    unknown_category: str,
+    quick_view: str = QUICK_VIEW_ALL,
+    merchant_search: str = "",
+) -> dict[str, Any]:
     """Fetch previous merchant totals."""
     previous_start, previous_end = previous_period_date_range(period)
     if previous_start is None or previous_end is None:
@@ -373,7 +393,12 @@ def fetch_previous_merchant_totals(
     return {merchant_key: aggregate["total"] for merchant_key, aggregate in aggregates.items()}
 
 
-def fetch_summary(conn, filters, unknown_category, include_transfer_credits=False):
+def fetch_summary(
+    conn: Any,
+    filters: Sequence[Any],
+    unknown_category: str,
+    include_transfer_credits: bool = False,
+) -> Any:
     """Fetch dashboard summary totals, optionally including filtered transfer credits."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
     has_tag = exists(select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id))
@@ -500,7 +525,7 @@ def fetch_summary(conn, filters, unknown_category, include_transfer_credits=Fals
     )
 
 
-def fetch_quick_view_counts(conn, filters, unknown_category):
+def fetch_quick_view_counts(conn: Any, filters: Sequence[Any], unknown_category: str) -> dict[str, Any]:
     """Fetch quick view counts."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
     row = (

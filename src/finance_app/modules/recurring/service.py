@@ -1,7 +1,9 @@
 """Application orchestration for the recurring feature."""
 
 from calendar import Calendar
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime
+from typing import Any
 from urllib.parse import urlencode
 
 from flask import url_for
@@ -21,7 +23,7 @@ from finance_app.modules.calendar.service import (
 
 RECURRING_VIEWS = {"list", "calendar"}
 RECURRING_CALENDAR_VISIBLE_COUNT = 3
-RECURRING_STATUS_PRIORITY = {
+RECURRING_STATUS_PRIORITY: dict[str, int] = {
     "overdue": 0,
     "amount_changed": 1,
     "expected": 2,
@@ -30,7 +32,7 @@ RECURRING_STATUS_PRIORITY = {
     "occurred": 4,
     "possibly_inactive": 5,
 }
-STATUS_OPTIONS = [
+STATUS_OPTIONS: list[dict[str, str]] = [
     {"value": "occurred", "label": "Occurred"},
     {"value": "amount_changed", "label": "Amount changed"},
     {"value": "likely_occurred", "label": "Likely occurred"},
@@ -38,10 +40,10 @@ STATUS_OPTIONS = [
     {"value": "overdue", "label": "Overdue"},
     {"value": "possibly_inactive", "label": "Possibly inactive"},
 ]
-CONFIDENCE_OPTIONS = ["High", "Medium", "Low"]
+CONFIDENCE_OPTIONS: list[str] = ["High", "Medium", "Low"]
 
 
-def build_recurring_page_context(args):
+def build_recurring_page_context(args: Any) -> dict[str, Any]:
     """Build recurring page context."""
     selected_month = parse_month(args.get("month")) or default_month()
     selected_categories = clean_categories(args.getlist("categories"))
@@ -55,13 +57,13 @@ def build_recurring_page_context(args):
         selected_categories,
         selected_tags,
     )
-    recurring_items = filter_recurring_items(
+    filtered_items = filter_recurring_items(
         recurring_context["recurring_items"],
         selected_statuses,
         selected_confidence,
     )
     recurring_items = decorate_recurring_items_for_table(
-        recurring_items,
+        filtered_items,
         recurring_context["month_start"],
         recurring_context["month_end"],
     )
@@ -144,34 +146,38 @@ def build_recurring_page_context(args):
     }
 
 
-def parse_recurring_view(value):
+def parse_recurring_view(value: object) -> str:
     """Parse recurring view."""
     value = str(value or "").strip().lower()
     return value if value in RECURRING_VIEWS else "list"
 
 
-def clean_statuses(values):
+def clean_statuses(values: Iterable[object]) -> list[str]:
     """Clean statuses."""
     valid_statuses = {option["value"] for option in STATUS_OPTIONS}
     return [status for status in (str(value or "").strip() for value in values) if status in valid_statuses]
 
 
-def parse_confidence(value):
+def parse_confidence(value: object) -> str:
     """Parse confidence."""
     value = str(value or "").strip()
     return value if value in CONFIDENCE_OPTIONS else ""
 
 
-def recurring_empty_state_message(has_applied_filters):
+def recurring_empty_state_message(has_applied_filters: bool) -> str:
     """Return the recurring empty-state message for the active filter context."""
     if has_applied_filters:
         return gettext("No recurring activity matches the current filters.")
     return gettext("No recurring activity detected for this month.")
 
 
-def filter_recurring_items(recurring_items, selected_statuses, selected_confidence):
+def filter_recurring_items(
+    recurring_items: Iterable[Mapping[str, Any]],
+    selected_statuses: Iterable[str],
+    selected_confidence: str,
+) -> list[Mapping[str, Any]]:
     """Filter recurring items."""
-    filtered = recurring_items
+    filtered = list(recurring_items)
     if selected_statuses:
         selected_status_set = set(selected_statuses)
         filtered = [item for item in filtered if item["status"] in selected_status_set]
@@ -180,7 +186,11 @@ def filter_recurring_items(recurring_items, selected_statuses, selected_confiden
     return filtered
 
 
-def decorate_recurring_items_for_table(recurring_items, month_start, month_end):
+def decorate_recurring_items_for_table(
+    recurring_items: Iterable[Mapping[str, Any]],
+    month_start: date,
+    month_end: date,
+) -> list[dict[str, Any]]:
     """Return recurring items with compact table display metadata attached."""
     evaluation_date = recurring_evaluation_date(month_start, month_end)
     return [
@@ -193,7 +203,7 @@ def decorate_recurring_items_for_table(recurring_items, month_start, month_end):
     ]
 
 
-def recurring_evaluation_date(month_start, month_end):
+def recurring_evaluation_date(month_start: date, month_end: date) -> date:
     """Return the date used to explain expected or overdue recurring rows."""
     today = date.today()
     if today < month_start:
@@ -203,7 +213,7 @@ def recurring_evaluation_date(month_start, month_end):
     return today
 
 
-def recurring_status_detail(item, evaluation_date):
+def recurring_status_detail(item: Mapping[str, Any], evaluation_date: date) -> str:
     """Return a short user-facing explanation for a recurring row status."""
     status = item["status"]
     details = item.get("match_details") or {}
@@ -229,7 +239,7 @@ def recurring_status_detail(item, evaluation_date):
     return ""
 
 
-def parse_recurring_date(value):
+def parse_recurring_date(value: object) -> date | None:
     """Return a parsed ISO date for recurring display helpers."""
     try:
         return datetime.strptime(str(value or ""), "%Y-%m-%d").date()
@@ -237,8 +247,9 @@ def parse_recurring_date(value):
         return None
 
 
-def build_recurring_summary(recurring_items):
+def build_recurring_summary(recurring_items: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Build recurring summary."""
+    recurring_items = list(recurring_items)
     amount_changed_items = [item for item in recurring_items if item.get("amount_change")]
     low_confidence_detected_items = [
         item
@@ -289,13 +300,13 @@ def build_recurring_summary(recurring_items):
 
 
 def recurring_view_url(
-    month_start,
-    selected_categories,
-    selected_tags,
-    view,
-    selected_statuses=None,
-    selected_confidence="",
-):
+    month_start: date,
+    selected_categories: Iterable[str],
+    selected_tags: Iterable[str],
+    view: str,
+    selected_statuses: Iterable[str] | None = None,
+    selected_confidence: str = "",
+) -> str:
     """Build view URL."""
     return recurring_filter_url(
         month_start,
@@ -308,15 +319,15 @@ def recurring_view_url(
 
 
 def recurring_filter_url(
-    month_start,
-    selected_categories,
-    selected_tags,
-    view,
-    selected_statuses=None,
-    selected_confidence="",
-):
+    month_start: date,
+    selected_categories: Iterable[str],
+    selected_tags: Iterable[str],
+    view: str,
+    selected_statuses: Iterable[str] | None = None,
+    selected_confidence: str = "",
+) -> str:
     """Build a recurring URL while preserving filter state."""
-    params = {
+    params: dict[str, object] = {
         "month": month_start.isoformat()[:7],
         "view": view,
     }
@@ -332,22 +343,22 @@ def recurring_filter_url(
     return f"{url_for('recurring.recurring')}?{urlencode(params, doseq=True)}"
 
 
-def recurring_clear_url(view, month_start=None):
+def recurring_clear_url(view: str, month_start: date | None = None) -> str:
     """Build a recurring filter-clear URL while preserving the viewed period."""
-    params = {"view": view}
+    params: dict[str, object] = {"view": view}
     if month_start:
         params["month"] = month_start.isoformat()[:7]
     return f"{url_for('recurring.recurring')}?{urlencode(params)}"
 
 
 def build_recurring_status_filter_links(
-    month_start,
-    selected_categories,
-    selected_tags,
-    view,
-    selected_statuses,
-    selected_confidence,
-):
+    month_start: date,
+    selected_categories: Iterable[str],
+    selected_tags: Iterable[str],
+    view: str,
+    selected_statuses: list[str],
+    selected_confidence: str,
+) -> list[dict[str, Any]]:
     """Build status filter links that keep recurring summaries and views aligned."""
     return [
         {
@@ -382,9 +393,12 @@ def build_recurring_status_filter_links(
     ]
 
 
-def build_recurring_calendar_days(month_start, recurring_items):
+def build_recurring_calendar_days(
+    month_start: date,
+    recurring_items: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Build recurring calendar days."""
-    items_by_date = {}
+    items_by_date: dict[str, list[dict[str, Any]]] = {}
     for item in recurring_items:
         placement_date = recurring_calendar_item_date(item)
         items_by_date.setdefault(placement_date, []).append(recurring_calendar_chip(item))
@@ -414,7 +428,7 @@ def build_recurring_calendar_days(month_start, recurring_items):
     return days
 
 
-def recurring_calendar_item_date(item):
+def recurring_calendar_item_date(item: Mapping[str, Any]) -> str:
     """Build calendar item date."""
     match_details = item.get("match_details") or {}
     matched_date = match_details.get("matched_date")
@@ -423,7 +437,7 @@ def recurring_calendar_item_date(item):
     return item["date"]
 
 
-def recurring_calendar_chip(item):
+def recurring_calendar_chip(item: Mapping[str, Any]) -> dict[str, Any]:
     """Build calendar chip."""
     return {
         "id": item["id"],
@@ -442,7 +456,7 @@ def recurring_calendar_chip(item):
     }
 
 
-def recurring_calendar_sort_key(chip):
+def recurring_calendar_sort_key(chip: Mapping[str, Any]) -> tuple[int, str]:
     """Return a priority key for recurring calendar chips."""
     return (
         RECURRING_STATUS_PRIORITY.get(chip["status"], 99),
@@ -450,7 +464,7 @@ def recurring_calendar_sort_key(chip):
     )
 
 
-def recurring_calendar_needs_attention(item):
+def recurring_calendar_needs_attention(item: Mapping[str, Any]) -> bool:
     """Return whether a recurring item should be called out in calendar summaries."""
     if item["status"] in {"overdue", "amount_changed"}:
         return True
@@ -461,13 +475,13 @@ def recurring_calendar_needs_attention(item):
     )
 
 
-def recurring_signed_amount_label(item):
+def recurring_signed_amount_label(item: Mapping[str, Any]) -> str:
     """Build signed amount label."""
     sign = "+" if item["type"] == "income" else "-"
     return f"{sign}{format_money_display(item['amount'])}"
 
 
-def recurring_calendar_chip_label(item):
+def recurring_calendar_chip_label(item: Mapping[str, Any]) -> str:
     """Build calendar chip label."""
     direction = gettext("income") if item["type"] == "income" else gettext("payment")
     return gettext(
@@ -479,7 +493,7 @@ def recurring_calendar_chip_label(item):
     )
 
 
-def build_recurring_calendar_legend(recurring_items):
+def build_recurring_calendar_legend(recurring_items: Iterable[Mapping[str, Any]]) -> list[dict[str, str]]:
     """Build recurring calendar legend."""
     seen_statuses = {item["status"] for item in recurring_items}
     ordered_statuses = ["expected", "occurred", "likely_occurred", "amount_changed", "overdue", "possibly_inactive"]
@@ -493,8 +507,9 @@ def build_recurring_calendar_legend(recurring_items):
     ]
 
 
-def recurring_status_label(status):
+def recurring_status_label(status: object) -> str:
     """Build status label."""
+    status_text = str(status or "")
     labels = {
         "occurred": "Occurred",
         "amount_changed": "Amount changed",
@@ -504,4 +519,4 @@ def recurring_status_label(status):
         "overdue": "Overdue",
         "possibly_inactive": "Possibly inactive",
     }
-    return labels.get(status, str(status or "").replace("_", " ").title())
+    return labels.get(status_text, status_text.replace("_", " ").title())

@@ -260,8 +260,7 @@
     align-items: center;
     display: grid;
     gap: 1rem 1.5rem;
-    grid-template-areas:
-        "summary support";
+    grid-template-areas: "summary support";
     grid-template-columns: minmax(0, 1fr) minmax(300px, 0.48fr);
 }
 

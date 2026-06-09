@@ -1,6 +1,7 @@
 """Application orchestration for the comparison feature."""
 
 from datetime import date
+from typing import Any
 
 from finance_app.core.config import settings
 from finance_app.core.i18n import month_abbreviation_labels
@@ -53,7 +54,7 @@ from finance_app.modules.comparison.urls import build_comparison_url
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 
 
-def build_comparison_context(args):
+def build_comparison_context(args: Any) -> dict[str, Any]:
     """Build comparison context."""
     selected_comparison_view = parse_comparison_view(args.get("comparison_view"))
     selected_years = parse_selected_years(args.getlist("years"))
@@ -175,16 +176,16 @@ def build_comparison_context(args):
 
 
 def build_period_comparison(
-    conn,
-    comparison_key,
-    selected_categories,
-    selected_tags,
-    unknown_category,
-    merchant_table_limit,
+    conn: Any,
+    comparison_key: str,
+    selected_categories: list[str],
+    selected_tags: list[str],
+    unknown_category: str,
+    merchant_table_limit: int,
     *,
-    ranked_insights=False,
-    insight_ranking_options=None,
-):
+    ranked_insights: bool = False,
+    insight_ranking_options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build period comparison."""
     ranges = period_comparison_ranges(comparison_key, date.today())
     category_filters = build_category_conditions(selected_categories, selected_tags, unknown_category)

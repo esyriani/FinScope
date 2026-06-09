@@ -1,8 +1,10 @@
 """Flask routes for the rules feature."""
 
 from pathlib import Path
+from typing import Any
 
 from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask.typing import ResponseReturnValue
 
 from finance_app.background.runner import submit_background_job
 from finance_app.core.config import settings
@@ -49,14 +51,14 @@ rules_bp = Blueprint("rules", __name__)
 
 @rules_bp.route("/rules")
 @permission_required(PERMISSION_MANAGE_RULES)
-def rules():
+def rules() -> ResponseReturnValue:
     """Render the rules page."""
     return render_template("rules.html", **build_rules_context(request.args))
 
 
 @rules_bp.route("/rules/audit")
 @permission_required(PERMISSION_MANAGE_RULES)
-def audit_rules():
+def audit_rules() -> ResponseReturnValue:
     """Render the read-only rule audit page."""
     with db_core_transaction() as conn:
         context = build_rule_audit_context(
@@ -69,7 +71,7 @@ def audit_rules():
 
 @rules_bp.route("/rules/audit/overlap/<int:rule_a_id>/<int:rule_b_id>")
 @permission_required(PERMISSION_MANAGE_RULES)
-def audit_rule_overlap(rule_a_id, rule_b_id):
+def audit_rule_overlap(rule_a_id: int, rule_b_id: int) -> ResponseReturnValue:
     """Render shared transactions for one overlapping rule pair."""
     with db_core_transaction() as conn:
         context = build_rule_overlap_detail_context(
@@ -86,7 +88,7 @@ def audit_rule_overlap(rule_a_id, rule_b_id):
 
 @rules_bp.route("/rules/audit/rule/<int:rule_id>")
 @permission_required(PERMISSION_MANAGE_RULES)
-def audit_rule_detail(rule_id):
+def audit_rule_detail(rule_id: int) -> ResponseReturnValue:
     """Render read-only audit diagnostics for one rule."""
     with db_core_transaction() as conn:
         context = build_rule_detail_context(
@@ -101,7 +103,7 @@ def audit_rule_detail(rule_id):
 
 @rules_bp.route("/rules/audit/preview", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def audit_rule_preview():
+def audit_rule_preview() -> ResponseReturnValue:
     """Render a read-only impact preview for a proposed rule audit action."""
     action = request.form.get("action", "").strip()
     rule_id = request.form.get("rule_id", type=int)
@@ -129,7 +131,7 @@ def audit_rule_preview():
 
 @rules_bp.route("/rules/create", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def add_rule():
+def add_rule() -> ResponseReturnValue:
     """Create a manual rule after an impact preview confirmation.
 
     Requires a manage-rules session and CSRF-protected POST with
@@ -154,7 +156,7 @@ def add_rule():
 
 @rules_bp.route("/rules/preview", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def preview_rule():
+def preview_rule() -> ResponseReturnValue:
     """Preview rule."""
     try:
         with db_core_transaction() as conn:
@@ -177,7 +179,7 @@ def preview_rule():
 
 @rules_bp.route("/rules/export.csv")
 @permission_required(PERMISSION_MANAGE_RULES)
-def export_rules():
+def export_rules() -> ResponseReturnValue:
     """Export rules."""
     output = export_rules_csv()
 
@@ -192,7 +194,7 @@ def export_rules():
 
 @rules_bp.route("/rules/import", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def import_rules():
+def import_rules() -> ResponseReturnValue:
     """Preview or queue a rules CSV import.
 
     Initial POSTs with an uploaded CSV render a read-only import preview.
@@ -216,7 +218,7 @@ def import_rules():
             flash(gettext("Choose a CSV file to import."))
             return redirect(next_url)
 
-        filename = Path(uploaded_file.filename).name
+        filename = Path(uploaded_file.filename or "").name
         if not filename.lower().endswith(".csv"):
             flash(gettext("Rules import currently supports CSV files."))
             return redirect(next_url)
@@ -255,7 +257,7 @@ def import_rules():
         flash(gettext(str(exc)))
         return redirect(next_url)
 
-    undo_state = {}
+    undo_state: dict[str, Any] = {}
     job_id = submit_background_job(
         f"Import rules from {filename}",
         import_rules_job,
@@ -277,7 +279,7 @@ def import_rules():
 
 @rules_bp.route("/rules/<int:rule_id>/update", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def update_rule(rule_id):
+def update_rule(rule_id: int) -> ResponseReturnValue:
     """Update a rule after an impact preview confirmation.
 
     Requires a CSRF-protected POST with ``confirm_preview=1`` and rule form
@@ -302,7 +304,7 @@ def update_rule(rule_id):
 
 @rules_bp.route("/rules/<int:rule_id>/approve", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def approve_rule(rule_id):
+def approve_rule(rule_id: int) -> ResponseReturnValue:
     """Approve an automatic rule without requiring an impact preview.
 
     Requires a manage-rules session and CSRF-protected POST. Approval only
@@ -341,7 +343,7 @@ def approve_rule(rule_id):
 
 @rules_bp.route("/rules/<int:rule_id>/apply", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def apply_rule(rule_id):
+def apply_rule(rule_id: int) -> ResponseReturnValue:
     """Apply a rule after an impact preview confirmation.
 
     Requires a valid manage-rules session permission and CSRF-protected POST
@@ -400,7 +402,7 @@ def apply_rule(rule_id):
 
 @rules_bp.route("/rules/apply-all", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def apply_all_rules():
+def apply_all_rules() -> ResponseReturnValue:
     """Queue apply-all rules after an impact preview confirmation.
 
     Requires a manage-rules session and CSRF-protected POST with
@@ -412,7 +414,7 @@ def apply_all_rules():
         flash(gettext("Preview apply before applying all rules."))
         return redirect(next_url)
 
-    undo_state = {}
+    undo_state: dict[str, Any] = {}
     job_id = submit_background_job(
         "Apply all category rules",
         apply_all_rules_job,
@@ -432,7 +434,7 @@ def apply_all_rules():
 
 @rules_bp.route("/rules/<int:rule_id>/delete", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
-def delete_rule(rule_id):
+def delete_rule(rule_id: int) -> ResponseReturnValue:
     """Delete a rule after preview unless it has no transaction references.
 
     Unconfirmed POSTs are allowed only when no existing transaction stores the
@@ -472,12 +474,12 @@ def delete_rule(rule_id):
     return redirect(next_url)
 
 
-def wants_json_response():
+def wants_json_response() -> bool:
     """Return whether a route should respond with JSON for a table action."""
     return request.headers.get("X-Requested-With") == "fetch"
 
 
-def rule_audit_transaction_limit(conn):
+def rule_audit_transaction_limit(conn: Any) -> int:
     """Return the configured newest-transaction cap for rule audit analysis."""
     return get_int_setting(
         conn,
@@ -486,7 +488,7 @@ def rule_audit_transaction_limit(conn):
     )
 
 
-def rules_redirect_target():
+def rules_redirect_target() -> str:
     """Render the rules redirect target page."""
     target = request.form.get("next", "").strip()
     if target.startswith("/rules"):

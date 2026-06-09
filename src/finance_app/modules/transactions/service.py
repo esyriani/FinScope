@@ -1,6 +1,8 @@
 """Application orchestration for the transactions feature."""
 
 import json
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
 
 from finance_app.background.runner import (
     AI_JOB_QUEUE,
@@ -66,7 +68,7 @@ APPLY_AI_SUGGESTION_ACTION = "apply"
 APPLY_AI_SUGGESTION_WITH_RULE_ACTION = "apply_and_create_rule"
 
 
-def build_transactions_context(args):
+def build_transactions_context(args: Any) -> dict[str, Any]:
     """Build transactions context."""
     with db_core_transaction() as conn:
         filters = parse_transaction_filters(args, conn)
@@ -140,7 +142,7 @@ def build_transactions_context(args):
     }
 
 
-def approve_selected_transactions(transaction_ids):
+def approve_selected_transactions(transaction_ids: Iterable[object] | None) -> int:
     """Approve selected transactions and return the number of changed rows."""
     ids = normalized_transaction_ids(transaction_ids)
     if not ids:
@@ -150,7 +152,7 @@ def approve_selected_transactions(transaction_ids):
         return mark_transactions_verified(conn, ids)
 
 
-def ignore_selected_transactions(transaction_ids):
+def ignore_selected_transactions(transaction_ids: Iterable[object] | None) -> int:
     """Ignore selected transactions and return the number of changed rows."""
     ids = normalized_transaction_ids(transaction_ids)
     if not ids:
@@ -160,7 +162,7 @@ def ignore_selected_transactions(transaction_ids):
         return set_transactions_ignored(conn, ids, 1)
 
 
-def queue_selected_transaction_recategorization(transaction_ids):
+def queue_selected_transaction_recategorization(transaction_ids: Iterable[object] | None) -> dict[str, Any]:
     """Queue complete categorization for selected transactions.
 
     Args:
@@ -184,7 +186,7 @@ def queue_selected_transaction_recategorization(transaction_ids):
     return {"selected_count": len(ids), "job_id": job_id}
 
 
-def recategorize_selected_transactions_job(transaction_ids):
+def recategorize_selected_transactions_job(transaction_ids: Iterable[object] | None) -> str:
     """Run the full categorization workflow for selected transaction IDs."""
     ids = normalized_transaction_ids(transaction_ids)
     if not ids:
@@ -274,7 +276,7 @@ def recategorize_selected_transactions_job(transaction_ids):
     return summary
 
 
-def recategorize_selected_transaction_rows(rows):
+def recategorize_selected_transaction_rows(rows: Sequence[Mapping[str, Any]]) -> int:
     """Categorize and persist one batch of selected transaction rows."""
     with db_core_transaction() as conn:
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
@@ -287,15 +289,15 @@ def recategorize_selected_transaction_rows(rows):
 
 
 def update_selected_recategorization_progress(
-    current,
-    total,
-    updated,
-    message=None,
-    params=None,
-    log_message=None,
-    log_params=None,
-    log_level="info",
-):
+    current: int,
+    total: int,
+    updated: int,
+    message: str | None = None,
+    params: Mapping[str, Any] | None = None,
+    log_message: str | None = None,
+    log_params: Mapping[str, Any] | None = None,
+    log_level: str = "info",
+) -> None:
     """Publish progress for the selected-transaction recategorization job."""
     default_message = "Recategorized {current} of {total}; {updated} updated."
     progress_params = {
@@ -319,12 +321,16 @@ def update_selected_recategorization_progress(
         )
 
 
-def append_selected_recategorization_log(message, params=None, level="info"):
+def append_selected_recategorization_log(
+    message: str,
+    params: Mapping[str, Any] | None = None,
+    level: str = "info",
+) -> None:
     """Append a selected-recategorization log entry to the current job."""
     append_background_job_log(message, params=params, level=level)
 
 
-def suggest_transaction_ai_category(transaction_id):
+def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
     """Run LLM categorization synchronously for one transaction.
 
     The action is suggestion-first: it suppresses automatic rule creation and
@@ -376,13 +382,13 @@ def suggest_transaction_ai_category(transaction_id):
 
 
 def apply_transaction_ai_suggestion(
-    transaction_id,
-    suggestion,
-    action=APPLY_AI_SUGGESTION_ACTION,
-    rule_keyword="",
-    amount_min=None,
-    amount_max=None,
-):
+    transaction_id: int,
+    suggestion: Mapping[str, Any] | None,
+    action: str = APPLY_AI_SUGGESTION_ACTION,
+    rule_keyword: str = "",
+    amount_min: float | None = None,
+    amount_max: float | None = None,
+) -> dict[str, Any]:
     """Apply a pending single-transaction AI suggestion.
 
     Args:
@@ -462,7 +468,11 @@ def apply_transaction_ai_suggestion(
         }
 
 
-def prepare_single_transaction_llm_payload(evidence_transaction, original_row, unknown_category):
+def prepare_single_transaction_llm_payload(
+    evidence_transaction: Mapping[str, Any],
+    original_row: Mapping[str, Any],
+    unknown_category: str,
+) -> dict[str, Any]:
     """Return an LLM payload that preserves evidence while forcing AI review."""
     payload = dict(evidence_transaction)
     payload["category"] = unknown_category
@@ -480,15 +490,15 @@ def prepare_single_transaction_llm_payload(evidence_transaction, original_row, u
 
 
 def build_transaction_ai_result(
-    original_row,
-    original_tags,
-    llm_transaction,
-    request_status,
-    tag_colors,
-    request_ok,
-    unknown_category,
-    model_name,
-):
+    original_row: Mapping[str, Any],
+    original_tags: Sequence[str],
+    llm_transaction: Mapping[str, Any],
+    request_status: Mapping[str, Any],
+    tag_colors: Mapping[str, str],
+    request_ok: bool,
+    unknown_category: str,
+    model_name: str,
+) -> dict[str, Any]:
     """Build a JSON-serializable modal view model for a one-off AI run."""
     metadata = parse_ai_metadata(llm_transaction.get("category_metadata"))
     tags = list(llm_transaction.get("tags") or [])
@@ -497,6 +507,7 @@ def build_transaction_ai_result(
     can_apply = bool(request_ok and category and category != unknown_category)
     message = ai_suggestion_message(request_status, can_apply)
     amount = original_row.get("amount")
+    transaction_kind = str(original_row.get("transaction_kind") or "")
     return {
         "ok": bool(request_ok),
         "applied": False,
@@ -507,11 +518,8 @@ def build_transaction_ai_result(
         "account_name": original_row.get("account_name"),
         "tx_date": stringify_date(original_row.get("tx_date")),
         "amount": amount,
-        "transaction_kind": original_row.get("transaction_kind"),
-        "transaction_kind_label": TRANSACTION_KINDS.get(
-            original_row.get("transaction_kind"),
-            original_row.get("transaction_kind"),
-        ),
+        "transaction_kind": transaction_kind,
+        "transaction_kind_label": TRANSACTION_KINDS.get(transaction_kind, transaction_kind),
         "previous_category": original_row.get("category"),
         "previous_tags": original_tag_list,
         "previous_tag_pills": tag_pills(original_tag_list, tag_colors),
@@ -544,7 +552,7 @@ def build_transaction_ai_result(
     }
 
 
-def ai_suggestion_persistence(llm_transaction, metadata):
+def ai_suggestion_persistence(llm_transaction: Mapping[str, Any], metadata: Mapping[str, Any]) -> dict[str, Any]:
     """Return the AI suggestion fields needed for a later explicit apply."""
     return {
         "category": llm_transaction.get("category"),
@@ -561,7 +569,7 @@ def ai_suggestion_persistence(llm_transaction, metadata):
     }
 
 
-def accepted_ai_suggestion_payload(payload):
+def accepted_ai_suggestion_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Return a persistence payload representing a user-accepted AI suggestion."""
     accepted = dict(payload)
     accepted_at = utc_timestamp()
@@ -580,19 +588,19 @@ def accepted_ai_suggestion_payload(payload):
     return accepted
 
 
-def llm_transaction_rule_keyword(original_row):
+def llm_transaction_rule_keyword(original_row: Mapping[str, Any]) -> str:
     """Return the default rule keyword shown with an AI suggestion."""
     return normalize_rule_keyword("", original_row.get("description", ""))
 
 
-def ai_suggestion_message(request_status, can_apply):
+def ai_suggestion_message(request_status: Mapping[str, Any], can_apply: bool) -> str:
     """Return a user-facing message for a one-transaction AI suggestion."""
     if request_status.get("status") == "ok":
         return "AI suggestion ready." if can_apply else "AI suggestion cannot be applied."
     return ai_request_failure_message(request_status)
 
 
-def disabled_ai_result():
+def disabled_ai_result() -> dict[str, Any]:
     """Return the result shown when the per-transaction AI action is disabled."""
     return {
         "ok": False,
@@ -602,7 +610,7 @@ def disabled_ai_result():
     }
 
 
-def missing_transaction_ai_result(transaction_id):
+def missing_transaction_ai_result(transaction_id: int) -> dict[str, Any]:
     """Return the result shown when the selected transaction no longer exists."""
     return {
         "ok": False,
@@ -613,7 +621,7 @@ def missing_transaction_ai_result(transaction_id):
     }
 
 
-def disabled_ai_apply_result():
+def disabled_ai_apply_result() -> dict[str, Any]:
     """Return the apply result shown when single-transaction AI is disabled."""
     return {
         "updated": False,
@@ -621,7 +629,7 @@ def disabled_ai_apply_result():
     }
 
 
-def missing_transaction_apply_result(transaction_id):
+def missing_transaction_apply_result(transaction_id: int) -> dict[str, Any]:
     """Return the apply result shown when the selected transaction no longer exists."""
     return {
         "updated": False,
@@ -630,7 +638,7 @@ def missing_transaction_apply_result(transaction_id):
     }
 
 
-def ai_request_failure_message(request_status):
+def ai_request_failure_message(request_status: Mapping[str, Any]) -> str:
     """Return a user-facing message for a request that was not persisted."""
     status = request_status.get("status")
     if status == "configuration_missing":
@@ -642,7 +650,7 @@ def ai_request_failure_message(request_status):
     return "AI categorization could not be applied."
 
 
-def parse_ai_metadata(value):
+def parse_ai_metadata(value: object) -> dict[str, Any]:
     """Return category metadata as a dictionary for the result modal."""
     if isinstance(value, dict):
         return value
@@ -656,7 +664,7 @@ def parse_ai_metadata(value):
     return parsed if isinstance(parsed, dict) else {"raw": parsed}
 
 
-def tag_pills(tags, tag_colors):
+def tag_pills(tags: Sequence[str], tag_colors: Mapping[str, str]) -> list[dict[str, str]]:
     """Return tag display pills for the AI result modal."""
     return [
         {
@@ -667,12 +675,12 @@ def tag_pills(tags, tag_colors):
     ]
 
 
-def request_status_label(request_status):
+def request_status_label(request_status: Mapping[str, Any]) -> str:
     """Return a compact status label for the LLM request result."""
     return str(request_status.get("status") or "unknown")
 
 
-def stringify_date(value):
+def stringify_date(value: object) -> str:
     """Return a stable date string for session storage and modal rendering."""
     if value is None:
         return ""

@@ -78,7 +78,10 @@
     gap: 0.75rem;
     min-height: 48px;
     padding: 0.65rem;
-    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease;
 }
 
 .amount-mode-option:hover {
@@ -352,7 +355,10 @@ legend.form-label {
 
 .audit-summary-link {
     cursor: pointer;
-    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+    transition:
+        border-color 120ms ease,
+        box-shadow 120ms ease,
+        transform 120ms ease;
 }
 
 .audit-summary-link:hover,
@@ -381,9 +387,7 @@ legend.form-label {
 }
 
 .audit-risk-healthy {
-    background:
-        linear-gradient(135deg, rgba(var(--app-success-rgb), 0.12), transparent 72%),
-        var(--app-surface);
+    background: linear-gradient(135deg, rgba(var(--app-success-rgb), 0.12), transparent 72%), var(--app-surface);
     border-color: rgba(var(--app-success-rgb), 0.46);
 }
 
@@ -392,9 +396,7 @@ legend.form-label {
 }
 
 .audit-risk-info {
-    background:
-        linear-gradient(135deg, rgba(var(--app-accent-rgb), 0.12), transparent 72%),
-        var(--app-surface);
+    background: linear-gradient(135deg, rgba(var(--app-accent-rgb), 0.12), transparent 72%), var(--app-surface);
     border-color: rgba(var(--app-accent-rgb), 0.46);
 }
 
@@ -403,9 +405,7 @@ legend.form-label {
 }
 
 .audit-risk-warning {
-    background:
-        linear-gradient(135deg, rgba(var(--app-warning-rgb), 0.16), transparent 72%),
-        var(--app-surface);
+    background: linear-gradient(135deg, rgba(var(--app-warning-rgb), 0.16), transparent 72%), var(--app-surface);
     border-color: rgba(var(--app-warning-rgb), 0.5);
 }
 
@@ -414,9 +414,7 @@ legend.form-label {
 }
 
 .audit-risk-critical {
-    background:
-        linear-gradient(135deg, rgba(var(--app-danger-rgb), 0.16), transparent 72%),
-        var(--app-surface);
+    background: linear-gradient(135deg, rgba(var(--app-danger-rgb), 0.16), transparent 72%), var(--app-surface);
     border-color: rgba(var(--app-danger-rgb), 0.55);
 }
 
@@ -447,7 +445,11 @@ legend.form-label {
     gap: 0.75rem;
     min-height: 64px;
     padding: 0.75rem;
-    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease,
+        transform 120ms ease;
 }
 
 .theme-mode-option:hover {

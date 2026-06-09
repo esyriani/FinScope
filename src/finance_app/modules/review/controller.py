@@ -1,6 +1,9 @@
 """Flask routes for the review feature."""
 
+from typing import Any
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask.typing import ResponseReturnValue
 
 from finance_app.background.runner import submit_background_job
 from finance_app.core.constants import UNKNOWN_CATEGORY
@@ -25,14 +28,14 @@ review_bp = Blueprint("review", __name__)
 
 @review_bp.route("/review")
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def review():
+def review() -> str:
     """Render the review page."""
     return render_template("review.html", **build_review_context(request.args))
 
 
 @review_bp.route("/review/apply", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def apply_review_group():
+def apply_review_group() -> ResponseReturnValue:
     """Apply review group."""
     next_url = review_redirect_target()
     merchant_key = review_merchant_key(request.form.get("merchant_key", ""))
@@ -105,7 +108,7 @@ def apply_review_group():
             flash(gettext("Rule keyword is required when saving a rule."))
             return redirect(next_url)
 
-    undo_state = {}
+    undo_state: dict[str, Any] = {}
     job_label = (
         f"Review transaction {transaction_id} as {category}"
         if transaction_id
@@ -115,7 +118,7 @@ def apply_review_group():
             else f"Review {short_label(merchant_key)} as {category}"
         )
     )
-    job_kwargs = {}
+    job_kwargs: dict[str, Any] = {}
     if selected_transaction_ids:
         job_kwargs["selected_transaction_ids"] = selected_transaction_ids
 
@@ -147,10 +150,10 @@ def apply_review_group():
     return redirect(next_url)
 
 
-def parse_review_transaction_ids(values):
+def parse_review_transaction_ids(values: list[str]) -> list[int]:
     """Parse selected review transaction ids from submitted form values."""
-    transaction_ids = []
-    seen = set()
+    transaction_ids: list[int] = []
+    seen: set[int] = set()
     for value in values:
         text = str(value or "").strip()
         if not text:
@@ -169,7 +172,7 @@ def parse_review_transaction_ids(values):
     return transaction_ids
 
 
-def review_redirect_target():
+def review_redirect_target() -> str:
     """Render the review redirect target page."""
     target = request.form.get("next", "").strip()
     if target.startswith("/review"):

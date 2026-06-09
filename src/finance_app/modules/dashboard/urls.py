@@ -1,11 +1,13 @@
 """URL builders for the dashboard feature."""
 
 from calendar import monthrange
+from collections.abc import Sequence
+from typing import Any, Protocol, TypedDict
 from urllib.parse import urlencode
 
 from flask import url_for
 
-from finance_app.core.periods import PERIOD_CUSTOM
+from finance_app.core.periods import PERIOD_CUSTOM, DatePeriod
 from finance_app.modules.transactions.constants import (
     CATEGORY_STATUS_CATEGORIZED,
     CATEGORY_STATUS_UNKNOWN,
@@ -27,9 +29,24 @@ from .constants import (
 from .filters import dashboard_table_default_direction, parse_dashboard_table_sort
 
 
-def app_url(endpoint, **params):
-    """Handle app URL."""
-    cleaned = {}
+class QueryStringArgs(Protocol):
+    """Represent query args that can be copied for URL updates."""
+
+    def to_dict(self, flat: bool = True) -> dict[str, Any]:
+        """Return query parameters as a dictionary."""
+        ...
+
+
+class MonthBounds(TypedDict):
+    """Represent inclusive month date bounds."""
+
+    start: str
+    end: str
+
+
+def app_url(endpoint: str, **params: object) -> str:
+    """Build an application URL with blank query values removed."""
+    cleaned: dict[str, object] = {}
     for key, value in params.items():
         if isinstance(value, (list, tuple)):
             values = [item for item in value if item not in (None, "")]
@@ -43,23 +60,29 @@ def app_url(endpoint, **params):
     return f"{base_url}?{query}" if query else base_url
 
 
-def dashboard_url(args, **overrides):
-    """Render url."""
+def dashboard_url(args: QueryStringArgs, **overrides: object) -> str:
+    """Build a dashboard URL that preserves current query parameters."""
     query = args.to_dict(flat=False)
     for key, value in overrides.items():
         if value in (None, ""):
             query.pop(key, None)
         elif isinstance(value, (list, tuple)):
-            query[key] = [item for item in value if item not in (None, "")]
+            query[key] = [str(item) for item in value if item not in (None, "")]
         else:
-            query[key] = [value]
+            query[key] = [str(value)]
 
     encoded_query = urlencode(query, doseq=True)
     return url_for("dashboard.dashboard") + (f"?{encoded_query}" if encoded_query else "")
 
 
-def dashboard_table_sort_url(args, table, sort_name, current_sort, current_direction):
-    """Render table sort URL."""
+def dashboard_table_sort_url(
+    args: QueryStringArgs,
+    table: str,
+    sort_name: str,
+    current_sort: str,
+    current_direction: str,
+) -> str:
+    """Build a dashboard URL for toggling one table sort."""
     if table == DASHBOARD_TABLE_MERCHANT:
         sort_name = parse_dashboard_table_sort(
             sort_name,
@@ -89,19 +112,19 @@ def dashboard_table_sort_url(args, table, sort_name, current_sort, current_direc
 
 
 def dashboard_transaction_params(
-    period,
-    filter_mode,
-    selected_categories,
-    include_category_filter=True,
-    date_from="",
-    date_to="",
-    quick_view=QUICK_VIEW_ALL,
-    selected_tags=None,
-    merchant_search="",
-):
-    """Render transaction params."""
-    selected_tags = selected_tags or []
-    params = {
+    period: DatePeriod,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    include_category_filter: bool = True,
+    date_from: str = "",
+    date_to: str = "",
+    quick_view: str = QUICK_VIEW_ALL,
+    selected_tags: Sequence[str] | None = None,
+    merchant_search: str = "",
+) -> dict[str, object]:
+    """Build transaction-list query parameters for a dashboard drill-down."""
+    selected_tags = selected_tags or ()
+    params: dict[str, object] = {
         "period": period,
         "ignored": IGNORED_FILTER_ACTIVE,
     }
@@ -127,18 +150,18 @@ def dashboard_transaction_params(
 
 
 def dashboard_transactions_url(
-    period,
-    filter_mode,
-    selected_categories,
-    include_category_filter=True,
-    date_from="",
-    date_to="",
-    quick_view=QUICK_VIEW_ALL,
-    selected_tags=None,
-    merchant_search="",
-    **overrides,
-):
-    """Render transactions URL."""
+    period: DatePeriod,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    include_category_filter: bool = True,
+    date_from: str = "",
+    date_to: str = "",
+    quick_view: str = QUICK_VIEW_ALL,
+    selected_tags: Sequence[str] | None = None,
+    merchant_search: str = "",
+    **overrides: object,
+) -> str:
+    """Build a transactions URL for a dashboard drill-down."""
     params = dashboard_transaction_params(
         period,
         filter_mode,
@@ -155,17 +178,17 @@ def dashboard_transactions_url(
 
 
 def dashboard_month_url(
-    month,
-    filter_mode,
-    selected_categories,
-    range_from="",
-    range_to="",
-    quick_view=QUICK_VIEW_ALL,
-    selected_tags=None,
-    merchant_search="",
-    **overrides,
-):
-    """Render month URL."""
+    month: str,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    range_from: str = "",
+    range_to: str = "",
+    quick_view: str = QUICK_VIEW_ALL,
+    selected_tags: Sequence[str] | None = None,
+    merchant_search: str = "",
+    **overrides: object,
+) -> str:
+    """Build a dashboard drill-down URL constrained to one calendar month."""
     bounds = month_bounds(month)
     date_from = max(bounds["start"], range_from) if range_from else bounds["start"]
     date_to = min(bounds["end"], range_to) if range_to else bounds["end"]
@@ -183,8 +206,8 @@ def dashboard_month_url(
     )
 
 
-def month_bounds(month):
-    """Return bounds."""
+def month_bounds(month: str) -> MonthBounds:
+    """Return inclusive ISO date bounds for a YYYY-MM month label."""
     year, month_number = (int(part) for part in month.split("-", 1))
     last_day = monthrange(year, month_number)[1]
     return {

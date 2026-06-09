@@ -16,13 +16,13 @@ function renderTags(multiselect) {
         checkedInputs.forEach((input) => {
             const label = input.nextElementSibling;
             const labelText = label ? label.textContent.trim() : input.value;
-            
+
             const tag = document.createElement("span");
             tag.className = "tag-multiselect-tag";
-            
+
             const textSpan = document.createElement("span");
             textSpan.textContent = labelText;
-            
+
             const closeBtn = document.createElement("button");
             closeBtn.type = "button";
             closeBtn.className = "tag-multiselect-remove";
@@ -35,7 +35,7 @@ function renderTags(multiselect) {
                 updateBulkOptionStates(multiselect);
                 updateMenuPosition();
             });
-            
+
             tag.appendChild(textSpan);
             tag.appendChild(closeBtn);
             tagsContainer.appendChild(tag);
@@ -71,7 +71,7 @@ function presetExcludedValues(multiselect) {
         if (Array.isArray(parsedValues)) {
             return new Set(parsedValues.map((value) => String(value)));
         }
-    } catch (error) {
+    } catch (_error) {
         return new Set();
     }
 
@@ -164,13 +164,8 @@ function updatePresetState(multiselect) {
     const hasExcludedChecked = excludedOptions.some((option) => option.checked);
 
     input.disabled = presetOptions.length === 0;
-    input.checked = presetOptions.length > 0
-        && presetCheckedCount === presetOptions.length
-        && !hasExcludedChecked;
-    input.indeterminate = (
-        presetCheckedCount > 0
-        && (presetCheckedCount < presetOptions.length || hasExcludedChecked)
-    );
+    input.checked = presetOptions.length > 0 && presetCheckedCount === presetOptions.length && !hasExcludedChecked;
+    input.indeterminate = presetCheckedCount > 0 && (presetCheckedCount < presetOptions.length || hasExcludedChecked);
 }
 
 function updateBulkOptionStates(multiselect) {
@@ -197,11 +192,10 @@ function setPresetOptions(multiselect, checked) {
     updateMenuPosition();
 }
 
-
 function positionMenu(multiselect) {
     const toggle = multiselect.querySelector("[data-tag-multiselect-toggle]");
     const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
-    
+
     if (!toggle || !menu) return;
 
     const rect = toggle.getBoundingClientRect();
@@ -236,7 +230,7 @@ function hideMenu(multiselect) {
 }
 
 function updateMenuPosition() {
-    document.querySelectorAll("[data-tag-multiselect]").forEach(multiselect => {
+    document.querySelectorAll("[data-tag-multiselect]").forEach((multiselect) => {
         const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
         if (menu && menu.style.display === "block") {
             positionMenu(multiselect);

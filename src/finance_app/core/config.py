@@ -47,12 +47,12 @@ class AppSettings:
     default_categorization_model: str
 
     @property
-    def max_content_length(self):
+    def max_content_length(self) -> int:
         """Handle max content length."""
         return self.max_upload_mb * 1024 * 1024
 
 
-def load_settings(config_path=CONFIG_PATH):
+def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
     """Load settings."""
     parser = ConfigParser()
     parser.read(EXAMPLE_CONFIG_PATH, encoding="utf-8")
@@ -188,18 +188,18 @@ def load_settings(config_path=CONFIG_PATH):
     )
 
 
-def env(name, fallback):
+def env(name: str, fallback: str) -> str:
     """Return env."""
     value = os.environ.get(name)
     return fallback if value is None else value
 
 
-def database_dialect(database_url):
+def database_dialect(database_url: object) -> str:
     """Return the SQLAlchemy dialect name from a database URL."""
     return str(database_url or "").split(":", 1)[0].split("+", 1)[0].lower()
 
 
-def sqlite_database_url(database_path):
+def sqlite_database_url(database_path: str | Path) -> str:
     """Return a SQLAlchemy SQLite URL for a filesystem database path."""
     path = Path(database_path)
     if str(path) == ":memory:":
@@ -208,7 +208,7 @@ def sqlite_database_url(database_path):
     return f"sqlite:///{quote(path.as_posix(), safe='/:')}"
 
 
-def sqlite_path_from_database_url(database_url):
+def sqlite_path_from_database_url(database_url: object) -> Path | None:
     """Return a SQLite path from a SQLAlchemy URL when the URL targets SQLite."""
     url = str(database_url or "").strip()
     if database_dialect(url) != "sqlite":
@@ -226,12 +226,12 @@ def sqlite_path_from_database_url(database_url):
     return path if path.is_absolute() else resolve_path(path_text)
 
 
-def parse_bool(value):
+def parse_bool(value: object) -> bool:
     """Parse bool."""
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def parse_secure_cookies(value, server_host):
+def parse_secure_cookies(value: object, server_host: object) -> bool:
     """Return whether browser cookies should require HTTPS transport."""
     text = str(value or "").strip().lower()
     if text:
@@ -239,7 +239,7 @@ def parse_secure_cookies(value, server_host):
     return not is_local_bind_host(server_host)
 
 
-def validate_secret_key(value, server_debug=False, server_host=""):
+def validate_secret_key(value: object, server_debug: bool = False, server_host: object = "") -> str:
     """Return a usable Flask secret key or raise for unsafe deployments."""
     secret_key = str(value or "").strip()
     if not secret_key:
@@ -252,19 +252,19 @@ def validate_secret_key(value, server_debug=False, server_host=""):
     return secret_key
 
 
-def is_local_bind_host(value):
+def is_local_bind_host(value: object) -> bool:
     """Return whether a configured bind host is loopback-only."""
     host = str(value or "").strip().lower()
     return host in LOCAL_BIND_HOSTS
 
 
-def parse_port(value, fallback=5000):
+def parse_port(value: object, fallback: int = 5000) -> int:
     """Parse a TCP port number, falling back when the value is invalid."""
     parsed = parse_positive_int(value, fallback)
     return parsed if 1 <= parsed <= 65535 else fallback
 
 
-def parse_positive_int(value, fallback):
+def parse_positive_int(value: object, fallback: int) -> int:
     """Parse positive int."""
     try:
         parsed = int(str(value).strip())
@@ -274,7 +274,7 @@ def parse_positive_int(value, fallback):
     return parsed if parsed > 0 else fallback
 
 
-def parse_probability(value, fallback):
+def parse_probability(value: object, fallback: float) -> float:
     """Parse probability."""
     try:
         parsed = float(str(value).strip())
@@ -284,7 +284,7 @@ def parse_probability(value, fallback):
     return parsed if 0 <= parsed <= 1 else fallback
 
 
-def resolve_path(value):
+def resolve_path(value: str | Path) -> Path:
     """Resolve path."""
     path = Path(value).expanduser()
 

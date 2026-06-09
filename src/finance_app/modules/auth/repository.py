@@ -5,6 +5,9 @@ and audit events. Per-user setting queries live in the neutral users repository
 so settings can share them without importing auth during app registration.
 """
 
+from datetime import datetime
+from typing import Any
+
 from sqlalchemy import func, insert, select, update
 
 from finance_app.core.constants import USER_ROLE_OWNER
@@ -19,12 +22,12 @@ from finance_app.modules.users.repository import (
 )
 
 
-def owner_exists(conn):
+def owner_exists(conn: Any) -> bool:
     """Return whether an owner account exists in the current database."""
     return active_owner_count(conn) > 0
 
 
-def active_owner_count(conn):
+def active_owner_count(conn: Any) -> int:
     """Return the number of active owner accounts."""
     return conn.execute(
         select(func.count())
@@ -36,12 +39,12 @@ def active_owner_count(conn):
     ).scalar_one()
 
 
-def get_user_by_id(conn, user_id):
+def get_user_by_id(conn: Any, user_id: object) -> dict[str, Any] | None:
     """Return one user by primary key, or ``None`` when absent."""
     return conn.execute(select(*USER_COLUMNS).where(users_table.c.id == user_id)).mappings().fetchone()
 
 
-def get_user_by_username(conn, username):
+def get_user_by_username(conn: Any, username: object) -> dict[str, Any] | None:
     """Return one user by case-insensitive username, or ``None`` when absent."""
     normalized = normalize_username_key(username)
     if not normalized:
@@ -50,7 +53,7 @@ def get_user_by_username(conn, username):
     return conn.execute(select(*USER_COLUMNS).where(users_table.c.username_key == normalized)).mappings().fetchone()
 
 
-def username_exists(conn, username, exclude_user_id=None):
+def username_exists(conn: Any, username: object, exclude_user_id: object | None = None) -> bool:
     """Return whether a case-insensitive username already exists."""
     normalized = normalize_username_key(username)
     if not normalized:
@@ -64,15 +67,15 @@ def username_exists(conn, username, exclude_user_id=None):
 
 
 def insert_user(
-    conn,
-    username,
-    password_hash,
-    role,
-    must_change_password,
-    now,
-    is_active=1,
-    display_name=None,
-):
+    conn: Any,
+    username: str,
+    password_hash: str,
+    role: str,
+    must_change_password: bool,
+    now: datetime,
+    is_active: object = 1,
+    display_name: object | None = None,
+) -> int:
     """Insert a user and return the new user ID."""
     display_value = normalize_display_name(display_name, username)
     result = conn.execute(
@@ -91,14 +94,14 @@ def insert_user(
     return result.inserted_primary_key[0]
 
 
-def update_display_name(conn, user_id, display_name, now):
+def update_display_name(conn: Any, user_id: object, display_name: str, now: datetime) -> int:
     """Update one user's UI display name and return the affected row count."""
     return conn.execute(
         update(users_table).where(users_table.c.id == user_id).values(display_name=display_name, updated_at=now)
     ).rowcount
 
 
-def record_login_success(conn, user_id, now):
+def record_login_success(conn: Any, user_id: object, now: datetime) -> None:
     """Reset failed login state and store the successful login timestamp."""
     conn.execute(
         update(users_table)
@@ -112,7 +115,13 @@ def record_login_success(conn, user_id, now):
     )
 
 
-def record_login_failure(conn, user_id, failed_login_count, locked_until, now):
+def record_login_failure(
+    conn: Any,
+    user_id: object,
+    failed_login_count: int,
+    locked_until: datetime | None,
+    now: datetime,
+) -> None:
     """Store failed login state after an unsuccessful authentication attempt."""
     conn.execute(
         update(users_table)
@@ -125,7 +134,7 @@ def record_login_failure(conn, user_id, failed_login_count, locked_until, now):
     )
 
 
-def update_password(conn, user_id, password_hash, must_change_password, now):
+def update_password(conn: Any, user_id: object, password_hash: str, must_change_password: bool, now: datetime) -> int:
     """Persist a password hash and password-change flag for one user."""
     return conn.execute(
         update(users_table)
@@ -140,21 +149,21 @@ def update_password(conn, user_id, password_hash, must_change_password, now):
     ).rowcount
 
 
-def update_user_active(conn, user_id, is_active, now):
+def update_user_active(conn: Any, user_id: object, is_active: bool, now: datetime) -> int:
     """Activate or deactivate one user and return the affected row count."""
     return conn.execute(
         update(users_table).where(users_table.c.id == user_id).values(is_active=1 if is_active else 0, updated_at=now)
     ).rowcount
 
 
-def update_user_role(conn, user_id, role, now):
+def update_user_role(conn: Any, user_id: object, role: str, now: datetime) -> int:
     """Update one user's role and return the affected row count."""
     return conn.execute(
         update(users_table).where(users_table.c.id == user_id).values(role=role, updated_at=now)
     ).rowcount
 
 
-def update_owner_roles_except(conn, preserved_user_id, role, now):
+def update_owner_roles_except(conn: Any, preserved_user_id: object, role: str, now: datetime) -> int:
     """Update all owner rows except the preserved user to the given role."""
     return conn.execute(
         update(users_table)
@@ -166,14 +175,21 @@ def update_owner_roles_except(conn, preserved_user_id, role, now):
     ).rowcount
 
 
-def force_password_change(conn, user_id, now):
+def force_password_change(conn: Any, user_id: object, now: datetime) -> int:
     """Mark one user as requiring a password change at next login."""
     return conn.execute(
         update(users_table).where(users_table.c.id == user_id).values(must_change_password=1, updated_at=now)
     ).rowcount
 
 
-def insert_audit_event(conn, user_id, username, action, details=None, ip_address=None):
+def insert_audit_event(
+    conn: Any,
+    user_id: object | None,
+    username: object | None,
+    action: str,
+    details: object | None = None,
+    ip_address: object | None = None,
+) -> None:
     """Append an audit event without storing sensitive values."""
     conn.execute(
         insert(audit_log_table).values(
@@ -186,12 +202,12 @@ def insert_audit_event(conn, user_id, username, action, details=None, ip_address
     )
 
 
-def normalize_username_key(username):
+def normalize_username_key(username: object) -> str:
     """Return the lookup key produced by the database username_key column."""
     return str(username or "").strip().lower()
 
 
-def normalize_display_name(display_name, fallback_username):
+def normalize_display_name(display_name: object, fallback_username: object) -> str:
     """Return a non-empty display name for low-level insert helpers."""
     text = str(display_name or "").strip()
     return text or str(fallback_username or "").strip()

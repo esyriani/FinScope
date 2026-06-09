@@ -69,39 +69,35 @@ function setupAiJobProgressPolling(root = document) {
                 return;
             }
 
-            log.replaceChildren(...entries.map((entry) => {
-                const level = String(entry.level || "info").toLowerCase();
-                const row = document.createElement("div");
-                row.className = "d-flex align-items-start gap-2 py-1";
-                row.dataset.aiJobProgressLogEntry = "";
+            log.replaceChildren(
+                ...entries.map((entry) => {
+                    const level = String(entry.level || "info").toLowerCase();
+                    const row = document.createElement("div");
+                    row.className = "d-flex align-items-start gap-2 py-1";
+                    row.dataset.aiJobProgressLogEntry = "";
 
-                const timestamp = document.createElement("span");
-                timestamp.className = "text-muted flex-shrink-0";
-                timestamp.textContent = entry.timestamp_label || "";
+                    const timestamp = document.createElement("span");
+                    timestamp.className = "text-muted flex-shrink-0";
+                    timestamp.textContent = entry.timestamp_label || "";
 
-                const icon = document.createElement("i");
-                icon.className = aiLogIconClass(level);
-                icon.setAttribute("aria-hidden", "true");
+                    const icon = document.createElement("i");
+                    icon.className = aiLogIconClass(level);
+                    icon.setAttribute("aria-hidden", "true");
 
-                const message = document.createElement("span");
-                message.textContent = translateJobsMessage(entry.message || "", entry.params || {});
+                    const message = document.createElement("span");
+                    message.textContent = translateJobsMessage(entry.message || "", entry.params || {});
 
-                row.append(timestamp, icon, message);
-                return row;
-            }));
+                    row.append(timestamp, icon, message);
+                    return row;
+                })
+            );
         }
 
         function refreshJobsSection() {
             const target = panel.closest("[data-ajax-refresh-target]");
             const key = target?.dataset.ajaxRefreshTarget || "";
-            const escapedKey = window.CSS?.escape
-                ? CSS.escape(key)
-                : key.replaceAll('"', '\\"');
-            const selector = target?.id
-                ? `#${target.id}`
-                : key
-                    ? `[data-ajax-refresh-target="${escapedKey}"]`
-                    : "";
+            const escapedKey = window.CSS?.escape ? CSS.escape(key) : key.replaceAll('"', '\\"');
+            const selector = target?.id ? `#${target.id}` : key ? `[data-ajax-refresh-target="${escapedKey}"]` : "";
 
             if (selector && window.ajaxRefreshFromUrl) {
                 window.ajaxRefreshFromUrl(window.location.href, selector).catch(() => {});
@@ -173,11 +169,9 @@ function restoreJobsRefreshState(state) {
 
         const escapedId = window.CSS?.escape ? CSS.escape(id) : id.replaceAll('"', '\\"');
         row.classList.toggle("show", expanded);
-        document
-            .querySelectorAll(`[data-bs-target="#${escapedId}"]`)
-            .forEach((toggle) => {
-                toggle.setAttribute("aria-expanded", String(expanded));
-            });
+        document.querySelectorAll(`[data-bs-target="#${escapedId}"]`).forEach((toggle) => {
+            toggle.setAttribute("aria-expanded", String(expanded));
+        });
     });
 }
 
@@ -185,9 +179,9 @@ function jobsRefreshIsBlocked(selector) {
     // Do not replace the table while a modal or form action is in progress.
     const target = document.querySelector(selector);
     return Boolean(
-        document.querySelector(".modal.show")
-        || document.querySelector("[data-ajax-refresh-form][aria-busy='true']")
-        || target?.getAttribute("aria-busy") === "true"
+        document.querySelector(".modal.show") ||
+        document.querySelector("[data-ajax-refresh-form][aria-busy='true']") ||
+        target?.getAttribute("aria-busy") === "true"
     );
 }
 
@@ -206,23 +200,21 @@ function renderJobsRefreshCountdown(button, seconds) {
 function setupJobsAutoRefresh(root = document) {
     // Refresh the jobs table through AJAX on a ten-second countdown.
     const button = document.querySelector("[data-jobs-refresh-button]");
-    const target = root.querySelector("[data-jobs-auto-refresh]")
-        || document.querySelector("[data-jobs-auto-refresh]");
+    const target = root.querySelector("[data-jobs-auto-refresh]") || document.querySelector("[data-jobs-auto-refresh]");
 
     if (!button || !target || button.dataset.jobsRefreshReady === "true") {
         return;
     }
 
     button.dataset.jobsRefreshReady = "true";
-    const selector = button.dataset.jobsRefreshTarget || "[data-ajax-refresh-target=\"jobs-actions\"]";
+    const selector = button.dataset.jobsRefreshTarget || '[data-ajax-refresh-target="jobs-actions"]';
     const configuredSeconds = Number(
-        button.dataset.jobsRefreshInterval
-        || target.dataset.jobsAutoRefreshInterval
-        || JOBS_REFRESH_DEFAULT_SECONDS
+        button.dataset.jobsRefreshInterval || target.dataset.jobsAutoRefreshInterval || JOBS_REFRESH_DEFAULT_SECONDS
     );
-    const intervalSeconds = Number.isFinite(configuredSeconds) && configuredSeconds > 0
-        ? Math.round(configuredSeconds)
-        : JOBS_REFRESH_DEFAULT_SECONDS;
+    const intervalSeconds =
+        Number.isFinite(configuredSeconds) && configuredSeconds > 0
+            ? Math.round(configuredSeconds)
+            : JOBS_REFRESH_DEFAULT_SECONDS;
     let remainingSeconds = intervalSeconds;
     let refreshing = false;
 
@@ -250,7 +242,7 @@ function setupJobsAutoRefresh(root = document) {
         try {
             await window.ajaxRefreshFromUrl(window.location.href, selector);
             restoreJobsRefreshState(state);
-        } catch (error) {
+        } catch (_error) {
             if (window.showAjaxRefreshError) {
                 window.showAjaxRefreshError(
                     activeTarget || button,

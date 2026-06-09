@@ -5,6 +5,8 @@ The helpers are pure formatting functions and do not access the database.
 """
 
 import json
+from collections.abc import Mapping, MutableMapping
+from typing import Any
 
 from finance_app.core.constants import STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER
 from finance_app.modules.categories.sources import (
@@ -25,7 +27,7 @@ AUTOMATIC_CATEGORIZATION_SOURCE_LABELS = {
 }
 
 
-def ai_batch_report(categorized, request_status):
+def ai_batch_report(categorized: list[Mapping[str, Any]], request_status: Mapping[str, Any] | None) -> dict[str, Any]:
     """Return concise AI request and unresolved-result details for one batch."""
     failure_counts = llm_failure_counts(categorized)
     return {
@@ -35,9 +37,9 @@ def ai_batch_report(categorized, request_status):
     }
 
 
-def llm_failure_counts(transactions):
+def llm_failure_counts(transactions: list[Mapping[str, Any]]) -> dict[str, int]:
     """Count LLM failure reasons from categorized transaction metadata."""
-    counts = {}
+    counts: dict[str, int] = {}
     for tx in transactions:
         metadata = transaction_category_metadata(tx)
         reason = metadata.get("failure_reason")
@@ -46,7 +48,7 @@ def llm_failure_counts(transactions):
     return counts
 
 
-def transaction_category_metadata(transaction):
+def transaction_category_metadata(transaction: Mapping[str, Any]) -> dict[str, Any]:
     """Return category metadata as a dictionary when available."""
     metadata = transaction.get("category_metadata")
     if not metadata:
@@ -60,25 +62,25 @@ def transaction_category_metadata(transaction):
     return parsed if isinstance(parsed, dict) else {}
 
 
-def ai_request_status_needs_log(status):
+def ai_request_status_needs_log(status: Mapping[str, Any] | None) -> bool:
     """Return whether an LLM request status should be surfaced in the job log."""
     if not status:
         return False
     return status.get("status") not in {"ok", "not_requested"}
 
 
-def format_failure_counts(counts):
+def format_failure_counts(counts: Mapping[str, int]) -> str:
     """Return compact failure reason counts for progress logs."""
     return ", ".join(f"{reason}: {count}" for reason, count in sorted(counts.items()))
 
 
-def merge_source_counts(target, source):
+def merge_source_counts(target: MutableMapping[str, int], source: Mapping[str, int]) -> None:
     """Add source-count values into an aggregate dictionary."""
     for key, value in source.items():
         target[key] = target.get(key, 0) + value
 
 
-def automatic_categorization_message(updated_count, source_counts=None):
+def automatic_categorization_message(updated_count: int, source_counts: Mapping[str, int] | None = None) -> str:
     """Return a concise background-job summary for automatic categorization."""
     if not updated_count:
         return "0 automatically categorized."
@@ -88,10 +90,10 @@ def automatic_categorization_message(updated_count, source_counts=None):
     return f"{updated_count} automatically categorized{suffix}."
 
 
-def automatic_categorization_breakdown(source_counts):
+def automatic_categorization_breakdown(source_counts: Mapping[str, int]) -> str:
     """Return a stable source-count breakdown for automatic categorization."""
-    parts = []
-    seen = set()
+    parts: list[str] = []
+    seen: set[str] = set()
     for source in AUTOMATIC_CATEGORIZATION_SOURCE_ORDER:
         count = source_counts.get(source, 0)
         if count:
@@ -108,15 +110,16 @@ def automatic_categorization_breakdown(source_counts):
 
 
 def upload_result_message(
-    statement_type,
-    extension,
-    inserted_count,
-    skipped_count,
-    ignored_count,
-    llm_candidate_count=0,
-    llm_job_queued=False,
-):
+    statement_type: str,
+    extension: str,
+    inserted_count: int,
+    skipped_count: int,
+    ignored_count: int,
+    llm_candidate_count: int = 0,
+    llm_job_queued: bool = False,
+) -> str:
     """Render the background upload result message."""
+    del extension
     if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
         message = f"Interac history processed. Enriched {inserted_count} existing transactions. "
         if skipped_count:

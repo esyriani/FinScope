@@ -1,13 +1,15 @@
 """Form parsing and validation helpers for the settings feature."""
 
 import re
+from typing import Any
 
 from finance_app.core.constants import THEME_MODE_DARK, THEME_MODE_LIGHT
 from finance_app.core.i18n import normalize_language
+from finance_app.core.query import QueryArgs
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 
 
-def parse_general_settings_form(form, app_settings):
+def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, object]:
     """Parse user-specific General settings from a submitted form."""
     return {
         "default_table_page_size": parse_positive_int(
@@ -47,7 +49,7 @@ def parse_general_settings_form(form, app_settings):
     }
 
 
-def parse_global_settings_form(form, app_settings):
+def parse_global_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, object]:
     """Parse owner-only advanced settings from a submitted form."""
     return {
         "llm_confidence_threshold": parse_probability(
@@ -92,7 +94,7 @@ def parse_global_settings_form(form, app_settings):
     }
 
 
-def parse_positive_int(value, fallback, minimum=1, label="Numeric settings"):
+def parse_positive_int(value: object, fallback: int, minimum: int = 1, label: str = "Numeric settings") -> int:
     """Parse positive int."""
     try:
         parsed = int(str(value).strip())
@@ -105,7 +107,7 @@ def parse_positive_int(value, fallback, minimum=1, label="Numeric settings"):
     return parsed if parsed > 0 else fallback
 
 
-def normalize_minimum_int(value, minimum, fallback):
+def normalize_minimum_int(value: object, minimum: int, fallback: int) -> str:
     """Normalize minimum int."""
     try:
         parsed = int(str(value).strip())
@@ -114,7 +116,7 @@ def normalize_minimum_int(value, minimum, fallback):
     return str(max(minimum, parsed))
 
 
-def parse_probability(value, label):
+def parse_probability(value: object, label: str) -> float:
     """Parse probability."""
     try:
         parsed = float(str(value).strip())
@@ -127,7 +129,7 @@ def parse_probability(value, label):
     return parsed
 
 
-def parse_non_negative_float(value, label):
+def parse_non_negative_float(value: object, label: str) -> float:
     """Parse non negative float."""
     try:
         parsed = float(str(value).strip())
@@ -140,22 +142,22 @@ def parse_non_negative_float(value, label):
     return parsed
 
 
-def parse_checkbox(value):
+def parse_checkbox(value: object) -> bool:
     """Return whether a checkbox-style form value is enabled."""
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def format_probability(value):
+def format_probability(value: object) -> str:
     """Format probability."""
-    return f"{float(value):.2f}"
+    return f"{float(str(value)):.2f}"
 
 
-def format_decimal(value):
+def format_decimal(value: object) -> str:
     """Format decimal."""
-    return f"{float(value):g}"
+    return f"{float(str(value)):g}"
 
 
-def clean_openai_model(value):
+def clean_openai_model(value: object) -> str:
     """Clean openai model."""
     text = str(value or "").strip()
     if not text:
@@ -163,12 +165,12 @@ def clean_openai_model(value):
     return text if re.fullmatch(r"[A-Za-z0-9._:/+-]+", text) else ""
 
 
-def normalize_theme_mode(value):
+def normalize_theme_mode(value: object) -> str:
     """Normalize theme mode."""
     return THEME_MODE_DARK if str(value or "").strip().lower() == THEME_MODE_DARK else THEME_MODE_LIGHT
 
 
-def parse_statement_types_form(form):
+def parse_statement_types_form(form: QueryArgs) -> list[dict[str, str]]:
     """Parse statement types form."""
     ids = form.getlist("statement_type_ids")
     names = form.getlist("statement_type_names")
@@ -179,7 +181,7 @@ def parse_statement_types_form(form):
         import_modes.extend([""] * (len(names) - len(import_modes)))
     if len(default_account_types) < len(names):
         default_account_types.extend([""] * (len(names) - len(default_account_types)))
-    statement_types = []
+    statement_types: list[dict[str, str]] = []
 
     for type_id, name, parser_type, import_mode, default_account_type in zip(
         ids,
@@ -193,11 +195,11 @@ def parse_statement_types_form(form):
             continue
         statement_types.append(
             {
-                "id": type_id,
+                "id": str(type_id),
                 "name": normalized_name,
-                "parser_type": parser_type,
-                "import_mode": import_mode,
-                "default_account_type": default_account_type,
+                "parser_type": str(parser_type),
+                "import_mode": str(import_mode),
+                "default_account_type": str(default_account_type),
             }
         )
 

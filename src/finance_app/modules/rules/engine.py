@@ -1,5 +1,8 @@
 """Domain engine for the rules feature."""
 
+from collections.abc import Mapping, MutableMapping, Sequence
+from typing import Any
+
 from sqlalchemy import and_, false, or_, select, update
 
 from finance_app.core.constants import (
@@ -47,7 +50,7 @@ from finance_app.modules.merchants.sql_filters import (
 from finance_app.modules.settings.runtime import get_unknown_category
 
 
-def apply_all_rules_job(undo_state):
+def apply_all_rules_job(undo_state: MutableMapping[str, Any]) -> str:
     """Apply all rules job."""
     with db_core_transaction() as conn:
         updated_count, undo_changes = apply_all_rules_to_transactions(conn, capture_undo=True)
@@ -56,7 +59,7 @@ def apply_all_rules_job(undo_state):
     return f"Rules applied to {updated_count} existing transaction" f"{'' if updated_count == 1 else 's'}."
 
 
-def undo_apply_all_rules_job(undo_state):
+def undo_apply_all_rules_job(undo_state: Mapping[str, Any]) -> str:
     """Undo apply all rules job."""
     changes = undo_state.get("changes") or []
 
@@ -94,7 +97,7 @@ def undo_apply_all_rules_job(undo_state):
     return message
 
 
-def preview_rule_matches(conn, rule, limit):
+def preview_rule_matches(conn: Any, rule: Mapping[str, Any], limit: int) -> tuple[int, list[dict[str, Any]]]:
     """Preview rule matches."""
     keyword = normalize_merchant_description(rule["keyword"])
     if not keyword:
@@ -103,7 +106,12 @@ def preview_rule_matches(conn, rule, limit):
     return preview_rule_matches_core(conn, rule, keyword, limit)
 
 
-def preview_rule_matches_core(conn, rule, keyword, limit):
+def preview_rule_matches_core(
+    conn: Any,
+    rule: Mapping[str, Any],
+    keyword: str,
+    limit: int,
+) -> tuple[int, list[dict[str, Any]]]:
     """Return rule preview matches using portable Core row filtering."""
     rows = (
         conn.execute(
@@ -122,7 +130,7 @@ def preview_rule_matches_core(conn, rule, keyword, limit):
         .fetchall()
     )
     match_count = 0
-    sample = []
+    sample: list[dict[str, Any]] = []
 
     for row in rows:
         if not rule_preview_matches_transaction(rule, row, keyword, conn=conn):
@@ -147,7 +155,12 @@ def preview_rule_matches_core(conn, rule, keyword, limit):
     return match_count, sample
 
 
-def rule_preview_matches_transaction(rule, transaction, keyword, conn=None):
+def rule_preview_matches_transaction(
+    rule: Mapping[str, Any],
+    transaction: Mapping[str, Any],
+    keyword: str,
+    conn: Any = None,
+) -> bool:
     """Return whether a transaction matches the current preview filter."""
     if not rule_account_matches_transaction(rule, transaction):
         return False
@@ -176,7 +189,7 @@ def rule_preview_matches_transaction(rule, transaction, keyword, conn=None):
     return rule_amount_matches(rule, amount)
 
 
-def rule_matches_transaction(rule, transaction, conn=None):
+def rule_matches_transaction(rule: Mapping[str, Any], transaction: Mapping[str, Any], conn: Any = None) -> bool:
     """Build matches transaction."""
     amount = money_to_float(transaction["amount"])
     if rule["category"] == "Income" and (amount is None or amount >= 0):
@@ -205,7 +218,7 @@ def rule_matches_transaction(rule, transaction, conn=None):
     return bool(keyword and any(keyword in candidate for candidate in candidates) and rule_amount_matches(rule, amount))
 
 
-def apply_single_rule_to_transactions(conn, rule):
+def apply_single_rule_to_transactions(conn: Any, rule: Mapping[str, Any]) -> int:
     """Apply single rule to transactions."""
     updated_count = 0
     unknown_category = get_unknown_category(conn)
@@ -259,7 +272,7 @@ def apply_single_rule_to_transactions(conn, rule):
     return updated_count
 
 
-def apply_rule_where_it_wins_to_transactions(conn, rule):
+def apply_rule_where_it_wins_to_transactions(conn: Any, rule: Mapping[str, Any]) -> int:
     """Apply one rule only to transactions where it wins normal precedence.
 
     Uses the current category rule matcher to select the normal winning rule
@@ -332,7 +345,7 @@ def apply_rule_where_it_wins_to_transactions(conn, rule):
     return updated_count
 
 
-def apply_all_rules_to_transactions(conn, capture_undo=False):
+def apply_all_rules_to_transactions(conn: Any, capture_undo: bool = False) -> Any:
     """Apply all rules to transactions."""
     rules = get_category_rules(conn)
     if not rules:
@@ -341,7 +354,7 @@ def apply_all_rules_to_transactions(conn, capture_undo=False):
     unknown_category = get_unknown_category(conn)
     category_options = get_category_options(conn)
     updated_count = 0
-    undo_changes = []
+    undo_changes: list[dict[str, Any]] = []
     rows = active_transaction_rows(conn, include_category_state=True, rules=rules)
 
     for row in rows:
@@ -356,7 +369,9 @@ def apply_all_rules_to_transactions(conn, capture_undo=False):
             account_id=row["account_id"],
             transaction_kind=row["transaction_kind"],
         )
-        category = normalize_category(rule["category"], category_options) if rule else unknown_category
+        if rule is None:
+            continue
+        category = normalize_category(rule["category"], category_options)
         if category == unknown_category:
             continue
 
@@ -426,9 +441,13 @@ def apply_all_rules_to_transactions(conn, capture_undo=False):
     return updated_count
 
 
-def active_transaction_rows(conn, include_category_state=False, rules=None):
+def active_transaction_rows(
+    conn: Any,
+    include_category_state: bool = False,
+    rules: Sequence[Mapping[str, Any]] | None = None,
+) -> Any:
     """Return non-ignored transaction rows used by rule matching."""
-    columns = [
+    columns: list[Any] = [
         transactions_table.c.id,
         transactions_table.c.account_id,
         transactions_table.c.description,
@@ -451,16 +470,16 @@ def active_transaction_rows(conn, include_category_state=False, rules=None):
             ]
         )
 
-    conditions = [transactions_table.c.ignored == 0]
+    conditions: list[Any] = [transactions_table.c.ignored == 0]
     if rules is not None:
         conditions.append(any_rule_sql_candidate_condition(conn, rules))
 
     return conn.execute(select(*columns).where(*conditions)).mappings().fetchall()
 
 
-def any_rule_sql_candidate_condition(conn, rules):
+def any_rule_sql_candidate_condition(conn: Any, rules: Sequence[Mapping[str, Any]]) -> Any:
     """Return a SQL predicate for transactions that may match any rule."""
-    conditions = []
+    conditions: list[Any] = []
     for rule in rules:
         keyword = normalize_merchant_description(rule["keyword"])
         condition = rule_sql_candidate_condition(conn, rule, keyword, include_ignored=False)
@@ -470,9 +489,14 @@ def any_rule_sql_candidate_condition(conn, rules):
     return or_(*conditions) if conditions else false()
 
 
-def rule_sql_candidate_condition(conn, rule, keyword, include_ignored=True):
+def rule_sql_candidate_condition(
+    conn: Any,
+    rule: Mapping[str, Any],
+    keyword: str,
+    include_ignored: bool = True,
+) -> Any:
     """Return simple SQL predicates that narrow rule matching candidates."""
-    conditions = []
+    conditions: list[Any] = []
     if include_ignored:
         conditions.append(transactions_table.c.ignored == 0)
 
@@ -506,7 +530,7 @@ def rule_sql_candidate_condition(conn, rule, keyword, include_ignored=True):
     return and_(*conditions)
 
 
-def rule_account_matches_transaction(rule, transaction):
+def rule_account_matches_transaction(rule: Mapping[str, Any], transaction: Mapping[str, Any]) -> bool:
     """Return whether a transaction satisfies a rule account constraint."""
     rule_account_id = rule["account_id"] if "account_id" in rule.keys() else rule.get("account_id")
     if rule_account_id is None:
@@ -519,7 +543,7 @@ def rule_account_matches_transaction(rule, transaction):
     return int(rule_account_id) == int(transaction_account_id)
 
 
-def rule_direction(rule):
+def rule_direction(rule: Mapping[str, Any]) -> str:
     """Return the normalized direction constraint for a rule."""
     direction = rule["direction"] if "direction" in rule.keys() else rule.get("direction")
     direction = str(direction or CATEGORY_RULE_DIRECTION_ANY).strip().lower()
@@ -528,7 +552,7 @@ def rule_direction(rule):
     return CATEGORY_RULE_DIRECTION_ANY
 
 
-def rule_direction_matches_transaction(rule, amount):
+def rule_direction_matches_transaction(rule: Mapping[str, Any], amount: float | None) -> bool:
     """Return whether a transaction amount satisfies a rule direction."""
     direction = rule_direction(rule)
     if direction == CATEGORY_RULE_DIRECTION_ANY:
@@ -542,7 +566,13 @@ def rule_direction_matches_transaction(rule, amount):
     return True
 
 
-def rule_assignment_metadata(rule, category, tags, confidence, reason):
+def rule_assignment_metadata(
+    rule: Mapping[str, Any],
+    category: str,
+    tags: Sequence[str],
+    confidence: float,
+    reason: str,
+) -> dict[str, Any]:
     """Return persisted audit metadata for rule-application workflows."""
     rule_id = rule["id"] if "id" in rule.keys() else rule.get("id")
     amount_min = rule["amount_min"] if "amount_min" in rule.keys() else rule.get("amount_min")
@@ -571,7 +601,12 @@ def rule_assignment_metadata(rule, category, tags, confidence, reason):
     }
 
 
-def update_transaction_state(conn, transaction_id, state, transaction_kind):
+def update_transaction_state(
+    conn: Any,
+    transaction_id: int,
+    state: TransactionCategoryState,
+    transaction_kind: str,
+) -> None:
     """Persist a rule-assigned transaction category state."""
     conn.execute(
         update(transactions_table)
@@ -593,7 +628,7 @@ def update_transaction_state(conn, transaction_id, state, transaction_kind):
     )
 
 
-def restore_rule_change(conn, change):
+def restore_rule_change(conn: Any, change: Mapping[str, Any]) -> Any:
     """Restore one transaction if it still has the state written by a rule job."""
     old_category_id = change.get("old_category_id")
     if old_category_id is None:
@@ -625,12 +660,12 @@ def restore_rule_change(conn, change):
     )
 
 
-def nullable_equals(column, value):
+def nullable_equals(column: Any, value: object) -> Any:
     """Return a SQLAlchemy condition that treats None as SQL NULL equality."""
     return column.is_(None) if value is None else column == value
 
 
-def rule_transaction_kind(category, amount, current_kind=None):
+def rule_transaction_kind(category: str, amount: float | None, current_kind: str | None = None) -> str:
     """Return transaction kind implied by a rule category and amount direction."""
     if category == TRANSFER_CATEGORY:
         return TRANSACTION_KIND_TRANSFER

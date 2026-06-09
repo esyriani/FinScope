@@ -7,10 +7,10 @@ const formatDashboardAxisMoney = dashboardChartUtils.formatAxisMoney;
 const dashboardTranslate = dashboardChartUtils.translate;
 
 function dashboardMonthName(monthIndex) {
-    return new Date(Date.UTC(2000, monthIndex, 1)).toLocaleString(
-        window.financeLocale || "en-CA",
-        { month: "short", timeZone: "UTC" }
-    );
+    return new Date(Date.UTC(2000, monthIndex, 1)).toLocaleString(window.financeLocale || "en-CA", {
+        month: "short",
+        timeZone: "UTC",
+    });
 }
 
 function dashboardMonthParts(label) {
@@ -22,25 +22,25 @@ function dashboardMonthParts(label) {
 
     return {
         year: match[1],
-        month: dashboardMonthName(monthIndex)
+        month: dashboardMonthName(monthIndex),
     };
 }
 
 function dashboardMonthLabels(labels) {
     const parts = labels.map(dashboardMonthParts);
-    if (parts.some(part => !part)) {
+    if (parts.some((part) => !part)) {
         return labels;
     }
 
-    const years = new Set(parts.map(part => part.year));
-    return parts.map(part => years.size > 1 ? `${part.month} ${part.year}` : part.month);
+    const years = new Set(parts.map((part) => part.year));
+    return parts.map((part) => (years.size > 1 ? `${part.month} ${part.year}` : part.month));
 }
 
 function dashboardDataPoint(value, drilldownUrl, itemStyle = {}) {
     return {
         value,
         drilldownUrl,
-        itemStyle
+        itemStyle,
     };
 }
 
@@ -70,15 +70,15 @@ function dashboardSelectChartPoint(chart, params) {
     chart.dispatchAction({
         type: "highlight",
         seriesIndex: params.seriesIndex,
-        dataIndex: params.dataIndex
+        dataIndex: params.dataIndex,
     });
 }
 
 function dashboardRegisterDrilldown(chart) {
-    chart.on("click", "series", params => {
+    chart.on("click", "series", (params) => {
         dashboardSelectChartPoint(chart, params);
     });
-    chart.on("dblclick", "series", params => {
+    chart.on("dblclick", "series", (params) => {
         dashboardNavigate(params.data?.drilldownUrl);
     });
 }
@@ -96,10 +96,7 @@ function dashboardCreateChart(element, option, drilldown = true) {
 
 function disposeDashboardCharts(root = document) {
     ["categoryChart", "spendingIncomeChart", "netChart"].forEach((id) => {
-        dashboardChartUtils.dispose(
-            dashboardChartUtils.element(id, root),
-            "financeDashboardResizeHandler"
-        );
+        dashboardChartUtils.dispose(dashboardChartUtils.element(id, root), "financeDashboardResizeHandler");
     });
 }
 
@@ -107,41 +104,41 @@ function dashboardCategoryBarOption() {
     return {
         color: dashboardPalette,
         textStyle: {
-            color: dashboardTheme.text
+            color: dashboardTheme.text,
         },
         tooltip: dashboardChartUtils.tooltip(dashboardTheme, {
-            formatter: params => `${params.name}: ${formatDashboardMoney(params.value)}`
+            formatter: (params) => `${params.name}: ${formatDashboardMoney(params.value)}`,
         }),
         grid: dashboardChartUtils.baseGrid({ top: 12 }),
         xAxis: {
             type: "value",
             axisLine: dashboardChartUtils.axisLine(dashboardTheme),
             axisLabel: dashboardChartUtils.axisLabel(dashboardTheme, formatDashboardAxisMoney),
-            splitLine: dashboardChartUtils.splitLine(dashboardTheme)
+            splitLine: dashboardChartUtils.splitLine(dashboardTheme),
         },
         yAxis: {
             type: "category",
             data: dashboardCharts.categoryLabels || [],
             inverse: true,
             axisLine: dashboardChartUtils.axisLine(dashboardTheme),
-            axisLabel: dashboardChartUtils.axisLabel(dashboardTheme)
+            axisLabel: dashboardChartUtils.axisLabel(dashboardTheme),
         },
         series: [
             {
                 name: dashboardTranslate("Spending"),
                 type: "bar",
                 cursor: "pointer",
-                data: (dashboardCharts.categoryTotals || []).map((value, index) => (
+                data: (dashboardCharts.categoryTotals || []).map((value, index) =>
                     dashboardDataPoint(value, dashboardCharts.categoryUrls?.[index], {
                         color: dashboardPalette[index % dashboardPalette.length],
-                        borderRadius: [0, 4, 4, 0]
+                        borderRadius: [0, 4, 4, 0],
                     })
-                )),
+                ),
                 emphasis: {
-                    focus: "self"
-                }
-            }
-        ]
+                    focus: "self",
+                },
+            },
+        ],
     };
 }
 
@@ -152,17 +149,17 @@ function dashboardSpendingIncomeOption() {
 
     return {
         textStyle: {
-            color: dashboardTheme.text
+            color: dashboardTheme.text,
         },
         legend: dashboardChartUtils.legend(dashboardTheme),
         tooltip: dashboardChartUtils.tooltip(dashboardTheme, {
             trigger: "axis",
             formatter(items) {
-                const rows = items.map(item => (
-                    `${item.marker}${item.seriesName}: ${formatDashboardMoney(item.value)}`
-                ));
+                const rows = items.map(
+                    (item) => `${item.marker}${item.seriesName}: ${formatDashboardMoney(item.value)}`
+                );
                 return [items[0]?.axisValue, ...rows].join("<br>");
-            }
+            },
         }),
         grid: dashboardChartUtils.baseGrid(),
         xAxis: {
@@ -172,55 +169,55 @@ function dashboardSpendingIncomeOption() {
             axisLine: dashboardChartUtils.axisLine(dashboardTheme),
             axisLabel: dashboardChartUtils.axisLabel(dashboardTheme),
             splitLine: {
-                show: false
-            }
+                show: false,
+            },
         },
         yAxis: {
             type: "value",
             axisLine: dashboardChartUtils.axisLine(dashboardTheme),
             axisLabel: dashboardChartUtils.axisLabel(dashboardTheme, formatDashboardAxisMoney),
-            splitLine: dashboardChartUtils.splitLine(dashboardTheme)
+            splitLine: dashboardChartUtils.splitLine(dashboardTheme),
         },
         series: [
             {
                 name: dashboardTranslate("Spending"),
                 type: "line",
                 cursor: "pointer",
-                data: spendingTotals.map((value, index) => (
+                data: spendingTotals.map((value, index) =>
                     dashboardDataPoint(value, dashboardCharts.spendingIncomeSpendingUrls?.[index])
-                )),
+                ),
                 itemStyle: {
-                    color: dashboardTheme.danger
+                    color: dashboardTheme.danger,
                 },
                 lineStyle: {
-                    color: dashboardTheme.danger
+                    color: dashboardTheme.danger,
                 },
                 smooth: true,
                 symbolSize: 8,
                 emphasis: {
-                    focus: "series"
-                }
+                    focus: "series",
+                },
             },
             {
                 name: dashboardTranslate("Income and credits"),
                 type: "line",
                 cursor: "pointer",
-                data: incomeTotals.map((value, index) => (
+                data: incomeTotals.map((value, index) =>
                     dashboardDataPoint(value, dashboardCharts.spendingIncomeIncomeUrls?.[index])
-                )),
+                ),
                 itemStyle: {
-                    color: dashboardTheme.success
+                    color: dashboardTheme.success,
                 },
                 lineStyle: {
-                    color: dashboardTheme.success
+                    color: dashboardTheme.success,
                 },
                 smooth: true,
                 symbolSize: 8,
                 emphasis: {
-                    focus: "series"
-                }
-            }
-        ]
+                    focus: "series",
+                },
+            },
+        ],
     };
 }
 
@@ -230,11 +227,11 @@ function dashboardNetCashflowOption() {
 
     return {
         textStyle: {
-            color: dashboardTheme.text
+            color: dashboardTheme.text,
         },
         legend: dashboardChartUtils.legend(dashboardTheme),
         tooltip: dashboardChartUtils.tooltip(dashboardTheme, {
-            formatter: params => `${params.name}: ${formatDashboardMoney(params.value)}`
+            formatter: (params) => `${params.name}: ${formatDashboardMoney(params.value)}`,
         }),
         grid: dashboardChartUtils.baseGrid(),
         xAxis: {
@@ -243,30 +240,30 @@ function dashboardNetCashflowOption() {
             axisLine: dashboardChartUtils.axisLine(dashboardTheme),
             axisLabel: dashboardChartUtils.axisLabel(dashboardTheme),
             splitLine: {
-                show: false
-            }
+                show: false,
+            },
         },
         yAxis: {
             type: "value",
             axisLine: dashboardChartUtils.axisLine(dashboardTheme),
             axisLabel: dashboardChartUtils.axisLabel(dashboardTheme, formatDashboardAxisMoney),
-            splitLine: dashboardChartUtils.splitLine(dashboardTheme)
+            splitLine: dashboardChartUtils.splitLine(dashboardTheme),
         },
         series: [
             {
                 type: "bar",
                 cursor: "pointer",
-                data: totals.map((value, index) => (
+                data: totals.map((value, index) =>
                     dashboardDataPoint(value, dashboardCharts.netMonthUrls?.[index], {
                         color: value >= 0 ? dashboardTheme.success : dashboardTheme.danger,
-                        borderRadius: value >= 0 ? [4, 4, 0, 0] : [0, 0, 4, 4]
+                        borderRadius: value >= 0 ? [4, 4, 0, 0] : [0, 0, 4, 4],
                     })
-                )),
+                ),
                 emphasis: {
-                    focus: "self"
-                }
-            }
-        ]
+                    focus: "self",
+                },
+            },
+        ],
     };
 }
 

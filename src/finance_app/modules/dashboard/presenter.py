@@ -1,9 +1,13 @@
 """View-model builders for the dashboard feature."""
 
+from collections.abc import Mapping, MutableMapping, Sequence
+from typing import Any
+
 from flask import url_for
 
 from finance_app.core.i18n import gettext
-from finance_app.core.money import format_money_display, money_to_float, rounded_money_float
+from finance_app.core.money import MoneyValue, format_money_display, money_to_float, rounded_money_float
+from finance_app.core.periods import DatePeriod
 from finance_app.modules.categories.service import (
     normalize_merchant_description,
     rule_amount_matches,
@@ -45,7 +49,7 @@ from .constants import (
 from .urls import app_url, dashboard_transactions_url
 
 
-def build_quick_view_options(active_view, counts):
+def build_quick_view_options(active_view: str, counts: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Build quick view options."""
     options = [
         {
@@ -77,16 +81,16 @@ def build_quick_view_options(active_view, counts):
 
 
 def build_dashboard_links(
-    period,
-    filter_mode,
-    selected_categories,
-    selected_tags=None,
-    date_from="",
-    date_to="",
-    quick_view=QUICK_VIEW_ALL,
-    include_transfer_credits=False,
-    merchant_search="",
-):
+    period: DatePeriod,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    selected_tags: Sequence[str] | None = None,
+    date_from: str = "",
+    date_to: str = "",
+    quick_view: str = QUICK_VIEW_ALL,
+    include_transfer_credits: bool = False,
+    merchant_search: str = "",
+) -> dict[str, str]:
     """Build dashboard drill-down links for the current reporting scope."""
     selected_tags = selected_tags or []
     credit_amount_type = AMOUNT_TYPE_CREDIT if include_transfer_credits else AMOUNT_TYPE_INCOME
@@ -180,17 +184,17 @@ def build_dashboard_links(
 
 
 def build_dashboard_insights(
-    summary,
-    total_spending,
-    period,
-    filter_mode,
-    selected_categories,
-    selected_tags=None,
-    date_from="",
-    date_to="",
-    quick_view=QUICK_VIEW_ALL,
-    merchant_search="",
-):
+    summary: Mapping[str, Any],
+    total_spending: float,
+    period: DatePeriod,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    selected_tags: Sequence[str] | None = None,
+    date_from: str = "",
+    date_to: str = "",
+    quick_view: str = QUICK_VIEW_ALL,
+    merchant_search: str = "",
+) -> dict[str, Any]:
     """Build finance-oriented dashboard insight tiles for the current view."""
     selected_tags = selected_tags or []
     transaction_count = summary["transaction_count"] or 0
@@ -223,9 +227,9 @@ def build_dashboard_insights(
     }
 
 
-def top_categorization_source(summary, categorized_count):
+def top_categorization_source(summary: Mapping[str, Any], categorized_count: int) -> dict[str, Any]:
     """Return the dominant category assignment source in a summary row."""
-    candidates = [
+    candidates: list[dict[str, Any]] = [
         {
             "source": CATEGORY_SOURCE_RULE,
             "label": "Rule",
@@ -252,7 +256,7 @@ def top_categorization_source(summary, categorized_count):
         key=lambda item: (item[1]["count"], -item[0]),
         reverse=True,
     )
-    top = ordered[0][1] if ordered else {"source": "", "label": "n/a", "count": 0}
+    top: dict[str, Any] = ordered[0][1] if ordered else {"source": "", "label": "n/a", "count": 0}
     if top["count"] == 0:
         top = {"source": "", "label": "n/a", "count": 0}
     return {
@@ -262,16 +266,16 @@ def top_categorization_source(summary, categorized_count):
 
 
 def source_transactions_url(
-    source,
-    period,
-    filter_mode,
-    selected_categories,
-    selected_tags,
-    date_from,
-    date_to,
-    quick_view,
-    merchant_search="",
-):
+    source: str,
+    period: DatePeriod,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    selected_tags: Sequence[str],
+    date_from: str,
+    date_to: str,
+    quick_view: str,
+    merchant_search: str = "",
+) -> str:
     """Return a transactions URL for a category source insight."""
     if not source:
         return ""
@@ -290,7 +294,7 @@ def source_transactions_url(
     )
 
 
-def build_cash_flow_summary(total_income, total_spending):
+def build_cash_flow_summary(total_income: float, total_spending: float) -> dict[str, Any]:
     """Build cash flow summary."""
     net_cashflow = round(total_income - total_spending, 2)
     if net_cashflow > 0:
@@ -326,16 +330,16 @@ def build_cash_flow_summary(total_income, total_spending):
 
 
 def attach_data_quality_urls(
-    data_quality,
-    period,
-    filter_mode,
-    selected_categories,
-    selected_tags=None,
-    date_from="",
-    date_to="",
-    quick_view=QUICK_VIEW_ALL,
-    merchant_search="",
-):
+    data_quality: MutableMapping[str, Any],
+    period: DatePeriod,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    selected_tags: Sequence[str] | None = None,
+    date_from: str = "",
+    date_to: str = "",
+    quick_view: str = QUICK_VIEW_ALL,
+    merchant_search: str = "",
+) -> None:
     """Attach data quality URLs."""
     selected_tags = selected_tags or []
     urls = {
@@ -446,17 +450,17 @@ def attach_data_quality_urls(
             )
 
 
-def dashboard_sort_text(value):
+def dashboard_sort_text(value: object) -> str:
     """Render sort text."""
     return str(value or "").casefold()
 
 
-def dashboard_optional_number(value):
+def dashboard_optional_number(value: object) -> tuple[bool, object]:
     """Render optional number."""
     return (value is not None, value if value is not None else 0)
 
 
-def sort_merchant_rows(rows, sort, direction):
+def sort_merchant_rows(rows: list[dict[str, Any]], sort: str, direction: str) -> None:
     """Sort merchant rows."""
     key_map = {
         DASHBOARD_MERCHANT_SORT_MERCHANT: lambda row: dashboard_sort_text(row["merchant"]),
@@ -471,7 +475,7 @@ def sort_merchant_rows(rows, sort, direction):
     rows.sort(key=key_map[sort], reverse=direction == "desc")
 
 
-def sort_category_rows(rows, sort, direction):
+def sort_category_rows(rows: list[dict[str, Any]], sort: str, direction: str) -> None:
     """Sort category rows."""
     key_map = {
         DASHBOARD_CATEGORY_SORT_CATEGORY: lambda row: dashboard_sort_text(row["category"]),
@@ -481,9 +485,9 @@ def sort_category_rows(rows, sort, direction):
     rows.sort(key=key_map[sort], reverse=direction == "desc")
 
 
-def build_merchant_aggregates(rows, conn=None):
+def build_merchant_aggregates(rows: Sequence[Mapping[str, Any]], conn: Any = None) -> dict[str, dict[str, Any]]:
     """Build merchant aggregates."""
-    aggregates = {}
+    aggregates: dict[str, dict[str, Any]] = {}
 
     for row in rows:
         merchant = merchant_identity_from_row(row, conn=conn)
@@ -520,7 +524,7 @@ def build_merchant_aggregates(rows, conn=None):
     return aggregates
 
 
-def merchant_primary_category(aggregate):
+def merchant_primary_category(aggregate: Mapping[str, Any]) -> dict[str, Any]:
     """Build primary category."""
     categories = sorted(
         aggregate["category_totals"],
@@ -544,9 +548,9 @@ def merchant_primary_category(aggregate):
     }
 
 
-def merchant_matching_rules(aggregate, rules):
+def merchant_matching_rules(aggregate: Mapping[str, Any], rules: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Build matching rules."""
-    matches = []
+    matches: list[dict[str, Any]] = []
     merchant_key = aggregate["merchant_key"]
     amounts = aggregate["amounts"]
     candidates = [merchant_key]
@@ -592,7 +596,7 @@ def merchant_matching_rules(aggregate, rules):
     return matches[:3]
 
 
-def merchant_period_change(current_total, previous_total):
+def merchant_period_change(current_total: float, previous_total: float | None) -> dict[str, Any]:
     """Build period change."""
     if previous_total is None:
         return {
@@ -621,27 +625,27 @@ def merchant_period_change(current_total, previous_total):
     }
 
 
-def format_money_text(value):
+def format_money_text(value: MoneyValue | None) -> str:
     """Format money text."""
     return format_money_display(value, places=0)
 
 
 def build_category_rows(
-    spending_by_category,
-    total_spending,
-    period,
-    filter_mode,
-    selected_categories,
-    selected_tags=None,
-    date_from="",
-    date_to="",
-    quick_view=QUICK_VIEW_ALL,
-    merchant_search="",
-    breakdown="category",
-):
+    spending_by_category: Sequence[Mapping[str, Any]],
+    total_spending: float,
+    period: DatePeriod,
+    filter_mode: str,
+    selected_categories: Sequence[str],
+    selected_tags: Sequence[str] | None = None,
+    date_from: str = "",
+    date_to: str = "",
+    quick_view: str = QUICK_VIEW_ALL,
+    merchant_search: str = "",
+    breakdown: str = "category",
+) -> list[dict[str, Any]]:
     """Build category or tag breakdown rows."""
     selected_tags = selected_tags or []
-    rows = []
+    rows: list[dict[str, Any]] = []
 
     for row in spending_by_category:
         row_data = dict(row)
@@ -698,7 +702,10 @@ def build_category_rows(
     return rows
 
 
-def build_spending_income_series(monthly_expenses, monthly_income):
+def build_spending_income_series(
+    monthly_expenses: Sequence[Mapping[str, Any]],
+    monthly_income: Sequence[Mapping[str, Any]],
+) -> dict[str, list[Any]]:
     """Build spending income series."""
     expense_by_month = {row["month"]: rounded_money_float(row["total"]) for row in monthly_expenses}
     income_by_month = {row["month"]: rounded_money_float(row["total"]) for row in monthly_income}
@@ -711,7 +718,7 @@ def build_spending_income_series(monthly_expenses, monthly_income):
     }
 
 
-def build_data_quality(summary):
+def build_data_quality(summary: Mapping[str, Any]) -> dict[str, Any]:
     """Build data quality."""
     transaction_count = summary["transaction_count"] or 0
     categorized_count = summary["categorized_count"] or 0
@@ -778,7 +785,7 @@ def build_data_quality(summary):
             review_count=needs_review_count,
         )
 
-    source_metrics = [
+    source_metrics: list[dict[str, Any]] = [
         {
             "label": "By rule",
             "count": rule_count,
@@ -850,7 +857,7 @@ def build_data_quality(summary):
     }
 
 
-def percentage(count, total):
+def percentage(count: float, total: float) -> float:
     """Handle percentage."""
     if not total:
         return 0

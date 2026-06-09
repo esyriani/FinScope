@@ -5,10 +5,12 @@ helpers enforce backend authorization and return JSON errors for fetch-style
 requests when appropriate.
 """
 
+from collections.abc import Callable
 from functools import wraps
+from typing import Any
 
 from flask import abort, jsonify, redirect, request, url_for
-from flask_login import current_user, login_required
+from flask_login import current_user, login_required  # type: ignore[import-untyped]
 
 from finance_app.core.constants import (
     USER_ROLE_EDITOR,
@@ -48,8 +50,8 @@ EDITOR_PERMISSIONS = frozenset(
         PERMISSION_EDIT_RECURRING,
     }
 )
-VIEWER_PERMISSIONS = frozenset()
-ROLE_PERMISSIONS = {
+VIEWER_PERMISSIONS: frozenset[str] = frozenset()
+ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     USER_ROLE_OWNER: OWNER_PERMISSIONS,
     USER_ROLE_EDITOR: EDITOR_PERMISSIONS,
     USER_ROLE_VIEWER: VIEWER_PERMISSIONS,
@@ -73,27 +75,27 @@ PASSWORD_CHANGE_ENDPOINTS = {
 }
 
 
-def current_user_can(permission):
+def current_user_can(permission: str) -> bool:
     """Return whether the active user has the named permission."""
     if not getattr(current_user, "is_authenticated", False):
         return False
     return user_has_permission(current_user, permission)
 
 
-def user_has_permission(user, permission):
+def user_has_permission(user: Any, permission: str) -> bool:
     """Return whether a user-like object has the named permission."""
     role = normalize_user_role(getattr(user, "role", ""))
     return permission in ROLE_PERMISSIONS.get(role, frozenset())
 
 
-def role_required(*roles):
+def role_required(*roles: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorate a route so only authenticated users with one role can access it."""
     allowed_roles = set(roles)
 
-    def decorator(view_func):
+    def decorator(view_func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(view_func)
         @login_required
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             if normalize_user_role(getattr(current_user, "role", None)) not in allowed_roles:
                 return forbidden_response()
             return view_func(*args, **kwargs)
@@ -103,13 +105,13 @@ def role_required(*roles):
     return decorator
 
 
-def permission_required(permission):
+def permission_required(permission: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorate a route so only users with a permission can access it."""
 
-    def decorator(view_func):
+    def decorator(view_func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(view_func)
         @login_required
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not current_user_can(permission):
                 return forbidden_response()
             return view_func(*args, **kwargs)
@@ -119,19 +121,19 @@ def permission_required(permission):
     return decorator
 
 
-def owner_required(view_func):
+def owner_required(view_func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorate a route so only owners can access it."""
     return role_required(USER_ROLE_OWNER)(view_func)
 
 
-def forbidden_response():
+def forbidden_response() -> Any:
     """Return a 403 response matching the request style."""
     if request.is_json or request.headers.get("X-Requested-With") == "fetch":
         return jsonify({"ok": False, "message": "Forbidden."}), 403
     abort(403)
 
 
-def register_authorization_guards(app, has_owner_account):
+def register_authorization_guards(app: Any, has_owner_account: Callable[[], bool]) -> None:
     """Register cross-cutting authentication and authorization request guards.
 
     The guard keeps bootstrap public until an owner exists, protects every
@@ -144,7 +146,7 @@ def register_authorization_guards(app, has_owner_account):
     """
 
     @app.before_request
-    def enforce_authentication_state():
+    def enforce_authentication_state() -> Any:
         """Protect app requests before controller code runs."""
         endpoint = request.endpoint or ""
         if endpoint == "static":

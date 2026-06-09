@@ -1,5 +1,7 @@
 """Application orchestration for the review feature."""
 
+from typing import Any
+
 from finance_app.core.config import settings
 from finance_app.core.query import parse_page, parse_sort_direction
 from finance_app.database.engine import db_core_transaction
@@ -40,7 +42,7 @@ from finance_app.modules.review.workflow import (
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 
 
-def build_review_context(args):
+def build_review_context(args: Any) -> dict[str, Any]:
     """Build review context."""
     page = parse_page(args.get("page"))
     sort = parse_review_sort(args.get("sort"))
@@ -101,12 +103,15 @@ def build_review_context(args):
     )
 
 
-def parse_review_merchant_search(value):
+def parse_review_merchant_search(value: object) -> str:
     """Return a normalized merchant search string for review filters."""
     return " ".join(str(value or "").split())
 
 
-def filter_review_groups_by_merchant(groups, merchant_search):
+def filter_review_groups_by_merchant(
+    groups: list[dict[str, Any]],
+    merchant_search: str,
+) -> list[dict[str, Any]]:
     """Return review groups whose merchant key contains the search text."""
     if not merchant_search:
         return groups
@@ -115,7 +120,7 @@ def filter_review_groups_by_merchant(groups, merchant_search):
     return [group for group in groups if needle in str(group.get("merchant_key") or "").casefold()]
 
 
-def review_groups(conn, unknown_category, merchant_candidate=""):
+def review_groups(conn: Any, unknown_category: str, merchant_candidate: str = "") -> list[dict[str, Any]]:
     """Return review groups for candidate rows fetched from persistence."""
     rows, transaction_tags = review_candidates_with_tags(conn, unknown_category, merchant_candidate)
     return build_review_groups(rows, transaction_tags, unknown_category)

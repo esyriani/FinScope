@@ -7,16 +7,18 @@ metadata, and settings.
 """
 
 import json
+from collections.abc import Mapping, Sequence
 from functools import lru_cache
 from pathlib import Path
 from string import Template
+from typing import Any
 
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_SOURCE_MANUAL,
 )
-from finance_app.core.money import money_to_decimal
+from finance_app.core.money import MoneyValue, money_to_decimal
 from finance_app.modules.categories.decision import HIGH_CONFIDENCE_THRESHOLD
 from finance_app.modules.categories.llm_taxonomy import semantic_tokens
 from finance_app.modules.categories.repository import normalize_category
@@ -27,7 +29,12 @@ MAX_PROMPT_MANUAL_RULES = 50
 LLM_SYSTEM_PROMPT_PATH = Path(__file__).with_name("llm_system_prompt.json")
 
 
-def build_llm_system_prompt(category_rows=None, tag_rows=None, verify_threshold=None, review_threshold=None):
+def build_llm_system_prompt(
+    category_rows: Sequence[Mapping[str, Any]] | None = None,
+    tag_rows: Sequence[Mapping[str, Any]] | None = None,
+    verify_threshold: float | None = None,
+    review_threshold: float | None = None,
+) -> str:
     """Build LLM categorization policy instructions.
 
     Args:
@@ -55,7 +62,7 @@ def build_llm_system_prompt(category_rows=None, tag_rows=None, verify_threshold=
 
 
 @lru_cache(maxsize=1)
-def load_llm_system_prompt_spec():
+def load_llm_system_prompt_spec() -> dict[str, Any]:
     """Load and validate the structured LLM system-prompt resource.
 
     Returns:
@@ -71,7 +78,7 @@ def load_llm_system_prompt_spec():
     return prompt_spec
 
 
-def validate_llm_system_prompt_spec(prompt_spec):
+def validate_llm_system_prompt_spec(prompt_spec: object) -> None:
     """Validate the minimal structure required to render a system prompt.
 
     Args:
@@ -94,7 +101,7 @@ def validate_llm_system_prompt_spec(prompt_spec):
         raise ValueError("LLM system prompt resource must define an output schema.")
 
 
-def render_llm_system_prompt(prompt_spec, context):
+def render_llm_system_prompt(prompt_spec: Mapping[str, Any], context: Mapping[str, str]) -> str:
     """Render a prompt specification into the final system prompt text.
 
     Args:
@@ -116,7 +123,7 @@ def render_llm_system_prompt(prompt_spec, context):
     return "\n".join(lines).rstrip()
 
 
-def render_prompt_section(section, context):
+def render_prompt_section(section: Mapping[str, Any], context: Mapping[str, str]) -> list[str]:
     """Render one named prompt section from paragraphs, bullets, and rules.
 
     Args:
@@ -136,7 +143,7 @@ def render_prompt_section(section, context):
     return lines
 
 
-def render_prompt_text(text, context):
+def render_prompt_text(text: object, context: Mapping[str, str]) -> str:
     """Apply simple placeholder substitution to prompt text.
 
     Args:
@@ -149,14 +156,21 @@ def render_prompt_text(text, context):
     return Template(str(text)).safe_substitute(context)
 
 
-def taxonomy_prompt_line(row):
+def taxonomy_prompt_line(row: Mapping[str, Any]) -> str:
     """Render a taxonomy row as a compact prompt line for compatibility callers."""
     detail = row["instruction"] or row["description"]
     label = f"ID {row.get('id')}: {row['name']}"
     return f"- {label}: {detail}" if detail else f"- {label}"
 
 
-def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, category_rows=None, tag_rows=None):
+def build_llm_prompt(
+    unknown_items: Sequence[Mapping[str, Any]],
+    rules: Sequence[Mapping[str, Any]],
+    category_options: Sequence[str],
+    tag_options: Sequence[str] | None = None,
+    category_rows: Sequence[Mapping[str, Any]] | None = None,
+    tag_rows: Sequence[Mapping[str, Any]] | None = None,
+) -> str:
     """Build the LLM request payload with full taxonomy and compact candidates.
 
     Transaction payloads are privacy-minimized before they are serialized for an
@@ -226,7 +240,13 @@ def build_llm_prompt(unknown_items, rules, category_options, tag_options=None, c
     return json.dumps(payload, ensure_ascii=True, indent=2)
 
 
-def transaction_prompt_payload(tx, category_options, tag_options, category_rows, tag_rows):
+def transaction_prompt_payload(
+    tx: Mapping[str, Any],
+    category_options: Sequence[str],
+    tag_options: Sequence[str],
+    category_rows: Sequence[Mapping[str, Any]],
+    tag_rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
     """Return a privacy-minimized transaction payload for the LLM prompt."""
     return {
         "request_id": tx.get("llm_request_id"),
@@ -254,7 +274,7 @@ def transaction_prompt_payload(tx, category_options, tag_options, category_rows,
     }
 
 
-def amount_direction(value):
+def amount_direction(value: MoneyValue | None) -> str:
     """Return a coarse signed amount direction for prompt context."""
     if value is None:
         return "unknown"
@@ -266,7 +286,7 @@ def amount_direction(value):
     return "zero"
 
 
-def amount_magnitude(value):
+def amount_magnitude(value: MoneyValue | None) -> str:
     """Return a coarse amount bucket without exposing the exact amount."""
     if value is None:
         return "unknown"
@@ -281,7 +301,7 @@ def amount_magnitude(value):
     return "very_large"
 
 
-def evidence_summary(rule_evidence, historical_evidence):
+def evidence_summary(rule_evidence: Any, historical_evidence: Any) -> dict[str, Any]:
     """Return category evidence stripped of transaction-identifying details."""
     return {
         "best_matching_rule": compact_evidence(rule_evidence),
@@ -289,7 +309,7 @@ def evidence_summary(rule_evidence, historical_evidence):
     }
 
 
-def compact_evidence(evidence):
+def compact_evidence(evidence: Any) -> dict[str, Any] | None:
     """Return category, tags, and confidence from local evidence only."""
     if not evidence:
         return None
@@ -300,9 +320,12 @@ def compact_evidence(evidence):
     }
 
 
-def prompt_relevant_manual_rules(rules, unknown_items):
+def prompt_relevant_manual_rules(
+    rules: Sequence[Mapping[str, Any]],
+    unknown_items: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
     """Return manual rules most relevant to the current LLM batch."""
-    scored_rules = []
+    scored_rules: list[tuple[int, int, Mapping[str, Any]]] = []
     for index, rule in enumerate(rules):
         if rule["source"] != CATEGORY_RULE_SOURCE_MANUAL:
             continue
@@ -314,7 +337,7 @@ def prompt_relevant_manual_rules(rules, unknown_items):
     return [rule for _, _, rule in scored_rules[:MAX_PROMPT_MANUAL_RULES]]
 
 
-def manual_rule_prompt_relevance(rule, unknown_items):
+def manual_rule_prompt_relevance(rule: Mapping[str, Any], unknown_items: Sequence[Mapping[str, Any]]) -> int:
     """Return a lightweight relevance score for sending a manual rule."""
     keyword = normalize_merchant_description(rule["keyword"])
     if not keyword:
@@ -344,10 +367,10 @@ def manual_rule_prompt_relevance(rule, unknown_items):
     return best_score
 
 
-def taxonomy_reference_rows(names, taxonomy_rows):
+def taxonomy_reference_rows(names: Sequence[str], taxonomy_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Return compact taxonomy rows for transaction-local candidate hints."""
     rows_by_name = {row["name"]: row for row in taxonomy_rows}
-    payload = []
+    payload: list[dict[str, Any]] = []
     for name in names:
         row = rows_by_name.get(name, {})
         payload.append(
@@ -361,10 +384,10 @@ def taxonomy_reference_rows(names, taxonomy_rows):
     return payload
 
 
-def taxonomy_payload_rows(names, taxonomy_rows):
+def taxonomy_payload_rows(names: Sequence[str], taxonomy_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Return compact taxonomy metadata for prompt payloads."""
     rows_by_name = {row["name"]: row for row in taxonomy_rows}
-    payload = []
+    payload: list[dict[str, Any]] = []
     for name in names:
         row = rows_by_name.get(name, {})
         payload.append(
@@ -378,7 +401,7 @@ def taxonomy_payload_rows(names, taxonomy_rows):
     return payload
 
 
-def build_rule_examples(rules, category_options):
+def build_rule_examples(rules: Sequence[Mapping[str, Any]], category_options: Sequence[str]) -> dict[str, Any]:
     """Return the legacy prompt examples payload for supported rule sources.
 
     Manual rules are sent through `current_manual_rules`, so this compatibility

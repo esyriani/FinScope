@@ -1,9 +1,11 @@
 """Runtime settings persistence helpers."""
 
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
+from typing import Any
 
 from flask import has_request_context
-from flask_login import current_user
+from flask_login import current_user  # type: ignore[import-untyped]
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 
@@ -34,7 +36,7 @@ from finance_app.database.upsert import insert_or_select_unique_row
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 from finance_app.modules.users import repository as user_repository
 
-SETTINGS_DEFAULTS = {
+SETTINGS_DEFAULTS: dict[str, str] = {
     "default_table_page_size": str(settings.default_table_page_size),
     "comparison_max_years": str(settings.default_comparison_max_years),
     "comparison_insight_card_limit": str(settings.default_comparison_insight_card_limit),
@@ -57,7 +59,7 @@ SETTINGS_DEFAULTS = {
     "recurrence_missed_cycles_before_inactive": str(RECURRENCE_DETECTION_DEFAULTS.missed_cycles_before_inactive),
 }
 
-GENERAL_SETTING_KEYS = (
+GENERAL_SETTING_KEYS: tuple[str, ...] = (
     "default_table_page_size",
     "comparison_max_years",
     "comparison_insight_card_limit",
@@ -68,12 +70,12 @@ GENERAL_SETTING_KEYS = (
     "theme_mode",
     "ui_language",
 )
-GLOBAL_SETTING_KEYS = ()
+GLOBAL_SETTING_KEYS: tuple[str, ...] = ()
 EDITABLE_SETTING_KEYS = tuple(SETTINGS_DEFAULTS.keys())
-DATABASE_OPERATIONAL_ERRORS = (SqlAlchemyOperationalError,)
+DATABASE_OPERATIONAL_ERRORS: tuple[type[Exception], ...] = (SqlAlchemyOperationalError,)
 
 
-def seed_runtime_settings(conn):
+def seed_runtime_settings(conn: Any) -> None:
     """Seed default settings for existing users without changing saved values."""
     for user in user_repository.list_users(conn):
         for key, value in SETTINGS_DEFAULTS.items():
@@ -95,7 +97,7 @@ def seed_runtime_settings(conn):
                 )
 
 
-def seed_statement_types(conn):
+def seed_statement_types(conn: Any) -> None:
     """Seed statement types."""
     for name, parser_type, import_mode, default_account_type in DEFAULT_STATEMENT_TYPE_SEED_ROWS:
         type_select = select(
@@ -133,7 +135,7 @@ def seed_statement_types(conn):
             )
 
 
-def get_statement_type_options(conn, include_inactive=False):
+def get_statement_type_options(conn: Any, include_inactive: bool = False) -> list[Mapping[str, Any]]:
     """Return statement type options."""
     statement = select(
         statement_types_table.c.id,
@@ -148,10 +150,10 @@ def get_statement_type_options(conn, include_inactive=False):
     return conn.execute(statement).mappings().fetchall()
 
 
-def get_statement_type_by_id(conn, statement_type_id):
+def get_statement_type_by_id(conn: Any, statement_type_id: object) -> Mapping[str, Any] | None:
     """Return statement type by ID."""
     try:
-        parsed_id = int(statement_type_id)
+        parsed_id = int(str(statement_type_id))
     except (TypeError, ValueError):
         return None
 
@@ -174,7 +176,7 @@ def get_statement_type_by_id(conn, statement_type_id):
     )
 
 
-def get_statement_type_by_parser_type(conn, parser_type):
+def get_statement_type_by_parser_type(conn: Any, parser_type: object) -> Mapping[str, Any] | None:
     """Return statement type by parser type."""
     normalized_parser_type = normalize_statement_parser_type(parser_type)
     return (
@@ -199,10 +201,10 @@ def get_statement_type_by_parser_type(conn, parser_type):
     )
 
 
-def sync_statement_types(conn, rows):
+def sync_statement_types(conn: Any, rows: Iterable[Mapping[str, Any]]) -> None:
     """Synchronize statement types."""
-    cleaned_rows = []
-    seen_names = set()
+    cleaned_rows: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
 
     for row in rows:
         name = str(row.get("name") or "").strip()
@@ -241,7 +243,7 @@ def sync_statement_types(conn, rows):
         .mappings()
         .fetchall()
     }
-    kept_ids = set()
+    kept_ids: set[int] = set()
 
     for row in cleaned_rows:
         if row["id"] in existing_ids:
@@ -291,13 +293,13 @@ def sync_statement_types(conn, rows):
         conn.execute(update(statement_types_table).where(statement_types_table.c.id.in_(retired_ids)).values(active=0))
 
 
-def normalize_statement_parser_type(value):
+def normalize_statement_parser_type(value: object) -> str:
     """Normalize statement parser type."""
     text = str(value or "").strip()
     return text if text in STATEMENT_TYPE_PARSER_TYPES else STATEMENT_TYPE_PARSER_CREDIT_CARD
 
 
-def normalize_statement_import_mode(value, parser_type=None):
+def normalize_statement_import_mode(value: object, parser_type: str | None = None) -> str:
     """Normalize statement import behavior."""
     if parser_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
         return STATEMENT_IMPORT_MODE_ENRICHMENT
@@ -309,7 +311,7 @@ def normalize_statement_import_mode(value, parser_type=None):
     return STATEMENT_IMPORT_MODE_LEDGER
 
 
-def normalize_default_account_type(value, parser_type=None):
+def normalize_default_account_type(value: object, parser_type: str | None = None) -> str:
     """Normalize the default account role for a statement type."""
     text = str(value or "").strip()
     if text in ACCOUNT_TYPES:
@@ -319,15 +321,15 @@ def normalize_default_account_type(value, parser_type=None):
     return ACCOUNT_TYPE_CHECKING
 
 
-def parse_optional_int(value):
+def parse_optional_int(value: object) -> int | None:
     """Parse optional int."""
     try:
-        return int(value)
+        return int(str(value))
     except (TypeError, ValueError):
         return None
 
 
-def get_all_settings(conn, user_id=None):
+def get_all_settings(conn: Any, user_id: object | None = None) -> dict[str, str]:
     """Return settings for the resolved user, falling back to defaults."""
     values = dict(SETTINGS_DEFAULTS)
     active_user_id = resolve_settings_user_id(conn, user_id)
@@ -343,12 +345,12 @@ def get_all_settings(conn, user_id=None):
     return values
 
 
-def get_global_settings(conn):
+def get_global_settings(conn: Any) -> dict[str, str]:
     """Return the owner fallback settings for non-request callers."""
     return get_all_settings(conn)
 
 
-def get_setting(conn, key, user_id=None):
+def get_setting(conn: Any, key: str, user_id: object | None = None) -> str | None:
     """Return one setting for the resolved user, falling back to defaults."""
     active_user_id = resolve_settings_user_id(conn, user_id)
     if active_user_id is not None:
@@ -362,12 +364,12 @@ def get_setting(conn, key, user_id=None):
     return SETTINGS_DEFAULTS.get(key)
 
 
-def get_global_setting(conn, key):
+def get_global_setting(conn: Any, key: str) -> str | None:
     """Return one owner fallback setting for non-request callers."""
     return get_setting(conn, key)
 
 
-def get_setting_with_fallback(key, fallback_value):
+def get_setting_with_fallback(key: str, fallback_value: str) -> str:
     """Return setting with fallback."""
     with db_core_connection() as conn:
         try:
@@ -380,21 +382,27 @@ def get_setting_with_fallback(key, fallback_value):
     return value
 
 
-def get_int_setting(conn, key, fallback):
+def get_int_setting(conn: Any, key: str, fallback: int) -> int:
     """Return int setting."""
     value = get_setting(conn, key)
     try:
-        parsed = int(value)
+        parsed = int(str(value))
     except (TypeError, ValueError):
         return fallback
     return parsed if parsed > 0 else fallback
 
 
-def get_float_setting(conn, key, fallback, minimum=None, maximum=None):
+def get_float_setting(
+    conn: Any,
+    key: str,
+    fallback: float,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
     """Return float setting."""
     value = get_setting(conn, key)
     try:
-        parsed = float(value)
+        parsed = float(str(value))
     except (TypeError, ValueError):
         return fallback
 
@@ -405,7 +413,7 @@ def get_float_setting(conn, key, fallback, minimum=None, maximum=None):
     return parsed
 
 
-def get_bool_setting(conn, key, fallback=False):
+def get_bool_setting(conn: Any, key: str, fallback: bool = False) -> bool:
     """Return boolean setting from a stored runtime value."""
     value = get_setting(conn, key)
     if value is None:
@@ -419,13 +427,13 @@ def get_bool_setting(conn, key, fallback=False):
     return bool(fallback)
 
 
-def get_unknown_category(conn):
+def get_unknown_category(conn: object) -> str:
     """Return the fixed built-in category used for uncategorized rows."""
     del conn
     return UNKNOWN_CATEGORY
 
 
-def upsert_setting(conn, key, value):
+def upsert_setting(conn: Any, key: str, value: object) -> None:
     """Insert or update a setting for the resolved user."""
     user_id = resolve_settings_user_id(conn)
     if user_id is None:
@@ -433,7 +441,7 @@ def upsert_setting(conn, key, value):
     upsert_user_setting(conn, user_id, key, value)
 
 
-def upsert_user_setting(conn, user_id, key, value):
+def upsert_user_setting(conn: Any, user_id: int, key: str, value: object) -> None:
     """Insert or update one user-specific General setting."""
     user_repository.upsert_user_setting(
         conn,
@@ -444,11 +452,11 @@ def upsert_user_setting(conn, user_id, key, value):
     )
 
 
-def resolve_settings_user_id(conn, explicit_user_id=None):
+def resolve_settings_user_id(conn: Any, explicit_user_id: object | None = None) -> int | None:
     """Return the explicit, authenticated, or owner fallback user id."""
     if explicit_user_id is not None:
         try:
-            return int(explicit_user_id)
+            return int(str(explicit_user_id))
         except (TypeError, ValueError):
             return None
     if has_request_context() and current_user.is_authenticated:
@@ -459,11 +467,11 @@ def resolve_settings_user_id(conn, explicit_user_id=None):
     return int(owner["id"])
 
 
-def current_user_id(explicit_user_id=None):
+def current_user_id(explicit_user_id: object | None = None) -> int | None:
     """Return an explicit or authenticated user id without owner fallback."""
     if explicit_user_id is not None:
         try:
-            return int(explicit_user_id)
+            return int(str(explicit_user_id))
         except (TypeError, ValueError):
             return None
     if not has_request_context() or not current_user.is_authenticated:

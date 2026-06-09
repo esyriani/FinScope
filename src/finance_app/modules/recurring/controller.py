@@ -1,6 +1,7 @@
 """Flask routes for the recurring feature."""
 
 from flask import Blueprint, jsonify, render_template, request
+from flask.typing import ResponseReturnValue
 
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.auth.permissions import PERMISSION_EDIT_RECURRING, permission_required
@@ -12,14 +13,14 @@ recurring_bp = Blueprint("recurring", __name__)
 
 
 @recurring_bp.route("/recurring")
-def recurring():
+def recurring() -> str:
     """Render the recurring page."""
     return render_template("recurring.html", **build_recurring_page_context(request.args))
 
 
 @recurring_bp.route("/recurring/patterns/confirm", methods=["POST"])
 @permission_required(PERMISSION_EDIT_RECURRING)
-def confirm_recurring_pattern():
+def confirm_recurring_pattern() -> ResponseReturnValue:
     """Handle the confirm recurring pattern route."""
     payload = request.get_json(silent=True) or {}
     try:
@@ -42,7 +43,7 @@ def confirm_recurring_pattern():
 
 @recurring_bp.route("/recurring/patterns/ignore", methods=["POST"])
 @permission_required(PERMISSION_EDIT_RECURRING)
-def ignore_recurring_pattern():
+def ignore_recurring_pattern() -> ResponseReturnValue:
     """Ignore recurring pattern."""
     payload = request.get_json(silent=True) or {}
     try:
@@ -65,7 +66,7 @@ def ignore_recurring_pattern():
 
 @recurring_bp.route("/recurring/patterns/edit", methods=["POST"])
 @permission_required(PERMISSION_EDIT_RECURRING)
-def edit_recurring_pattern():
+def edit_recurring_pattern() -> ResponseReturnValue:
     """Edit recurring pattern."""
     payload = request.get_json(silent=True) or {}
     try:

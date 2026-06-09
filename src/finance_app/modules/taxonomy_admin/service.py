@@ -1,6 +1,8 @@
 """Application orchestration for the taxonomy admin feature."""
 
 import json
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from sqlalchemy import case, delete, func, or_, select, update
 
@@ -43,7 +45,7 @@ from finance_app.modules.taxonomy_admin.forms import (
 TAXONOMY_YAML_SECTIONS = ("categories", "tags")
 
 
-def build_taxonomy_context():
+def build_taxonomy_context() -> dict[str, Any]:
     """Build taxonomy context."""
     with db_core_transaction() as conn:
         return {
@@ -52,7 +54,7 @@ def build_taxonomy_context():
         }
 
 
-def export_taxonomy_yaml(conn=None):
+def export_taxonomy_yaml(conn: Any = None) -> str:
     """Return category and tag metadata in the FinScope taxonomy YAML format.
 
     Args:
@@ -92,7 +94,7 @@ def export_taxonomy_yaml(conn=None):
     return "\n".join(lines) + "\n"
 
 
-def import_taxonomy_yaml_text(raw_text, conn=None):
+def import_taxonomy_yaml_text(raw_text: str, conn: Any = None) -> dict[str, int]:
     """Import category and tag metadata from FinScope taxonomy YAML text.
 
     Args:
@@ -152,16 +154,16 @@ def import_taxonomy_yaml_text(raw_text, conn=None):
     }
 
 
-def parse_taxonomy_yaml(raw_text):
+def parse_taxonomy_yaml(raw_text: object) -> dict[str, list[dict[str, str]]]:
     """Parse FinScope taxonomy YAML into cleaned category and tag rows.
 
     The parser intentionally supports the flat YAML list shape used by
     ``taxonomy.yml`` and taxonomy exports, which keeps imports dependency-free
     while still accepting quoted scalar values with escaped newlines.
     """
-    sections = {section: [] for section in TAXONOMY_YAML_SECTIONS}
-    current_section = None
-    current_item = None
+    sections: dict[str, list[dict[str, str]]] = {section: [] for section in TAXONOMY_YAML_SECTIONS}
+    current_section: str | None = None
+    current_item: dict[str, str] | None = None
 
     for line_number, raw_line in enumerate(str(raw_text or "").splitlines(), start=1):
         line = raw_line.rstrip()
@@ -201,7 +203,7 @@ def parse_taxonomy_yaml(raw_text):
     return cleaned
 
 
-def parse_yaml_key_value(text, line_number):
+def parse_yaml_key_value(text: str, line_number: int) -> tuple[str, str]:
     """Return a key and scalar text parsed from one YAML mapping line."""
     if ":" not in text:
         raise ValueError(f"Line {line_number}: expected a key and value.")
@@ -212,12 +214,12 @@ def parse_yaml_key_value(text, line_number):
     return key, value.strip()
 
 
-def yaml_scalar(value):
+def yaml_scalar(value: object) -> str:
     """Return a quoted scalar compatible with YAML and JSON string parsers."""
     return json.dumps(str(value or ""), ensure_ascii=False)
 
 
-def yaml_scalar_value(value, line_number):
+def yaml_scalar_value(value: object, line_number: int) -> str:
     """Parse a YAML scalar from the supported taxonomy import subset."""
     text = str(value or "").strip()
     if not text:
@@ -232,7 +234,7 @@ def yaml_scalar_value(value, line_number):
     return text
 
 
-def clean_imported_category(item):
+def clean_imported_category(item: Mapping[str, Any]) -> dict[str, str]:
     """Return one cleaned imported category metadata row."""
     name = clean_label(item.get("name"))
     if not name:
@@ -245,7 +247,7 @@ def clean_imported_category(item):
     }
 
 
-def clean_imported_tag(item):
+def clean_imported_tag(item: Mapping[str, Any]) -> dict[str, str]:
     """Return one cleaned imported tag metadata row."""
     name = clean_label(item.get("name"))
     if not name:
@@ -258,9 +260,9 @@ def clean_imported_tag(item):
     }
 
 
-def validate_unique_taxonomy_names(rows, label):
+def validate_unique_taxonomy_names(rows: Sequence[Mapping[str, str]], label: str) -> None:
     """Raise when an imported taxonomy section repeats a name."""
-    seen = set()
+    seen: set[str] = set()
     for row in rows:
         normalized = row["name"].casefold()
         if normalized in seen:
@@ -268,7 +270,7 @@ def validate_unique_taxonomy_names(rows, label):
         seen.add(normalized)
 
 
-def fetch_category_export_rows(conn):
+def fetch_category_export_rows(conn: Any) -> list[dict[str, Any]]:
     """Return categories with all persisted metadata fields for YAML export."""
     rows = (
         conn.execute(
@@ -289,7 +291,7 @@ def fetch_category_export_rows(conn):
     return [dict(row) for row in rows]
 
 
-def fetch_tag_export_rows(conn):
+def fetch_tag_export_rows(conn: Any) -> list[dict[str, Any]]:
     """Return tags with all persisted metadata fields for YAML export."""
     rows = (
         conn.execute(
@@ -316,7 +318,7 @@ def fetch_tag_export_rows(conn):
     ]
 
 
-def create_category_from_form(form):
+def create_category_from_form(form: Any) -> Any:
     """Create category from form."""
     values = parse_category_form(form)
     if is_builtin_category_name(values["name"]):
@@ -332,12 +334,13 @@ def create_category_from_form(form):
         return category
 
 
-def update_category_from_form(form):
+def update_category_from_form(form: Any) -> str:
     """Update category from form."""
     values = parse_category_form(form)
     category_id = values["id"]
-    if category_id is None:
+    if not isinstance(category_id, int):
         raise ValueError("Category was not found.")
+    category_name = str(values["name"])
 
     with db_core_transaction() as conn:
         current = fetch_category_by_id(conn, category_id)
@@ -346,8 +349,8 @@ def update_category_from_form(form):
         if current["builtin_key"]:
             raise ValueError("Built-in categories cannot be modified.")
 
-        if current["name"] != values["name"]:
-            renamed = rename_category(conn, current["name"], values["name"])
+        if current["name"] != category_name:
+            renamed = rename_category(conn, current["name"], category_name)
             if not renamed:
                 raise ValueError("Choose a unique category name.")
 
@@ -359,10 +362,10 @@ def update_category_from_form(form):
                 instruction=values["instruction"],
             )
         )
-        return values["name"]
+        return category_name
 
 
-def create_tag_from_form(form):
+def create_tag_from_form(form: Any) -> Any:
     """Create tag from form."""
     values = parse_tag_form(form)
     with db_core_transaction() as conn:
@@ -376,12 +379,13 @@ def create_tag_from_form(form):
         return tag
 
 
-def update_tag_from_form(form):
+def update_tag_from_form(form: Any) -> str:
     """Update tag from form."""
     values = parse_tag_form(form)
     tag_id = values["id"]
-    if tag_id is None:
+    if not isinstance(tag_id, int):
         raise ValueError("Tag was not found.")
+    tag_name = str(values["name"])
 
     with db_core_transaction() as conn:
         if fetch_tag_by_id(conn, tag_id) is None:
@@ -389,7 +393,7 @@ def update_tag_from_form(form):
 
         existing = conn.execute(
             select(tags_table.c.id).where(
-                tags_table.c.name == values["name"],
+                tags_table.c.name == tag_name,
                 tags_table.c.id != tag_id,
             )
         ).fetchone()
@@ -400,16 +404,16 @@ def update_tag_from_form(form):
             update(tags_table)
             .where(tags_table.c.id == tag_id)
             .values(
-                name=values["name"],
+                name=tag_name,
                 description=values["description"],
                 instruction=values["instruction"],
-                color=clean_color(values["color"]) or tag_color_for_name(values["name"]),
+                color=clean_color(values["color"]) or tag_color_for_name(tag_name),
             ),
         )
-        return values["name"]
+        return tag_name
 
 
-def delete_tag_from_form(form):
+def delete_tag_from_form(form: Any) -> str:
     """Delete tag from form."""
     tag_id = parse_required_int(form.get("tag_id"), "Tag")
     with db_core_transaction() as conn:
@@ -425,7 +429,7 @@ def delete_tag_from_form(form):
         return tag["name"]
 
 
-def delete_category_from_form(form):
+def delete_category_from_form(form: Any) -> str:
     """Delete category from form."""
     category_id = parse_required_int(form.get("category_id"), "Category")
     with db_core_transaction() as conn:
@@ -443,7 +447,7 @@ def delete_category_from_form(form):
         return category["name"]
 
 
-def fetch_category_rows(conn):
+def fetch_category_rows(conn: Any) -> list[dict[str, Any]]:
     """Fetch category rows."""
     transaction_count = (
         select(func.count())
@@ -497,7 +501,7 @@ def fetch_category_rows(conn):
     ]
 
 
-def fetch_tag_rows(conn):
+def fetch_tag_rows(conn: Any) -> list[dict[str, Any]]:
     """Fetch tag rows."""
     transaction_count = (
         select(func.count())
@@ -543,7 +547,7 @@ def fetch_tag_rows(conn):
     ]
 
 
-def fetch_category_by_id(conn, category_id):
+def fetch_category_by_id(conn: Any, category_id: int) -> Any:
     """Fetch category by ID."""
     return (
         conn.execute(
@@ -560,7 +564,7 @@ def fetch_category_by_id(conn, category_id):
     )
 
 
-def fetch_tag_by_id(conn, tag_id):
+def fetch_tag_by_id(conn: Any, tag_id: int) -> Any:
     """Fetch tag by ID."""
     return (
         conn.execute(
@@ -577,7 +581,7 @@ def fetch_tag_by_id(conn, tag_id):
     )
 
 
-def fetch_tag_usage(conn, tag_id):
+def fetch_tag_usage(conn: Any, tag_id: int) -> dict[str, int]:
     """Fetch tag usage."""
     return {
         "transaction_count": conn.execute(
@@ -591,7 +595,7 @@ def fetch_tag_usage(conn, tag_id):
     }
 
 
-def fetch_category_usage(conn, category_id, category_name):
+def fetch_category_usage(conn: Any, category_id: int, category_name: str) -> dict[str, int]:
     """Fetch category usage."""
     return {
         "transaction_count": conn.execute(

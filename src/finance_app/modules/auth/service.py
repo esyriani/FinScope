@@ -6,7 +6,9 @@ and owner-managed user changes on top of SQLAlchemy Core repositories.
 
 import secrets
 import string
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
@@ -24,8 +26,8 @@ from finance_app.modules.auth import repository
 from finance_app.modules.auth.models import AuthenticatedUser
 from finance_app.modules.users import repository as user_repository
 
-AUTH_OPERATIONAL_ERRORS = (SqlAlchemyOperationalError,)
-AUTH_INTEGRITY_ERRORS = (SqlAlchemyIntegrityError,)
+AUTH_OPERATIONAL_ERRORS: tuple[type[Exception], ...] = (SqlAlchemyOperationalError,)
+AUTH_INTEGRITY_ERRORS: tuple[type[Exception], ...] = (SqlAlchemyIntegrityError,)
 FAILED_LOGIN_LIMIT = 5
 LOCKOUT_MINUTES = 15
 MIN_PASSWORD_LENGTH = 10
@@ -34,7 +36,7 @@ DUMMY_PASSWORD_HASH = generate_password_hash("finscope-dummy-password")
 TEMP_PASSWORD_ALPHABET = string.ascii_letters + string.digits + "-_"
 
 
-def has_owner_account():
+def has_owner_account() -> bool:
     """Return whether the current database has an active owner account."""
     try:
         with db_core_connection() as conn:
@@ -43,10 +45,10 @@ def has_owner_account():
         return False
 
 
-def load_login_user(user_id):
+def load_login_user(user_id: object) -> AuthenticatedUser | None:
     """Return a Flask-Login user object for an active user ID."""
     try:
-        parsed_user_id = int(user_id)
+        parsed_user_id = int(str(user_id))
     except (TypeError, ValueError):
         return None
 
@@ -57,7 +59,7 @@ def load_login_user(user_id):
     return AuthenticatedUser(row)
 
 
-def authenticate_user(username, password, ip_address=None):
+def authenticate_user(username: object, password: object, ip_address: object | None = None) -> AuthenticatedUser | None:
     """Authenticate credentials and update login tracking.
 
     Args:
@@ -99,6 +101,8 @@ def authenticate_user(username, password, ip_address=None):
                 ip_address=ip_address,
             )
             refreshed = repository.get_user_by_id(conn, row["id"])
+            if refreshed is None:
+                return None
             return AuthenticatedUser(refreshed)
 
         failed_count = failed_count_after_attempt(row, now)
@@ -115,7 +119,13 @@ def authenticate_user(username, password, ip_address=None):
         return None
 
 
-def bootstrap_owner(username, password, confirm_password, ip_address=None, display_name=None):
+def bootstrap_owner(
+    username: object,
+    password: object,
+    confirm_password: object,
+    ip_address: object | None = None,
+    display_name: object | None = None,
+) -> Mapping[str, Any]:
     """Create the first owner account for a database.
 
     Raises:
@@ -152,12 +162,21 @@ def bootstrap_owner(username, password, confirm_password, ip_address=None, displ
                 "owner_bootstrap",
                 ip_address=ip_address,
             )
-            return repository.get_user_by_id(conn, user_id)
+            created_user = repository.get_user_by_id(conn, user_id)
+            if created_user is None:
+                raise ValueError("User not found.")
+            return created_user
     except AUTH_INTEGRITY_ERRORS as exc:
         raise ValueError("The owner account already exists or username is already in use.") from exc
 
 
-def create_managed_user(username, role, actor=None, ip_address=None, display_name=None):
+def create_managed_user(
+    username: object,
+    role: object,
+    actor: Any = None,
+    ip_address: object | None = None,
+    display_name: object | None = None,
+) -> tuple[Mapping[str, Any], str]:
     """Create an owner-managed editor or viewer with a temporary password."""
     normalized_username = clean_username(username)
     normalized_display_name = clean_display_name(display_name, normalized_username)
@@ -196,10 +215,12 @@ def create_managed_user(username, role, actor=None, ip_address=None, display_nam
     except AUTH_INTEGRITY_ERRORS as exc:
         raise ValueError("Username is already in use.") from exc
 
+    if created_user is None:
+        raise ValueError("User not found.")
     return created_user, temporary_password
 
 
-def set_user_active(user_id, is_active, actor=None, ip_address=None):
+def set_user_active(user_id: object, is_active: bool, actor: Any = None, ip_address: object | None = None) -> None:
     """Activate or deactivate a user while preserving the last active owner."""
     with db_core_transaction() as conn:
         target = require_user(conn, user_id)
@@ -219,7 +240,7 @@ def set_user_active(user_id, is_active, actor=None, ip_address=None):
         )
 
 
-def change_user_role(user_id, role, actor=None, ip_address=None):
+def change_user_role(user_id: object, role: object, actor: Any = None, ip_address: object | None = None) -> None:
     """Change a managed user's role to editor or viewer.
 
     FinScope allows exactly one owner account, so owner promotion is not
@@ -245,7 +266,11 @@ def change_user_role(user_id, role, actor=None, ip_address=None):
         )
 
 
-def reset_user_password(user_id, actor=None, ip_address=None):
+def reset_user_password(
+    user_id: object,
+    actor: Any = None,
+    ip_address: object | None = None,
+) -> tuple[dict[str, Any], str]:
     """Generate a temporary password and force a password change."""
     temporary_password = generate_temporary_password()
     with db_core_transaction() as conn:
@@ -272,7 +297,12 @@ def reset_user_password(user_id, actor=None, ip_address=None):
     return display_user_row(target), temporary_password
 
 
-def hand_off_ownership(current_owner_id, target_user_id, actor=None, ip_address=None):
+def hand_off_ownership(
+    current_owner_id: object,
+    target_user_id: object,
+    actor: Any = None,
+    ip_address: object | None = None,
+) -> dict[str, Any]:
     """Transfer the unique owner role to an active non-owner user.
 
     The current owner is demoted to viewer in the same transaction so the
@@ -304,10 +334,19 @@ def hand_off_ownership(current_owner_id, target_user_id, actor=None, ip_address=
             details=f"from_user_id={current_owner['id']};to_user_id={target['id']}",
             ip_address=ip_address,
         )
-        return display_user_row(repository.get_user_by_id(conn, target["id"]))
+        updated_target = repository.get_user_by_id(conn, target["id"])
+        if updated_target is None:
+            raise ValueError("User not found.")
+        return display_user_row(updated_target)
 
 
-def change_password(user_id, current_password, new_password, confirm_password, ip_address=None):
+def change_password(
+    user_id: object,
+    current_password: object,
+    new_password: object,
+    confirm_password: object,
+    ip_address: object | None = None,
+) -> None:
     """Change a user's own password after validating the current password."""
     validate_password_pair(new_password, confirm_password)
     with db_core_transaction() as conn:
@@ -332,13 +371,18 @@ def change_password(user_id, current_password, new_password, confirm_password, i
         )
 
 
-def list_managed_users():
+def list_managed_users() -> list[dict[str, Any]]:
     """Return all users for the owner user-management page."""
     with db_core_connection() as conn:
         return [display_user_row(row) for row in user_repository.list_users(conn)]
 
 
-def update_own_display_name(user_id, display_name, actor=None, ip_address=None):
+def update_own_display_name(
+    user_id: object,
+    display_name: object,
+    actor: Any = None,
+    ip_address: object | None = None,
+) -> Mapping[str, Any]:
     """Update the authenticated user's display name."""
     normalized_display_name = clean_display_name(display_name)
     with db_core_transaction() as conn:
@@ -354,24 +398,27 @@ def update_own_display_name(user_id, display_name, actor=None, ip_address=None):
             details=f"username={target['username']}",
             ip_address=ip_address,
         )
-        return repository.get_user_by_id(conn, target["id"])
+        row = repository.get_user_by_id(conn, target["id"])
+        if row is None:
+            raise ValueError("User not found.")
+        return row
 
 
-def get_user_account(user_id):
+def get_user_account(user_id: object) -> dict[str, Any]:
     """Return one active user row for the Account page."""
     with db_core_connection() as conn:
-        row = repository.get_user_by_id(conn, int(user_id))
+        row = repository.get_user_by_id(conn, int(str(user_id)))
     if row is None:
         raise ValueError("User not found.")
     return display_user_row(row)
 
 
-def hash_password(password):
+def hash_password(password: object) -> str:
     """Return a Werkzeug scrypt password hash."""
     return generate_password_hash(str(password or ""), method="scrypt")
 
 
-def validate_password_pair(password, confirm_password):
+def validate_password_pair(password: object, confirm_password: object) -> None:
     """Validate a password and matching confirmation."""
     password_text = str(password or "")
     if password_text != str(confirm_password or ""):
@@ -380,7 +427,7 @@ def validate_password_pair(password, confirm_password):
         raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
 
 
-def clean_username(username):
+def clean_username(username: object) -> str:
     """Return a validated username suitable for persistence."""
     text = str(username or "").strip()
     if len(text) < 3:
@@ -392,7 +439,7 @@ def clean_username(username):
     return text
 
 
-def clean_display_name(display_name, fallback=None):
+def clean_display_name(display_name: object, fallback: object | None = None) -> str:
     """Return a validated display name for UI presentation."""
     text = str(display_name or "").strip()
     if not text and fallback is not None:
@@ -404,7 +451,7 @@ def clean_display_name(display_name, fallback=None):
     return text
 
 
-def clean_managed_role(role):
+def clean_managed_role(role: object) -> str:
     """Return a role owners may assign to managed users."""
     text = normalize_user_role(role)
     if text not in MANAGED_USER_ROLES:
@@ -412,10 +459,10 @@ def clean_managed_role(role):
     return text
 
 
-def require_user(conn, user_id):
+def require_user(conn: Any, user_id: object) -> Mapping[str, Any]:
     """Return a user row or raise a validation error."""
     try:
-        parsed_user_id = int(user_id)
+        parsed_user_id = int(str(user_id))
     except (TypeError, ValueError):
         parsed_user_id = 0
     row = repository.get_user_by_id(conn, parsed_user_id)
@@ -424,24 +471,24 @@ def require_user(conn, user_id):
     return row
 
 
-def ensure_not_last_active_owner(conn):
+def ensure_not_last_active_owner(conn: Any) -> None:
     """Raise when a requested change would remove the final active owner."""
     if repository.active_owner_count(conn) <= 1:
         raise ValueError("The last active owner cannot be changed.")
 
 
-def generate_temporary_password(length=18):
+def generate_temporary_password(length: int = 18) -> str:
     """Return a random temporary password suitable for first login."""
     return "".join(secrets.choice(TEMP_PASSWORD_ALPHABET) for _ in range(length))
 
 
-def login_lock_active(user_row, now):
+def login_lock_active(user_row: Mapping[str, Any], now: datetime) -> bool:
     """Return whether a user's temporary login lock is still active."""
     locked_until = parse_optional_datetime(user_row["locked_until"])
     return bool(locked_until and locked_until > now.replace(tzinfo=None))
 
 
-def failed_count_after_attempt(user_row, now):
+def failed_count_after_attempt(user_row: Mapping[str, Any], now: datetime) -> int:
     """Return the failed-login count to persist after another failure."""
     locked_until = parse_optional_datetime(user_row["locked_until"])
     if locked_until and locked_until <= now.replace(tzinfo=None):
@@ -449,26 +496,26 @@ def failed_count_after_attempt(user_row, now):
     return int(user_row["failed_login_count"] or 0) + 1
 
 
-def parse_optional_datetime(value):
+def parse_optional_datetime(value: object) -> datetime | None:
     """Return a naive UTC datetime for a stored timestamp value."""
     if value in (None, ""):
         return None
     return coerce_utc_datetime(value)
 
 
-def utc_now():
+def utc_now() -> datetime:
     """Return the current UTC datetime for persisted auth timestamps."""
     return datetime.now(timezone.utc).replace(microsecond=0)
 
 
-def actor_identity(actor):
+def actor_identity(actor: Any) -> tuple[int | None, str | None]:
     """Return audit identity fields for a Flask-Login user-like actor."""
     if actor is None or not getattr(actor, "is_authenticated", False):
         return None, None
-    return int(actor.id), actor.username
+    return int(actor.id), str(actor.username)
 
 
-def display_user_row(row):
+def display_user_row(row: Mapping[str, Any]) -> dict[str, Any]:
     """Return a template-ready user row with normalized role text."""
     data = dict(row)
     data["role"] = normalize_user_role(data["role"])

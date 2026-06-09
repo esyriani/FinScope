@@ -1,11 +1,13 @@
 """Form parsing and validation helpers for the recurring feature."""
 
+from collections.abc import Mapping
 from datetime import date
+from typing import Any
 
 from finance_app.modules.recurring.patterns import recurring_pattern_key
 
 
-def recurring_pattern_payload(payload):
+def recurring_pattern_payload(payload: Mapping[str, Any]) -> dict[str, object]:
     """Build pattern payload."""
     merchant = str(payload.get("merchant") or "").strip()
     tx_type = str(payload.get("type") or "").strip()
@@ -24,7 +26,7 @@ def recurring_pattern_payload(payload):
     }
 
 
-def parse_expected_day(value):
+def parse_expected_day(value: object) -> int | None:
     """Parse expected day."""
     text = str(value or "").strip()
     if not text:
@@ -41,18 +43,18 @@ def parse_expected_day(value):
     return day if 1 <= day <= 31 else None
 
 
-def parse_optional_positive_int(value):
+def parse_optional_positive_int(value: object) -> int | None:
     """Parse an optional positive integer."""
     if value in (None, ""):
         return None
     try:
-        parsed = int(value)
+        parsed = int(str(value))
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
 
 
-def parse_match_type(value, merchant_id=None):
+def parse_match_type(value: object, merchant_id: int | None = None) -> str:
     """Return the recurring pattern match mode for a payload."""
     text = str(value or "").strip().lower()
     if text in {"merchant", "keyword"}:

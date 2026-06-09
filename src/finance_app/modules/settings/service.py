@@ -1,6 +1,9 @@
 """Application orchestration for the settings feature."""
 
-from flask_login import current_user
+from collections.abc import Mapping
+from typing import Any, cast
+
+from flask_login import current_user  # type: ignore[import-untyped]
 
 from finance_app.core.config import settings as app_settings
 from finance_app.core.constants import (
@@ -60,7 +63,7 @@ PROBABILITY_SETTING_KEYS = (
 DECIMAL_SETTING_KEYS = ("recurrence_amount_tolerance_absolute",)
 
 
-def build_settings_context():
+def build_settings_context() -> dict[str, Any]:
     """Build settings context."""
     can_manage_global_settings = current_user_can(PERMISSION_MANAGE_GLOBAL_SETTINGS)
     with db_core_transaction() as conn:
@@ -142,7 +145,7 @@ def build_settings_context():
     }
 
 
-def save_settings_from_form(form):
+def save_settings_from_form(form: Any) -> None:
     """Save user-bound General settings and owner-only advanced settings."""
     if not current_user.is_authenticated:
         raise ValueError("Please log in to continue.")
@@ -168,17 +171,18 @@ def save_settings_from_form(form):
         for key in DECIMAL_SETTING_KEYS:
             upsert_setting(conn, key, format_decimal(global_values[key]))
 
-        sync_statement_types(conn, global_values["statement_types"])
+        statement_types = cast(list[Mapping[str, Any]], global_values["statement_types"])
+        sync_statement_types(conn, statement_types)
 
 
-def validate_openai_model_from_form(form):
+def validate_openai_model_from_form(form: Any) -> str:
     """Validate openai model from form."""
     model_name = clean_openai_model(form.get("openai_model")) or app_settings.default_categorization_model
     available, message = is_openai_model_available(model_name)
     return message if available else f"Model validation failed: {message}"
 
 
-def is_openai_model_available(model_name):
+def is_openai_model_available(model_name: str) -> tuple[bool, str]:
     """Return whether openai model available."""
     if not app_settings.openai_api_key:
         return False, "Configure an OpenAI API key first."

@@ -31,7 +31,10 @@
     min-height: 2rem;
     min-width: 4.6rem;
     padding: 0.35rem 0.55rem;
-    transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease,
+        box-shadow 120ms ease;
 }
 
 .chart-type-option .bi {
@@ -79,7 +82,10 @@
     height: 2.5rem;
     justify-content: center;
     place-items: center;
-    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease;
     width: 2.5rem;
 }
 
@@ -103,9 +109,7 @@
 .insight-card {
     --insight-color: var(--app-accent);
     --insight-rgb: var(--app-accent-rgb);
-    background:
-        linear-gradient(135deg, rgba(var(--insight-rgb), 0.13), transparent 44%),
-        var(--app-surface);
+    background: linear-gradient(135deg, rgba(var(--insight-rgb), 0.13), transparent 44%), var(--app-surface);
     border: 1px solid var(--app-border);
     border-top: 3px solid var(--insight-color);
     border-radius: 8px;

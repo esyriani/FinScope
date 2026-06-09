@@ -44,10 +44,11 @@ Warnings are always test failures. Run coverage deliberately when needed:
 ## Code quality checks
 
 Install the developer tools before running formatter, linter, or type-checker
-commands:
+commands. Frontend checks require Node.js 20+ with npm:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+npm install
 ```
 
 Run the current quality checks from the repository root:
@@ -56,11 +57,14 @@ Run the current quality checks from the repository root:
 .\.venv\Scripts\python.exe -B -m black --check .
 .\.venv\Scripts\python.exe -B -m ruff check .
 .\.venv\Scripts\python.exe -B -m mypy
+npm run lint:frontend
 ```
 
-Mypy is configured as a gradual allowlist in `pyproject.toml`. Add modules to
-that list only after their public helpers have useful annotations and the
-reported errors are actionable.
+Mypy is configured in `pyproject.toml` for `sitecustomize.py` and the production
+application package. Frontend checks are configured through npm scripts:
+Prettier checks formatting for first-party static JavaScript and CSS, ESLint
+checks browser JavaScript, and Stylelint checks first-party CSS. Vendored
+browser libraries are excluded.
 
 ## Markers
 

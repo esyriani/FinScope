@@ -1,5 +1,8 @@
 """Background workflow helpers for the review feature."""
 
+from collections.abc import Iterable, Mapping, MutableMapping
+from typing import Any
+
 from sqlalchemy import delete, update
 
 from finance_app.core.constants import (
@@ -10,6 +13,7 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_TRANSFER,
     TRANSFER_CATEGORY,
 )
+from finance_app.core.money import MoneyValue, optional_money_to_float
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import category_rules as category_rules_table
 from finance_app.database.tables import transactions as transactions_table
@@ -32,17 +36,17 @@ from finance_app.modules.settings.runtime import get_unknown_category
 
 
 def apply_review_group_job(
-    undo_state,
-    merchant_key,
-    category,
-    tags,
-    create_rule,
-    rule_keyword,
-    amount_min=None,
-    amount_max=None,
-    transaction_id=None,
-    selected_transaction_ids=None,
-):
+    undo_state: MutableMapping[str, Any],
+    merchant_key: str,
+    category: str,
+    tags: Iterable[str],
+    create_rule: bool,
+    rule_keyword: str,
+    amount_min: float | None = None,
+    amount_max: float | None = None,
+    transaction_id: int | None = None,
+    selected_transaction_ids: Iterable[int] | None = None,
+) -> str:
     """Apply review group job."""
     with db_core_transaction() as conn:
         unknown_category = get_unknown_category(conn)
@@ -73,7 +77,7 @@ def apply_review_group_job(
     return message
 
 
-def undo_review_group_job(undo_state):
+def undo_review_group_job(undo_state: Mapping[str, Any]) -> str:
     """Undo review group job."""
     changes = undo_state.get("changes") or []
     rule_change = undo_state.get("rule_change")
@@ -109,16 +113,17 @@ def undo_review_group_job(undo_state):
 
 
 def apply_review_group_transactions(
-    conn,
-    merchant_key,
-    category,
-    tags,
-    unknown_category,
-    transaction_id=None,
-    transaction_ids=None,
-):
+    conn: Any,
+    merchant_key: str,
+    category: str,
+    tags: Iterable[str],
+    unknown_category: str,
+    transaction_id: int | None = None,
+    transaction_ids: Iterable[int] | None = None,
+) -> list[dict[str, Any]]:
     """Apply review group transactions."""
-    changes = []
+    tags = list(tags)
+    changes: list[dict[str, Any]] = []
     rows = review_group_rows(conn, merchant_key, unknown_category)
     selected_ids = review_transaction_id_filter(transaction_id, transaction_ids)
     if selected_ids is not None:
@@ -154,7 +159,9 @@ def apply_review_group_transactions(
     return changes
 
 
-def update_review_transaction(conn, transaction_id, category, metadata, transaction_kind):
+def update_review_transaction(
+    conn: Any, transaction_id: int, category: str, metadata: Any, transaction_kind: str
+) -> None:
     """Persist the reviewed category state for one transaction."""
     conn.execute(
         update(transactions_table)
@@ -174,7 +181,7 @@ def update_review_transaction(conn, transaction_id, category, metadata, transact
     )
 
 
-def restore_review_transaction(conn, change):
+def restore_review_transaction(conn: Any, change: Mapping[str, Any]) -> Any:
     """Restore a reviewed transaction if its current state still matches the undo snapshot."""
     old_category_id = change.get("old_category_id")
     if old_category_id is None:
@@ -220,7 +227,10 @@ def restore_review_transaction(conn, change):
     )
 
 
-def review_transaction_id_filter(transaction_id=None, transaction_ids=None):
+def review_transaction_id_filter(
+    transaction_id: int | None = None,
+    transaction_ids: Iterable[object] | None = None,
+) -> list[int] | None:
     """Return the optional transaction-id filter for a review group action."""
     if transaction_id is not None:
         return [transaction_id]
@@ -228,13 +238,13 @@ def review_transaction_id_filter(transaction_id=None, transaction_ids=None):
     if not transaction_ids:
         return None
 
-    selected_ids = []
-    seen = set()
+    selected_ids: list[int] = []
+    seen: set[int] = set()
     for tx_id in transaction_ids:
         if tx_id is None:
             continue
         try:
-            tx_id = int(tx_id)
+            tx_id = int(str(tx_id))
         except (TypeError, ValueError):
             continue
         if tx_id <= 0 or tx_id in seen:
@@ -244,16 +254,24 @@ def review_transaction_id_filter(transaction_id=None, transaction_ids=None):
     return selected_ids
 
 
-def reviewed_transaction_kind(category, amount, current_kind=None):
+def reviewed_transaction_kind(category: object, amount: MoneyValue | None, current_kind: object | None = None) -> str:
     """Return transaction kind implied by reviewed category and amount."""
     if category == TRANSFER_CATEGORY:
         return TRANSACTION_KIND_TRANSFER
     if current_kind == TRANSACTION_KIND_REFUND:
         return TRANSACTION_KIND_REFUND
-    return TRANSACTION_KIND_INCOME if (amount or 0) < 0 else TRANSACTION_KIND_EXPENSE
+    amount_value = optional_money_to_float(amount)
+    return TRANSACTION_KIND_INCOME if amount_value is not None and amount_value < 0 else TRANSACTION_KIND_EXPENSE
 
 
-def save_review_rule(conn, merchant_key, category, amount_min=None, amount_max=None, tags=None):
+def save_review_rule(
+    conn: Any,
+    merchant_key: str,
+    category: str,
+    amount_min: float | None = None,
+    amount_max: float | None = None,
+    tags: Iterable[str] | None = None,
+) -> dict[str, Any]:
     """Save review rule."""
     previous_rule = find_review_rule(conn, merchant_key, amount_min, amount_max)
     rule_id = save_category_rule(
@@ -265,6 +283,8 @@ def save_review_rule(conn, merchant_key, category, amount_min=None, amount_max=N
         amount_max=amount_max,
         tags=tags or [],
     )
+    if rule_id is None:
+        raise ValueError("Rule could not be saved.")
     new_rule = rule_snapshot(conn, rule_id)
     return {
         "rule_id": rule_id,
@@ -273,7 +293,7 @@ def save_review_rule(conn, merchant_key, category, amount_min=None, amount_max=N
     }
 
 
-def undo_review_rule(conn, rule_change):
+def undo_review_rule(conn: Any, rule_change: Mapping[str, Any] | None) -> str:
     """Undo review rule."""
     if not rule_change:
         return ""
@@ -317,7 +337,7 @@ def undo_review_rule(conn, rule_change):
     return "Restored previous rule."
 
 
-def rule_snapshots_match(left, right):
+def rule_snapshots_match(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
     """Build snapshots match."""
     keys = (
         "id",

@@ -72,7 +72,11 @@
     min-height: 58px;
     min-width: 0;
     padding: 0.7rem;
-    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease,
+        transform 120ms ease;
 }
 
 .rule-choice:hover {
@@ -157,7 +161,11 @@
     max-width: 100%;
     min-height: 34px;
     padding: 0.38rem 0.62rem;
-    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease,
+        color 120ms ease;
 }
 
 .tag-choice:hover {
@@ -182,7 +190,9 @@
 .btn-check:checked + .tag-choice {
     background: var(--tag-color);
     border-color: var(--tag-color);
-    box-shadow: 0 0 0 2px var(--app-surface), 0 0 0 4px var(--tag-color);
+    box-shadow:
+        0 0 0 2px var(--app-surface),
+        0 0 0 4px var(--tag-color);
     color: #ffffff;
 }
 

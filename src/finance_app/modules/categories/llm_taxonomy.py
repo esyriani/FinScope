@@ -5,6 +5,8 @@ rule evidence, historical evidence, merchant history, and taxonomy text.
 """
 
 import re
+from collections.abc import Mapping, MutableMapping, Sequence
+from typing import Any
 
 from sqlalchemy import func, select
 
@@ -53,14 +55,14 @@ SEMANTIC_STOPWORDS = frozenset(
 
 
 def prepare_llm_candidate_taxonomies(
-    conn,
-    unknown_items,
-    category_options,
-    tag_options,
-    unknown_category,
-    category_rows=None,
-    tag_rows=None,
-):
+    conn: Any,
+    unknown_items: Sequence[MutableMapping[str, Any]],
+    category_options: Sequence[str],
+    tag_options: Sequence[str],
+    unknown_category: str,
+    category_rows: Sequence[Mapping[str, Any]] | None = None,
+    tag_rows: Sequence[Mapping[str, Any]] | None = None,
+) -> None:
     """Attach compact candidate category and tag lists to LLM transaction payloads.
 
     Candidate taxonomies are intentionally transaction-local. They prioritize
@@ -72,7 +74,7 @@ def prepare_llm_candidate_taxonomies(
     tag_rows = tag_rows or []
     common_categories = common_category_names(conn, category_options, unknown_category)
     for tx in unknown_items:
-        categories = []
+        categories: list[Any] = []
         categories.extend(rule_evidence_categories(tx))
         categories.extend(historical_evidence_categories(tx))
         categories.extend(merchant_history_category_names(conn, tx, category_options, unknown_category))
@@ -95,13 +97,13 @@ def prepare_llm_candidate_taxonomies(
         )
 
 
-def rule_evidence_categories(transaction):
+def rule_evidence_categories(transaction: Mapping[str, Any]) -> list[Any]:
     """Return category candidates from matched rule evidence."""
     evidence = transaction.get("rule_evidence") or {}
     return [evidence.get("category")]
 
 
-def historical_evidence_categories(transaction):
+def historical_evidence_categories(transaction: Mapping[str, Any]) -> list[Any]:
     """Return category candidates from historical retrieval evidence."""
     evidence = transaction.get("historical_evidence") or {}
     categories = [evidence.get("category")]
@@ -109,7 +111,12 @@ def historical_evidence_categories(transaction):
     return categories
 
 
-def semantic_taxonomy_names(transaction, taxonomy_rows, taxonomy_options, unknown_category=None):
+def semantic_taxonomy_names(
+    transaction: Mapping[str, Any],
+    taxonomy_rows: Sequence[Mapping[str, Any]],
+    taxonomy_options: Sequence[str],
+    unknown_category: str | None = None,
+) -> list[str]:
     """Return taxonomy names whose instructions overlap the merchant text."""
     query_tokens = semantic_tokens(
         " ".join(
@@ -125,7 +132,7 @@ def semantic_taxonomy_names(transaction, taxonomy_rows, taxonomy_options, unknow
 
     option_order = {name: index for index, name in enumerate(taxonomy_options)}
     rows_by_name = {row["name"]: row for row in taxonomy_rows}
-    scored = []
+    scored: list[tuple[int, int, str]] = []
     for name in taxonomy_options:
         if unknown_category is not None and name == unknown_category:
             continue
@@ -148,7 +155,7 @@ def semantic_taxonomy_names(transaction, taxonomy_rows, taxonomy_options, unknow
     return [name for _, _, name in scored]
 
 
-def semantic_tokens(value):
+def semantic_tokens(value: object) -> set[str]:
     """Return meaningful normalized tokens for lightweight taxonomy matching."""
     normalized = normalize_merchant_description(value)
     return {
@@ -158,7 +165,7 @@ def semantic_tokens(value):
     }
 
 
-def common_category_names(conn, category_options, unknown_category):
+def common_category_names(conn: Any, category_options: Sequence[str], unknown_category: str) -> list[str]:
     """Return commonly used non-unknown categories from persisted transactions."""
     rows = (
         conn.execute(
@@ -182,7 +189,12 @@ def common_category_names(conn, category_options, unknown_category):
     return [row["category"] for row in rows]
 
 
-def merchant_history_category_names(conn, transaction, category_options, unknown_category):
+def merchant_history_category_names(
+    conn: Any,
+    transaction: Mapping[str, Any],
+    category_options: Sequence[str],
+    unknown_category: str,
+) -> list[str]:
     """Return categories historically used for the same durable merchant."""
     merchant_id = transaction.get("merchant_id")
     if merchant_id is None:
@@ -211,10 +223,14 @@ def merchant_history_category_names(conn, transaction, category_options, unknown
     return [row["category"] for row in rows]
 
 
-def compact_category_candidates(categories, category_options, unknown_category):
+def compact_category_candidates(
+    categories: Sequence[Any],
+    category_options: Sequence[str],
+    unknown_category: str,
+) -> list[str]:
     """Return compact, valid category candidates with an unknown fallback."""
-    candidates = []
-    seen = set()
+    candidates: list[str] = []
+    seen: set[str] = set()
     for category in categories:
         normalized = normalize_candidate_category(category, category_options, unknown_category)
         if not normalized or normalized in seen:
@@ -248,7 +264,9 @@ def compact_category_candidates(categories, category_options, unknown_category):
     return limited
 
 
-def normalize_candidate_category(category, category_options, unknown_category):
+def normalize_candidate_category(
+    category: object, category_options: Sequence[str], unknown_category: str
+) -> str | None:
     """Normalize a candidate category against the active taxonomy."""
     text = str(category or "").strip()
     if not text:
@@ -259,9 +277,15 @@ def normalize_candidate_category(category, category_options, unknown_category):
     return normalized if normalized in category_options else None
 
 
-def compact_tag_candidates(conn, transaction, candidate_categories, tag_options, tag_rows=None):
+def compact_tag_candidates(
+    conn: Any,
+    transaction: Mapping[str, Any],
+    candidate_categories: Sequence[str],
+    tag_options: Sequence[str],
+    tag_rows: Sequence[Mapping[str, Any]] | None = None,
+) -> list[str]:
     """Return compact, valid tag candidates for one LLM transaction."""
-    tags = []
+    tags: list[Any] = []
     evidence = transaction.get("rule_evidence") or {}
     tags.extend(evidence.get("tags") or [])
     historical = transaction.get("historical_evidence") or {}
@@ -278,7 +302,11 @@ def compact_tag_candidates(conn, transaction, candidate_categories, tag_options,
     return common_tag_names(conn, tag_options)
 
 
-def tags_for_candidate_categories(conn, candidate_categories, tag_options):
+def tags_for_candidate_categories(
+    conn: Any,
+    candidate_categories: Sequence[str],
+    tag_options: Sequence[str],
+) -> list[str]:
     """Return tags commonly associated with candidate categories."""
     concrete_categories = [category for category in candidate_categories if category != UNKNOWN_CATEGORY]
     if not concrete_categories or not tag_options:
@@ -309,7 +337,7 @@ def tags_for_candidate_categories(conn, candidate_categories, tag_options):
     return [row["name"] for row in rows]
 
 
-def common_tag_names(conn, tag_options):
+def common_tag_names(conn: Any, tag_options: Sequence[str]) -> list[str]:
     """Return commonly used tags as a compact fallback."""
     if not tag_options:
         return []
@@ -333,12 +361,12 @@ def common_tag_names(conn, tag_options):
     return names or list(tag_options[:MAX_CANDIDATE_TAGS])
 
 
-def taxonomy_rows_for_names(rows, names):
+def taxonomy_rows_for_names(rows: Sequence[Mapping[str, Any]], names: Sequence[str]) -> list[Mapping[str, Any]]:
     """Return taxonomy rows ordered by a compact name list."""
     rows_by_name = {row["name"]: row for row in rows}
     return [rows_by_name.get(name, {"id": None, "name": name, "description": "", "instruction": ""}) for name in names]
 
 
-def taxonomy_ids_for_names(rows, names):
+def taxonomy_ids_for_names(rows: Sequence[Mapping[str, Any]], names: Sequence[str]) -> list[int]:
     """Return taxonomy row IDs ordered by a compact name list."""
     return [row["id"] for row in taxonomy_rows_for_names(rows, names) if row.get("id") is not None]

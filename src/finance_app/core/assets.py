@@ -7,13 +7,14 @@ Depends on the application's configured static folder and Flask's url routing.
 from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 from flask import url_for
 
 ASSET_HASH_LENGTH = 12
 
 
-def static_asset_hash(filename, static_folder):
+def static_asset_hash(filename: str, static_folder: str | Path) -> str | None:
     """Return a short content hash for a file in the configured static folder.
 
     Args:
@@ -48,12 +49,12 @@ def static_asset_hash(filename, static_folder):
 
 
 @lru_cache(maxsize=512)
-def _static_asset_hash_for_state(asset_path, _mtime_ns, _size):
+def _static_asset_hash_for_state(asset_path: str, _mtime_ns: int, _size: int) -> str:
     """Hash a static file, invalidating the cache when its filesystem state changes."""
     return sha256(Path(asset_path).read_bytes()).hexdigest()[:ASSET_HASH_LENGTH]
 
 
-def register_asset_helpers(app):
+def register_asset_helpers(app: Any) -> None:
     """Register template helpers that produce hashed local static asset URLs.
 
     The registered static_asset helper appends a v query parameter containing a
@@ -62,7 +63,7 @@ def register_asset_helpers(app):
     easy to diagnose during development.
     """
 
-    def static_asset(filename):
+    def static_asset(filename: str) -> str:
         """Return a Flask static URL with a content hash query string when available."""
         version = static_asset_hash(filename, app.static_folder)
         if version is None:
@@ -70,6 +71,6 @@ def register_asset_helpers(app):
         return url_for("static", filename=filename, v=version)
 
     @app.context_processor
-    def inject_asset_helpers():
+    def inject_asset_helpers() -> dict[str, Any]:
         """Expose static asset helpers to every template render."""
         return {"static_asset": static_asset}

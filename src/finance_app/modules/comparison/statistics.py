@@ -5,7 +5,9 @@ comparison values. Callers provide already-filtered values; this module does
 not query storage or decide which transactions belong to a reporting scope.
 """
 
+from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal
+from typing import Any
 
 from finance_app.core.money import money_to_decimal, rounded_money_float
 
@@ -14,7 +16,7 @@ ROBUST_Z_SCORE_SCALE = Decimal("0.6745")
 ROBUST_ANOMALY_THRESHOLD = 3.5
 
 
-def build_descriptive_statistics(values):
+def build_descriptive_statistics(values: Iterable[Any]) -> dict[str, Any]:
     """Return descriptive statistics for a sequence of numeric values.
 
     Args:
@@ -56,7 +58,7 @@ def build_descriptive_statistics(values):
     }
 
 
-def empty_descriptive_statistics():
+def empty_descriptive_statistics() -> dict[str, Any]:
     """Return the descriptive statistics payload for an empty value set."""
     return {
         "count": 0,
@@ -73,12 +75,12 @@ def empty_descriptive_statistics():
     }
 
 
-def normalize_statistics_values(values):
+def normalize_statistics_values(values: Iterable[Any]) -> list[Decimal]:
     """Return non-null input values as Decimals for stable calculations."""
     return [money_to_decimal(value) for value in values if value is not None]
 
 
-def median_absolute_deviation(values):
+def median_absolute_deviation(values: Iterable[Any]) -> dict[str, Any]:
     """Return median absolute deviation metadata for a sequence of values."""
     normalized = sorted(normalize_statistics_values(values))
     count = len(normalized)
@@ -99,7 +101,7 @@ def median_absolute_deviation(values):
     }
 
 
-def robust_z_score(current, history):
+def robust_z_score(current: Any, history: Iterable[Any]) -> dict[str, Any]:
     """Return robust z-score metadata for a current value against history.
 
     History values define the baseline distribution. The returned z-score is a
@@ -171,7 +173,7 @@ def robust_z_score(current, history):
     )
 
 
-def robust_anomaly_score(current, history):
+def robust_anomaly_score(current: Any, history: Iterable[Any]) -> dict[str, Any]:
     """Return robust anomaly score metadata for future insight ranking."""
     result = robust_z_score(current, history)
     z_score = result["z_score"]
@@ -185,17 +187,17 @@ def robust_anomaly_score(current, history):
 
 
 def _build_robust_score_result(
-    status,
-    history_count,
-    current,
-    median,
-    mad,
+    status: str,
+    history_count: int,
+    current: Decimal | None,
+    median: Decimal | None,
+    mad: Decimal | None,
     *,
-    difference=None,
-    scale=None,
-    scale_source="none",
-    z_score=None,
-):
+    difference: Decimal | None = None,
+    scale: Decimal | None = None,
+    scale_source: str = "none",
+    z_score: Decimal | None = None,
+) -> dict[str, Any]:
     """Build the shared robust-score result payload."""
     z_score_float = float(z_score) if z_score is not None else None
     return {
@@ -213,7 +215,7 @@ def _build_robust_score_result(
     }
 
 
-def _anomaly_direction(difference):
+def _anomaly_direction(difference: Decimal | None) -> str | None:
     """Return the direction of a current value relative to its baseline."""
     if difference is None:
         return None
@@ -222,7 +224,7 @@ def _anomaly_direction(difference):
     return "high" if difference > 0 else "low"
 
 
-def percentile(sorted_values, fraction):
+def percentile(sorted_values: Sequence[Decimal], fraction: Decimal) -> Decimal:
     """Return an interpolated inclusive percentile for sorted Decimal values."""
     if len(sorted_values) == 1:
         return sorted_values[0]
@@ -236,17 +238,21 @@ def percentile(sorted_values, fraction):
     return lower_value + ((upper_value - lower_value) * weight)
 
 
-def sample_standard_deviation(values, mean):
+def sample_standard_deviation(values: Sequence[Decimal], mean: Decimal) -> Decimal | None:
     """Return sample standard deviation, or ``None`` when fewer than two values exist."""
     count = len(values)
     if count < 2:
         return None
 
-    variance = sum((value - mean) ** 2 for value in values) / (count - 1)
+    variance = sum(((value - mean) ** 2 for value in values), Decimal("0")) / (count - 1)
     return variance.sqrt()
 
 
-def build_grouped_descriptive_statistics(rows, label_key, value_key):
+def build_grouped_descriptive_statistics(
+    rows: Iterable[Mapping[str, Any]],
+    label_key: str,
+    value_key: str,
+) -> list[dict[str, Any]]:
     """Return descriptive statistics for row values grouped by a label.
 
     Args:
@@ -258,12 +264,12 @@ def build_grouped_descriptive_statistics(rows, label_key, value_key):
         A list of dictionaries with ``label`` and ``statistics`` keys, sorted by
         descending absolute total and then by label text.
     """
-    grouped_values = {}
+    grouped_values: dict[str, list[Any]] = {}
     for row in rows:
         label = str(row.get(label_key) or "n/a")
         grouped_values.setdefault(label, []).append(row.get(value_key))
 
-    grouped = [
+    grouped: list[dict[str, Any]] = [
         {
             "label": label,
             "statistics": build_descriptive_statistics(values),
@@ -272,8 +278,8 @@ def build_grouped_descriptive_statistics(rows, label_key, value_key):
     ]
     grouped.sort(
         key=lambda row: (
-            -abs(row["statistics"]["total"]),
-            row["label"].casefold(),
+            -abs(float(row["statistics"]["total"])),
+            str(row["label"]).casefold(),
         )
     )
     return grouped

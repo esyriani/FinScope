@@ -5,17 +5,20 @@ merchant normalization for exact matching. The helpers push simple ID and
 token predicates into SQL so callers do not scan every transaction row.
 """
 
+from collections.abc import Iterable
+from typing import Any
+
 from sqlalchemy import and_, false, func, or_, select
 
 from finance_app.database.tables import merchants as merchants_table
 from finance_app.modules.merchants.normalization import clean_merchant_description
 
 
-def merchant_identity_candidates(conn, merchant_key):
+def merchant_identity_candidates(conn: Any | None, merchant_key: object) -> tuple[set[int], set[str]]:
     """Return merchant IDs and description keys that may match a merchant."""
     normalized_key = clean_merchant_description(merchant_key).cleaned_key
-    merchant_ids = set()
-    description_candidates = set()
+    merchant_ids: set[int] = set()
+    description_candidates: set[str] = set()
     add_description_candidate(description_candidates, normalized_key)
 
     if conn is None or not normalized_key:
@@ -41,28 +44,32 @@ def merchant_identity_candidates(conn, merchant_key):
     return merchant_ids, description_candidates
 
 
-def merchant_description_candidates(conn, merchant_key):
+def merchant_description_candidates(conn: Any | None, merchant_key: object) -> set[str]:
     """Return normalized description keys that may match a merchant key."""
     return merchant_identity_candidates(conn, merchant_key)[1]
 
 
-def add_description_candidate(candidates, value):
+def add_description_candidate(candidates: set[str], value: object) -> None:
     """Add one cleaned description candidate when it is present."""
     cleaned = clean_merchant_description(value).cleaned_key
     if cleaned:
         candidates.add(cleaned)
 
 
-def description_matches_any_candidate(column, candidates):
+def description_matches_any_candidate(column: Any, candidates: Iterable[str]) -> Any:
     """Return a SQL predicate matching any normalized description candidate."""
-    conditions = [description_contains_candidate(column, candidate) for candidate in sorted(candidates)]
-    conditions = [condition for condition in conditions if condition is not None]
+    conditions: list[Any] = []
+    for candidate in sorted(candidates):
+        condition = description_contains_candidate(column, candidate)
+        if condition is not None:
+            conditions.append(condition)
+
     if not conditions:
         return false()
     return or_(*conditions)
 
 
-def description_contains_candidate(column, candidate):
+def description_contains_candidate(column: Any, candidate: object) -> Any | None:
     """Return a SQL predicate for candidate tokens appearing in a description.
 
     Exact merchant normalization still happens in Python. This predicate is
@@ -77,6 +84,6 @@ def description_contains_candidate(column, candidate):
     return and_(*[upper_description.like(f"%{escape_like_token(token)}%", escape="\\") for token in tokens])
 
 
-def escape_like_token(token):
+def escape_like_token(token: object) -> str:
     """Escape wildcard characters in a SQL LIKE token."""
     return str(token).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

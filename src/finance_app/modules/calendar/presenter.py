@@ -1,7 +1,9 @@
 """View-model builders for the calendar feature."""
 
 from calendar import Calendar
+from collections.abc import Iterable, Mapping
 from datetime import date
+from typing import Any
 
 from finance_app.core.money import money_to_float, rounded_money_float
 from finance_app.modules.merchants.repository import merchant_identity_from_row
@@ -10,7 +12,7 @@ from .constants import HEATMAP_OPTIONS, UNMATCHED_RECURRING_STATUSES
 from .urls import transactions_url
 
 
-def build_calendar_transactions(rows, conn=None):
+def build_calendar_transactions(rows: Iterable[Mapping[str, Any]], conn: Any = None) -> list[dict[str, Any]]:
     """Build calendar transactions."""
     transactions = []
     for row in rows:
@@ -41,9 +43,9 @@ def build_calendar_transactions(rows, conn=None):
     return transactions
 
 
-def build_calendar_days(month_start, transactions):
+def build_calendar_days(month_start: date, transactions: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Build calendar days."""
-    transaction_by_date = {}
+    transaction_by_date: dict[str, list[Mapping[str, Any]]] = {}
     for transaction in transactions:
         transaction_by_date.setdefault(transaction["date"], []).append(transaction)
 
@@ -70,7 +72,7 @@ def build_calendar_days(month_start, transactions):
     return days
 
 
-def apply_heatmap(days, metric):
+def apply_heatmap(days: list[dict[str, Any]], metric: str) -> None:
     """Apply heatmap."""
     max_values = {
         option: max(
@@ -105,7 +107,7 @@ def apply_heatmap(days, metric):
         day["heatmap_class"] = heatmap_class(metric, day["heatmap_value"])
 
 
-def heatmap_class(metric, value):
+def heatmap_class(metric: str, value: float) -> str:
     """Return class."""
     if metric == "income":
         return "calendar-heat-income"
@@ -114,7 +116,7 @@ def heatmap_class(metric, value):
     return "calendar-heat-spending"
 
 
-def heatmap_value(day, metric):
+def heatmap_value(day: Mapping[str, Any], metric: str) -> float:
     """Return value."""
     if metric == "income":
         return day["income"]
@@ -123,8 +125,13 @@ def heatmap_value(day, metric):
     return day["spending"]
 
 
-def build_calendar_summary(transactions, recurring_items):
+def build_calendar_summary(
+    transactions: Iterable[Mapping[str, Any]],
+    recurring_items: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
     """Build calendar summary."""
+    transactions = list(transactions)
+    recurring_items = list(recurring_items)
     spending = sum(item["amount"] for item in transactions if item["type"] == "spending")
     income = sum(item["amount"] for item in transactions if item["type"] == "income")
     recurring_spending = sum(item["amount"] for item in recurring_items if item["type"] == "spending")
@@ -171,13 +178,13 @@ def build_calendar_summary(transactions, recurring_items):
     }
 
 
-def recurring_amount_change_cashflow_impact(item):
+def recurring_amount_change_cashflow_impact(item: Mapping[str, Any]) -> float:
     """Build amount change cashflow impact."""
     difference = item["amount_change"]["difference"]
     return difference if item["type"] == "income" else -difference
 
 
-def build_calendar_day_json(days):
+def build_calendar_day_json(days: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Build calendar day json."""
     return {
         day["date"]: {
@@ -203,7 +210,7 @@ def build_calendar_day_json(days):
     }
 
 
-def build_recurring_activity_json(recurring_items):
+def build_recurring_activity_json(recurring_items: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Build recurring activity json."""
     return {
         item["id"]: {

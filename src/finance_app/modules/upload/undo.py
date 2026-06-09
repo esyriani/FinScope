@@ -4,6 +4,9 @@ Provides SQLAlchemy Core helpers that remove imported statement data and
 restore transactions changed by Interac enrichment. Callers manage transactions.
 """
 
+from collections.abc import Mapping
+from typing import Any
+
 from sqlalchemy import delete, func, select, update
 
 from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
@@ -17,7 +20,7 @@ from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 
 
-def statement_filename_row(conn, statement_id):
+def statement_filename_row(conn: Any, statement_id: int) -> Any:
     """Return the filename for one statement ID.
 
     Args:
@@ -34,7 +37,7 @@ def statement_filename_row(conn, statement_id):
     )
 
 
-def statement_transaction_count(conn, statement_id):
+def statement_transaction_count(conn: Any, statement_id: int) -> int:
     """Return the number of transactions imported by one statement."""
     return conn.execute(
         select(func.count().label("count"))
@@ -43,17 +46,17 @@ def statement_transaction_count(conn, statement_id):
     ).scalar_one()
 
 
-def delete_statement_transactions(conn, statement_id):
+def delete_statement_transactions(conn: Any, statement_id: int) -> None:
     """Delete all transaction rows imported by one statement."""
     conn.execute(delete(transactions_table).where(transactions_table.c.statement_id == statement_id))
 
 
-def delete_statement(conn, statement_id):
+def delete_statement(conn: Any, statement_id: int) -> None:
     """Delete one persisted statement row."""
     conn.execute(delete(statements_table).where(statements_table.c.id == statement_id))
 
 
-def restore_interac_undo_state(conn, undo_state):
+def restore_interac_undo_state(conn: Any, undo_state: Mapping[str, Any] | None) -> int:
     """Restore transactions changed by Interac enrichment."""
     changes = (undo_state or {}).get("updated_transactions") or []
     restored_count = 0
@@ -71,7 +74,7 @@ def restore_interac_undo_state(conn, undo_state):
     return restored_count
 
 
-def restore_enriched_transaction(conn, change):
+def restore_enriched_transaction(conn: Any, change: Mapping[str, Any]) -> Any:
     """Restore a transaction changed by upload enrichment."""
     values = {
         "merchant_id": change["merchant_id"],

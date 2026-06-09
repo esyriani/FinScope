@@ -3,7 +3,9 @@
 import json
 import logging
 import re
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from threading import local
+from typing import Any
 
 from finance_app.core.config import settings
 from finance_app.core.constants import (
@@ -13,7 +15,7 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_AUTOMATIC,
     UNKNOWN_CATEGORY,
 )
-from finance_app.core.money import optional_money_to_float
+from finance_app.core.money import MoneyValue, optional_money_to_float
 from finance_app.modules.categories.decision import (
     MEDIUM_CONFIDENCE_THRESHOLD,
     FinalCategoryDecision,
@@ -51,28 +53,31 @@ LLM_BATCH_SIZE = 20
 LLM_TIMEOUT_SECONDS = 60
 
 
-def clear_llm_request_status():
+def clear_llm_request_status() -> None:
     """Clear the thread-local status for the next LLM categorization request."""
     _request_context.status = {"status": "not_requested"}
 
 
-def last_llm_request_status():
+def last_llm_request_status() -> dict[str, Any]:
     """Return the last thread-local LLM request status for progress logging."""
     return dict(getattr(_request_context, "status", {"status": "not_requested"}))
 
 
-def record_llm_request_status(status, **fields):
+def record_llm_request_status(status: str, **fields: Any) -> None:
     """Record thread-local LLM request status details."""
     _request_context.status = {"status": status, **fields}
 
 
-def chunked(items, size):
+def chunked(items: Sequence[Any], size: int) -> Iterator[Sequence[Any]]:
     """Yield fixed-size chunks from a sequence."""
     for index in range(0, len(items), size):
         yield items[index : index + size]
 
 
-def pair_llm_results(unknown_items, llm_results):
+def pair_llm_results(
+    unknown_items: Sequence[MutableMapping[str, Any]],
+    llm_results: Sequence[Any],
+) -> Iterator[tuple[MutableMapping[str, Any], Any]]:
     """Pair LLM results with the transactions they describe."""
     # New prompts include request_id, but keep positional pairing as a fallback
     # so older or malformed responses can still be interpreted conservatively.
@@ -89,7 +94,7 @@ def pair_llm_results(unknown_items, llm_results):
     yield from zip(unknown_items, llm_results)
 
 
-def automatic_rule_amount_bounds(amount):
+def automatic_rule_amount_bounds(amount: MoneyValue | None) -> tuple[float | None, float | None]:
     """Return signed amount bounds for an automatically created rule.
 
     Automatic categorization deduplicates candidate transactions by merchant and
@@ -109,7 +114,12 @@ def automatic_rule_amount_bounds(amount):
     return 0, None
 
 
-def save_automatic_category_rule(conn, transaction, category, tags):
+def save_automatic_category_rule(
+    conn: Any,
+    transaction: Mapping[str, Any],
+    category: str,
+    tags: Sequence[str],
+) -> int | None:
     """Persist an accepted no-review LLM categorization as an automatic rule."""
     keyword = normalize_merchant_description(transaction.get("merchant_key") or transaction.get("description") or "")
     if not keyword:
@@ -131,7 +141,7 @@ def save_automatic_category_rule(conn, transaction, category, tags):
     )
 
 
-def automatic_rule_direction(amount):
+def automatic_rule_direction(amount: MoneyValue | None) -> str:
     """Return the signed direction constraint for an automatic LLM rule."""
     amount = optional_money_to_float(amount)
     if amount is None:
@@ -140,15 +150,15 @@ def automatic_rule_direction(amount):
 
 
 def classify_unknowns_with_llm(
-    conn,
-    transactions,
-    rules,
-    unknown_category,
-    save_automatic_rules=True,
-    request_categories=None,
-    prepare_candidate_taxonomies=None,
-    batch_size=None,
-):
+    conn: Any,
+    transactions: Sequence[MutableMapping[str, Any]],
+    rules: Sequence[Mapping[str, Any]],
+    unknown_category: str,
+    save_automatic_rules: bool = True,
+    request_categories: Any = None,
+    prepare_candidate_taxonomies: Any = None,
+    batch_size: int | None = None,
+) -> None:
     """Classify unknowns with LLM.
 
     When ``save_automatic_rules`` is false, accepted high-confidence results
@@ -162,7 +172,7 @@ def classify_unknowns_with_llm(
     request_categories = request_categories or request_llm_categories
     prepare_candidate_taxonomies = prepare_candidate_taxonomies or prepare_llm_candidate_taxonomies
     batch_size = batch_size or LLM_BATCH_SIZE
-    unknown_by_key = {}
+    unknown_by_key: dict[Any, MutableMapping[str, Any]] = {}
     # Deduplicate by merchant and amount before calling the model; equivalent
     # unknown transactions should receive the same accepted classification.
     for tx in transactions:
@@ -216,7 +226,7 @@ def classify_unknowns_with_llm(
         tag_rows,
     )
 
-    accepted = {}
+    accepted: dict[Any, dict[str, Any]] = {}
     llm_result_count = 0
 
     for unknown_chunk in chunked(unknown_items, batch_size):
@@ -255,7 +265,7 @@ def classify_unknowns_with_llm(
                 len(unknown_chunk),
             )
 
-        paired_cache_keys = set()
+        paired_cache_keys: set[Any] = set()
         for tx, result in pair_llm_results(unknown_chunk, llm_results):
             if not isinstance(result, dict):
                 logger.warning("OpenAI categorization returned a non-object result.")
@@ -319,7 +329,11 @@ def classify_unknowns_with_llm(
                     assigned_unknown=decision.assigned_unknown,
                 )
 
-            if decision.category != unknown_category and decision.confidence >= confidence_threshold:
+            if (
+                decision.category != unknown_category
+                and decision.confidence is not None
+                and decision.confidence >= confidence_threshold
+            ):
                 rule_id = (
                     save_automatic_category_rule(conn, tx, decision.category, decision.tags)
                     if save_automatic_rules and not decision.needs_review
@@ -401,14 +415,14 @@ def classify_unknowns_with_llm(
             )
 
 
-def cleanup_llm_candidate_taxonomies(unknown_items):
+def cleanup_llm_candidate_taxonomies(unknown_items: Sequence[MutableMapping[str, Any]]) -> None:
     """Remove transient compact taxonomy fields after LLM processing."""
     for tx in unknown_items:
         tx.pop("llm_candidate_categories", None)
         tx.pop("llm_candidate_tags", None)
 
 
-def filtered_llm_tags_for_validity(tags, tag_ids):
+def filtered_llm_tags_for_validity(tags: Sequence[str], tag_ids: Sequence[int]) -> dict[str, Any]:
     """Return valid taxonomy tags selected by the LLM.
 
     Candidate tags are prompt hints, not an acceptance gate. Invalid IDs are
@@ -422,13 +436,13 @@ def filtered_llm_tags_for_validity(tags, tag_ids):
 
 
 def llm_result_needs_forced_review(
-    decision,
-    category_outside_candidate_taxonomy,
-    tag_ids_outside_candidate_taxonomy,
-    invalid_tag_ids,
-    tag_ids_payload_is_valid,
-    dropped_tag_ids_outside_candidate_taxonomy,
-):
+    decision: FinalCategoryDecision,
+    category_outside_candidate_taxonomy: bool,
+    tag_ids_outside_candidate_taxonomy: Sequence[int],
+    invalid_tag_ids: Sequence[Any],
+    tag_ids_payload_is_valid: bool,
+    dropped_tag_ids_outside_candidate_taxonomy: Sequence[int],
+) -> bool:
     """Return whether malformed LLM taxonomy output should force review."""
     del category_outside_candidate_taxonomy, tag_ids_outside_candidate_taxonomy
     if decision.assigned_unknown:
@@ -442,10 +456,15 @@ def llm_result_needs_forced_review(
     )
 
 
-def llm_final_confidence(transaction, category, confidence, result):
+def llm_final_confidence(
+    transaction: Mapping[str, Any],
+    category: str,
+    confidence: object,
+    result: Mapping[str, Any],
+) -> float | None:
     """Return LLM confidence adjusted by rule and retrieval agreement."""
-    agreement_confidences = []
-    disagreement_confidences = []
+    agreement_confidences: list[float] = []
+    disagreement_confidences: list[float] = []
     rule_evidence = transaction.get("rule_evidence") or {}
     historical_evidence = transaction.get("historical_evidence") or {}
 
@@ -463,7 +482,12 @@ def llm_final_confidence(transaction, category, confidence, result):
     )
 
 
-def collect_evidence_agreement(evidence, category, agreement_confidences, disagreement_confidences):
+def collect_evidence_agreement(
+    evidence: Mapping[str, Any],
+    category: str,
+    agreement_confidences: list[float],
+    disagreement_confidences: list[float],
+) -> None:
     """Append evidence confidence to agreement or disagreement buckets."""
     evidence_category = evidence.get("category")
     evidence_confidence = clamp_llm_evidence_confidence(evidence.get("confidence"))
@@ -475,7 +499,14 @@ def collect_evidence_agreement(evidence, category, agreement_confidences, disagr
         disagreement_confidences.append(evidence_confidence)
 
 
-def apply_llm_review_policy(category, tags, confidence, unknown_category, review_threshold, verify_threshold):
+def apply_llm_review_policy(
+    category: str,
+    tags: Sequence[str],
+    confidence: object,
+    unknown_category: str,
+    review_threshold: float,
+    verify_threshold: float,
+) -> FinalCategoryDecision:
     """Return the final assignment and review state for an LLM proposal.
 
     LLM output is allowed to keep lower-confidence best-fit suggestions for
@@ -513,7 +544,11 @@ def apply_llm_review_policy(category, tags, confidence, unknown_category, review
     )
 
 
-def parse_llm_category_id(value, allowed_category_rows, unknown_category):
+def parse_llm_category_id(
+    value: object,
+    allowed_category_rows: Sequence[Mapping[str, Any]],
+    unknown_category: str,
+) -> tuple[str, int | None, bool]:
     """Return the category selected by a strict LLM category ID."""
     category_by_id = {
         str(row.get("id")): row.get("name")
@@ -528,7 +563,10 @@ def parse_llm_category_id(value, allowed_category_rows, unknown_category):
     return unknown_category, None, False
 
 
-def parse_llm_tag_ids(value, allowed_tag_rows):
+def parse_llm_tag_ids(
+    value: object,
+    allowed_tag_rows: Sequence[Mapping[str, Any]],
+) -> tuple[list[str], list[int], list[Any], bool]:
     """Return valid tag selections and invalid values from an LLM tag payload."""
     if value in (None, ""):
         return [], [], [], False
@@ -538,10 +576,10 @@ def parse_llm_tag_ids(value, allowed_tag_rows):
     tags_by_id = {
         str(row.get("id")): row.get("name") for row in allowed_tag_rows if row.get("id") is not None and row.get("name")
     }
-    names = []
-    tag_ids = []
-    invalid_tag_ids = []
-    seen = set()
+    names: list[str] = []
+    tag_ids: list[int] = []
+    invalid_tag_ids: list[Any] = []
+    seen: set[str] = set()
     for item in value:
         key = str(item).strip()
         name = tags_by_id.get(key)
@@ -556,10 +594,10 @@ def parse_llm_tag_ids(value, allowed_tag_rows):
     return names, tag_ids, invalid_tag_ids, True
 
 
-def clamp_llm_evidence_confidence(confidence):
+def clamp_llm_evidence_confidence(confidence: object) -> float | None:
     """Return evidence confidence only when it is a valid probability."""
     try:
-        value = float(confidence)
+        value = float(str(confidence))
     except (TypeError, ValueError):
         return None
     if 0 <= value <= 1:
@@ -567,7 +605,11 @@ def clamp_llm_evidence_confidence(confidence):
     return None
 
 
-def unknown_llm_result(transaction, unknown_category, failure_reason):
+def unknown_llm_result(
+    transaction: Mapping[str, Any],
+    unknown_category: str,
+    failure_reason: str,
+) -> dict[str, Any]:
     """Return an explicit unknown result for an LLM failure path."""
     decision = apply_review_policy(unknown_category, (), 0.0, unknown_category)
     return {
@@ -591,12 +633,12 @@ def unknown_llm_result(transaction, unknown_category, failure_reason):
 
 
 def llm_failure_reason(
-    category,
-    unknown_category,
-    category_id_is_valid,
-    confidence_is_valid,
-    decision,
-):
+    category: str,
+    unknown_category: str,
+    category_id_is_valid: bool,
+    confidence_is_valid: bool,
+    decision: FinalCategoryDecision,
+) -> str | None:
     """Return a compact failure reason for conservative LLM outcomes."""
     if not category_id_is_valid:
         return "invalid_category_id"
@@ -610,23 +652,23 @@ def llm_failure_reason(
 
 
 def llm_category_metadata(
-    transaction,
-    result,
-    decision,
-    llm_confidence,
-    final_confidence,
-    rule_id,
-    category_id=None,
-    tag_ids=None,
-    candidate_category_ids=None,
-    candidate_tag_ids=None,
-    category_outside_candidate_taxonomy=False,
-    tag_ids_outside_candidate_taxonomy=None,
-    dropped_invalid_tag_ids=None,
-    dropped_tag_ids_outside_candidate_taxonomy=None,
-    tag_ids_payload_is_valid=True,
-    failure_reason=None,
-):
+    transaction: Mapping[str, Any],
+    result: Mapping[str, Any],
+    decision: FinalCategoryDecision,
+    llm_confidence: float,
+    final_confidence: float | None,
+    rule_id: int | None,
+    category_id: int | None = None,
+    tag_ids: Sequence[int] | None = None,
+    candidate_category_ids: Sequence[int] | None = None,
+    candidate_tag_ids: Sequence[int] | None = None,
+    category_outside_candidate_taxonomy: bool = False,
+    tag_ids_outside_candidate_taxonomy: Sequence[int] | None = None,
+    dropped_invalid_tag_ids: Sequence[Any] | None = None,
+    dropped_tag_ids_outside_candidate_taxonomy: Sequence[int] | None = None,
+    tag_ids_payload_is_valid: bool = True,
+    failure_reason: str | None = None,
+) -> dict[str, Any]:
     """Return persisted audit metadata for an accepted LLM categorization."""
     rule_evidence = transaction.get("rule_evidence")
     historical_evidence = transaction.get("historical_evidence")
@@ -681,18 +723,18 @@ def llm_category_metadata(
 
 
 def request_llm_categories(
-    unknown_items,
-    rules,
-    category_options,
-    tag_options,
-    category_rows,
-    tag_rows,
-    openai_model,
-    verify_threshold,
-    review_threshold,
-    client_factory=None,
-    api_key=None,
-):
+    unknown_items: Sequence[Mapping[str, Any]],
+    rules: Sequence[Mapping[str, Any]],
+    category_options: Sequence[str],
+    tag_options: Sequence[str],
+    category_rows: Sequence[Mapping[str, Any]],
+    tag_rows: Sequence[Mapping[str, Any]],
+    openai_model: str,
+    verify_threshold: float,
+    review_threshold: float,
+    client_factory: Any = None,
+    api_key: str | None = None,
+) -> list[Any]:
     """Request LLM categories.
 
     Args:
@@ -807,15 +849,15 @@ def request_llm_categories(
     return results if isinstance(results, list) else []
 
 
-def parse_confidence(value):
+def parse_confidence(value: object) -> float:
     """Parse confidence."""
     try:
-        return float(value)
+        return float(str(value))
     except (TypeError, ValueError):
         return 0.0
 
 
-def parse_bool(value):
+def parse_bool(value: object) -> bool:
     """Parse bool."""
     if isinstance(value, bool):
         return value
@@ -824,14 +866,14 @@ def parse_bool(value):
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def sanitize_openai_error(exc):
+def sanitize_openai_error(exc: BaseException) -> str:
     """Sanitize openai error."""
     message = str(exc)
     message = re.sub(r"sk-[A-Za-z0-9_-]+", "sk-***", message)
     return message[:500]
 
 
-def normalize_llm_category(category, allowed_categories, unknown_category):
+def normalize_llm_category(category: object, allowed_categories: Iterable[str], unknown_category: str) -> str:
     """Normalize llm category."""
     text = str(category or "").strip()
     if text.upper() == UNKNOWN_CATEGORY:

@@ -6,9 +6,12 @@ English source text is the canonical message id.
 """
 
 import json
+from collections.abc import Iterable, Mapping
+from datetime import date
 from functools import cache
 from pathlib import Path
 from string import Formatter
+from typing import Any
 
 from flask import g, has_request_context
 
@@ -64,7 +67,7 @@ WEEKDAY_ABBREVIATIONS = (
 )
 
 
-def normalize_language(value):
+def normalize_language(value: object) -> str:
     """Return a supported language code from a user or locale value.
 
     Args:
@@ -78,57 +81,57 @@ def normalize_language(value):
     return language if language in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE
 
 
-def locale_for_language(language):
+def locale_for_language(language: object) -> str:
     """Return the browser locale associated with a supported language."""
     return LANGUAGE_LOCALES.get(normalize_language(language), DEFAULT_LOCALE)
 
 
-def current_language():
+def current_language() -> str:
     """Return the language selected for the current request, if any."""
     if has_request_context():
         return normalize_language(getattr(g, "ui_language", DEFAULT_LANGUAGE))
     return DEFAULT_LANGUAGE
 
 
-def gettext(message, **variables):
+def gettext(message: object, **variables: Any) -> str:
     """Translate a message for the current request language."""
     return translate(message, current_language(), **variables)
 
 
-def month_name(month, language=None):
+def month_name(month: object, language: object | None = None) -> str:
     """Return a localized full month name for a one-based month number."""
-    index = int(month) - 1
+    index = int(str(month)) - 1
     if index < 0 or index >= len(MONTH_NAMES):
         return ""
     return translate(MONTH_NAMES[index], language or current_language())
 
 
-def month_abbreviation(month, language=None):
+def month_abbreviation(month: object, language: object | None = None) -> str:
     """Return a localized short month label for a one-based month number."""
-    index = int(month) - 1
+    index = int(str(month)) - 1
     if index < 0 or index >= len(MONTH_ABBREVIATIONS):
         return ""
     return translate(MONTH_ABBREVIATIONS[index], language or current_language())
 
 
-def month_abbreviation_labels(language=None):
+def month_abbreviation_labels(language: object | None = None) -> list[str]:
     """Return localized short month labels for January through December."""
     active_language = language or current_language()
     return [translate(month, active_language) for month in MONTH_ABBREVIATIONS]
 
 
-def weekday_abbreviation_labels(language=None):
+def weekday_abbreviation_labels(language: object | None = None) -> list[str]:
     """Return localized weekday labels starting on Monday."""
     active_language = language or current_language()
     return [translate(day, active_language) for day in WEEKDAY_ABBREVIATIONS]
 
 
-def format_month_year(value, language=None):
+def format_month_year(value: date, language: object | None = None) -> str:
     """Return a localized month and year label for a ``date`` value."""
     return f"{month_name(value.month, language)} {value.year}".strip()
 
 
-def client_translations(language, messages):
+def client_translations(language: object, messages: Iterable[object]) -> dict[str, str]:
     """Return translated strings for JavaScript-visible messages.
 
     Args:
@@ -141,7 +144,7 @@ def client_translations(language, messages):
     return {str(message): translate(str(message), language) for message in messages}
 
 
-def translate(message, language=None, **variables):
+def translate(message: object, language: object | None = None, **variables: Any) -> str:
     """Translate and optionally format a source English message.
 
     Args:
@@ -160,7 +163,7 @@ def translate(message, language=None, **variables):
 
 
 @cache
-def _load_catalog(language):
+def _load_catalog(language: object) -> dict[str, str]:
     """Load a translation catalog from disk."""
     if normalize_language(language) == DEFAULT_LANGUAGE:
         return {}
@@ -179,7 +182,7 @@ def _load_catalog(language):
     }
 
 
-def _format_message(template, source, variables):
+def _format_message(template: str, source: str, variables: Mapping[str, Any]) -> str:
     """Safely format a translated string with named variables."""
     if not variables:
         return template
@@ -191,7 +194,7 @@ def _format_message(template, source, variables):
         return source.format(**variables)
 
 
-def _validate_format_variables(template, variables):
+def _validate_format_variables(template: str, variables: Mapping[str, Any]) -> None:
     """Reject translated placeholders that were not supplied by the caller."""
     field_names = {field_name for _, field_name, _, _ in Formatter().parse(template) if field_name}
     missing = field_names - set(variables)

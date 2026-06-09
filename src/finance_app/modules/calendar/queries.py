@@ -1,6 +1,8 @@
 """SQLAlchemy Core query helpers for the calendar feature."""
 
+from collections.abc import Iterable, Sequence
 from datetime import date
+from typing import Any
 
 from sqlalchemy import func, select
 
@@ -20,7 +22,7 @@ from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 from finance_app.modules.settings.runtime import get_float_setting, get_int_setting
 
 
-def get_recurrence_detection_settings(conn):
+def get_recurrence_detection_settings(conn: Any) -> RecurrenceDetectionSettings:
     """Return recurrence detection settings."""
     defaults = RECURRENCE_DETECTION_DEFAULTS
     return RecurrenceDetectionSettings(
@@ -55,9 +57,13 @@ def get_recurrence_detection_settings(conn):
     )
 
 
-def build_category_filter(selected_categories, selected_tags, unknown_category):
+def build_category_filter(
+    selected_categories: Sequence[str],
+    selected_tags: Sequence[str],
+    unknown_category: str,
+) -> tuple[Any, ...]:
     """Build Core category and tag filters for calendar transaction queries."""
-    conditions = []
+    conditions: list[Any] = []
     if selected_categories:
         conditions.append(func.coalesce(transactions_table.c.category, unknown_category).in_(selected_categories))
 
@@ -68,12 +74,12 @@ def build_category_filter(selected_categories, selected_tags, unknown_category):
     return tuple(conditions)
 
 
-def non_transfer_clause():
+def non_transfer_clause() -> Any:
     """Return the calendar Core filter for reportable transaction kinds."""
     return transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS)
 
 
-def transaction_row_select(unknown_category):
+def transaction_row_select(unknown_category: str) -> Any:
     """Return the shared calendar transaction projection."""
     return select(
         transactions_table.c.tx_date,
@@ -96,7 +102,13 @@ def transaction_row_select(unknown_category):
     )
 
 
-def fetch_month_transactions(conn, month_start, month_end, unknown_category, category_filter):
+def fetch_month_transactions(
+    conn: Any,
+    month_start: date,
+    month_end: date,
+    unknown_category: str,
+    category_filter: Iterable[Any],
+) -> Any:
     """Fetch month transactions."""
     return (
         conn.execute(
@@ -115,7 +127,7 @@ def fetch_month_transactions(conn, month_start, month_end, unknown_category, cat
     )
 
 
-def fetch_recurring_source_rows(conn, unknown_category, category_filter):
+def fetch_recurring_source_rows(conn: Any, unknown_category: str, category_filter: Iterable[Any]) -> Any:
     """Fetch recurring source rows."""
     recurring_start = shift_months(date.today(), -18)
     return (

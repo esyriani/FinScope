@@ -2,6 +2,7 @@
 
 import hmac
 import secrets
+from typing import Any
 
 from flask import abort, jsonify, request, session
 
@@ -11,7 +12,7 @@ CSRF_HEADER_NAME = "X-CSRF-Token"
 CSRF_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
-def csrf_token():
+def csrf_token() -> str:
     """Return token."""
     token = session.get(CSRF_SESSION_KEY)
     if not token:
@@ -20,7 +21,7 @@ def csrf_token():
     return token
 
 
-def validate_csrf():
+def validate_csrf() -> bool:
     """Validate csrf."""
     expected = session.get(CSRF_SESSION_KEY)
     submitted = request.headers.get(CSRF_HEADER_NAME)
@@ -31,17 +32,17 @@ def validate_csrf():
     return bool(expected and submitted and hmac.compare_digest(str(expected), str(submitted)))
 
 
-def register_csrf(app):
+def register_csrf(app: Any) -> None:
     """Register csrf."""
     app.jinja_env.globals[CSRF_FIELD_NAME] = csrf_token
 
     @app.context_processor
-    def inject_csrf_token():
+    def inject_csrf_token() -> dict[str, Any]:
         """Handle inject CSRF token."""
         return {CSRF_FIELD_NAME: csrf_token}
 
     @app.before_request
-    def protect_mutating_requests():
+    def protect_mutating_requests() -> Any:
         """Handle protect mutating requests."""
         if request.method not in CSRF_METHODS:
             return None

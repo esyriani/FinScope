@@ -1,8 +1,10 @@
 """In-memory background job runner and undo orchestration."""
 
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from threading import Lock, local
+from typing import Any
 from uuid import uuid4
 
 MAIN_JOB_QUEUE = "main"
@@ -13,10 +15,10 @@ MAX_PROGRESS_LOG_ENTRIES = 120
 
 _executor = ThreadPoolExecutor(max_workers=MAX_BACKGROUND_WORKERS)
 _ai_executor = ThreadPoolExecutor(max_workers=MAX_BACKGROUND_WORKERS)
-_jobs = {}
+_jobs: dict[str, dict[str, Any]] = {}
 _job_sequence = 0
 _lock = Lock()
-_job_context = local()
+_job_context: Any = local()
 
 
 FINISHED_STATUSES = {"completed", "failed", "cancelled"}
@@ -29,22 +31,22 @@ class JobCancelled(RuntimeError):
 
 
 def submit_background_job(
-    label,
-    func,
-    *args,
-    undo_handler=None,
-    undo_args=None,
-    undo_kwargs=None,
-    queue=MAIN_JOB_QUEUE,
-    **kwargs,
-):
+    label: str,
+    func: Callable[..., Any],
+    *args: Any,
+    undo_handler: Callable[..., Any] | None = None,
+    undo_args: tuple[Any, ...] | None = None,
+    undo_kwargs: Mapping[str, Any] | None = None,
+    queue: object = MAIN_JOB_QUEUE,
+    **kwargs: Any,
+) -> str:
     """Queue a background job and return its public identifier."""
     global _job_sequence
 
     queue = normalize_job_queue(queue)
     job_id = uuid4().hex
     now = utc_now()
-    job = {
+    job: dict[str, Any] = {
         "id": job_id,
         "label": label,
         "queue": queue,
@@ -81,7 +83,7 @@ def submit_background_job(
     return job_id
 
 
-def run_job(job_id, func, args, kwargs):
+def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> None:
     """Execute a queued job and record its terminal state."""
     if is_job_cancel_requested(job_id):
         result = "Job cancelled before it started."
@@ -130,7 +132,7 @@ def run_job(job_id, func, args, kwargs):
     update_job(job_id, status="completed", result=result, finished_at=utc_now())
 
 
-def update_job(job_id, **changes):
+def update_job(job_id: str, **changes: Any) -> None:
     """Apply state changes to a tracked job."""
     with _lock:
         job = _jobs.get(job_id)
@@ -139,12 +141,12 @@ def update_job(job_id, **changes):
 
 
 def update_background_job_progress(
-    current=None,
-    total=None,
-    message=None,
-    params=None,
-    job_id=None,
-):
+    current: object | None = None,
+    total: object | None = None,
+    message: object | None = None,
+    params: Mapping[str, Any] | None = None,
+    job_id: str | None = None,
+) -> dict[str, Any] | None:
     """Update progress details for a running background job.
 
     Args:
@@ -167,9 +169,9 @@ def update_background_job_progress(
             return None
 
         if current is not None:
-            job["progress_current"] = max(0, int(current))
+            job["progress_current"] = max(0, int(str(current)))
         if total is not None:
-            job["progress_total"] = max(0, int(total))
+            job["progress_total"] = max(0, int(str(total)))
         if message is not None:
             job["progress_message"] = str(message)
         if params is not None:
@@ -182,7 +184,12 @@ def update_background_job_progress(
         return public_job(job)
 
 
-def append_background_job_log(message, params=None, level="info", job_id=None):
+def append_background_job_log(
+    message: object,
+    params: Mapping[str, Any] | None = None,
+    level: object = "info",
+    job_id: str | None = None,
+) -> dict[str, Any] | None:
     """Append a timestamped progress log entry to a tracked background job.
 
     Args:
@@ -207,7 +214,12 @@ def append_background_job_log(message, params=None, level="info", job_id=None):
         return public_job(job)
 
 
-def append_job_log_entry(job, message, params=None, level="info"):
+def append_job_log_entry(
+    job: dict[str, Any],
+    message: object,
+    params: Mapping[str, Any] | None = None,
+    level: object = "info",
+) -> None:
     """Append a bounded log entry to a job dictionary already under lock."""
     entries = job.setdefault("progress_log", [])
     entries.append(
@@ -222,26 +234,26 @@ def append_job_log_entry(job, message, params=None, level="info"):
         del entries[: len(entries) - MAX_PROGRESS_LOG_ENTRIES]
 
 
-def normalize_log_level(level):
+def normalize_log_level(level: object) -> str:
     """Return a supported progress log severity."""
     text = str(level or "info").strip().lower()
     return text if text in {"info", "warning", "error"} else "info"
 
 
-def progress_percent(current, total):
+def progress_percent(current: object, total: object) -> int | None:
     """Return a bounded integer percent for known progress values."""
     if total in (None, ""):
         return None
 
-    total = int(total)
-    if total <= 0:
+    parsed_total = int(str(total))
+    if parsed_total <= 0:
         return 100
 
-    current = min(max(0, int(current or 0)), total)
-    return int(round((current / total) * 100))
+    parsed_current = min(max(0, int(str(current or 0))), parsed_total)
+    return int(round((parsed_current / parsed_total) * 100))
 
 
-def cancel_background_job(job_id):
+def cancel_background_job(job_id: str) -> dict[str, Any] | None:
     """Request cancellation for a queued or running job."""
     with _lock:
         job = _jobs.get(job_id)
@@ -269,7 +281,7 @@ def cancel_background_job(job_id):
         return public_job(job)
 
 
-def cancel_queued_background_jobs(queue=None):
+def cancel_queued_background_jobs(queue: object | None = None) -> int:
     """Cancel queued jobs, optionally limited to one queue, and return a count."""
     queue = normalize_job_queue(queue) if queue is not None else None
     with _lock:
@@ -287,14 +299,14 @@ def cancel_queued_background_jobs(queue=None):
     return cancelled_count
 
 
-def get_background_job(job_id):
+def get_background_job(job_id: str) -> dict[str, Any] | None:
     """Return a public snapshot of one background job."""
     with _lock:
         job = _jobs.get(job_id)
         return public_job(job) if job else None
 
 
-def list_background_jobs(limit=50, offset=0):
+def list_background_jobs(limit: int | None = 50, offset: int = 0) -> list[dict[str, Any]]:
     """List public job snapshots in newest-first order."""
     with _lock:
         jobs = list(_jobs.values())
@@ -310,13 +322,13 @@ def list_background_jobs(limit=50, offset=0):
     return jobs[offset : offset + limit]
 
 
-def count_background_jobs():
+def count_background_jobs() -> int:
     """Count tracked background jobs."""
     with _lock:
         return len(_jobs)
 
 
-def undo_background_job(job_id):
+def undo_background_job(job_id: str) -> dict[str, Any] | None:
     """Run the undo handler for a completed job when available."""
     with _lock:
         job = _jobs.get(job_id)
@@ -361,7 +373,7 @@ def undo_background_job(job_id):
     return get_background_job(job_id)
 
 
-def public_job(job):
+def public_job(job: Mapping[str, Any]) -> dict[str, Any]:
     """Build the job representation exposed to controllers."""
     public = {key: value for key, value in dict(job).items() if not key.startswith("_")}
     public["can_undo"] = (
@@ -381,12 +393,12 @@ def public_job(job):
     return public
 
 
-def current_job_id():
+def current_job_id() -> str | None:
     """Return the identifier of the job executing on this worker thread."""
     return getattr(_job_context, "job_id", None)
 
 
-def is_job_cancel_requested(job_id=None):
+def is_job_cancel_requested(job_id: str | None = None) -> bool:
     """Return whether the current or named job has a pending cancel request."""
     job_id = job_id or current_job_id()
     if not job_id:
@@ -397,18 +409,18 @@ def is_job_cancel_requested(job_id=None):
         return bool(job and job.get("cancel_requested"))
 
 
-def raise_if_cancel_requested(message="Job cancelled."):
+def raise_if_cancel_requested(message: str = "Job cancelled.") -> None:
     """Raise ``JobCancelled`` when the current job should stop cooperatively."""
     if is_job_cancel_requested():
         raise JobCancelled(message)
 
 
-def executor_for_queue(queue):
+def executor_for_queue(queue: object) -> ThreadPoolExecutor:
     """Return the executor assigned to a normalized queue name."""
     return _ai_executor if queue == AI_JOB_QUEUE else _executor
 
 
-def normalize_job_queue(queue):
+def normalize_job_queue(queue: object) -> str:
     """Return a supported queue name for new background work."""
     text = str(queue or MAIN_JOB_QUEUE).strip().lower()
     if text not in JOB_QUEUES:
@@ -416,6 +428,6 @@ def normalize_job_queue(queue):
     return text
 
 
-def utc_now():
+def utc_now() -> str:
     """Return the current UTC timestamp for job metadata."""
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")

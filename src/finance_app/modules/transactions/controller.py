@@ -1,6 +1,7 @@
 """Flask routes for the transactions feature."""
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask.typing import ResponseReturnValue
 
 from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
@@ -27,7 +28,7 @@ transactions_bp = Blueprint("transactions", __name__)
 
 
 @transactions_bp.route("/transactions")
-def transactions():
+def transactions() -> str:
     """Render the transactions page."""
     context = transactions_service.build_transactions_context(request.args)
     context["transaction_ai_result"] = session.pop("transaction_ai_result", None)
@@ -36,7 +37,7 @@ def transactions():
 
 @transactions_bp.route("/transactions/<int:transaction_id>/category", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def update_transaction_category(transaction_id):
+def update_transaction_category(transaction_id: int) -> ResponseReturnValue:
     """Apply a manual category update to one transaction."""
     next_url = transactions_redirect_target()
     with db_core_transaction() as conn:
@@ -112,7 +113,7 @@ def update_transaction_category(transaction_id):
 
 @transactions_bp.route("/transactions/<int:transaction_id>/verify", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def verify_transaction(transaction_id):
+def verify_transaction(transaction_id: int) -> ResponseReturnValue:
     """Mark one transaction as manually verified."""
     next_url = transactions_redirect_target()
     with db_core_transaction() as conn:
@@ -124,7 +125,7 @@ def verify_transaction(transaction_id):
 
 @transactions_bp.route("/transactions/<int:transaction_id>/ignored", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def update_transaction_ignored(transaction_id):
+def update_transaction_ignored(transaction_id: int) -> ResponseReturnValue:
     """Update the ignored flag for one transaction."""
     next_url = transactions_redirect_target()
     ignored = 1 if request.form.get("ignored") == "1" else 0
@@ -140,7 +141,7 @@ def update_transaction_ignored(transaction_id):
 
 @transactions_bp.route("/transactions/batch", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def batch_transactions():
+def batch_transactions() -> ResponseReturnValue:
     """Apply one batch action to explicitly selected transaction IDs."""
     next_url = transactions_redirect_target()
     transaction_ids = request.form.getlist("transaction_ids")
@@ -188,7 +189,7 @@ def batch_transactions():
 @transactions_bp.route("/transactions/<int:transaction_id>/run-ai", methods=["POST"])
 @transactions_bp.route("/transactions/<int:transaction_id>/suggest-category", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def suggest_transaction_category(transaction_id):
+def suggest_transaction_category(transaction_id: int) -> ResponseReturnValue:
     """Preview an AI category suggestion for one transaction.
 
     The route stores the signed-session suggestion for an explicit follow-up
@@ -213,7 +214,7 @@ def suggest_transaction_category(transaction_id):
 
 @transactions_bp.route("/transactions/<int:transaction_id>/ai-suggestion", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def apply_transaction_ai_suggestion(transaction_id):
+def apply_transaction_ai_suggestion(transaction_id: int) -> ResponseReturnValue:
     """Apply a pending AI suggestion and optionally save a category rule."""
     next_url = transactions_redirect_target()
     action = request.form.get(

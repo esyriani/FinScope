@@ -30,7 +30,7 @@ function setupFlatpickrInputs(root = document) {
             altInputClass: flatpickrAltInputClass(input),
             dateFormat: "Y-m-d",
             disableMobile: true,
-            position: "auto center"
+            position: "auto center",
         });
     });
 
@@ -42,7 +42,7 @@ function setupFlatpickrInputs(root = document) {
             monthPlugins.push(
                 new monthSelectPlugin({
                     altFormat: "F Y",
-                    dateFormat: "Y-m"
+                    dateFormat: "Y-m",
                 })
             );
         }
@@ -56,7 +56,7 @@ function setupFlatpickrInputs(root = document) {
             disableMobile: true,
             onChange: () => submitFlatpickrForm(input),
             plugins: monthPlugins,
-            position: "auto center"
+            position: "auto center",
         });
     });
 }

@@ -4,6 +4,9 @@ Formats read-only audit analysis from the rules audit service for Flask/Jinja
 templates. The presenter does not mutate rules or transactions.
 """
 
+from collections.abc import Mapping
+from typing import Any
+
 from finance_app.core.config import settings
 from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.rules.audit import (
@@ -87,7 +90,11 @@ PREVIEW_ACTION_LABELS = {
 }
 
 
-def build_rule_audit_context(conn, args=None, transaction_limit=None):
+def build_rule_audit_context(
+    conn: Any,
+    args: Any = None,
+    transaction_limit: int | None = None,
+) -> dict[str, Any]:
     """Return template context for the main Rule Audit page.
 
     Args:
@@ -218,7 +225,13 @@ def build_rule_audit_context(conn, args=None, transaction_limit=None):
     }
 
 
-def build_rule_overlap_detail_context(conn, rule_a_id, rule_b_id, args=None, transaction_limit=None):
+def build_rule_overlap_detail_context(
+    conn: Any,
+    rule_a_id: int,
+    rule_b_id: int,
+    args: Any = None,
+    transaction_limit: int | None = None,
+) -> dict[str, Any] | None:
     """Return template context for a shared matching transactions detail page."""
     args = args or {}
     page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
@@ -268,7 +281,7 @@ def build_rule_overlap_detail_context(conn, rule_a_id, rule_b_id, args=None, tra
     }
 
 
-def build_rule_detail_context(conn, rule_id, transaction_limit=None):
+def build_rule_detail_context(conn: Any, rule_id: int, transaction_limit: int | None = None) -> dict[str, Any] | None:
     """Return template context for one rule's read-only audit detail page."""
     page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
     audit_data = compute_rule_match_sets(conn, transaction_limit=transaction_limit)
@@ -346,7 +359,13 @@ def build_rule_detail_context(conn, rule_id, transaction_limit=None):
     }
 
 
-def build_rule_change_preview_context(conn, action, rule_id, proposed_rule=None, transaction_limit=None):
+def build_rule_change_preview_context(
+    conn: Any,
+    action: str,
+    rule_id: int | None,
+    proposed_rule: Mapping[str, Any] | None = None,
+    transaction_limit: int | None = None,
+) -> dict[str, Any] | None:
     """Return template context for a read-only rule change impact preview."""
     preview = preview_rule_change(
         conn,
@@ -378,7 +397,13 @@ def build_rule_change_preview_context(conn, action, rule_id, proposed_rule=None,
     }
 
 
-def build_rule_import_preview_context(conn, raw_text, mode, filename, transaction_limit=None):
+def build_rule_import_preview_context(
+    conn: Any,
+    raw_text: str,
+    mode: str,
+    filename: str,
+    transaction_limit: int | None = None,
+) -> dict[str, Any]:
     """Return template context for a read-only rule import preview.
 
     Args:
