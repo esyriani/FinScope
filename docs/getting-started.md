@@ -58,13 +58,15 @@ cp src/finance_app/config.example.ini src/finance_app/config.ini
 
 </details>
 
-Open `http://127.0.0.1:5000` in a browser. FinScope uses the repository-level `runtime/finescope.db` SQLite database by default unless `FINANCE_DATABASE_URL`, `FINANCE_DB_PATH`, or `src/finance_app/config.ini` selects another database.
+Modify `config.ini` according to your settings, including `database`, `server`, `categorization_model`, and `openai_api_key`.
+
+If `config.ini` is left as default, open `http://127.0.0.1:5000` in a browser. FinScope uses the repository-level `runtime/finescope.db` SQLite database by default unless `FINANCE_DATABASE_URL`, `FINANCE_DB_PATH`, or `src/finance_app/config.ini` selects another database.
 
 ## Create the owner account
 
 On an empty database, FinScope redirects application pages to `/auth/bootstrap`. Create the first owner username and password there. The owner can later create editor and viewer users from Users.
 
-<strong style="color: red;">Screenshot placeholder: Show the owner bootstrap page with username, display name, password, and create-owner action visible.</strong>
+![Owner bootstrap](img/owner-bootstrap.png)
 
 See [Authentication and authorization](authentication.md) for role permissions, password handling, and deployment notes.
 
@@ -81,9 +83,9 @@ Go to Upload and import one ordinary checking, savings, or credit card statement
 7. If slash dates are ambiguous, choose `MM/DD/YYYY` or `DD/MM/YYYY`.
 8. Confirm the import and watch progress on Jobs if a background job is queued.
 
-<strong style="color: red;">Screenshot placeholder: Show the Upload page with account, statement type, file chooser, and preview action visible.</strong>
+![Statements](img/statements.png)
 
-<strong style="color: red;">Screenshot placeholder: Show the Confirm statement import modal with row counts, date range, date format choice, and parsed transaction preview visible.</strong>
+![Confirm import](img/confirm-import.png)
 
 Interac e-Transfer history is enrichment-only. Import the matching checking statement first, then import the Interac history for the same account so FinScope can enrich existing generic transfer rows instead of adding duplicate ledger rows.
 
@@ -97,7 +99,7 @@ After the first import, open Review. FinScope groups active transactions that ne
 4. Choose the category and optional tags.
 5. Save a reusable rule only when the same pattern should apply in future imports.
 
-<strong style="color: red;">Screenshot placeholder: Show the Review page grouped by merchant with summary cards, examples, and Review group action visible.</strong>
+![Review](img/review.png)
 
 ## Create your first rule
 
@@ -109,7 +111,8 @@ Rules can be created directly from Rules or while reviewing/editing a transactio
 4. Review the preview.
 5. Confirm creation only if the preview matches the intended transactions.
 
-<strong style="color: red;">Screenshot placeholder: Show the New rule modal with keyword, category, tags, amount bounds, and preview panel visible.</strong>
+
+![Create rule](img/new-rule.png)
 
 Rules created from the Rules page are keyword-fuzzy by default. Rules saved while editing a transaction can be merchant-bound when the transaction has a durable merchant identity.
 
@@ -117,11 +120,11 @@ Rules created from the Rules page are keyword-fuzzy by default. Rules saved whil
 
 Open Dashboard after the first import to inspect categorization completeness, spending, income, net cash flow, savings rate, spending breakdowns, monthly cash flow, and merchant analytics.
 
-<strong style="color: red;">Screenshot placeholder: Show the Dashboard page with categorization completeness, cash-flow metrics, and spending breakdown visible.</strong>
+![Dashboard analytics](img/dashboard-analytics.png)
 
 Open Comparison after you have more than one useful period of data. Period changes compare the selected current period with a matching prior period. Year trends are more useful once multiple calendar years or enough months exist.
 
-<strong style="color: red;">Screenshot placeholder: Show the Comparison page with Period changes and Year trends tabs visible.</strong>
+![Comparison analytics](img/comparison-analytics.png)
 
 ## Next reads
 
