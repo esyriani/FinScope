@@ -224,4 +224,57 @@ def test_recurring_activity_context_exposes_json_payload(app, core_conn, monkeyp
     assert payload["patternKey"] == "NETFLIX::spending"
     assert payload["merchant"] == "NETFLIX"
     assert payload["status"] == "occurred"
-    assert payload["occurrences"][0]["date"] == "2026-05-05"
+    assert payload["matchDetails"]["matched_date"] == "2026-05-05"
+    assert payload["occurrences"][0]["date"] == "2026-04-05"
+
+
+def test_recurring_activity_context_trains_on_prior_months_only(app, core_conn, monkeypatch):
+    """Verify selected-month merchant activity does not create recurrence history."""
+    account_id = core_conn.execute(text("""
+        INSERT INTO accounts (name)
+        VALUES ('Visa')
+        """)).lastrowid
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            account_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            transaction_kind,
+            fingerprint
+        )
+        VALUES (:account_id, :tx_date, :description, :amount, 'Food', 'expense', :fingerprint)
+        """),
+        [
+            {
+                "account_id": account_id,
+                "tx_date": "2026-01-05",
+                "description": "Noisy Store",
+                "amount": 42.00,
+                "fingerprint": "calendar-noisy-store-jan",
+            },
+            {
+                "account_id": account_id,
+                "tx_date": "2026-03-05",
+                "description": "Noisy Store",
+                "amount": 43.00,
+                "fingerprint": "calendar-noisy-store-mar",
+            },
+            {
+                "account_id": account_id,
+                "tx_date": "2026-05-05",
+                "description": "Noisy Store",
+                "amount": 44.00,
+                "fingerprint": "calendar-noisy-store-may",
+            },
+        ],
+    )
+    core_conn.commit()
+    patch_calendar_today(monkeypatch)
+
+    with app.test_request_context("/calendar"):
+        context = calendar_service.build_recurring_activity_context(real_date(2026, 5, 1), ["Food"])
+
+    assert [item["merchant"] for item in context["recurring_items"]] == []

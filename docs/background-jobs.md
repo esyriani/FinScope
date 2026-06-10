@@ -33,9 +33,11 @@ finishes.
 
 ## AI categorization controls
 
-Automatic AI categorization after imports is off by default. Owners can turn it
-on or off from Settings. Turning it off does not disable manual categorization;
-it only stops statement imports from queueing AI follow-up work automatically.
+Automatic AI categorization after imports is controlled by Settings >
+Categorization > Confirm token usage. The confirmation step is on by default,
+so imports report remaining unknown rows and wait for a manual AI run. When an
+owner turns confirmation off, statement imports automatically queue AI
+follow-up work for those remaining unknown rows.
 
 Use Jobs to queue AI categorization for all active unknown transactions or to
 clear queued AI jobs. Use Upload > Uploaded statements to queue AI

@@ -54,7 +54,14 @@ def test_classify_recurring_match_statuses_by_date_amount_and_missing_cycles():
         recurrence_settings,
     )
     likely = classify_recurring_match(
-        [candidate("2026-05-25", 100.0)],
+        [candidate("2026-05-09", 100.0)],
+        expected_date,
+        100.0,
+        date(2026, 5, 20),
+        recurrence_settings,
+    )
+    far_same_merchant = classify_recurring_match(
+        [candidate("2026-05-05", 100.0)],
         expected_date,
         100.0,
         date(2026, 5, 20),
@@ -94,6 +101,10 @@ def test_classify_recurring_match_statuses_by_date_amount_and_missing_cycles():
     assert amount_changed["status"] == "amount_changed"
     assert amount_changed["amount_difference"] == 30.0
     assert likely["status"] == "likely_occurred"
+    assert likely["date_difference_days"] == -6
+    assert likely["likely_date_tolerance_days"] == 6
+    assert far_same_merchant["status"] == "overdue"
+    assert far_same_merchant["matched_date"] is None
     assert expected["status"] == "expected"
     assert overdue["status"] == "overdue"
     assert inactive["status"] == "possibly_inactive"

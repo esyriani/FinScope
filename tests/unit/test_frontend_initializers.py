@@ -33,6 +33,15 @@ def test_ajax_refresh_uses_initializer_registry():
     assert "window.setupTableExports" not in ajax_actions
 
 
+def test_busy_overlay_ignores_prevented_submits():
+    """Verify custom AJAX submit handlers do not leave navigation overlay tokens open."""
+    busy_overlay = read_script("busy-overlay.js")
+
+    submit_listener = busy_overlay.split('document.addEventListener("submit"', 1)[1]
+
+    assert "event.defaultPrevented" in submit_listener.split("showBusyOverlayForElement", 1)[0]
+
+
 def test_static_scripts_do_not_export_setup_globals():
     """Verify page setup hooks register with financeApp instead of window.setup names."""
     core = read_script("core.js")
@@ -99,6 +108,50 @@ def test_comparison_insight_carousel_uses_responsive_three_card_grid():
     assert "@media (max-width: 1100px)" in comparison_css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in comparison_css
     assert "grid-template-columns: 1fr;" in comparison_css
+
+
+def test_tag_multiselect_summarizes_preset_selection():
+    """Verify preset category selections render as one compact summary tag."""
+    tag_multiselect_js = read_script("tag-multiselect.js")
+
+    assert "selectPresetSummaryLabel" in tag_multiselect_js
+    assert "selectionMatchesPreset(multiselect)" in tag_multiselect_js
+    assert "renderedTag(presetSummaryLabel" in tag_multiselect_js
+    assert "setPresetOptions(multiselect, false)" in tag_multiselect_js
+
+
+def test_scrollable_modals_fit_content_height():
+    """Verify scrollable Bootstrap modals do not stretch to full-page height."""
+    base_css = read_style("base.css")
+
+    assert ".modal-dialog-scrollable" in base_css
+    assert "height: auto;" in base_css.split(".modal-dialog-scrollable", 1)[1].split("}", 1)[0]
+    assert "overflow-y: auto;" in base_css.split(".modal-body", 1)[1].split("}", 1)[0]
+
+
+def test_dashboard_wide_cards_span_medium_width_grid():
+    """Verify wide dashboard panels keep spanning both columns below desktop widths."""
+    dashboard_template = (TEMPLATES / "dashboard.html").read_text(encoding="utf-8")
+    home_dashboard_css = read_style("home-dashboard.css")
+    responsive_css = read_style("responsive.css")
+    medium_breakpoint = responsive_css.split("@media (max-width: 1100px)", 1)[1].split(
+        "@media",
+        1,
+    )[0]
+    medium_dashboard_wide_rule = re.search(
+        r"\.dashboard-wide\s*\{(?P<body>[^}]*)\}",
+        medium_breakpoint,
+    )
+
+    assert '<section class="card dashboard-wide">' in dashboard_template
+    assert (
+        "grid-column: 1 / -1;"
+        in home_dashboard_css.split(".dashboard-wide", 1)[1].split(
+            "}",
+            1,
+        )[0]
+    )
+    assert not medium_dashboard_wide_rule or "grid-column: auto;" not in medium_dashboard_wide_rule.group("body")
 
 
 def test_dynamic_user_rows_avoid_inner_html_builders():

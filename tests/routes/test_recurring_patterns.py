@@ -222,6 +222,8 @@ def test_recurring_calendar_template_places_amount_on_its_own_chip_line():
     body = (PROJECT_ROOT / "src" / "finance_app" / "templates" / "_recurring_calendar.html").read_text(encoding="utf-8")
 
     assert "recurring-calendar-chip-amount" in body
+    assert "<strong>{{ item.merchant_label }}</strong>" in body
+    assert 'title="{{ _(item.status_label) }} - {{ item.merchant }} - {{ item.amount_label }}"' in body
 
 
 def test_recurring_detail_modal_exposes_decision_summary_hooks(client):
@@ -295,6 +297,21 @@ def test_recurring_calendar_days_prioritize_dense_day_attention_items():
     assert day["all_recurring_items"][0]["category"] == "Utilities"
     assert day["all_recurring_items"][0]["user_status"] == "detected"
     assert day["all_recurring_items"][0]["active"] == 1
+
+
+def test_recurring_calendar_days_truncate_long_chip_merchants():
+    """Verify calendar chip labels stay compact while full merchant details remain available."""
+    merchant = "COSTCO WHOLESALE W527 MONTREAL"
+    days = build_recurring_calendar_days(
+        date(2026, 5, 1),
+        [recurring_calendar_item("expected", merchant)],
+    )
+    chip = next(item for item in days if item["date"] == "2026-05-10")["recurring_items"][0]
+
+    assert chip["merchant"] == merchant
+    assert chip["merchant_label"] == "COSTCO WHOLESALE W52..."
+    assert len(chip["merchant_label"]) == 23
+    assert merchant in chip["aria_label"]
 
 
 def test_recurring_activity_json_exposes_detail_modal_status_context():

@@ -230,7 +230,7 @@ function setupRecurringActivityDetailModal() {
         const amountTolerance = detailValue(details, "amount_tolerance", "amountTolerance");
         if (!matchedDate) {
             return financeTranslate(
-                "No current-month merchant and direction match was found. Expected date uses a +/-{days} day tolerance.",
+                "No current-month merchant and direction match was found near the expected date. Expected date uses a +/-{days} day tolerance.",
                 { days: dateToleranceDays }
             );
         }

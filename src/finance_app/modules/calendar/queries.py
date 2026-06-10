@@ -127,9 +127,14 @@ def fetch_month_transactions(
     )
 
 
-def fetch_recurring_source_rows(conn: Any, unknown_category: str, category_filter: Iterable[Any]) -> Any:
-    """Fetch recurring source rows."""
-    recurring_start = shift_months(date.today(), -18)
+def fetch_recurring_source_rows(
+    conn: Any,
+    month_start: date,
+    unknown_category: str,
+    category_filter: Iterable[Any],
+) -> Any:
+    """Fetch historical rows used to infer recurring activity."""
+    recurring_start = shift_months(month_start, -18)
     return (
         conn.execute(
             transaction_row_select(unknown_category)
@@ -137,6 +142,7 @@ def fetch_recurring_source_rows(conn: Any, unknown_category: str, category_filte
                 transactions_table.c.ignored == 0,
                 non_transfer_clause(),
                 transactions_table.c.tx_date >= recurring_start,
+                transactions_table.c.tx_date < month_start,
                 *category_filter,
             )
             .order_by(transactions_table.c.tx_date)

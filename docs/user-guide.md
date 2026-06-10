@@ -74,6 +74,8 @@ Recurring detects repeated spending and income patterns.
 
 It provides list and calendar views, category and tag filters, confidence filtering, status filtering, month navigation, and summary metrics for needs-attention items, monthly recurring spending, recurring income, expected soon, occurred, overdue, and possibly inactive patterns.
 
+Detection is inferred from historical transactions before the selected month. Transactions in the selected month are used as evidence only when they are near the expected date and within the configured amount tolerance.
+
 Users with recurring-edit permission can confirm a pattern, ignore a pattern, or edit frequency, expected date, typical amount, tolerances, and active state from the detail modal.
 
 ## Jobs
@@ -86,11 +88,11 @@ AI categorization uses a separate queue from the main import/rule/review queue. 
 
 ## Settings
 
-Settings stores user-bound runtime preferences.
+Settings stores database-backed runtime preferences.
 
-All authenticated users can edit General settings such as theme mode, interface language, and personal table/display limits. Owners can also edit advanced categorization settings, recurrence detection defaults, and statement import type mappings.
+All authenticated users can edit General settings for their own account, including theme mode, interface language, and personal table/display limits. Owners can also edit shared advanced settings for categorization, recurrence detection, and statement import type mappings.
 
-See [Authentication and authorization](authentication.md) for role-specific settings permissions.
+See [Settings reference](settings.md) for every configurable setting and [Authentication and authorization](authentication.md) for role-specific settings permissions.
 
 ## Taxonomy
 
@@ -104,7 +106,7 @@ The seed file [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml) is
 
 AI categorization is optional and requires `OPENAI_API_KEY` or `api_keys.openai_api_key`.
 
-Manual AI reruns are available from Jobs and Uploaded statements after FinScope shows a token estimate. Owners can turn the token-confirmation step on or off from Settings > Categorization. The single-transaction Suggest category action can also be shown or hidden from Settings when configured.
+By default, FinScope asks for token-estimate confirmation before queued AI categorization. Owners can turn that confirmation step off from Settings > Categorization; when it is off, statement imports automatically queue AI categorization for remaining unknown rows. Manual AI reruns remain available from Jobs and Uploaded statements. The single-transaction Suggest category action can also be shown or hidden from Settings when configured.
 
 LLM prompts are privacy-minimized. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples to external providers.
 

@@ -717,6 +717,11 @@ h2 {
     max-height: calc(100dvh - 1rem);
 }
 
+.modal-dialog-scrollable {
+    height: auto;
+    min-height: 0;
+}
+
 .modal-dialog-fit-content {
     height: auto;
 }

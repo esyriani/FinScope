@@ -287,6 +287,7 @@ def classify_recurring_match(
         "matched_date": None,
         "matched_amount": None,
         "date_tolerance_days": recurrence_settings.date_tolerance_days,
+        "likely_date_tolerance_days": likely_recurring_date_tolerance_days(recurrence_settings),
         "amount_tolerance": rounded_money_float(amount_tolerance),
         "missed_cycles_before_inactive": recurrence_settings.missed_cycles_before_inactive,
         "missed_cycles": None,
@@ -294,28 +295,20 @@ def classify_recurring_match(
     }
 
     if not candidates:
-        overdue_after = expected_date + timedelta(days=recurrence_settings.date_tolerance_days)
-        inactive_details = possible_inactive_details(
+        return missing_recurring_match(
+            base_match,
             expected_date,
             evaluation_date,
+            recurrence_settings,
             last_seen,
             frequency,
-            recurrence_settings,
         )
-        if inactive_details:
-            return {
-                **base_match,
-                **inactive_details,
-                "status": "possibly_inactive",
-            }
-        return {
-            **base_match,
-            "status": "overdue" if evaluation_date > overdue_after else "expected",
-        }
 
     strict_matches: list[dict[str, Any]] = []
     date_matches: list[dict[str, Any]] = []
+    likely_matches: list[dict[str, Any]] = []
     all_matches: list[dict[str, Any]] = []
+    likely_date_tolerance_days = base_match["likely_date_tolerance_days"]
 
     for candidate in candidates:
         candidate_date = datetime.strptime(candidate["date"], "%Y-%m-%d").date()
@@ -332,15 +325,19 @@ def classify_recurring_match(
         }
         within_date = abs(date_difference) <= recurrence_settings.date_tolerance_days
         within_amount = abs(amount_difference) <= amount_tolerance
+        within_likely_date = abs(date_difference) <= likely_date_tolerance_days
         all_matches.append(candidate_match)
 
         if within_date and within_amount:
             strict_matches.append(candidate_match)
         if within_date:
             date_matches.append(candidate_match)
+        elif within_likely_date and within_amount:
+            likely_matches.append(candidate_match)
 
-    # Prefer strict evidence, then near-date amount changes, then the closest
-    # same-merchant occurrence as a weak likely match.
+    # Prefer strict evidence, then near-date amount changes, then a soft-window
+    # same-merchant occurrence with a plausible amount. Far-away merchant visits
+    # are treated as missing evidence rather than weak matches.
     if strict_matches:
         best = min(strict_matches, key=recurring_match_sort_key)
         return {**best, "status": "occurred"}
@@ -349,8 +346,52 @@ def classify_recurring_match(
         best = min(date_matches, key=recurring_match_sort_key)
         return {**best, "status": "amount_changed"}
 
-    best = min(all_matches, key=recurring_match_sort_key)
-    return {**best, "status": "likely_occurred"}
+    if likely_matches:
+        best = min(likely_matches, key=recurring_match_sort_key)
+        return {**best, "status": "likely_occurred"}
+
+    return missing_recurring_match(
+        base_match,
+        expected_date,
+        evaluation_date,
+        recurrence_settings,
+        last_seen,
+        frequency,
+    )
+
+
+def likely_recurring_date_tolerance_days(recurrence_settings: Any) -> int:
+    """Return the outer date window for weak same-merchant recurrence matches."""
+    return max(0, int(recurrence_settings.date_tolerance_days)) * 2
+
+
+def missing_recurring_match(
+    base_match: Mapping[str, Any],
+    expected_date: date,
+    evaluation_date: date,
+    recurrence_settings: Any,
+    last_seen: date | None,
+    frequency: str | None,
+) -> dict[str, Any]:
+    """Return missing recurrence status details for unmatched current-month evidence."""
+    overdue_after = expected_date + timedelta(days=recurrence_settings.date_tolerance_days)
+    inactive_details = possible_inactive_details(
+        expected_date,
+        evaluation_date,
+        last_seen,
+        frequency,
+        recurrence_settings,
+    )
+    if inactive_details:
+        return {
+            **base_match,
+            **inactive_details,
+            "status": "possibly_inactive",
+        }
+    return {
+        **base_match,
+        "status": "overdue" if evaluation_date > overdue_after else "expected",
+    }
 
 
 def recurring_match_sort_key(match: Mapping[str, Any]) -> tuple[int, float, str]:

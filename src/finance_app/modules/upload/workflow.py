@@ -54,7 +54,7 @@ from finance_app.modules.merchants.repository import (
     get_or_create_merchant_for_description,
     get_or_create_merchant_for_name,
 )
-from finance_app.modules.settings.runtime import get_unknown_category
+from finance_app.modules.settings.runtime import confirm_ai_token_usage_enabled, get_unknown_category
 from finance_app.modules.statements.importer import parse_csv_transactions
 from finance_app.modules.transactions.importer import filter_new_transactions
 from finance_app.modules.upload.messages import (
@@ -506,6 +506,8 @@ def import_statement_transactions_job(
     import_mode = import_mode or default_import_mode(statement_type)
 
     llm_candidate_count = 0
+    auto_llm_job_id: str | None = None
+    auto_queue_llm = False
 
     try:
         with db_core_transaction() as conn:
@@ -533,6 +535,7 @@ def import_statement_transactions_job(
             )
             if extension == "csv" and inserted_count and statement_type != STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
                 llm_candidate_count = count_statement_unknown_transactions(conn, statement_id)
+                auto_queue_llm = should_auto_queue_statement_llm(conn, llm_candidate_count)
             update_statement_import_state(
                 conn,
                 statement_id,
@@ -544,6 +547,8 @@ def import_statement_transactions_job(
                 ignored_count=ignored_count,
                 llm_candidate_count=llm_candidate_count,
             )
+        if auto_queue_llm:
+            auto_llm_job_id = queue_statement_llm_categorization(statement_id)
     except Exception as exc:
         with db_core_transaction() as conn:
             update_statement_import_state(
@@ -562,7 +567,13 @@ def import_statement_transactions_job(
         skipped_count,
         ignored_count,
         llm_candidate_count=llm_candidate_count,
+        auto_llm_job_id=auto_llm_job_id,
     )
+
+
+def should_auto_queue_statement_llm(conn: Any, llm_candidate_count: int) -> bool:
+    """Return whether import should immediately queue AI for statement unknowns."""
+    return bool(llm_candidate_count and not confirm_ai_token_usage_enabled(conn))
 
 
 def queue_statement_llm_categorization(statement_id: int) -> str:

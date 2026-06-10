@@ -150,7 +150,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "No unknown transactions needed AI categorization.",
     "No action needed unless the pattern changed.",
     "No active transactions match this rule.",
-    "No current-month merchant and direction match was found. Expected date uses a +/-{days} day tolerance.",
+    "No current-month merchant and direction match was found near the expected date. Expected date uses a +/-{days} day tolerance.",
     "No recent occurrences available.",
     "Not reviewed yet",
     "No transactions selected. The category will apply to the whole group.",

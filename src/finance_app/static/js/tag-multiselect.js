@@ -2,6 +2,7 @@ function renderTags(multiselect) {
     const tagsContainer = multiselect.querySelector("[data-tag-multiselect-tags]");
     const checkedInputs = optionInputs(multiselect).filter((input) => input.checked);
     const placeholder = multiselect.dataset.placeholder || "Select";
+    const presetSummaryLabel = multiselect.dataset.selectPresetSummaryLabel || "";
 
     if (!tagsContainer) return;
 
@@ -12,35 +13,49 @@ function renderTags(multiselect) {
         placeholderSpan.className = "text-muted";
         placeholderSpan.textContent = placeholder;
         tagsContainer.appendChild(placeholderSpan);
+    } else if (presetSummaryLabel && selectionMatchesPreset(multiselect)) {
+        tagsContainer.appendChild(
+            renderedTag(presetSummaryLabel, () => {
+                setPresetOptions(multiselect, false);
+            })
+        );
     } else {
         checkedInputs.forEach((input) => {
             const label = input.nextElementSibling;
             const labelText = label ? label.textContent.trim() : input.value;
 
-            const tag = document.createElement("span");
-            tag.className = "tag-multiselect-tag";
-
-            const textSpan = document.createElement("span");
-            textSpan.textContent = labelText;
-
-            const closeBtn = document.createElement("button");
-            closeBtn.type = "button";
-            closeBtn.className = "tag-multiselect-remove";
-            closeBtn.setAttribute("aria-label", financeTranslate("Remove {label}", { label: labelText }));
-            closeBtn.textContent = "x";
-            closeBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                input.checked = false;
-                renderTags(multiselect);
-                updateBulkOptionStates(multiselect);
-                updateMenuPosition();
-            });
-
-            tag.appendChild(textSpan);
-            tag.appendChild(closeBtn);
-            tagsContainer.appendChild(tag);
+            tagsContainer.appendChild(
+                renderedTag(labelText, () => {
+                    input.checked = false;
+                    renderTags(multiselect);
+                    updateBulkOptionStates(multiselect);
+                    updateMenuPosition();
+                })
+            );
         });
     }
+}
+
+function renderedTag(labelText, removeHandler) {
+    const tag = document.createElement("span");
+    tag.className = "tag-multiselect-tag";
+
+    const textSpan = document.createElement("span");
+    textSpan.textContent = labelText;
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "tag-multiselect-remove";
+    closeBtn.setAttribute("aria-label", financeTranslate("Remove {label}", { label: labelText }));
+    closeBtn.textContent = "x";
+    closeBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        removeHandler();
+    });
+
+    tag.appendChild(textSpan);
+    tag.appendChild(closeBtn);
+    return tag;
 }
 
 function optionInputs(multiselect) {
@@ -76,6 +91,25 @@ function presetExcludedValues(multiselect) {
     }
 
     return new Set();
+}
+
+function presetOptionGroups(multiselect, options = enabledOptionInputs(multiselect)) {
+    const excludedValues = presetExcludedValues(multiselect);
+
+    return {
+        excludedOptions: options.filter((option) => excludedValues.has(option.value)),
+        presetOptions: options.filter((option) => !excludedValues.has(option.value)),
+    };
+}
+
+function selectionMatchesPreset(multiselect) {
+    const { excludedOptions, presetOptions } = presetOptionGroups(multiselect, optionInputs(multiselect));
+
+    return (
+        presetOptions.length > 0 &&
+        presetOptions.every((option) => option.checked) &&
+        !excludedOptions.some((option) => option.checked)
+    );
 }
 
 function ensureSelectAllOption(multiselect) {
@@ -156,10 +190,7 @@ function updatePresetState(multiselect) {
         return;
     }
 
-    const excludedValues = presetExcludedValues(multiselect);
-    const options = enabledOptionInputs(multiselect);
-    const presetOptions = options.filter((option) => !excludedValues.has(option.value));
-    const excludedOptions = options.filter((option) => excludedValues.has(option.value));
+    const { excludedOptions, presetOptions } = presetOptionGroups(multiselect);
     const presetCheckedCount = presetOptions.filter((option) => option.checked).length;
     const hasExcludedChecked = excludedOptions.some((option) => option.checked);
 

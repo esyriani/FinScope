@@ -28,10 +28,6 @@
         justify-self: start;
     }
 
-    .dashboard-wide {
-        grid-column: auto;
-    }
-
     .calendar-control-row {
         grid-template-columns: 1fr;
         grid-template-areas:

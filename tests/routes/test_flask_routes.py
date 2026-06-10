@@ -236,6 +236,7 @@ def test_category_filters_offer_analysis_category_preset(client, core_conn):
 
         assert response.status_code == 200
         assert body.count('data-select-preset-label="Select analysis categories"') == expected_count
+        assert body.count('data-select-preset-summary-label="Analysis categories"') == expected_count
         preset_values = re.findall(r"data-select-preset-exclude-values='([^']+)'", body)
         assert len(preset_values) == expected_count
         assert all("System adjustment" in value for value in preset_values)
@@ -452,6 +453,11 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
         dashboard_response,
         None,
         attrs={"data-select-preset-label": "Sélectionner les catégories d’analyse"},
+    )
+    assert_has_element(
+        dashboard_response,
+        None,
+        attrs={"data-select-preset-summary-label": "Catégories d’analyse"},
     )
     assert_not_visible_text(dashboard_response, "year to date", "Merchant analytics")
 

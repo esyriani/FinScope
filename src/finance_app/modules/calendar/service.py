@@ -96,7 +96,7 @@ def build_recurring_activity_context(
         table_page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
         recurring_pattern_metadata = get_recurring_pattern_metadata(conn)
         month_rows = fetch_month_transactions(conn, month_start, month_end, unknown_category, category_filter)
-        recurring_rows = fetch_recurring_source_rows(conn, unknown_category, category_filter)
+        recurring_rows = fetch_recurring_source_rows(conn, month_start, unknown_category, category_filter)
         transactions = build_calendar_transactions(month_rows, conn)
         recurring_items = infer_recurring_items(
             recurring_rows,

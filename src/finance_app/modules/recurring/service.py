@@ -23,6 +23,7 @@ from finance_app.modules.calendar.service import (
 
 RECURRING_VIEWS = {"list", "calendar"}
 RECURRING_CALENDAR_VISIBLE_COUNT = 3
+RECURRING_CALENDAR_MERCHANT_LABEL_LENGTH = 23
 RECURRING_STATUS_PRIORITY: dict[str, int] = {
     "overdue": 0,
     "amount_changed": 1,
@@ -439,12 +440,14 @@ def recurring_calendar_item_date(item: Mapping[str, Any]) -> str:
 
 def recurring_calendar_chip(item: Mapping[str, Any]) -> dict[str, Any]:
     """Build calendar chip."""
+    merchant = item["merchant"]
     return {
         "id": item["id"],
         "status": item["status"],
         "status_label": item.get("status_label") or recurring_status_label(item["status"]),
         "status_detail": item.get("status_detail", ""),
-        "merchant": item["merchant"],
+        "merchant": merchant,
+        "merchant_label": recurring_calendar_merchant_label(merchant),
         "category": item["category"],
         "frequency": item["frequency"],
         "user_status": item["user_status"],
@@ -454,6 +457,16 @@ def recurring_calendar_chip(item: Mapping[str, Any]) -> dict[str, Any]:
         "needs_attention": recurring_calendar_needs_attention(item),
         "aria_label": recurring_calendar_chip_label(item),
     }
+
+
+def recurring_calendar_merchant_label(merchant: object) -> str:
+    """Return a compact merchant label for constrained calendar chips."""
+    merchant_text = str(merchant or "")
+    label_limit = RECURRING_CALENDAR_MERCHANT_LABEL_LENGTH
+    if len(merchant_text) <= label_limit:
+        return merchant_text
+
+    return f"{merchant_text[: label_limit - 3]}..."
 
 
 def recurring_calendar_sort_key(chip: Mapping[str, Any]) -> tuple[int, str]:
