@@ -440,7 +440,6 @@ a:focus {
 }
 
 .content {
-    max-width: 1380px;
     min-width: 0;
     padding: 2rem;
     width: 100%;
@@ -640,6 +639,41 @@ h2 {
     --bs-btn-hover-bg: var(--app-surface-soft);
     --bs-btn-hover-border-color: var(--app-border-strong);
     --bs-btn-hover-color: var(--app-heading);
+}
+
+.app-toggle-option {
+    border-color: var(--app-border-strong);
+    color: var(--app-heading);
+}
+
+.app-toggle-option:hover {
+    background: var(--app-accent-soft);
+    border-color: var(--app-accent);
+    color: var(--app-heading);
+}
+
+.btn-check:checked + .app-toggle-option {
+    --bs-btn-active-bg: var(--app-accent);
+    --bs-btn-active-border-color: var(--app-accent);
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-bg: var(--app-accent);
+    --bs-btn-border-color: var(--app-accent);
+    --bs-btn-color: #ffffff;
+    --bs-btn-hover-bg: var(--app-accent-strong);
+    --bs-btn-hover-border-color: var(--app-accent-strong);
+    --bs-btn-hover-color: #ffffff;
+
+    box-shadow: 0 0 0 2px rgba(var(--app-accent-rgb), 0.32);
+}
+
+[data-bs-theme="dark"] .btn-check:checked + .app-toggle-option {
+    --bs-btn-active-color: #05201c;
+    --bs-btn-color: #05201c;
+    --bs-btn-hover-color: #041714;
+}
+
+.btn-check:focus-visible + .app-toggle-option {
+    box-shadow: var(--focus-shadow);
 }
 
 .btn-outline-success {

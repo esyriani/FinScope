@@ -18,6 +18,7 @@ def test_parse_dashboard_request_normalizes_query_controls():
                 ("categories", ""),
                 ("tags", "Tax"),
                 ("merchant_search", "  metro   grocery "),
+                ("account_id", "42"),
                 ("quick_view", "unknown"),
                 ("breakdown", "tag"),
                 ("show_untagged", "1"),
@@ -33,6 +34,7 @@ def test_parse_dashboard_request_normalizes_query_controls():
     assert parsed.filter_mode == "include"
     assert parsed.selected_categories == ["Food"]
     assert parsed.selected_tags == ["Tax"]
+    assert parsed.selected_account_id == 42
     assert parsed.merchant_search == "metro grocery"
     assert parsed.quick_view == "unknown"
     assert parsed.breakdown_mode == "tag"

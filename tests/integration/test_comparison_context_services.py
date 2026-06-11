@@ -7,6 +7,7 @@ from tests.support.context_services import (
     seed_reimbursable_comparison_data,
     seed_reporting_data,
 )
+from tests.support.database import insert_account, insert_transaction
 from werkzeug.datastructures import MultiDict
 
 from finance_app.modules.comparison import service as comparison_service
@@ -221,6 +222,63 @@ def test_comparison_context_filters_year_and_period_by_tags(app, core_conn, monk
     assert period_totals["Spending"]["current"] == 200.00
     assert period_totals["Spending"]["previous"] == 60.00
     assert context["period_comparison"]["merchant_rows"][0]["merchant"] == "METRO GROCERY"
+
+
+def test_comparison_context_filters_year_and_period_by_account(app, core_conn, monkeypatch):
+    """Verify comparison analytics can be scoped to one account."""
+    card_id = insert_account(core_conn, "Rewards Visa", account_type="credit_card")
+    checking_id = insert_account(core_conn, "Daily Checking")
+    for row in [
+        (card_id, "2025-05-02", "Metro Grocery", 60.00, "comparison-account-card-2025"),
+        (card_id, "2026-04-02", "Metro Grocery", 25.00, "comparison-account-card-prior"),
+        (card_id, "2026-05-02", "Metro Grocery", 80.00, "comparison-account-card-current"),
+        (checking_id, "2025-05-02", "Checking Store", 900.00, "comparison-account-checking-2025"),
+        (checking_id, "2026-04-02", "Checking Store", 700.00, "comparison-account-checking-prior"),
+        (checking_id, "2026-05-02", "Checking Store", 600.00, "comparison-account-checking-current"),
+    ]:
+        insert_transaction(
+            core_conn,
+            row[2],
+            row[3],
+            "Food",
+            account_id=row[0],
+            tx_date=row[1],
+            fingerprint=row[4],
+            category_source="rule",
+            needs_review=0,
+        )
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    args = MultiDict(
+        [
+            ("years", "2025"),
+            ("years", "2026"),
+            ("baseline_year", "2025"),
+            ("period_comparison", "month_previous"),
+            ("account_id", str(card_id)),
+        ]
+    )
+
+    with app.test_request_context("/comparison"):
+        context = comparison_service.build_comparison_context(args)
+
+    food_comparison = next(row for row in context["category_comparison"] if row["category"] == "Food")
+    period_totals = {metric["label"]: metric for metric in context["period_comparison"]["totals"]}
+
+    assert context["selected_account_id"] == card_id
+    assert context["selected_account_name"] == "Rewards Visa"
+    assert {account["name"] for account in context["account_options"]} == {"Daily Checking", "Rewards Visa"}
+    assert context["available_years"] == [2026, 2025]
+    assert context["monthly_spending"][2025][4] == 60.00
+    assert context["monthly_spending"][2026][3] == 25.00
+    assert context["monthly_spending"][2026][4] == 80.00
+    assert food_comparison["totals"] == {2025: 60.00, 2026: 105.00}
+    assert period_totals["Spending"]["current"] == 80.00
+    assert period_totals["Spending"]["previous"] == 25.00
+    assert period_totals["Transactions"]["current"] == 1
+    assert context["period_comparison"]["merchant_rows"][0]["merchant"] == "METRO GROCERY"
+    assert "Account: Rewards Visa" in context["period_filter_context"]
+    assert f"account_id={card_id}" in context["period_clear_url"]
+    assert f"account_id={card_id}" in context["year_clear_url"]
 
 
 def test_comparison_tag_cashflow_includes_tagged_transfer_credits(app, core_conn, monkeypatch):

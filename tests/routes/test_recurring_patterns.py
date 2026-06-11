@@ -140,7 +140,7 @@ def test_recurring_routes_reject_incomplete_payloads(client, payload):
 
 def test_recurring_page_uses_shared_status_filter_links(client):
     """Verify recurring status filters are URL-driven instead of client-only buttons."""
-    response = client.get("/recurring?view=list&statuses=overdue")
+    response = client.get("/recurring?view=list&statuses=overdue&account_id=12")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -148,6 +148,8 @@ def test_recurring_page_uses_shared_status_filter_links(client):
     assert 'data-recurring-status-filter="overdue"' in body
     assert "data-recurring-ajax-link" in body
     assert 'name="statuses" value="overdue"' in body
+    assert 'name="account_id" value="12"' in body
+    assert "account_id=12" in body
     assert 'aria-pressed="true"' in body
     assert 'id="recurring-status"' not in body
     assert "data-recurring-activity-filter" not in body
@@ -167,15 +169,35 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
     assert "data-flatpickr-submit-on-change" in body
     assert "Repeating merchants detected for the selected month." in body
     assert "No recurring activity detected for this month." in body
-    assert 'data-sort-column="7" data-sort-type="number"' in body
+    assert "Confidence: High" in body
+    assert '<option value="High" selected>High</option>' in body
+    assert 'data-sort-column="8" data-sort-type="number"' in body
     assert "data-paginated-table" in body
     assert 'data-pagination-label="Recurring activity pages"' in body
     assert 'data-export-visible-source="#recurring-activity-table"' in body
     assert 'data-export-excel-extension="xlsx"' not in body
-    assert 'colspan="8"' in body
+    assert "data-recurring-batch-table" in body
+    assert "data-all-recurring-ids" in body
+    assert "data-recurring-select-all" in body
+    assert "Confirm selected" in body
+    assert "Remove selected" in body
+    assert 'colspan="10"' in body
     assert "Status detail" in body
     assert "Matched date" in body
     assert "Actual amount" in body
+
+
+def test_recurring_page_all_confidence_filter_is_explicit(client):
+    """Verify All confidence is opt-in now that High confidence is the default."""
+    response = client.get("/recurring?view=list&confidence=all")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Confidence: All confidence" in body
+    assert '<option value="all" selected>All confidence</option>' in body
+    assert 'name="confidence" value="all"' in body
+    assert "confidence=all" in body
+    assert "No recurring activity matches the current filters." in body
 
 
 def test_table_export_script_prompts_for_displayed_or_entire_table():
@@ -215,6 +237,12 @@ def test_recurring_activity_template_keeps_post_action_state_hooks():
     assert "data-recurring-user-status" in body
     assert "data-recurring-active" in body
     assert "data-recurring-row-state" in body
+    assert "data-recurring-batch-table" in body
+    assert "data-recurring-batch-action" in body
+    assert "data-recurring-row-checkbox" in body
+    assert "data-recurring-row-confirm" in body
+    assert "data-recurring-row-edit" in body
+    assert "data-recurring-row-remove" in body
 
 
 def test_recurring_calendar_template_places_amount_on_its_own_chip_line():

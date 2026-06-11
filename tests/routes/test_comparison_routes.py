@@ -208,7 +208,7 @@ def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypat
     assert_has_element(
         year_response,
         "section",
-        attrs={"id": "comparison-year-filters-block", "aria-labelledby": "comparison-year-filters-heading"},
+        attrs={"aria-labelledby": "comparison-year-filters-heading"},
         text="Filters",
     )
     assert_has_element(

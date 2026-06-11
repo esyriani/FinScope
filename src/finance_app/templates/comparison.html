@@ -16,6 +16,7 @@
     "js/exports.js"
 ] %}
 {% extends "base.html" %}
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
 
 {% block content %}
 {% set selected_years = selected_years | default([]) %}
@@ -24,6 +25,7 @@
 {% set selected_period_tags = selected_period_tags | default([]) %}
 {% set selected_year_tags = selected_year_tags | default([]) %}
 {% set tag_options = tag_options | default([]) %}
+{% set account_options = account_options | default([]) %}
 {% set selected_comparison_view = selected_comparison_view | default("period") %}
 
 <div class="page-header">
@@ -46,24 +48,11 @@
 </div>
 
 <div class="tab-content comparison-tab-content page-tab-content">
-<section id="year-comparison-section" class="card mb-4 tab-pane fade {% if selected_comparison_view == 'year' %}show active{% endif %}" role="tabpanel" aria-labelledby="comparison-year-tab" tabindex="0">
-    <div class="card-body">
-        <div class="section-title">
-            <div>
-                <h5 class="card-title mb-1">{{ _("Year trends") }}</h5>
-                <div class="text-muted small">
-                    {{ _("Reviews spending patterns across the selected years.") }}
-                    <br>
-                    {{ year_filter_context }}
-                </div>
-            </div>
-        </div>
-
-        <section id="comparison-year-filters-block" class="comparison-year-block page-block" aria-labelledby="comparison-year-filters-heading">
-            <div class="comparison-year-block-header page-block-header">
-                <h6 id="comparison-year-filters-heading" class="card-title mb-0">{{ _("Filters") }}</h6>
-            </div>
-
+<section id="year-comparison-section" class="tab-pane fade {% if selected_comparison_view == 'year' %}show active{% endif %}" role="tabpanel" aria-labelledby="comparison-year-tab" tabindex="0">
+    {% call collapsible_filter_panel(
+            "comparison-year-filters",
+            year_filter_context
+        ) %}
             <form method="get" class="row g-3 align-items-end">
                 <input type="hidden" name="comparison_view" value="year">
                 <input type="hidden" name="period_comparison" value="{{ selected_period_comparison }}">
@@ -111,6 +100,16 @@
                         <option value="">{{ _("Previous year") }}</option>
                         {% for year in selected_years %}
                             <option value="{{ year }}" {% if year == selected_baseline_year %}selected{% endif %}>{{ year }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label" for="comparison-year-account">{{ _("Account") }}</label>
+                    <select id="comparison-year-account" class="form-select" name="account_id">
+                        <option value="">{{ _("All accounts") }}</option>
+                        {% for account in account_options %}
+                            <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -202,8 +201,10 @@
                     <a class="btn btn-outline-secondary" href="{{ year_clear_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
                 </div>
             </form>
-        </section>
+        {% endcall %}
 
+    <div class="card mb-4">
+    <div class="card-body">
         <section id="comparison-year-charts-block" class="comparison-year-block page-block" aria-labelledby="comparison-year-charts-heading">
             <div class="comparison-year-block-header page-block-header">
                 <h6 id="comparison-year-charts-heading" class="card-title mb-0">{{ _("Charts") }}</h6>
@@ -315,28 +316,31 @@
                 </div>
         </section>
     </div>
+    </div>
 </section>
 {% if period_comparison %}
-<section id="period-comparison-section" class="card mb-4 tab-pane fade {% if selected_comparison_view == 'period' %}show active{% endif %}" role="tabpanel" aria-labelledby="comparison-period-tab" tabindex="0">
-    <div class="card-body">
-        <div class="section-title">
-            <div>
-                <h5 class="card-title mb-1">{{ _("Period changes") }}</h5>
-                <div class="text-muted small">
-                    {{ _("Highlights changes between the selected current period and the matching prior period.") }}
-                    <br>
-                    {{ period_filter_context }}
-                </div>
-            </div>
-        </div>
-
-        <form method="get" class="row g-3 align-items-end mb-4">
+<section id="period-comparison-section" class="tab-pane fade {% if selected_comparison_view == 'period' %}show active{% endif %}" role="tabpanel" aria-labelledby="comparison-period-tab" tabindex="0">
+    {% call collapsible_filter_panel(
+            "comparison-period-filters",
+            period_filter_context
+        ) %}
+        <form method="get" class="row g-3 align-items-end">
             <input type="hidden" name="comparison_view" value="period">
             <div class="col-md-3">
                 <label class="form-label" for="period-comparison">{{ _("Period") }}</label>
                 <select id="period-comparison" class="form-select" name="period_comparison">
                     {% for option in period_comparison_options %}
                         <option value="{{ option.value }}" {% if option.value == selected_period_comparison %}selected{% endif %}>{{ _(option.label) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label" for="comparison-period-account">{{ _("Account") }}</label>
+                <select id="comparison-period-account" class="form-select" name="account_id">
+                    <option value="">{{ _("All accounts") }}</option>
+                    {% for account in account_options %}
+                        <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -426,7 +430,10 @@
                 <a class="btn btn-outline-secondary" href="{{ period_clear_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>
         </form>
+        {% endcall %}
 
+    <div class="card mb-4">
+    <div class="card-body">
         <section id="comparison-summary-block" class="comparison-period-block page-block" aria-labelledby="comparison-summary-heading">
             <div class="comparison-period-block-header page-block-header">
                 <h6 id="comparison-summary-heading" class="card-title mb-0">{{ _("Summary") }}</h6>
@@ -671,6 +678,7 @@
                 </section>
             </div>
         </section>
+    </div>
     </div>
 </section>
 {% endif %}

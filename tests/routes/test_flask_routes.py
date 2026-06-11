@@ -31,30 +31,65 @@ class FixedDate(real_date):
         return cls(2026, 5, 11)
 
 
+def test_navigation_pages_render_distinct_browser_titles(client):
+    """Verify browser history labels include the active navigation destination."""
+    expected_titles = {
+        "/": "FinScope - Home",
+        "/account": "FinScope - Account",
+        "/dashboard": "FinScope - Dashboard",
+        "/comparison": "FinScope - Comparison",
+        "/calendar": "FinScope - Calendar",
+        "/recurring": "FinScope - Recurring",
+        "/upload": "FinScope - Statements",
+        "/transactions": "FinScope - Transactions",
+        "/review": "FinScope - Review",
+        "/rules": "FinScope - Rules",
+        "/taxonomy": "FinScope - Taxonomy",
+        "/jobs": "FinScope - Jobs",
+        "/settings": "FinScope - Settings",
+        "/admin/users": "FinScope - Users",
+    }
+
+    for path, expected_title in expected_titles.items():
+        response = client.get(path)
+
+        assert response.status_code == 200
+        assert_has_element(response, "title", text=expected_title)
+
+
 def test_transactions_route_renders_category_source_badges_and_filter(client, core_conn):
     """Verify transaction source provenance is visible on the transaction page."""
+    account_id = core_conn.execute(text("""
+        INSERT INTO accounts (name)
+        VALUES ('Route Visa')
+        """)).lastrowid
     rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
         VALUES ('RULE CATEGORIZED STORE', 'Food', 'manual')
         """)).lastrowid
-    core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date,
-            description,
-            amount,
-            category,
-            category_source,
-            category_confidence,
-            fingerprint
-        )
-        VALUES ('2026-01-02', 'AI categorized store', 12.34, 'Food', 'ai', 0.91, 'route-ai-source')
-        """))
     core_conn.execute(
         text("""
         INSERT INTO transactions (
             tx_date,
             description,
             amount,
+            account_id,
+            category,
+            category_source,
+            category_confidence,
+            fingerprint
+        )
+        VALUES ('2026-01-02', 'AI categorized store', 12.34, :p0, 'Food', 'ai', 0.91, 'route-ai-source')
+        """),
+        {"p0": account_id},
+    )
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            account_id,
             category,
             category_source,
             category_confidence,
@@ -65,6 +100,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
             '2026-01-03',
             'Rule categorized store',
             23.45,
+            :p1,
             'Food',
             'rule',
             0.96,
@@ -72,17 +108,19 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
             'route-rule-source-link'
         )
         """),
-        {"p0": rule_id},
+        {"p0": rule_id, "p1": account_id},
     )
     core_conn.commit()
 
-    response = client.get("/transactions?period=all")
+    response = client.get(f"/transactions?period=all&account_id={account_id}")
     body = response_html(response)
     compact_body = " ".join(body.split())
     expected_rule_url = f"/rules/audit/rule/{rule_id}"
 
     assert response.status_code == 200
-    assert_visible_text(response, "Categorization method", "All methods", "Pending approval")
+    assert_visible_text(response, "Categorization method", "All methods", "Pending approval", "Route Visa")
+    assert_has_element(response, "select", attrs={"id": "transaction-account", "name": "account_id"})
+    assert_has_element(response, "option", attrs={"value": str(account_id), "selected": True}, text="Route Visa")
     assert_not_visible_text(response, "Ready to approve", "Unverified")
     assert "&middot; AI 91%" in compact_body
     assert "<th>Kind</th>" not in body

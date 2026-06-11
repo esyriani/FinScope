@@ -77,6 +77,7 @@ def test_interactive_table_rows_have_keyboard_semantics():
     assert 'row.setAttribute("role", "button")' in tables_js
     assert 'row.addEventListener("keydown"' in tables_js
     assert 'event.key !== "Enter" && event.key !== " "' in tables_js
+    assert "window.financeApp?.showModalAfterExpandedExportCloses" in tables_js
 
 
 def test_flatpickr_initializers_use_document_and_cleanup_instances():
@@ -87,6 +88,21 @@ def test_flatpickr_initializers_use_document_and_cleanup_instances():
     assert 'document.addEventListener("DOMContentLoaded", () => setupFlatpickrInputs())' in dates_js
     assert "input.financeFlatpickr = flatpickr(input" in dates_js
     assert "destroyDynamicFlatpickr(currentDynamic)" in recurring_js
+    assert "window.financeApp?.showModalAfterExpandedExportCloses" in recurring_js
+
+
+def test_recurring_table_actions_use_batch_and_row_handlers():
+    """Verify recurring list actions are wired without row double-click conflicts."""
+    recurring_js = read_script("recurring.js")
+
+    assert "function applyRecurringAction(id, action)" in recurring_js
+    assert "function setupRecurringBatchActions()" in recurring_js
+    assert '"[data-recurring-batch-table]"' in recurring_js
+    assert '"[data-recurring-row-confirm]"' in recurring_js
+    assert '"[data-recurring-row-remove]"' in recurring_js
+    assert '"[data-recurring-row-edit]"' in recurring_js
+    assert "event.stopPropagation()" in recurring_js
+    assert "event.target.closest(interactiveSelector)" in recurring_js
 
 
 def test_comparison_tabs_preserve_active_view_in_url():
@@ -129,6 +145,35 @@ def test_scrollable_modals_fit_content_height():
     assert "overflow-y: auto;" in base_css.split(".modal-body", 1)[1].split("}", 1)[0]
 
 
+def test_filter_panels_use_shared_collapsible_summary_macros():
+    """Verify page filters collapse by default and reuse the shared toggle markup."""
+    collapsible_template = (TEMPLATES / "_collapsible.html").read_text(encoding="utf-8")
+    tables_css = read_style("tables.css")
+
+    assert "macro collapsible_filter_panel" in collapsible_template
+    assert "macro collapsible_filter_block" in collapsible_template
+    assert "data-collapse-label-toggle" in collapsible_template
+    assert '"Show filters", "Hide filters"' in collapsible_template
+    assert 'class="collapse{% if expanded %} show{% endif %}"' in collapsible_template
+    assert "filter-panel-summary" in collapsible_template
+    assert ".filter-panel-summary" in tables_css
+
+    panel_templates = [
+        "dashboard.html",
+        "transactions.html",
+        "rules.html",
+        "review.html",
+        "calendar.html",
+        "comparison.html",
+        "recurring.html",
+        "rules_audit.html",
+    ]
+
+    for template_name in panel_templates:
+        template = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        assert "collapsible_filter_panel" in template
+
+
 def test_dashboard_wide_cards_span_medium_width_grid():
     """Verify wide dashboard panels keep spanning both columns below desktop widths."""
     dashboard_template = (TEMPLATES / "dashboard.html").read_text(encoding="utf-8")
@@ -152,6 +197,35 @@ def test_dashboard_wide_cards_span_medium_width_grid():
         )[0]
     )
     assert not medium_dashboard_wide_rule or "grid-column: auto;" not in medium_dashboard_wide_rule.group("body")
+
+
+def test_dashboard_quick_view_buttons_are_radio_style_apply_filters():
+    """Verify quick-view controls are browser-native radios applied by the form."""
+    dashboard_template = (TEMPLATES / "dashboard.html").read_text(encoding="utf-8")
+    dashboard_js = read_script("dashboard.js")
+    base_css = read_style("base.css")
+    home_dashboard_css = read_style("home-dashboard.css")
+
+    quick_view_section = dashboard_template.split("aria-label=\"{{ _('Quick view') }}\"", 1)[1].split(
+        "{% endfor %}",
+        1,
+    )[0]
+
+    assert "app-toggle-group" in dashboard_template
+    assert 'role="radiogroup"' in dashboard_template
+    assert 'class="btn-check"' in quick_view_section
+    assert 'type="radio"' in quick_view_section
+    assert 'name="quick_view"' in quick_view_section
+    assert 'value="{{ option.value }}"' in quick_view_section
+    assert "app-toggle-option btn btn-sm btn-outline-secondary text-nowrap" in quick_view_section
+    assert 'type="hidden" name="quick_view"' not in dashboard_template
+    assert "data-dashboard-quick-view" not in dashboard_template
+    assert "data-dashboard-quick-view-submit" not in dashboard_template
+    assert "setupDashboardQuickView" not in dashboard_js
+    assert "event.submitter" not in dashboard_js
+    assert ".btn-check:checked + .app-toggle-option" in base_css
+    assert "box-shadow: 0 0 0 2px rgba(var(--app-accent-rgb), 0.32);" in base_css
+    assert "dashboard-quick-view" not in home_dashboard_css
 
 
 def test_dynamic_user_rows_avoid_inner_html_builders():

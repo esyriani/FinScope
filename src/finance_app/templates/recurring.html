@@ -21,26 +21,52 @@
     "js/recurring.js"
 ] %}
 {% extends "base.html" %}
+{% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
 
 {% block content %}
 {% set selected_tags = selected_tags | default([]) %}
 {% set tag_options = tag_options | default([]) %}
+{% set account_options = account_options | default([]) %}
 {% set can_edit_recurring = current_user_can('edit_recurring') %}
+{% set recurring_account_label = namespace(value=_("All accounts")) %}
+{% for account in account_options %}
+    {% if selected_account_id == account.id %}
+        {% set recurring_account_label.value = account.name %}
+    {% endif %}
+{% endfor %}
+{% set recurring_status_labels = namespace(values=[]) %}
+{% for item in recurring_status_filter_links %}
+    {% if item.selected and item.value %}
+        {% set _ = recurring_status_labels.values.append(_(item.label)) %}
+    {% endif %}
+{% endfor %}
+{% set recurring_filter_summary %}
+{{ _("Month") }}: {{ selected_month }} - {{ _("Account") }}: {{ recurring_account_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ recurring_status_labels.values | join(", ") if recurring_status_labels.values else _("All statuses") }} - {{ _("Confidence") }}: {{ _(selected_confidence) if selected_confidence else _("All confidence") }}
+{% endset %}
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Recurring") }}</h2>
-        <p class="text-muted mb-0">{{ _("Review repeating merchants, confirm useful patterns, and ignore noise.") }}</p>
+        <p class="text-muted mb-0">{{ _("Review repeating merchants, confirm useful patterns, and remove noise.") }}</p>
     </div>
 </div>
 
-<section class="card mb-4">
-    <div class="card-body">
+{% call collapsible_filter_panel("recurring-filters", recurring_filter_summary | trim) %}
         <form method="get" class="recurring-control-row">
             <input type="hidden" name="view" value="{{ selected_recurring_view }}">
             <input type="hidden" name="month" value="{{ selected_month }}">
             {% for status in selected_statuses %}
                 <input type="hidden" name="statuses" value="{{ status }}">
             {% endfor %}
+
+            <div class="recurring-account-field">
+                <label class="form-label" for="recurring-account">{{ _("Account") }}</label>
+                <select id="recurring-account" class="form-select" name="account_id">
+                    <option value="">{{ _("All accounts") }}</option>
+                    {% for account in account_options %}
+                        <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
 
             <div class="recurring-category-field">
                 <label class="form-label" id="recurring-categories-label">{{ _("Categories") }}</label>
@@ -125,7 +151,7 @@
             <div class="recurring-confidence-field">
                 <label class="form-label" for="recurring-confidence">{{ _("Confidence") }}</label>
                 <select id="recurring-confidence" class="form-select" name="confidence">
-                    <option value="">{{ _("All confidence") }}</option>
+                    <option value="all" {% if not selected_confidence %}selected{% endif %}>{{ _("All confidence") }}</option>
                     {% for option in confidence_options %}
                         <option value="{{ option }}" {% if option == selected_confidence %}selected{% endif %}>{{ _(option) }}</option>
                     {% endfor %}
@@ -137,8 +163,7 @@
                 <a class="btn btn-outline-secondary" href="{{ clear_filters_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>
         </form>
-    </div>
-</section>
+{% endcall %}
 
 <div id="recurring-dynamic" data-recurring-dynamic>
 <section class="recurring-summary-layout mb-4" aria-label="{{ _('Recurring summary') }}">
@@ -217,8 +242,11 @@
             {% for status in selected_statuses %}
                 <input type="hidden" name="statuses" value="{{ status }}">
             {% endfor %}
-            {% if selected_confidence %}
-                <input type="hidden" name="confidence" value="{{ selected_confidence }}">
+            {% if selected_confidence_filter_value != "High" %}
+                <input type="hidden" name="confidence" value="{{ selected_confidence_filter_value }}">
+            {% endif %}
+            {% if selected_account_id %}
+                <input type="hidden" name="account_id" value="{{ selected_account_id }}">
             {% endif %}
             <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-recurring-ajax-link><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
             <div class="calendar-month-field">

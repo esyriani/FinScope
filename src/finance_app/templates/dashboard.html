@@ -23,13 +23,30 @@
     "js/exports.js"
 ] %}
 {% extends "base.html" %}
+{% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
 
 {% block content %}
 {% set category_options = category_options | default([]) %}
 {% set selected_categories = selected_categories | default([]) %}
 {% set tag_options = tag_options | default([]) %}
 {% set selected_tags = selected_tags | default([]) %}
+{% set account_options = account_options | default([]) %}
 {% set merchant_search = merchant_search | default("") %}
+{% set dashboard_account_label = namespace(value=_("All accounts")) %}
+{% for account in account_options %}
+    {% if selected_account_id == account.id %}
+        {% set dashboard_account_label.value = account.name %}
+    {% endif %}
+{% endfor %}
+{% set dashboard_quick_view_label = namespace(value=_("All")) %}
+{% for option in quick_view_options %}
+    {% if option.active %}
+        {% set dashboard_quick_view_label.value = _(option.label) %}
+    {% endif %}
+{% endfor %}
+{% set dashboard_filter_summary %}
+{{ _("Period") }}: {{ period_label }}{% if selected_period == period_custom and (selected_date_from or selected_date_to) %} ({{ selected_date_from or _("Any") }} {{ _("to") }} {{ selected_date_to or _("Any") }}){% endif %} - {{ _("Account") }}: {{ dashboard_account_label.value }} - {{ _("Quick view") }}: {{ dashboard_quick_view_label.value }} - {{ _("Merchant") }}: {{ merchant_search if merchant_search else _("All") }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }}
+{% endset %}
 {% macro dashboard_sort_icon(active_sort, active_direction, column) -%}
     {% if active_sort == column %}<span class="sort-icon {{ active_direction }}" aria-hidden="true"></span>{% endif %}
 {%- endmacro %}
@@ -43,10 +60,8 @@
 
 </div>
 
-<div class="card mb-4">
-    <div class="card-body">
+{% call collapsible_filter_panel("dashboard-filters", dashboard_filter_summary | trim) %}
         <form method="get" class="row g-3 align-items-end">
-            <input type="hidden" name="quick_view" value="{{ quick_view }}" data-dashboard-quick-view-input>
             <input type="hidden" name="filter_mode" value="{{ filter_mode }}">
             <input type="hidden" name="breakdown" value="{{ breakdown_mode }}">
             <div class="col-md-3">
@@ -84,7 +99,17 @@
                 >
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <label class="form-label" for="dashboard-account">{{ _("Account") }}</label>
+                <select id="dashboard-account" class="form-select" name="account_id">
+                    <option value="">{{ _("All accounts") }}</option>
+                    {% for account in account_options %}
+                        <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
                 <label class="form-label" for="dashboard-merchant-search">{{ _("Merchant") }}</label>
                 <input
                     id="dashboard-merchant-search"
@@ -98,16 +123,23 @@
 
             <div class="col-md-6 col-xl-5">
                 <label class="form-label">{{ _("Quick view") }}</label>
-                <div class="d-flex flex-wrap gap-1" role="group" aria-label="{{ _('Quick view') }}">
+                <div class="app-toggle-group d-flex flex-wrap gap-1" role="radiogroup" aria-label="{{ _('Quick view') }}">
                     {% for option in quick_view_options %}
-                    <button
-                        type="submit"
-                        class="btn btn-sm text-nowrap {% if option.active %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                        data-dashboard-quick-view="{{ option.value }}"
-                        aria-pressed="{{ 'true' if option.active else 'false' }}"
+                    <input
+                        class="btn-check"
+                        type="radio"
+                        name="quick_view"
+                        id="dashboard-quick-view-{{ option.value }}"
+                        value="{{ option.value }}"
+                        autocomplete="off"
+                        {% if option.active %}checked{% endif %}
+                    >
+                    <label
+                        class="app-toggle-option btn btn-sm btn-outline-secondary text-nowrap"
+                        for="dashboard-quick-view-{{ option.value }}"
                     >
                         {{ _(option.label) }}{% if option.count is defined %}: {{ option.count }}{% endif %}
-                    </button>
+                    </label>
                     {% endfor %}
                 </div>
             </div>
@@ -199,8 +231,7 @@
                 <a class="btn btn-outline-secondary" href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>
         </form>
-    </div>
-</div>
+{% endcall %}
 
 {% if data_quality and data_quality.transaction_count > 0 %}
 <section class="quality-panel quality-{{ data_quality.level }} mb-4">

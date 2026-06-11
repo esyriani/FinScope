@@ -16,6 +16,7 @@ from finance_app.core.config import settings
 from finance_app.core.constants import CATEGORY_RULE_SOURCE_MANUAL, TRANSACTION_KINDS, UNKNOWN_CATEGORY
 from finance_app.core.periods import DATE_PERIOD_OPTIONS, PERIOD_CUSTOM
 from finance_app.database.engine import db_core_transaction
+from finance_app.modules.accounts.queries import list_account_options
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.categorization import categorize_transactions
 from finance_app.modules.categories.repository import get_category_rules
@@ -109,6 +110,7 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         )
         tag_map = get_transaction_tags_by_id(conn, [row["id"] for row in fetched_rows])
         rows = build_transaction_rows(fetched_rows, tag_map, get_tag_color_map(conn), conn)
+        account_options = list_account_options(conn)
         categories = fetch_distinct_categories(conn)
         category_options = get_category_options(conn)
         category_descriptions = get_category_description_map(conn)
@@ -128,6 +130,8 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "selected_category": filters["category"],
         "selected_categories": filters["selected_categories"],
         "selected_tags": filters["selected_tags"],
+        "selected_account_id": filters["account_id"],
+        "account_options": account_options,
         "selected_review": filters["review"],
         "selected_category_source": filters["category_source"],
         "selected_ignored": filters["ignored"],

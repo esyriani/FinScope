@@ -13,6 +13,7 @@ from finance_app.core.reporting import (
 )
 from finance_app.database.dates import date_month, date_year
 from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.accounts.filters import account_filter_condition
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 
 
@@ -35,9 +36,13 @@ def build_category_conditions(
     selected_categories: Iterable[str],
     selected_tags: Iterable[str],
     unknown_category: str,
+    account_id: int | None = None,
 ) -> tuple[Any, ...]:
     """Build Core category and tag filter conditions."""
     conditions: list[Any] = []
+    account_condition = account_filter_condition(account_id)
+    if account_condition is not None:
+        conditions.append(account_condition)
     if selected_categories:
         conditions.append(func.coalesce(transactions_table.c.category, unknown_category).in_(selected_categories))
 
@@ -48,7 +53,7 @@ def build_category_conditions(
     return tuple(conditions)
 
 
-def fetch_available_years(conn: Any) -> list[int]:
+def fetch_available_years(conn: Any, account_id: int | None = None) -> list[int]:
     """Fetch available years."""
     year = transaction_year()
     rows = (
@@ -58,6 +63,7 @@ def fetch_available_years(conn: Any) -> list[int]:
                 transactions_table.c.tx_date.is_not(None),
                 transactions_table.c.ignored == 0,
                 reportable_transaction_clause(),
+                *[condition for condition in (account_filter_condition(account_id),) if condition is not None],
             )
             .distinct()
             .order_by(year.desc())

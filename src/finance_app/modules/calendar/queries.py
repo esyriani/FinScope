@@ -17,6 +17,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
+from finance_app.modules.accounts.filters import account_filter_condition
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS, RecurrenceDetectionSettings
 from finance_app.modules.settings.runtime import get_float_setting, get_int_setting
@@ -61,9 +62,13 @@ def build_category_filter(
     selected_categories: Sequence[str],
     selected_tags: Sequence[str],
     unknown_category: str,
+    account_id: int | None = None,
 ) -> tuple[Any, ...]:
     """Build Core category and tag filters for calendar transaction queries."""
     conditions: list[Any] = []
+    account_condition = account_filter_condition(account_id)
+    if account_condition is not None:
+        conditions.append(account_condition)
     if selected_categories:
         conditions.append(func.coalesce(transactions_table.c.category, unknown_category).in_(selected_categories))
 

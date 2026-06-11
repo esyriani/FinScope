@@ -12,6 +12,7 @@ from tests.support.context_services import (
     seed_reimbursable_dashboard_data,
     seed_reporting_data,
 )
+from tests.support.database import insert_account, insert_transaction
 from werkzeug.datastructures import MultiDict
 
 from finance_app.modules.categories.taxonomy import set_transaction_tags
@@ -150,6 +151,69 @@ def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
     assert category_totals(metro_context) == {"Food": 100.00}
     assert list(merchant_totals(metro_context).items()) == [("METRO GROCERY", 100.00)]
     assert "search=metro+grocery" in metro_context["dashboard_links"]["transactions"]
+
+
+def test_dashboard_context_filters_reporting_by_account(app, core_conn):
+    """Verify dashboard totals and drill-down URLs can be scoped to one account."""
+    card_id = insert_account(core_conn, "Rewards Visa", account_type="credit_card")
+    checking_id = insert_account(core_conn, "Daily Checking")
+    insert_transaction(
+        core_conn,
+        "Metro Grocery",
+        80.00,
+        "Food",
+        account_id=card_id,
+        tx_date="2026-01-05",
+        fingerprint="dashboard-account-card-food",
+        category_source="rule",
+        needs_review=0,
+    )
+    insert_transaction(
+        core_conn,
+        "Payroll",
+        -1000.00,
+        "Income",
+        account_id=card_id,
+        tx_date="2026-01-06",
+        transaction_kind="income",
+        fingerprint="dashboard-account-card-income",
+        category_source="rule",
+        needs_review=0,
+    )
+    insert_transaction(
+        core_conn,
+        "Checking Store",
+        400.00,
+        "Food",
+        account_id=checking_id,
+        tx_date="2026-01-05",
+        fingerprint="dashboard-account-checking-food",
+        category_source="rule",
+        needs_review=0,
+    )
+    args = MultiDict(
+        [
+            ("period", "custom"),
+            ("date_from", "2026-01-01"),
+            ("date_to", "2026-01-31"),
+            ("account_id", str(card_id)),
+        ]
+    )
+
+    with app.test_request_context("/dashboard"):
+        context = build_dashboard_context(args)
+
+    assert context["selected_account_id"] == card_id
+    assert {account["name"] for account in context["account_options"]} == {"Daily Checking", "Rewards Visa"}
+    assert context["total_spending"] == 80.00
+    assert context["total_income"] == 1000.00
+    assert context["transaction_count"] == 2
+    assert category_totals(context) == {"Food": 80.00}
+    assert list(merchant_totals(context).items()) == [("METRO GROCERY", 80.00)]
+    assert f"account_id={card_id}" in context["dashboard_links"]["transactions"]
+    assert f"account_id={card_id}" in context["category_rows"][0]["url"]
+    assert f"account_id={card_id}" in context["merchant_rows"][0]["url"]
+    assert f"account_id={card_id}" in context["expense_month_urls"][0]
 
 
 def test_dashboard_context_tag_breakdown_counts_each_matching_tag(app, core_conn):

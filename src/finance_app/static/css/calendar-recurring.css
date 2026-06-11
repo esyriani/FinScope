@@ -1,14 +1,11 @@
 .calendar-control-row {
     align-items: end;
-    border-bottom: 1px solid var(--app-border);
     display: grid;
     gap: 0.85rem;
     grid-template-areas:
-        "categories tags actions"
-        "navigation navigation navigation";
-    grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr) auto;
-    margin-bottom: 1rem;
-    padding-bottom: 1rem;
+        "account categories tags actions"
+        "navigation navigation navigation navigation";
+    grid-template-columns: minmax(180px, 0.7fr) minmax(240px, 1fr) minmax(240px, 1fr) auto;
 }
 
 .recurring-control-row {
@@ -16,9 +13,9 @@
     display: grid;
     gap: 0.85rem;
     grid-template-areas:
-        "categories tags confidence"
-        ". . actions";
-    grid-template-columns: repeat(3, minmax(240px, 1fr));
+        "account categories tags confidence"
+        ". . . actions";
+    grid-template-columns: minmax(180px, 0.7fr) repeat(3, minmax(220px, 1fr));
 }
 
 .calendar-month-controls {
@@ -41,6 +38,11 @@
     min-width: 10rem;
 }
 
+.calendar-account-field {
+    grid-area: account;
+    min-width: 0;
+}
+
 .calendar-category-field {
     grid-area: categories;
     min-width: 0;
@@ -48,6 +50,11 @@
 
 .calendar-tag-field {
     grid-area: tags;
+    min-width: 0;
+}
+
+.recurring-account-field {
+    grid-area: account;
     min-width: 0;
 }
 
@@ -188,9 +195,19 @@
     gap: 0.45rem;
 }
 
+.recurring-status-filter-link,
+.recurring-status-pill,
+.recurring-calendar-chip,
+.recurring-calendar-day-list-item,
+.recurring-calendar-legend-item {
+    --recurring-status-bg: rgba(148, 163, 184, 0.14);
+    --recurring-status-border: rgba(148, 163, 184, 0.62);
+    --recurring-status-color: #94a3b8;
+}
+
 .recurring-status-filter-link {
-    border: 1px solid var(--app-border);
-    border-left-width: 3px;
+    border: 1px solid var(--recurring-status-border);
+    border-left: 5px solid var(--recurring-status-color);
     border-radius: 999px;
     color: var(--app-text);
     font-size: 0.82rem;
@@ -203,7 +220,7 @@
 
 .recurring-status-filter-link:hover,
 .recurring-status-filter-link:focus {
-    background: var(--app-surface-soft);
+    background: var(--recurring-status-bg);
     color: var(--app-heading);
 }
 
@@ -215,6 +232,7 @@
 .recurring-status-filter-link.active {
     background: var(--app-accent);
     border-color: var(--app-border-strong);
+    border-left-color: var(--recurring-status-color);
     color: #05201c;
 }
 
@@ -403,9 +421,28 @@
     color: var(--app-accent-strong);
 }
 
+.recurring-batch-bar {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+}
+
+.recurring-select-column {
+    text-align: center;
+    width: 2.75rem;
+}
+
+.recurring-row-actions {
+    min-width: 9rem;
+}
+
+#recurring-activity-table {
+    min-width: 76rem;
+}
+
 .recurring-status-pill {
-    border: 1px solid var(--app-border);
-    border-left-width: 3px;
+    background: var(--recurring-status-bg);
+    border: 1px solid var(--recurring-status-border);
+    border-left: 5px solid var(--recurring-status-color);
     border-radius: 999px;
     color: var(--app-heading);
     display: inline-flex;
@@ -503,9 +540,9 @@
 }
 
 .recurring-calendar-chip {
-    background: transparent;
-    border: 1px solid var(--app-border);
-    border-left-width: 3px;
+    background: var(--recurring-status-bg);
+    border: 1px solid var(--recurring-status-border);
+    border-left: 5px solid var(--recurring-status-color);
     border-radius: 6px;
     color: var(--app-text);
     display: flex;
@@ -579,9 +616,9 @@
 }
 
 .recurring-calendar-day-list-item {
-    background: var(--app-surface-soft);
-    border: 1px solid var(--app-border);
-    border-left-width: 3px;
+    background: var(--recurring-status-bg);
+    border: 1px solid var(--recurring-status-border);
+    border-left: 5px solid var(--recurring-status-color);
     border-radius: 8px;
     color: var(--app-text);
     display: grid;
@@ -626,8 +663,9 @@
 }
 
 .recurring-calendar-legend-item {
-    border: 1px solid var(--app-border);
-    border-left-width: 3px;
+    background: var(--recurring-status-bg);
+    border: 1px solid var(--recurring-status-border);
+    border-left: 5px solid var(--recurring-status-color);
     border-radius: 999px;
     color: var(--app-text);
     font-size: 0.78rem;
@@ -636,28 +674,39 @@
 }
 
 .recurring-status-expected {
-    border-left-color: var(--app-muted);
+    --recurring-status-bg: rgba(148, 163, 184, 0.14);
+    --recurring-status-border: rgba(148, 163, 184, 0.62);
+    --recurring-status-color: #94a3b8;
 }
 
 .recurring-status-occurred {
-    border-left-color: var(--app-success);
+    --recurring-status-bg: rgba(var(--app-success-rgb), 0.16);
+    --recurring-status-border: rgba(var(--app-success-rgb), 0.7);
+    --recurring-status-color: var(--app-success);
 }
 
 .recurring-status-likely_occurred {
-    border-left-color: var(--app-accent);
+    --recurring-status-bg: rgba(var(--app-accent-rgb), 0.16);
+    --recurring-status-border: rgba(var(--app-accent-rgb), 0.7);
+    --recurring-status-color: var(--app-accent);
 }
 
 .recurring-status-amount_changed {
-    border-left-color: #d97706;
+    --recurring-status-bg: rgba(var(--app-warning-rgb), 0.18);
+    --recurring-status-border: rgba(var(--app-warning-rgb), 0.72);
+    --recurring-status-color: var(--app-warning);
 }
 
 .recurring-status-overdue {
-    border-left-color: var(--app-danger);
+    --recurring-status-bg: rgba(var(--app-danger-rgb), 0.16);
+    --recurring-status-border: rgba(var(--app-danger-rgb), 0.72);
+    --recurring-status-color: var(--app-danger);
 }
 
 .recurring-status-possibly_inactive {
-    border-left-color: var(--app-muted);
-    opacity: 0.82;
+    --recurring-status-bg: rgba(148, 163, 184, 0.18);
+    --recurring-status-border: rgba(148, 163, 184, 0.74);
+    --recurring-status-color: #94a3b8;
 }
 
 @media (max-width: 768px) {

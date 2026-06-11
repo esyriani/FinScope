@@ -121,6 +121,7 @@ def dashboard_transaction_params(
     quick_view: str = QUICK_VIEW_ALL,
     selected_tags: Sequence[str] | None = None,
     merchant_search: str = "",
+    account_id: int | None = None,
 ) -> dict[str, object]:
     """Build transaction-list query parameters for a dashboard drill-down."""
     selected_tags = selected_tags or ()
@@ -145,6 +146,8 @@ def dashboard_transaction_params(
         params["categories"] = selected_categories
     if merchant_search:
         params["search"] = merchant_search
+    if account_id:
+        params["account_id"] = account_id
 
     return params
 
@@ -159,6 +162,7 @@ def dashboard_transactions_url(
     quick_view: str = QUICK_VIEW_ALL,
     selected_tags: Sequence[str] | None = None,
     merchant_search: str = "",
+    account_id: int | None = None,
     **overrides: object,
 ) -> str:
     """Build a transactions URL for a dashboard drill-down."""
@@ -172,6 +176,7 @@ def dashboard_transactions_url(
         quick_view=quick_view,
         selected_tags=selected_tags,
         merchant_search=merchant_search,
+        account_id=account_id,
     )
     params.update(overrides)
     return app_url("transactions.transactions", **params)
@@ -186,6 +191,7 @@ def dashboard_month_url(
     quick_view: str = QUICK_VIEW_ALL,
     selected_tags: Sequence[str] | None = None,
     merchant_search: str = "",
+    account_id: int | None = None,
     **overrides: object,
 ) -> str:
     """Build a dashboard drill-down URL constrained to one calendar month."""
@@ -202,6 +208,7 @@ def dashboard_month_url(
         quick_view,
         selected_tags=selected_tags,
         merchant_search=merchant_search,
+        account_id=account_id,
         **overrides,
     )
 

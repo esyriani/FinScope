@@ -25,6 +25,7 @@ def infer_recurring_items(
     recurrence_settings: Any = None,
     recurring_pattern_metadata: Mapping[str, Mapping[str, Any]] | None = None,
     conn: Any = None,
+    account_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Infer recurring items."""
     recurrence_settings = recurrence_settings or RECURRENCE_DETECTION_DEFAULTS
@@ -77,7 +78,7 @@ def infer_recurring_items(
                 "type": tx_type,
                 "category": row["category"],
                 "account_name": row["account_name"],
-                "url": transactions_url(row["tx_date"], row["tx_date"]),
+                "url": transactions_url(row["tx_date"], row["tx_date"], account_id=account_id),
             }
         )
 
@@ -160,7 +161,11 @@ def infer_recurring_items(
                 "match_details": match,
                 "amount_change": recurring_amount_change_details(typical_amount, match),
                 "occurrences": recent_recurring_occurrences(group["occurrences"]),
-                "url": transactions_url(expected_date.isoformat(), expected_date.isoformat()),
+                "url": transactions_url(
+                    expected_date.isoformat(),
+                    expected_date.isoformat(),
+                    account_id=account_id,
+                ),
             }
         )
 

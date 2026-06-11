@@ -8,6 +8,8 @@ from finance_app.core.i18n import month_abbreviation_labels
 from finance_app.core.query import CoreFilters
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.accounts.filters import account_filter_condition, parse_account_id
+from finance_app.modules.accounts.queries import list_account_options
 from finance_app.modules.categories.service import get_category_options
 from finance_app.modules.categories.tag_filters import has_concrete_tag_filter
 from finance_app.modules.categories.taxonomy import get_tag_option_rows
@@ -62,6 +64,7 @@ def build_comparison_context(args: Any) -> dict[str, Any]:
     selected_year_categories = clean_categories(args.getlist("year_categories"))
     selected_period_tags = clean_tags(args.getlist("period_tags"))
     selected_year_tags = clean_tags(args.getlist("year_tags"))
+    selected_account_id = parse_account_id(args.get("account_id"))
     selected_period_comparison = parse_period_comparison(args.get("period_comparison"))
 
     with db_core_transaction() as conn:
@@ -72,7 +75,9 @@ def build_comparison_context(args: Any) -> dict[str, Any]:
             settings.default_comparison_insight_card_limit,
         )
         merchant_table_limit = get_int_setting(conn, "merchant_table_limit", settings.default_merchant_table_limit)
-        available_years = fetch_available_years(conn)
+        account_options = list_account_options(conn)
+        selected_account_name = selected_account_option_name(account_options, selected_account_id)
+        available_years = fetch_available_years(conn, selected_account_id)
         category_options = get_category_options(conn)
         tag_options = get_tag_option_rows(conn)
         unknown_category = get_unknown_category(conn)
@@ -89,6 +94,7 @@ def build_comparison_context(args: Any) -> dict[str, Any]:
 
         filters = CoreFilters()
         filters.add(transactions_table.c.ignored == 0)
+        filters.add(account_filter_condition(selected_account_id))
         filters.add_in(transaction_year(), selected_years)
         for condition in build_category_conditions(
             selected_year_categories,
@@ -106,6 +112,7 @@ def build_comparison_context(args: Any) -> dict[str, Any]:
             selected_period_tags,
             unknown_category,
             merchant_table_limit,
+            account_id=selected_account_id,
             ranked_insights=True,
             insight_ranking_options={"max_count": insight_card_limit},
         )
@@ -127,6 +134,9 @@ def build_comparison_context(args: Any) -> dict[str, Any]:
         selected_year_categories=selected_year_categories,
         selected_period_tags=selected_period_tags,
         selected_year_tags=selected_year_tags,
+        selected_account_id=selected_account_id,
+        selected_account_name=selected_account_name,
+        account_options=account_options,
         selected_comparison_view=selected_comparison_view,
         merchant_table_limit=merchant_table_limit,
         comparison_insight_card_limit=insight_card_limit,
@@ -134,12 +144,14 @@ def build_comparison_context(args: Any) -> dict[str, Any]:
             PERIOD_COMPARISON_OPTIONS[selected_period_comparison],
             selected_period_categories,
             selected_period_tags,
+            selected_account_name,
         ),
         year_filter_context=build_year_filter_context(
             selected_years,
             selected_baseline_year,
             selected_year_categories,
             selected_year_tags,
+            selected_account_name,
         ),
         period_clear_url=build_comparison_url(
             comparison_view="period",
@@ -147,12 +159,14 @@ def build_comparison_context(args: Any) -> dict[str, Any]:
             baseline_year=selected_baseline_year,
             year_categories=selected_year_categories,
             year_tags=selected_year_tags,
+            account_id=selected_account_id,
         ),
         year_clear_url=build_comparison_url(
             comparison_view="year",
             period_comparison=selected_period_comparison,
             period_categories=selected_period_categories,
             period_tags=selected_period_tags,
+            account_id=selected_account_id,
         ),
         period_comparison_options=[
             {"value": value, "label": label} for value, label in PERIOD_COMPARISON_OPTIONS.items()
@@ -183,12 +197,13 @@ def build_period_comparison(
     unknown_category: str,
     merchant_table_limit: int,
     *,
+    account_id: int | None = None,
     ranked_insights: bool = False,
     insight_ranking_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build period comparison."""
     ranges = period_comparison_ranges(comparison_key, date.today())
-    category_filters = build_category_conditions(selected_categories, selected_tags, unknown_category)
+    category_filters = build_category_conditions(selected_categories, selected_tags, unknown_category, account_id)
     include_transfer_credits = has_concrete_tag_filter(selected_tags)
 
     current_summary = fetch_period_summary(
@@ -333,3 +348,13 @@ def build_period_comparison(
         "current_transaction_count": current_summary["transaction_count"],
         "previous_transaction_count": previous_summary["transaction_count"],
     }
+
+
+def selected_account_option_name(account_options: list[dict[str, Any]], selected_account_id: int | None) -> str:
+    """Return the selected account display name for filter summaries."""
+    if selected_account_id is None:
+        return ""
+    for account in account_options:
+        if int(account["id"]) == selected_account_id:
+            return str(account["name"])
+    return ""

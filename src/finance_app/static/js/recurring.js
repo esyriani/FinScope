@@ -62,6 +62,7 @@ function setupRecurringActivityDetailModal() {
     const fallbackDateToleranceDays = 5;
     let activeRecurringId = "";
     const ignoredRecurringIds = new Set();
+    const interactiveSelector = "a, button, input, select, textarea, form, [data-row-action]";
 
     function formatMoneyLocal(value) {
         return window.financeFormatMoney ? window.financeFormatMoney(value) : Number(value || 0).toFixed(2);
@@ -187,7 +188,7 @@ function setupRecurringActivityDetailModal() {
         if (item.status === "expected") {
             return financeTranslate("Wait for it to appear, or edit the expected date if the timing changed.");
         }
-        return financeTranslate("Confirm recurring if this pattern is useful; ignore it if it is noise.");
+        return financeTranslate("Confirm recurring if this pattern is useful; remove it if it is noise.");
     }
 
     function userStatusLabel(item) {
@@ -312,6 +313,12 @@ function setupRecurringActivityDetailModal() {
                 rowState.textContent = label;
                 rowState.classList.toggle("d-none", !label);
             }
+            const confirmButton = element.querySelector("[data-recurring-row-confirm]");
+            if (confirmButton) {
+                const alreadyConfirmed = item.userStatus === "confirmed" && item.active !== 0;
+                confirmButton.disabled = alreadyConfirmed;
+                confirmButton.setAttribute("aria-disabled", alreadyConfirmed ? "true" : "false");
+            }
         });
     }
 
@@ -359,7 +366,30 @@ function setupRecurringActivityDetailModal() {
         return data;
     }
 
-    function openRecurringDetail(id) {
+    async function applyRecurringAction(id, action) {
+        const item = recurringData[id];
+        if (!item) return null;
+
+        const result = await postRecurringPattern(
+            action === "confirm" ? "/recurring/patterns/confirm" : "/recurring/patterns/ignore",
+            patternPayload(item)
+        );
+        item.userStatus = result.userStatus;
+        item.active = result.active;
+
+        if (action === "remove") {
+            ignoredRecurringIds.add(id);
+        } else {
+            ignoredRecurringIds.delete(id);
+        }
+
+        syncModalDecisionState(item);
+        syncVisibleRecurringState(item);
+        applyIgnoredRecurringState();
+        return item;
+    }
+
+    function openRecurringDetail(id, options = {}) {
         const item = recurringData[id];
         if (!item) return;
 
@@ -390,9 +420,11 @@ function setupRecurringActivityDetailModal() {
         match.textContent = matchText(item);
         setAmountChangeDetails(item);
         hideActionStatus();
-        setEditPanelVisible(false);
+        setEditPanelVisible(Boolean(options.edit));
         populateEditForm(item);
-        if (item.userStatus === "confirmed") {
+        if (options.edit) {
+            hideActionStatus();
+        } else if (item.userStatus === "confirmed") {
             showActionStatus(financeTranslate("Confirmed recurring."));
         } else if (item.userStatus === "edited") {
             showActionStatus(financeTranslate("This recurring pattern has saved user edits."));
@@ -401,17 +433,25 @@ function setupRecurringActivityDetailModal() {
         const rows = item.occurrences || [];
         occurrences.replaceChildren(...(rows.length ? rows.map(occurrenceRow) : [emptyOccurrenceRow()]));
 
-        modal.show();
+        if (typeof window.financeApp?.showModalAfterExpandedExportCloses === "function") {
+            window.financeApp.showModalAfterExpandedExportCloses(modalElement);
+        } else {
+            modal.show();
+        }
     }
 
     function wireDetailTrigger(element) {
         const isTableRow = element.matches("tr[data-recurring-id]");
         if (isTableRow) {
-            element.addEventListener("dblclick", () => openRecurringDetail(element.dataset.recurringId));
+            element.addEventListener("dblclick", (event) => {
+                if (event.target.closest(interactiveSelector)) return;
+                openRecurringDetail(element.dataset.recurringId);
+            });
         } else {
             element.addEventListener("click", () => openRecurringDetail(element.dataset.recurringId));
         }
         element.addEventListener("keydown", (event) => {
+            if (event.target.closest(interactiveSelector)) return;
             if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 openRecurringDetail(element.dataset.recurringId);
@@ -453,14 +493,8 @@ function setupRecurringActivityDetailModal() {
 
     confirmAction?.addEventListener("click", async () => {
         if (!activeRecurringId) return;
-        const item = recurringData[activeRecurringId];
-        if (!item) return;
         try {
-            await postRecurringPattern("/recurring/patterns/confirm", patternPayload(item));
-            item.userStatus = "confirmed";
-            item.active = 1;
-            syncModalDecisionState(item);
-            syncVisibleRecurringState(item);
+            await applyRecurringAction(activeRecurringId, "confirm");
             showActionStatus(financeTranslate("Confirmed recurring."), "success");
         } catch (error) {
             showActionStatus(error.message, "danger");
@@ -469,16 +503,8 @@ function setupRecurringActivityDetailModal() {
 
     ignoreAction?.addEventListener("click", async () => {
         if (!activeRecurringId) return;
-        const item = recurringData[activeRecurringId];
-        if (!item) return;
         try {
-            await postRecurringPattern("/recurring/patterns/ignore", patternPayload(item));
-            item.userStatus = "ignored";
-            item.active = 0;
-            ignoredRecurringIds.add(activeRecurringId);
-            syncModalDecisionState(item);
-            syncVisibleRecurringState(item);
-            applyIgnoredRecurringState();
+            await applyRecurringAction(activeRecurringId, "remove");
             modal.hide();
         } catch (error) {
             showActionStatus(error.message, "danger");
@@ -534,6 +560,160 @@ function setupRecurringActivityDetailModal() {
         }
     });
 
+    function recurringBatchIds(table, rowCheckboxes) {
+        try {
+            const parsed = JSON.parse(table.dataset.allRecurringIds || "[]");
+            if (Array.isArray(parsed)) {
+                return parsed.map((recurringId) => String(recurringId));
+            }
+        } catch (_error) {
+            // Fall back to visible row checkboxes when the server-provided list is unavailable.
+        }
+
+        return rowCheckboxes.map((checkbox) => String(checkbox.value));
+    }
+
+    function setupRecurringBatchActions() {
+        document.querySelectorAll("[data-recurring-batch-table]").forEach((table) => {
+            if (table.dataset.recurringBatchReady === "true") return;
+
+            table.dataset.recurringBatchReady = "true";
+            const container = table.closest(".card") || document;
+            const bar = container.querySelector("[data-recurring-batch-bar]");
+            const countLabel = container.querySelector("[data-recurring-batch-count-label]");
+            const statusLabel = container.querySelector("[data-recurring-batch-status]");
+            const selectAll = table.querySelector("[data-recurring-select-all]");
+            const rowCheckboxes = Array.from(table.querySelectorAll("[data-recurring-row-checkbox]"));
+            const actionButtons = Array.from(container.querySelectorAll("[data-recurring-batch-action]"));
+            const allIds = recurringBatchIds(table, rowCheckboxes);
+            const selectedIds = new Set();
+
+            if (!bar || !selectAll || rowCheckboxes.length === 0) return;
+
+            function setBatchStatus(message, tone = "info") {
+                if (!statusLabel) return;
+                statusLabel.textContent = message || "";
+                statusLabel.classList.toggle("d-none", !message);
+                statusLabel.classList.toggle("text-danger", tone === "danger");
+                statusLabel.classList.toggle("text-success", tone === "success");
+            }
+
+            function syncSelectionState() {
+                const selectedCount = selectedIds.size;
+                rowCheckboxes.forEach((checkbox) => {
+                    checkbox.checked = selectedIds.has(String(checkbox.value));
+                });
+
+                selectAll.checked = allIds.length > 0 && selectedCount === allIds.length;
+                selectAll.indeterminate = selectedCount > 0 && selectedCount < allIds.length;
+                bar.hidden = selectedCount === 0;
+
+                if (countLabel) {
+                    countLabel.textContent = financeTranslate("{count} selected", { count: selectedCount });
+                }
+            }
+
+            function setBusy(busy) {
+                selectAll.disabled = busy;
+                rowCheckboxes.forEach((checkbox) => {
+                    checkbox.disabled = busy;
+                });
+                actionButtons.forEach((button) => {
+                    button.disabled = busy;
+                });
+            }
+
+            selectAll.addEventListener("change", () => {
+                selectedIds.clear();
+                if (selectAll.checked) {
+                    allIds.forEach((recurringId) => selectedIds.add(recurringId));
+                }
+                setBatchStatus("");
+                syncSelectionState();
+            });
+
+            rowCheckboxes.forEach((checkbox) => {
+                checkbox.addEventListener("change", () => {
+                    if (checkbox.checked) {
+                        selectedIds.add(String(checkbox.value));
+                    } else {
+                        selectedIds.delete(String(checkbox.value));
+                    }
+                    setBatchStatus("");
+                    syncSelectionState();
+                });
+            });
+
+            actionButtons.forEach((button) => {
+                button.addEventListener("click", async () => {
+                    const action = button.dataset.recurringBatchAction;
+                    const ids = Array.from(selectedIds);
+                    if (!ids.length || (action !== "confirm" && action !== "remove")) return;
+
+                    setBusy(true);
+                    setBatchStatus("");
+                    try {
+                        for (const recurringId of ids) {
+                            await applyRecurringAction(recurringId, action);
+                        }
+                        selectedIds.clear();
+                        syncSelectionState();
+                    } catch (error) {
+                        setBatchStatus(error.message, "danger");
+                    } finally {
+                        setBusy(false);
+                    }
+                });
+            });
+
+            syncSelectionState();
+        });
+    }
+
+    document.querySelectorAll("[data-recurring-row-confirm]").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const row = button.closest("[data-recurring-id]");
+            const recurringId = row?.dataset.recurringId;
+            if (!recurringId) return;
+
+            button.disabled = true;
+            try {
+                await applyRecurringAction(recurringId, "confirm");
+            } finally {
+                const item = recurringData[recurringId];
+                const alreadyConfirmed = item?.userStatus === "confirmed" && item.active !== 0;
+                button.disabled = alreadyConfirmed;
+            }
+        });
+    });
+
+    document.querySelectorAll("[data-recurring-row-remove]").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const recurringId = button.closest("[data-recurring-id]")?.dataset.recurringId;
+            if (!recurringId) return;
+
+            button.disabled = true;
+            try {
+                await applyRecurringAction(recurringId, "remove");
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
+
+    document.querySelectorAll("[data-recurring-row-edit]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const recurringId = button.closest("[data-recurring-id]")?.dataset.recurringId;
+            if (recurringId) openRecurringDetail(recurringId, { edit: true });
+        });
+    });
+
     document.querySelectorAll("[data-recurring-id]").forEach((element) => {
         if (element.closest("[data-recurring-calendar-day-list]")) return;
         wireDetailTrigger(element);
@@ -558,6 +738,7 @@ function setupRecurringActivityDetailModal() {
     });
 
     applyIgnoredRecurringState();
+    setupRecurringBatchActions();
 }
 
 function setupRecurringAjaxNavigation() {

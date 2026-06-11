@@ -31,6 +31,7 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
             ("date_from", "2026-01-01"),
             ("date_to", "not-a-date"),
             ("merchant_key", "AMZN MKTP CA*1234"),
+            ("account_id", "7"),
         ]
     )
 
@@ -51,6 +52,7 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
     assert filters["date_from"] == "2026-01-01"
     assert filters["date_to"] == ""
     assert filters["merchant_key"] == "AMZN MKTP"
+    assert filters["account_id"] == 7
 
 
 def test_parse_transaction_filters_defaults_invalid_values(core_conn):
@@ -109,6 +111,7 @@ def test_build_transaction_core_filters_combines_high_value_filters(core_conn):
                 ("period", "custom"),
                 ("date_from", "2026-01-01"),
                 ("date_to", "2026-01-31"),
+                ("account_id", "7"),
             ]
         ),
         core_conn,
@@ -128,6 +131,7 @@ def test_build_transaction_core_filters_combines_high_value_filters(core_conn):
     assert "transactions.ignored" in sql
     assert "transactions.tx_date >=" in sql
     assert "transactions.tx_date <=" in sql
+    assert "transactions.account_id" in sql
 
 
 def test_build_transaction_core_filters_supports_credit_filter(core_conn):

@@ -24,7 +24,11 @@ function setupTableRowInteractions(root = document) {
             return false;
         }
 
-        window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        if (typeof window.financeApp?.showModalAfterExpandedExportCloses === "function") {
+            window.financeApp.showModalAfterExpandedExportCloses(modalElement);
+        } else {
+            window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        }
         return true;
     }
 

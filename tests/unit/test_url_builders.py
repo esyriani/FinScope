@@ -41,6 +41,7 @@ def test_dashboard_transactions_url_builds_drilldown_query(app):
             date_to="2026-01-31",
             selected_tags=["Tax"],
             merchant_search="metro grocery",
+            account_id=7,
             amount_type="spending",
         )
 
@@ -54,6 +55,7 @@ def test_dashboard_transactions_url_builds_drilldown_query(app):
         "tags": ["Tax"],
         "categories": ["Food"],
         "search": ["metro grocery"],
+        "account_id": ["7"],
         "amount_type": ["spending"],
     }
 
@@ -128,13 +130,14 @@ def test_review_urls_preserve_grouping_and_toggle_sort(app):
 def test_calendar_urls_build_month_and_transaction_links(app):
     """Verify calendar URLs include month filters and transaction date scopes."""
     with app.test_request_context("/calendar"):
-        month_url = calendar_url(month_bounds_date(), {"categories": ["Food", ""], "empty": ""})
-        tx_url = calendar_transactions_url("2026-05-01", "2026-05-31")
+        month_url = calendar_url(month_bounds_date(), {"categories": ["Food", ""], "account_id": 7, "empty": ""})
+        tx_url = calendar_transactions_url("2026-05-01", "2026-05-31", account_id=7)
 
     assert urlsplit(month_url).path == "/calendar"
     assert parsed_query(month_url) == {
         "month": ["2026-05"],
         "categories": ["Food"],
+        "account_id": ["7"],
     }
     assert urlsplit(tx_url).path == "/transactions"
     assert parsed_query(tx_url) == {
@@ -142,6 +145,7 @@ def test_calendar_urls_build_month_and_transaction_links(app):
         "date_from": ["2026-05-01"],
         "date_to": ["2026-05-31"],
         "ignored": ["active"],
+        "account_id": ["7"],
     }
 
 

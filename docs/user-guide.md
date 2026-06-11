@@ -50,6 +50,8 @@ Dashboard summarizes the selected period.
 
 It includes categorization completeness, spending, income and credits, net cash flow, savings rate, average transaction, untagged rate, verified rate, top categorization source, spending breakdowns by category or tag, monthly cash flow, spending versus income over time, and merchant analytics.
 
+Use the account filter to scope dashboard totals, charts, merchant rows, and transaction drill-downs to one imported account.
+
 Transfers and payments are visible as transactions but excluded from spending and income totals to avoid double-counting internal money movement. When concrete tag filters are applied, matching transfer credits can be included so reimbursement-style tags can show a net view.
 
 Unknown categories reduce report usefulness. Use the categorization completeness panel to find transactions that need review.
@@ -60,7 +62,7 @@ Comparison analyzes spending changes.
 
 Period changes compare a selected current period with a matching prior period. The view includes summary metrics, key insights, category changes, merchant changes, and filters for categories and tags.
 
-Year trends compare monthly spending across selected years. The view includes monthly spending charts, spending distribution, and category spending by year. Category warnings appear when Unknown spending may make comparison unreliable.
+Year trends compare monthly spending across selected years. Account, category, and tag filters apply to both period and year comparisons, so a card or bank account can be compared across months or years. The view includes monthly spending charts, spending distribution, and category spending by year. Category warnings appear when Unknown spending may make comparison unreliable.
 
 ## Calendar
 
@@ -68,11 +70,15 @@ Calendar shows posted daily transactions for a selected month.
 
 It summarizes monthly spending, income and credits, net cash flow, expected recurring items, and daily transaction counts. The heatmap can show spending, income, or net cash flow. Day cells can open transaction detail for that date.
 
+The account filter scopes daily posted activity, monthly totals, and recurring evidence to one account.
+
 ## Recurring
 
 Recurring detects repeated spending and income patterns.
 
 It provides list and calendar views, category and tag filters, confidence filtering, status filtering, month navigation, and summary metrics for needs-attention items, monthly recurring spending, recurring income, expected soon, occurred, overdue, and possibly inactive patterns.
+
+The account filter scopes recurring detection evidence and list/calendar results to transactions from one account.
 
 Detection is inferred from historical transactions before the selected month. Transactions in the selected month are used as evidence only when they are near the expected date and within the configured amount tolerance.
 

@@ -15,6 +15,8 @@ from finance_app.core.periods import (
 from finance_app.core.query import CoreFilters, QueryArgs
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.accounts.filters import account_filter_condition
+from finance_app.modules.accounts.queries import list_account_options
 from finance_app.modules.categories.service import get_category_options
 from finance_app.modules.categories.tag_filters import has_concrete_tag_filter
 from finance_app.modules.categories.taxonomy import get_tag_option_rows
@@ -75,6 +77,7 @@ class DashboardQueryData:
     include_transfer_credits: bool
     category_options: list[str]
     tag_options: list[dict[str, Any]]
+    account_options: list[dict[str, Any]]
     quick_view_counts: dict[str, Any]
     data_quality: dict[str, Any]
     spending_by_category_all: list[Any]
@@ -161,6 +164,7 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
 
         category_options = get_category_options(conn)
         tag_options = get_tag_option_rows(conn)
+        account_options = list_account_options(conn)
         spending_by_category_all = fetch_spending_by_category(
             conn,
             filter_criteria,
@@ -197,6 +201,7 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
             dashboard_request.quick_view,
             merchant_table_limit,
             dashboard_request.merchant_search,
+            dashboard_request.selected_account_id,
         )
         summary = fetch_summary(
             conn,
@@ -211,6 +216,7 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
         include_transfer_credits=include_transfer_credits,
         category_options=category_options,
         tag_options=tag_options,
+        account_options=account_options,
         quick_view_counts=quick_view_counts,
         data_quality=data_quality,
         spending_by_category_all=spending_by_category_all,
@@ -228,6 +234,7 @@ def dashboard_base_filters(dashboard_request: DashboardRequest) -> CoreFilters:
     """Return the date-scoped base filters shared by dashboard queries."""
     filters = CoreFilters()
     filters.add(transactions_table.c.ignored == 0)
+    filters.add(account_filter_condition(dashboard_request.selected_account_id))
     start_date = period_start_date(dashboard_request.period)
     if start_date:
         filters.add(transactions_table.c.tx_date >= start_date)
@@ -273,6 +280,7 @@ def prepare_dashboard_data(
         date_to,
         quick_view,
         merchant_search,
+        dashboard_request.selected_account_id,
         breakdown=dashboard_request.breakdown_mode,
     )
     chart_category_rows = list(category_rows)
@@ -296,6 +304,7 @@ def prepare_dashboard_data(
         quick_view,
         include_transfer_credits=query_data.include_transfer_credits,
         merchant_search=merchant_search,
+        account_id=dashboard_request.selected_account_id,
     )
     dashboard_insights = build_dashboard_insights(
         query_data.summary,
@@ -308,6 +317,7 @@ def prepare_dashboard_data(
         date_to,
         quick_view,
         merchant_search,
+        dashboard_request.selected_account_id,
     )
     attach_data_quality_urls(
         query_data.data_quality,
@@ -319,6 +329,7 @@ def prepare_dashboard_data(
         date_to,
         quick_view,
         merchant_search,
+        dashboard_request.selected_account_id,
     )
     income_amount_type = AMOUNT_TYPE_CREDIT if query_data.include_transfer_credits else AMOUNT_TYPE_INCOME
 
@@ -422,6 +433,8 @@ def dashboard_filter_context(dashboard_request: DashboardRequest, query_data: Da
         "filter_mode": dashboard_request.filter_mode,
         "selected_categories": dashboard_request.selected_categories,
         "selected_tags": dashboard_request.selected_tags,
+        "account_options": query_data.account_options,
+        "selected_account_id": dashboard_request.selected_account_id,
         "merchant_search": dashboard_request.merchant_search,
         "quick_view": dashboard_request.quick_view,
         "quick_view_options": build_quick_view_options(
@@ -571,6 +584,7 @@ def dashboard_month_urls_for_labels(
             dashboard_request.quick_view,
             selected_tags=dashboard_request.selected_tags,
             merchant_search=dashboard_request.merchant_search,
+            account_id=dashboard_request.selected_account_id,
             amount_type=amount_type,
         )
         for month in months

@@ -86,6 +86,22 @@
     min-width: 64rem;
 }
 
+.filter-panel-heading {
+    min-width: 0;
+}
+
+.filter-panel-summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-block-header {
+    border-bottom: 1px solid var(--app-border);
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+}
+
 .taxonomy-table-responsive {
     overflow-x: visible;
 }
@@ -134,6 +150,10 @@
 }
 
 @media (max-width: 640px) {
+    .filter-panel-summary {
+        white-space: normal;
+    }
+
     .taxonomy-table-responsive {
         overflow-x: auto;
     }

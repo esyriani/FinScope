@@ -11,6 +11,7 @@
     "js/tables.js"
 ] %}
 {% extends "base.html" %}
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
 {% from "_pagination.html" import pagination with context %}
 
@@ -29,6 +30,9 @@
 {% set tag_options = tag_options | default([]) %}
 {% set category_descriptions = category_descriptions | default({}) %}
 {% set merchant_search = merchant_search | default("") %}
+{% set review_filter_summary %}
+{{ _("Merchant") }}: {{ merchant_search if merchant_search else _("All") }}
+{% endset %}
 
 {%- macro default_review_page_url(page_number) -%}{{ url_for('review.review', page=page_number) }}{%- endmacro -%}
 {% macro review_pagination(label, review_page_url) %}
@@ -57,8 +61,7 @@
     {% endif %}
 {% endwith %}
 
-<div class="card mb-4">
-    <div class="card-body">
+{% call collapsible_filter_panel("review-filters", review_filter_summary | trim) %}
         <form method="get" class="row g-3 align-items-end">
             <input type="hidden" name="sort" value="{{ sort }}">
             <input type="hidden" name="direction" value="{{ direction }}">
@@ -83,8 +86,7 @@
                 <a class="btn btn-outline-secondary" href="{{ url_for('review.review') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>
         </form>
-    </div>
-</div>
+{% endcall %}
 
 <div class="metric-grid mb-4">
     <div class="metric-card">

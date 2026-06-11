@@ -3,6 +3,7 @@
 from datetime import date as real_date
 
 from sqlalchemy import text
+from tests.support.database import insert_account, insert_transaction
 from werkzeug.datastructures import MultiDict
 
 from finance_app.modules.calendar import parsing as calendar_parsing
@@ -93,6 +94,7 @@ def seed_calendar_transactions(conn):
         {"p0": account_id},
     )
     conn.commit()
+    return account_id
 
 
 def patch_calendar_today(monkeypatch):
@@ -184,6 +186,42 @@ def test_calendar_context_applies_tag_filters(app, core_conn, monkeypatch):
     assert "tags=Tax" in context["previous_month_url"]
     assert calendar_day(context, "2026-05-02")["transactions"][0]["category"] == "Food"
     assert calendar_day(context, "2026-05-05")["transactions"] == []
+
+
+def test_calendar_context_filters_activity_by_account(app, core_conn, monkeypatch):
+    """Verify calendar and recurring activity can be scoped to one account."""
+    visa_id = seed_calendar_transactions(core_conn)
+    checking_id = insert_account(core_conn, "Daily Checking")
+    insert_transaction(
+        core_conn,
+        "Checking Store",
+        500.00,
+        "Food",
+        account_id=checking_id,
+        tx_date="2026-05-02",
+        fingerprint="calendar-account-checking-food",
+        category_source="rule",
+        needs_review=0,
+    )
+    patch_calendar_today(monkeypatch)
+    args = MultiDict([("month", "2026-05"), ("account_id", str(visa_id))])
+
+    with app.test_request_context("/calendar"):
+        context = calendar_service.build_calendar_context(args)
+
+    may_2 = calendar_day(context, "2026-05-02")
+
+    assert context["selected_account_id"] == visa_id
+    assert {account["name"] for account in context["account_options"]} == {"Daily Checking", "Visa"}
+    assert context["summary"]["spending"] == 98.99
+    assert context["summary"]["transaction_count"] == 4
+    assert context["summary"]["recurring_count"] == 1
+    assert len(may_2["transactions"]) == 1
+    assert may_2["transactions"][0]["description"] == "Metro Grocery"
+    assert f"account_id={visa_id}" in context["previous_month_url"]
+    assert f"account_id={visa_id}" in context["month_transactions_url"]
+    assert f"account_id={visa_id}" in may_2["url"]
+    assert f"account_id={visa_id}" in may_2["transactions"][0]["url"]
 
 
 def test_calendar_context_applies_untagged_filter(app, core_conn, monkeypatch):

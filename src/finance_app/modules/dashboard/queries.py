@@ -26,6 +26,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
+from finance_app.modules.accounts.filters import account_filter_condition
 from finance_app.modules.categories.service import get_category_rules
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,
@@ -262,6 +263,7 @@ def fetch_merchant_analytics(
     quick_view: str = QUICK_VIEW_ALL,
     merchant_table_limit: int = 10,
     merchant_search: str = "",
+    account_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch merchant analytics."""
     current_rows = fetch_merchant_transaction_rows(conn, filters, unknown_category)
@@ -275,6 +277,7 @@ def fetch_merchant_analytics(
         unknown_category,
         quick_view,
         merchant_search,
+        account_id,
     )
     rules = get_category_rules(conn)
     merchant_rows: list[dict[str, Any]] = []
@@ -308,6 +311,7 @@ def fetch_merchant_analytics(
                     quick_view,
                     selected_tags=selected_tags,
                     merchant_search=merchant_search,
+                    account_id=account_id,
                     merchant_key=aggregate["merchant_key"],
                     amount_type=AMOUNT_TYPE_SPENDING,
                 ),
@@ -355,6 +359,7 @@ def fetch_previous_merchant_totals(
     unknown_category: str,
     quick_view: str = QUICK_VIEW_ALL,
     merchant_search: str = "",
+    account_id: int | None = None,
 ) -> dict[str, Any]:
     """Fetch previous merchant totals."""
     previous_start, previous_end = previous_period_date_range(period)
@@ -363,6 +368,7 @@ def fetch_previous_merchant_totals(
 
     filters = CoreFilters()
     filters.add(transactions_table.c.ignored == 0)
+    filters.add(account_filter_condition(account_id))
     filters.add(transactions_table.c.tx_date >= previous_start)
     filters.add(transactions_table.c.tx_date < previous_end)
     apply_dashboard_dimension_filters(

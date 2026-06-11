@@ -23,14 +23,15 @@ def calendar_url(month: date, params: Mapping[str, object]) -> str:
     return f"{url_for('calendar_page.calendar_view')}?{urlencode(cleaned, doseq=True)}"
 
 
-def transactions_url(date_from: str, date_to: str) -> str:
+def transactions_url(date_from: str, date_to: str, account_id: int | None = None) -> str:
     """Build a transactions URL for an inclusive date range."""
-    query = urlencode(
-        {
-            "period": PERIOD_CUSTOM,
-            "date_from": date_from,
-            "date_to": date_to,
-            "ignored": IGNORED_FILTER_ACTIVE,
-        }
-    )
+    params: dict[str, object] = {
+        "period": PERIOD_CUSTOM,
+        "date_from": date_from,
+        "date_to": date_to,
+        "ignored": IGNORED_FILTER_ACTIVE,
+    }
+    if account_id:
+        params["account_id"] = account_id
+    query = urlencode(params)
     return f"{url_for('transactions.transactions')}?{query}"

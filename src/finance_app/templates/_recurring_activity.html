@@ -1,4 +1,6 @@
 <section class="card" id="recurring-activity-section" data-table-export-scope>
+    {% set recurring_sort_offset = 1 if can_edit_recurring else 0 %}
+    {% set recurring_table_colspan = 10 if can_edit_recurring else 8 %}
     <div class="card-body p-0">
         <div class="section-title px-4 pt-4">
             <div>
@@ -9,6 +11,26 @@
         <div class="text-muted small px-4 pb-3">
             {{ _("Status explains the current month: occurred matched date and amount; amount changed matched timing but not amount; likely occurred found the merchant outside the date tolerance; possibly inactive missed expected cycles.") }}
         </div>
+        {% if can_edit_recurring %}
+        <div class="transaction-batch-bar recurring-batch-bar border-top border-bottom" data-recurring-batch-bar hidden>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <div class="fw-semibold" data-recurring-batch-count-label>
+                        {{ _("{count} selected", count=0) }}
+                    </div>
+                    <div class="text-muted small d-none" data-recurring-batch-status></div>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-batch-action="confirm">
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Confirm selected") }}
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" type="button" data-recurring-batch-action="remove">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Remove selected") }}
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
         <div class="table-responsive">
             <table
                 id="recurring-activity-table"
@@ -16,19 +38,36 @@
                 data-no-export
                 data-sortable-table
                 data-paginated-table
+                {% if can_edit_recurring %}
+                data-recurring-batch-table
+                data-all-recurring-ids="{{ all_recurring_ids | tojson }}"
+                {% endif %}
                 data-page-size="{{ table_page_size }}"
                 data-pagination-label="{{ _('Recurring activity pages') }}"
             >
                 <thead>
                     <tr>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Status") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Merchant") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Date") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="number"><span>{{ _("Amount") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="number"><span>{{ _("Change") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Confidence") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="6" data-sort-type="text"><span>{{ _("Last seen") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="7" data-sort-type="number"><span>{{ _("Observed months") }}</span></button></th>
+                        {% if can_edit_recurring %}
+                        <th class="recurring-select-column">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                data-recurring-select-all
+                                aria-label="{{ _('Select all recurring patterns') }}"
+                            >
+                        </th>
+                        {% endif %}
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 0 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Status") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 1 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Merchant") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 2 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Date") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="{{ 3 + recurring_sort_offset }}" data-sort-type="number"><span>{{ _("Amount") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="{{ 4 + recurring_sort_offset }}" data-sort-type="number"><span>{{ _("Change") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 5 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Confidence") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 6 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Last seen") }}</span></button></th>
+                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="{{ 7 + recurring_sort_offset }}" data-sort-type="number"><span>{{ _("Observed months") }}</span></button></th>
+                        {% if can_edit_recurring %}
+                        <th class="text-end">{{ _("Actions") }}</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -48,6 +87,17 @@
                         tabindex="0"
                         title="{{ _('Double-click to view recurring activity details') }}"
                     >
+                        {% if can_edit_recurring %}
+                        <td class="recurring-select-column" data-row-action>
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                value="{{ item.id }}"
+                                data-recurring-row-checkbox
+                                aria-label="{{ _('Select recurring pattern') }}"
+                            >
+                        </td>
+                        {% endif %}
                         <td data-sort-value="{{ item.status_label }}">
                             <span class="recurring-status-pill recurring-status-{{ item.status }}">{{ _(item.status_label) }}</span>
                             <div class="recurring-table-detail">{{ item.status_detail }}</div>
@@ -97,10 +147,25 @@
                         </td>
                         <td data-sort-value="{{ item.last_seen }}">{{ item.last_seen | datefmt }}</td>
                         <td class="text-end" data-sort-value="{{ item.observed_months }}">{{ item.observed_months }}</td>
+                        {% if can_edit_recurring %}
+                        <td class="text-end">
+                            <div class="recurring-row-actions d-flex align-items-center justify-content-end gap-1" data-row-action>
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-recurring-row-confirm>
+                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Confirm") }}
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary btn-icon-only" type="button" data-recurring-row-edit aria-label="{{ _('Edit') }}" title="{{ _('Edit') }}" data-bs-tooltip>
+                                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger btn-icon-only" type="button" data-recurring-row-remove aria-label="{{ _('Remove') }}" title="{{ _('Remove') }}" data-bs-tooltip>
+                                    <i class="bi bi-x-circle" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </td>
+                        {% endif %}
                     </tr>
                     {% else %}
                     <tr data-sort-ignore>
-                        <td colspan="8">
+                        <td colspan="{{ recurring_table_colspan }}">
                             <div class="empty-state compact mb-0">{{ recurring_empty_state_message }}</div>
                         </td>
                     </tr>

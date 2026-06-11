@@ -1834,23 +1834,36 @@ def build_tag_context(tags: Any) -> Any:
     return ", ".join(tags) if tags else gettext("All tags")
 
 
-def build_period_filter_context(option_label: Any, categories: Any, tags: Any = None) -> Any:
+def build_account_context(account_name: Any = "") -> Any:
+    """Build account context."""
+    return str(account_name or "").strip() or gettext("All accounts")
+
+
+def build_period_filter_context(option_label: Any, categories: Any, tags: Any = None, account_name: Any = "") -> Any:
     """Build period filter context."""
     return gettext(
-        "{period} - Categories: {categories} - Tags: {tags}",
+        "{period} - Account: {account} - Categories: {categories} - Tags: {tags}",
         period=gettext(option_label),
+        account=build_account_context(account_name),
         categories=build_category_context(categories),
         tags=build_tag_context(tags or []),
     )
 
 
-def build_year_filter_context(years: Any, baseline_year: Any, categories: Any, tags: Any = None) -> Any:
+def build_year_filter_context(
+    years: Any,
+    baseline_year: Any,
+    categories: Any,
+    tags: Any = None,
+    account_name: Any = "",
+) -> Any:
     """Build year filter context."""
     baseline_label = str(baseline_year) if baseline_year else gettext("previous year")
     return gettext(
-        "Years: {years} - Baseline: {baseline} - Categories: {categories} - Tags: {tags}",
+        "Years: {years} - Baseline: {baseline} - Account: {account} - Categories: {categories} - Tags: {tags}",
         years=", ".join(str(year) for year in years),
         baseline=baseline_label,
+        account=build_account_context(account_name),
         categories=build_category_context(categories),
         tags=build_tag_context(tags or []),
     )

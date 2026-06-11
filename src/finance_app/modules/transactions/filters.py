@@ -41,6 +41,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
+from finance_app.modules.accounts.filters import account_filter_condition, parse_account_id
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 from finance_app.modules.merchants.normalization import canonicalize_merchant_key
 from finance_app.modules.merchants.repository import merchant_identity_from_row
@@ -83,6 +84,7 @@ class TransactionFilters(TypedDict):
     category: str
     selected_categories: list[str]
     selected_tags: list[str]
+    account_id: int | None
     filter_mode: str
     review: str
     category_status: str
@@ -143,6 +145,7 @@ def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilte
         "category": legacy_category,
         "selected_categories": selected_categories,
         "selected_tags": selected_tags,
+        "account_id": parse_account_id(query_value(args, "account_id")),
         "filter_mode": filter_mode,
         "review": review,
         "category_status": category_status,
@@ -192,6 +195,7 @@ def build_transaction_core_filters(
         core_filters.add(transactions_table.c.tx_date >= start_date)
 
     core_filters.add(search_condition(filters["search"], unknown_category))
+    core_filters.add(account_filter_condition(filters["account_id"]))
     core_filters.add_in(
         category_value,
         filters["selected_categories"],

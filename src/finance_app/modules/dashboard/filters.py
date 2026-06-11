@@ -17,6 +17,7 @@ from finance_app.core.periods import (
 from finance_app.core.query import CoreFilters, QueryArgs, parse_sort_direction, query_value, query_values
 from finance_app.database.tables import merchants as merchants_table
 from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.accounts.filters import parse_account_id
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 
 from .constants import (
@@ -60,6 +61,7 @@ class DashboardRequest:
     category_table_direction: str
     selected_categories: list[str]
     selected_tags: list[str]
+    selected_account_id: int | None
     merchant_search: str
     quick_view: str
     date_from: str
@@ -113,6 +115,7 @@ def parse_dashboard_request(args: QueryArgs) -> DashboardRequest:
         ),
         selected_categories=selected_categories,
         selected_tags=selected_tags,
+        selected_account_id=parse_account_id(query_value(args, "account_id")),
         merchant_search=parse_merchant_search(query_value(args, "merchant_search")),
         quick_view=parse_quick_view(query_value(args, "quick_view"), selected_categories, selected_tags),
         date_from=date_from,
