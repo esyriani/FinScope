@@ -5,13 +5,13 @@ __pycache__/
 *.py[cod]
 .coverage
 npm-debug.log*
-
-report.md
-code review.txt
-*.docx
-codereview.md
-vibecoding/
-
+coverage.xml
+htmlcov/
+*.bak
+*.sqlite
+*.sqlite3
+*.db
+*.log
 
 src/finance_app/config.ini
 src/finance_app/*.db
@@ -19,4 +19,8 @@ src/finance_app/db_backups/
 src/finance_app/uploads/
 runtime/
 
-server*.log
+report.md
+code review.txt
+*.docx
+codereview.md
+vibecoding/
