@@ -116,6 +116,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     body = response_html(response)
     compact_body = " ".join(body.split())
     expected_rule_url = f"/rules/audit/rule/{rule_id}"
+    modal_summary = body.split('id="categorize-transaction-', 1)[1].split("</dl>", 1)[0]
 
     assert response.status_code == 200
     assert_visible_text(response, "Categorization method", "All methods", "Pending approval", "Route Visa")
@@ -137,6 +138,10 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     assert "js/busy-overlay.js" in body
     assert 'data-busy-message="Recategorizing selected transactions..."' in body
     assert 'data-busy-message="Suggesting category..."' in body
+    assert modal_summary.index("<dt>Kind</dt>") < modal_summary.index("<dt>Account</dt>")
+    assert modal_summary.index("<dt>Account</dt>") < modal_summary.index("<dt>Status</dt>")
+    assert "Route Visa" in modal_summary
+    assert "Pending approval" in modal_summary
     assert 'class="transaction-date text-nowrap"' in body
     assert "transaction-action-menu" in body
     assert "Edit category" in body
@@ -240,7 +245,7 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, core_conn):
         "Show untagged",
     )
     assert_not_visible_text(response, "Choose filters")
-    assert_markup(response, 'name="merchant_search"', 'placeholder="Search merchant"', "data-ajax-refresh-link")
+    assert_markup(response, 'name="merchant_query"', 'placeholder="Search merchant"', "data-merchant-autocomplete")
     assert_not_markup(response, "data-dashboard-custom-categories", "data-dashboard-custom-tags")
     assert_markup(tag_response, '"categoryLabels": []')
     assert_visible_text(untagged_response, "Hide untagged")
@@ -280,6 +285,32 @@ def test_category_filters_offer_analysis_category_preset(client, core_conn):
         assert all("System adjustment" in value for value in preset_values)
         assert "Transfers" in body
         assert "UNKNOWN" in body
+
+
+def test_calendar_route_renders_bookmarkable_merchant_filter(client):
+    """Verify calendar exposes merchant autocomplete and preserves query filters."""
+    response = client.get("/calendar?month=2026-05&account_id=12&merchant_id=34&merchant_query=NETFLIX")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert_markup(
+        response,
+        "data-calendar-dynamic",
+        "data-calendar-ajax-form",
+        "data-calendar-ajax-link",
+        "data-flatpickr-submit-on-change",
+        "js/merchant-autocomplete.js",
+        "data-merchant-autocomplete",
+        'name="merchant_id"',
+        'value="34"',
+        'name="merchant_query"',
+        'value="NETFLIX"',
+        "merchant_id=34",
+        "merchant_query=NETFLIX",
+    )
+    assert body.index('id="calendar-filters"') < body.index("data-calendar-ajax-form")
+    assert body.index("data-calendar-ajax-form") < body.index("Daily summaries.")
+    assert_visible_text(response, "Merchant: NETFLIX", "No posted transactions match this account and merchant.")
 
 
 def test_comparison_route_renders_complete_unknown_warning(client, core_conn, monkeypatch):
@@ -502,7 +533,7 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     assert_visible_text(
         comparison_response,
         "Tendances annuelles",
-        "Dépenses mensuelles par année",
+        "Analyse mensuelle par année : dépenses",
         "Changements de période",
         "La comparaison par catégorie peut être peu fiable",
         "Les constats par catégorie peuvent être incomplets",

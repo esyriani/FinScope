@@ -140,16 +140,29 @@ def test_recurring_routes_reject_incomplete_payloads(client, payload):
 
 def test_recurring_page_uses_shared_status_filter_links(client):
     """Verify recurring status filters are URL-driven instead of client-only buttons."""
-    response = client.get("/recurring?view=list&statuses=overdue&account_id=12")
+    response = client.get("/recurring?view=list&statuses=overdue&account_id=12&merchant_id=34&merchant_query=NETFLIX")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert 'aria-label="Status filter"' in body
+    assert 'class="recurring-tabs page-tabs nav nav-tabs mb-4"' in body
+    assert 'id="recurring-list-tab"' in body
+    assert 'role="tab"' in body
+    assert 'href="/recurring?month=' in body
+    assert "view=list" in body
+    assert 'id="recurring-calendar-tab"' in body
+    assert "view=calendar" in body
+    assert 'aria-selected="true"' in body
     assert 'data-recurring-status-filter="overdue"' in body
     assert "data-recurring-ajax-link" in body
     assert 'name="statuses" value="overdue"' in body
     assert 'name="account_id" value="12"' in body
+    assert 'name="merchant_id" value="34"' in body
+    assert 'name="merchant_query" value="NETFLIX"' in body
     assert "account_id=12" in body
+    assert "merchant_id=34" in body
+    assert "merchant_query=NETFLIX" in body
+    assert "Merchant: NETFLIX" in body
     assert 'aria-pressed="true"' in body
     assert 'id="recurring-status"' not in body
     assert "data-recurring-activity-filter" not in body
@@ -236,6 +249,7 @@ def test_recurring_activity_template_keeps_post_action_state_hooks():
 
     assert "data-recurring-user-status" in body
     assert "data-recurring-active" in body
+    assert "data-recurring-pattern-key" in body
     assert "data-recurring-row-state" in body
     assert "data-recurring-batch-table" in body
     assert "data-recurring-batch-action" in body
@@ -250,6 +264,7 @@ def test_recurring_calendar_template_places_amount_on_its_own_chip_line():
     body = (PROJECT_ROOT / "src" / "finance_app" / "templates" / "_recurring_calendar.html").read_text(encoding="utf-8")
 
     assert "recurring-calendar-chip-amount" in body
+    assert "data-recurring-pattern-key" in body
     assert "<strong>{{ item.merchant_label }}</strong>" in body
     assert 'title="{{ _(item.status_label) }} - {{ item.merchant }} - {{ item.amount_label }}"' in body
 
@@ -299,6 +314,18 @@ def test_recurring_empty_state_message_mentions_filters_when_applied(app):
     with app.app_context():
         assert recurring_empty_state_message(False) == "No recurring activity detected for this month."
         assert recurring_empty_state_message(True) == "No recurring activity matches the current filters."
+        assert (
+            recurring_empty_state_message(True, has_account_filter=True)
+            == "No recurring activity matches this account."
+        )
+        assert (
+            recurring_empty_state_message(True, has_merchant_filter=True)
+            == "No recurring activity matches this merchant."
+        )
+        assert (
+            recurring_empty_state_message(True, has_account_filter=True, has_merchant_filter=True)
+            == "No recurring activity matches this account and merchant."
+        )
 
 
 def test_recurring_calendar_days_prioritize_dense_day_attention_items():
@@ -323,6 +350,7 @@ def test_recurring_calendar_days_prioritize_dense_day_attention_items():
     ]
     assert day["all_recurring_items"][0]["status_detail"] == "Needs payment."
     assert day["all_recurring_items"][0]["category"] == "Utilities"
+    assert day["all_recurring_items"][0]["pattern_key"] == "HYDRO::spending"
     assert day["all_recurring_items"][0]["user_status"] == "detected"
     assert day["all_recurring_items"][0]["active"] == 1
 

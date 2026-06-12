@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 
 from finance_app.core.reporting import (
     income_or_tagged_transfer_credit_clause,
@@ -12,9 +12,12 @@ from finance_app.core.reporting import (
     spending_impact_clause,
 )
 from finance_app.database.dates import date_month, date_year
+from finance_app.database.tables import merchants as merchants_table
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.accounts.filters import account_filter_condition
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
+from finance_app.modules.comparison.constants import ANALYSIS_MODE_INCOME, ANALYSIS_MODE_NET
+from finance_app.modules.merchants.filters import merchant_filter_condition
 
 
 def non_transfer_clause() -> Any:
@@ -32,17 +35,42 @@ def transaction_month() -> Any:
     return date_month(transactions_table.c.tx_date)
 
 
+def analysis_amount_expression(analysis_mode: str) -> Any:
+    """Return the signed amount expression for the selected analysis mode."""
+    if analysis_mode in {ANALYSIS_MODE_INCOME, ANALYSIS_MODE_NET}:
+        return -transactions_table.c.amount
+    return transactions_table.c.amount
+
+
+def analysis_scope_clause(analysis_mode: str, include_transfer_credits: bool = False) -> Any:
+    """Return the row scope for the selected analysis mode."""
+    if analysis_mode == ANALYSIS_MODE_INCOME:
+        return and_(
+            transactions_table.c.amount < 0,
+            income_or_tagged_transfer_credit_clause(include_transfer_credits),
+            reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
+        )
+    if analysis_mode == ANALYSIS_MODE_NET:
+        return reportable_or_tagged_transfer_credit_clause(include_transfer_credits)
+    return spending_impact_clause()
+
+
 def build_category_conditions(
     selected_categories: Iterable[str],
     selected_tags: Iterable[str],
     unknown_category: str,
     account_id: int | None = None,
+    merchant_id: int | None = None,
+    merchant_query: str = "",
 ) -> tuple[Any, ...]:
     """Build Core category and tag filter conditions."""
     conditions: list[Any] = []
     account_condition = account_filter_condition(account_id)
     if account_condition is not None:
         conditions.append(account_condition)
+    merchant_condition = merchant_filter_condition(merchant_id, merchant_query)
+    if merchant_condition is not None:
+        conditions.append(merchant_condition)
     if selected_categories:
         conditions.append(func.coalesce(transactions_table.c.category, unknown_category).in_(selected_categories))
 
@@ -53,7 +81,12 @@ def build_category_conditions(
     return tuple(conditions)
 
 
-def fetch_available_years(conn: Any, account_id: int | None = None) -> list[int]:
+def fetch_available_years(
+    conn: Any,
+    account_id: int | None = None,
+    merchant_id: int | None = None,
+    merchant_query: str = "",
+) -> list[int]:
     """Fetch available years."""
     year = transaction_year()
     rows = (
@@ -63,7 +96,14 @@ def fetch_available_years(conn: Any, account_id: int | None = None) -> list[int]
                 transactions_table.c.tx_date.is_not(None),
                 transactions_table.c.ignored == 0,
                 reportable_transaction_clause(),
-                *[condition for condition in (account_filter_condition(account_id),) if condition is not None],
+                *[
+                    condition
+                    for condition in (
+                        account_filter_condition(account_id),
+                        merchant_filter_condition(merchant_id, merchant_query),
+                    )
+                    if condition is not None
+                ],
             )
             .distinct()
             .order_by(year.desc())
@@ -74,31 +114,25 @@ def fetch_available_years(conn: Any, account_id: int | None = None) -> list[int]
     return [row["year"] for row in rows if row["year"]]
 
 
-def fetch_monthly_spending(conn: Any, filters: Iterable[Any]) -> list[Any]:
-    """Fetch monthly spending."""
+def fetch_monthly_analysis(
+    conn: Any,
+    filters: Iterable[Any],
+    analysis_mode: str,
+    include_transfer_credits: bool = False,
+) -> list[Any]:
+    """Fetch monthly analysis totals."""
     year = transaction_year()
     month = transaction_month()
-    spending = func.coalesce(
-        func.sum(
-            case(
-                (
-                    spending_impact_clause(),
-                    transactions_table.c.amount,
-                ),
-                else_=0,
-            )
-        ),
-        0,
-    )
+    amount = func.coalesce(func.sum(analysis_amount_expression(analysis_mode)), 0)
     return (
         conn.execute(
             select(
                 year.label("year"),
                 month.label("month"),
-                spending.label("spending"),
+                amount.label("amount"),
             )
             .where(
-                spending_impact_clause(),
+                analysis_scope_clause(analysis_mode, include_transfer_credits),
                 *filters,
             )
             .group_by(year, month)
@@ -109,31 +143,26 @@ def fetch_monthly_spending(conn: Any, filters: Iterable[Any]) -> list[Any]:
     )
 
 
-def fetch_category_comparison(conn: Any, filters: Iterable[Any], unknown_category: str) -> list[Any]:
-    """Fetch category comparison."""
+def fetch_category_comparison(
+    conn: Any,
+    filters: Iterable[Any],
+    unknown_category: str,
+    analysis_mode: str,
+    include_transfer_credits: bool = False,
+) -> list[Any]:
+    """Fetch category comparison totals."""
     year = transaction_year()
     category = func.coalesce(transactions_table.c.category, unknown_category)
-    spending = func.coalesce(
-        func.sum(
-            case(
-                (
-                    spending_impact_clause(),
-                    transactions_table.c.amount,
-                ),
-                else_=0,
-            )
-        ),
-        0,
-    )
+    amount = func.coalesce(func.sum(analysis_amount_expression(analysis_mode)), 0)
     return (
         conn.execute(
             select(
                 year.label("year"),
                 category.label("category"),
-                spending.label("spending"),
+                amount.label("amount"),
             )
             .where(
-                spending_impact_clause(),
+                analysis_scope_clause(analysis_mode, include_transfer_credits),
                 *filters,
             )
             .group_by(year, category)
@@ -196,24 +225,26 @@ def fetch_period_summary(
     )
 
 
-def fetch_period_category_spending(
+def fetch_period_category_analysis(
     conn: Any,
     date_from: str,
     date_to: str,
     category_filters: Iterable[Any],
     unknown_category: str,
+    analysis_mode: str,
+    include_transfer_credits: bool = False,
 ) -> list[Any]:
-    """Fetch period category spending."""
+    """Fetch period category totals for the selected analysis mode."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
     return (
         conn.execute(
             select(
                 category.label("category"),
-                func.coalesce(func.sum(transactions_table.c.amount), 0).label("spending"),
+                func.coalesce(func.sum(analysis_amount_expression(analysis_mode)), 0).label("amount"),
             )
             .where(
                 transactions_table.c.ignored == 0,
-                spending_impact_clause(),
+                analysis_scope_clause(analysis_mode, include_transfer_credits),
                 transactions_table.c.tx_date >= date_from,
                 transactions_table.c.tx_date <= date_to,
                 *category_filters,
@@ -231,17 +262,29 @@ def fetch_period_merchant_transactions(
     date_to: str,
     category_filters: Iterable[Any],
     unknown_category: str,
+    analysis_mode: str,
+    include_transfer_credits: bool = False,
 ) -> list[Any]:
-    """Fetch period merchant transactions."""
+    """Fetch period merchant transactions for the selected analysis mode."""
     return (
         conn.execute(
             select(
                 transactions_table.c.description,
-                transactions_table.c.amount,
+                transactions_table.c.merchant_id,
+                merchants_table.c.merchant_key.label("merchant_name"),
+                merchants_table.c.merchant_key.label("merchant_key"),
+                analysis_amount_expression(analysis_mode).label("amount"),
                 func.coalesce(transactions_table.c.category, unknown_category).label("category"),
-            ).where(
+            )
+            .select_from(
+                transactions_table.outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == transactions_table.c.merchant_id,
+                )
+            )
+            .where(
                 transactions_table.c.ignored == 0,
-                spending_impact_clause(),
+                analysis_scope_clause(analysis_mode, include_transfer_credits),
                 transactions_table.c.tx_date >= date_from,
                 transactions_table.c.tx_date <= date_to,
                 *category_filters,
@@ -252,13 +295,15 @@ def fetch_period_merchant_transactions(
     )
 
 
-def fetch_historical_monthly_category_spending(
+def fetch_historical_monthly_category_analysis(
     conn: Any,
     date_before: str,
     category_filters: Iterable[Any],
     unknown_category: str,
+    analysis_mode: str,
+    include_transfer_credits: bool = False,
 ) -> list[Any]:
-    """Fetch monthly category spending before a comparison period."""
+    """Fetch monthly category totals before a comparison period."""
     year = transaction_year()
     month = transaction_month()
     category = func.coalesce(transactions_table.c.category, unknown_category)
@@ -268,11 +313,11 @@ def fetch_historical_monthly_category_spending(
                 year.label("year"),
                 month.label("month"),
                 category.label("category"),
-                func.coalesce(func.sum(transactions_table.c.amount), 0).label("spending"),
+                func.coalesce(func.sum(analysis_amount_expression(analysis_mode)), 0).label("amount"),
             )
             .where(
                 transactions_table.c.ignored == 0,
-                spending_impact_clause(),
+                analysis_scope_clause(analysis_mode, include_transfer_credits),
                 transactions_table.c.tx_date < date_before,
                 *category_filters,
             )
@@ -289,8 +334,10 @@ def fetch_historical_monthly_merchant_transactions(
     date_before: str,
     category_filters: Iterable[Any],
     unknown_category: str,
+    analysis_mode: str,
+    include_transfer_credits: bool = False,
 ) -> list[Any]:
-    """Fetch merchant transaction rows before a comparison period for monthly grouping."""
+    """Fetch merchant analysis rows before a comparison period for monthly grouping."""
     year = transaction_year()
     month = transaction_month()
     return (
@@ -299,12 +346,21 @@ def fetch_historical_monthly_merchant_transactions(
                 year.label("year"),
                 month.label("month"),
                 transactions_table.c.description,
-                transactions_table.c.amount,
+                transactions_table.c.merchant_id,
+                merchants_table.c.merchant_key.label("merchant_name"),
+                merchants_table.c.merchant_key.label("merchant_key"),
+                analysis_amount_expression(analysis_mode).label("amount"),
                 func.coalesce(transactions_table.c.category, unknown_category).label("category"),
+            )
+            .select_from(
+                transactions_table.outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == transactions_table.c.merchant_id,
+                )
             )
             .where(
                 transactions_table.c.ignored == 0,
-                spending_impact_clause(),
+                analysis_scope_clause(analysis_mode, include_transfer_credits),
                 transactions_table.c.tx_date < date_before,
                 *category_filters,
             )

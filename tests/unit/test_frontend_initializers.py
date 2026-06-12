@@ -97,6 +97,8 @@ def test_recurring_table_actions_use_batch_and_row_handlers():
 
     assert "function applyRecurringAction(id, action)" in recurring_js
     assert "function setupRecurringBatchActions()" in recurring_js
+    assert "function recurringPatternItems(item)" in recurring_js
+    assert "dataset.recurringPatternKey" in recurring_js
     assert '"[data-recurring-batch-table]"' in recurring_js
     assert '"[data-recurring-row-confirm]"' in recurring_js
     assert '"[data-recurring-row-remove]"' in recurring_js

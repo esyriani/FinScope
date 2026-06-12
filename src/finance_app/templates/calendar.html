@@ -16,6 +16,7 @@
 {% set page_scripts = [
     "js/dates.js",
     "js/tag-multiselect.js",
+    "js/merchant-autocomplete.js",
     "js/calendar.js",
     "js/tables.js",
     "js/exports.js"
@@ -28,6 +29,11 @@
 {% set selected_tags = selected_tags | default([]) %}
 {% set tag_options = tag_options | default([]) %}
 {% set account_options = account_options | default([]) %}
+{% set merchant_query = merchant_query | default("") %}
+{% set selected_merchant_id = selected_merchant_id | default(none) %}
+{% set selected_merchant_label = selected_merchant_label | default(merchant_query) %}
+{% set merchant_suggestion_limit = merchant_suggestion_limit | default(5) %}
+{% set calendar_merchant_filter_label = selected_merchant_label if selected_merchant_id else merchant_query %}
 {% set calendar_account_label = namespace(value=_("All accounts")) %}
 {% for account in account_options %}
     {% if selected_account_id == account.id %}
@@ -41,7 +47,7 @@
     {% endif %}
 {% endfor %}
 {% set calendar_filter_summary %}
-{{ _("Month") }}: {{ month_label }} - {{ _("Account") }}: {{ calendar_account_label.value }} - {{ _("Heatmap") }}: {{ calendar_heatmap_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }}
+{{ _("Month") }}: {{ month_label }} - {{ _("Account") }}: {{ calendar_account_label.value }} - {{ _("Merchant") }}: {{ calendar_merchant_filter_label if calendar_merchant_filter_label else _("All") }} - {{ _("Heatmap") }}: {{ calendar_heatmap_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }}
 {% endset %}
 <div class="page-header">
     <div>
@@ -50,8 +56,10 @@
     </div>
 </div>
 
+<div id="calendar-dynamic" data-calendar-dynamic>
 {% call collapsible_filter_panel("calendar-filters", calendar_filter_summary | trim) %}
 <form method="get" class="calendar-control-row">
+    <input type="hidden" name="month" value="{{ selected_month }}">
     <input type="hidden" name="heatmap" value="{{ heatmap_metric }}" data-calendar-heatmap-input>
 
     <div class="calendar-account-field">
@@ -62,6 +70,32 @@
                 <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
             {% endfor %}
         </select>
+    </div>
+
+    <div class="calendar-merchant-field merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
+        <label class="form-label" for="calendar-merchant">{{ _("Merchant") }}</label>
+        <input
+            type="hidden"
+            name="merchant_id"
+            value="{{ selected_merchant_id or '' }}"
+            data-merchant-autocomplete-id
+        >
+        <input
+            id="calendar-merchant"
+            class="form-control"
+            type="search"
+            name="merchant_query"
+            value="{{ calendar_merchant_filter_label }}"
+            placeholder="{{ _('Search merchant') }}"
+            autocomplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="calendar-merchant-suggestions"
+            data-selected-merchant-label="{{ selected_merchant_label }}"
+            data-merchant-autocomplete-input
+        >
+        <div id="calendar-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
     </div>
 
     <div class="calendar-category-field">
@@ -148,16 +182,6 @@
         <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
         <a class="btn btn-outline-secondary" href="{{ url_for('calendar_page.calendar_view') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
     </div>
-
-    <div class="calendar-month-controls" aria-label="{{ _('Calendar month navigation') }}">
-        <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
-        <div class="calendar-month-field">
-            <label class="form-label" for="calendar-month">{{ _("Month") }}</label>
-            <input id="calendar-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month>
-        </div>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
-    </div>
 </form>
 {% endcall %}
 
@@ -199,10 +223,42 @@
             {{ summary.expected_spending | moneyfmt }} {{ _("expected spending") }} / {{ summary.expected_income | moneyfmt }} {{ _("expected income") }}
         </div>
         <div class="d-flex flex-wrap gap-2 mt-2">
-            <a class="btn btn-sm btn-primary" href="{% if selected_account_id %}{{ url_for('recurring.recurring', month=selected_month, view='calendar', account_id=selected_account_id) }}{% else %}{{ url_for('recurring.recurring', month=selected_month, view='calendar') }}{% endif %}">{{ _("View recurring calendar") }}</a>
-            <a class="btn btn-sm btn-outline-secondary" href="{% if selected_account_id %}{{ url_for('recurring.recurring', month=selected_month, view='list', account_id=selected_account_id) }}{% else %}{{ url_for('recurring.recurring', month=selected_month, view='list') }}{% endif %}">{{ _("View recurring list") }}</a>
+            <a class="btn btn-sm btn-primary" href="{{ recurring_calendar_url }}">{{ _("View recurring calendar") }}</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ recurring_list_url }}">{{ _("View recurring list") }}</a>
         </div>
     </div>
+</div>
+
+{% if summary.transaction_count == 0 %}
+<div class="empty-state compact mb-4">{{ _(calendar_empty_state_message) }}</div>
+{% endif %}
+
+<div class="calendar-view-tools mb-3">
+    <form method="get" class="calendar-month-controls calendar-period-controls" aria-label="{{ _('Calendar month navigation') }}" data-calendar-ajax-form>
+        <input type="hidden" name="heatmap" value="{{ heatmap_metric }}" data-calendar-heatmap-input>
+        {% for category in selected_categories %}
+            <input type="hidden" name="categories" value="{{ category }}">
+        {% endfor %}
+        {% for tag in selected_tags %}
+            <input type="hidden" name="tags" value="{{ tag }}">
+        {% endfor %}
+        {% if selected_account_id %}
+            <input type="hidden" name="account_id" value="{{ selected_account_id }}">
+        {% endif %}
+        {% if selected_merchant_id %}
+            <input type="hidden" name="merchant_id" value="{{ selected_merchant_id }}">
+        {% endif %}
+        {% if merchant_query %}
+            <input type="hidden" name="merchant_query" value="{{ merchant_query }}">
+        {% endif %}
+        <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+        <div class="calendar-month-field">
+            <label class="form-label" for="calendar-month">{{ _("Month") }}</label>
+            <input id="calendar-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month data-flatpickr-submit-on-change>
+        </div>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
+    </form>
 </div>
 
 <section class="card mb-4">
@@ -319,4 +375,5 @@
 <script id="calendar-day-data" type="application/json">
 {{ calendar_day_json | tojson }}
 </script>
+</div>
 {% endblock %}

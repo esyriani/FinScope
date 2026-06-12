@@ -174,6 +174,8 @@ Unknown categories reduce report usefulness. Use the categorization completeness
 
 Transfers are visible in the ledger but are excluded from spending and income totals to avoid double-counting internal money movement. Credit card payment rows and matching funding-account payment rows are treated as payments/transfers. When a concrete tag filter is applied, matching transfer credits can be included so reimbursement-style tags can show a net view.
 
+Use account and merchant filters when you want an analysis slice you can return to later, such as one credit card and one merchant across several months. Analytics pages keep those filters in the URL so refresh, back/forward navigation, and copied links preserve the view.
+
 ![Dashboard](img/dashboard.png)
 
 ### Comparison
@@ -181,7 +183,7 @@ Transfers are visible in the ledger but are excluded from spending and income to
 Comparison has two major views:
 
 - Period changes compare the selected current period with the matching prior period and highlight category and merchant changes.
-- Year trends compare monthly spending patterns across selected years and summarize category spending by year.
+- Year trends compare monthly spending, income and credits, or net cash flow patterns across selected years and summarize category totals by year.
 
 Large Unknown category shares can make category comparisons unreliable, so review unknowns before drawing conclusions. Period comparisons are most useful when both periods have similar import completeness.
 
@@ -190,13 +192,13 @@ Large Unknown category shares can make category comparisons unreliable, so revie
 
 ### Calendar
 
-Calendar shows posted daily transactions for a selected month. It summarizes spending, income and credits, net cash flow, and expected recurring activity. The heatmap can show spending, income, or net cash flow. Double-click a day or use the day link to inspect that day's transactions.
+Calendar shows posted daily transactions for a selected month. It summarizes spending, income and credits, net cash flow, and expected recurring activity. The account and merchant filters narrow visible days, monthly totals, transaction drill-downs, and recurring evidence. The heatmap can show spending, income, or net cash flow. Double-click a day or use the day link to inspect that day's transactions.
 
 ![Calendar](img/calendar.png)
 
 ### Recurring
 
-Recurring detects repeated spending and income patterns. Use it to confirm useful patterns, ignore noise, inspect overdue items, and track amount changes. It has list and calendar views, status filters, category/tag filters, confidence filtering, month navigation, and detail modals with confirm, ignore, and edit actions for users with recurring-edit permission.
+Recurring detects repeated spending and income patterns. Use it to confirm useful patterns, ignore noise, inspect overdue items, and track amount changes. It has list and calendar views, account and merchant filters, status filters, category/tag filters, confidence filtering, month navigation, and detail modals with confirm, ignore, and edit actions for users with recurring-edit permission.
 
 ![Recurring](img/recurring.png)
 

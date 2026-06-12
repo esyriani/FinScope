@@ -6,7 +6,6 @@ from typing import Any
 from finance_app.core.constants import THEME_MODE_DARK, THEME_MODE_LIGHT
 from finance_app.core.i18n import normalize_language
 from finance_app.core.query import QueryArgs
-from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 
 
 def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, object]:
@@ -35,6 +34,11 @@ def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str,
             form.get("merchant_table_limit"),
             app_settings.default_merchant_table_limit,
         ),
+        "merchant_suggestion_limit": parse_positive_int(
+            form.get("merchant_suggestion_limit"),
+            app_settings.default_merchant_suggestion_limit,
+            label="Merchant suggestion limit",
+        ),
         "rule_preview_limit": parse_positive_int(
             form.get("rule_preview_limit"),
             app_settings.default_rule_preview_limit,
@@ -45,7 +49,7 @@ def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str,
             label="Rule audit transaction limit",
         ),
         "theme_mode": normalize_theme_mode(form.get("theme_mode", THEME_MODE_DARK)),
-        "ui_language": normalize_language(form.get("ui_language", app_settings.locale)),
+        "ui_language": normalize_language(form.get("ui_language", app_settings.default_ui_language)),
     }
 
 
@@ -69,12 +73,12 @@ def parse_global_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, 
         "openai_model": clean_openai_model(form.get("openai_model")) or app_settings.default_categorization_model,
         "recurrence_minimum_occurrences": parse_positive_int(
             form.get("recurrence_minimum_occurrences"),
-            RECURRENCE_DETECTION_DEFAULTS.minimum_occurrences,
+            app_settings.default_recurrence_minimum_occurrences,
             label="Recurring minimum occurrences",
         ),
         "recurrence_date_tolerance_days": parse_positive_int(
             form.get("recurrence_date_tolerance_days"),
-            RECURRENCE_DETECTION_DEFAULTS.date_tolerance_days,
+            app_settings.default_recurrence_date_tolerance_days,
             label="Recurring date tolerance days",
         ),
         "recurrence_amount_tolerance_absolute": parse_non_negative_float(
@@ -87,7 +91,7 @@ def parse_global_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, 
         ),
         "recurrence_missed_cycles_before_inactive": parse_positive_int(
             form.get("recurrence_missed_cycles_before_inactive"),
-            RECURRENCE_DETECTION_DEFAULTS.missed_cycles_before_inactive,
+            app_settings.default_recurrence_missed_cycles_before_inactive,
             label="Recurring missed cycles before inactive",
         ),
         "statement_types": parse_statement_types_form(form),

@@ -16,7 +16,6 @@ from finance_app.core.constants import (
 from finance_app.core.i18n import SUPPORTED_LANGUAGES, normalize_language
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.auth.permissions import PERMISSION_MANAGE_GLOBAL_SETTINGS, current_user_can
-from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 from finance_app.modules.settings.forms import (
     clean_openai_model,
     format_decimal,
@@ -86,6 +85,10 @@ def build_settings_context() -> dict[str, Any]:
             "home_top_category_limit", str(app_settings.default_home_top_category_limit)
         ),
         "merchant_table_limit": current.get("merchant_table_limit", str(app_settings.default_merchant_table_limit)),
+        "merchant_suggestion_limit": current.get(
+            "merchant_suggestion_limit",
+            str(app_settings.default_merchant_suggestion_limit),
+        ),
         "rule_preview_limit": current.get("rule_preview_limit", str(app_settings.default_rule_preview_limit)),
         "rule_audit_transaction_limit": current.get(
             "rule_audit_transaction_limit",
@@ -113,28 +116,28 @@ def build_settings_context() -> dict[str, Any]:
         "openai_model": current.get("openai_model", app_settings.default_categorization_model),
         "recurrence_minimum_occurrences": current.get(
             "recurrence_minimum_occurrences",
-            str(RECURRENCE_DETECTION_DEFAULTS.minimum_occurrences),
+            str(app_settings.default_recurrence_minimum_occurrences),
         ),
         "recurrence_date_tolerance_days": current.get(
             "recurrence_date_tolerance_days",
-            str(RECURRENCE_DETECTION_DEFAULTS.date_tolerance_days),
+            str(app_settings.default_recurrence_date_tolerance_days),
         ),
         "recurrence_amount_tolerance_absolute": current.get(
             "recurrence_amount_tolerance_absolute",
-            format_decimal(RECURRENCE_DETECTION_DEFAULTS.amount_tolerance_absolute),
+            format_decimal(app_settings.default_recurrence_amount_tolerance_absolute),
         ),
         "recurrence_amount_tolerance_percent": current.get(
             "recurrence_amount_tolerance_percent",
-            format_probability(RECURRENCE_DETECTION_DEFAULTS.amount_tolerance_percent),
+            format_probability(app_settings.default_recurrence_amount_tolerance_percent),
         ),
         "recurrence_missed_cycles_before_inactive": current.get(
             "recurrence_missed_cycles_before_inactive",
-            str(RECURRENCE_DETECTION_DEFAULTS.missed_cycles_before_inactive),
+            str(app_settings.default_recurrence_missed_cycles_before_inactive),
         ),
-        "theme_mode": normalize_theme_mode(current.get("theme_mode", THEME_MODE_DARK)),
+        "theme_mode": normalize_theme_mode(current.get("theme_mode", app_settings.default_theme_mode)),
         "theme_mode_dark": THEME_MODE_DARK,
         "theme_mode_light": THEME_MODE_LIGHT,
-        "ui_language": normalize_language(current.get("ui_language", app_settings.locale)),
+        "ui_language": normalize_language(current.get("ui_language", app_settings.default_ui_language)),
         "supported_languages": SUPPORTED_LANGUAGES,
         "statement_types": statement_types,
         "statement_type_parser_types": STATEMENT_TYPE_PARSER_TYPES,

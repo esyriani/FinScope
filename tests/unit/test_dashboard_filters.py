@@ -17,7 +17,8 @@ def test_parse_dashboard_request_normalizes_query_controls():
                 ("categories", " Food "),
                 ("categories", ""),
                 ("tags", "Tax"),
-                ("merchant_search", "  metro   grocery "),
+                ("merchant_id", "7"),
+                ("merchant_query", "  metro   grocery "),
                 ("account_id", "42"),
                 ("quick_view", "unknown"),
                 ("breakdown", "tag"),
@@ -35,9 +36,20 @@ def test_parse_dashboard_request_normalizes_query_controls():
     assert parsed.selected_categories == ["Food"]
     assert parsed.selected_tags == ["Tax"]
     assert parsed.selected_account_id == 42
+    assert parsed.selected_merchant_id == 7
+    assert parsed.merchant_query == "metro grocery"
     assert parsed.merchant_search == "metro grocery"
     assert parsed.quick_view == "unknown"
     assert parsed.breakdown_mode == "tag"
     assert parsed.show_untagged is True
     assert parsed.merchant_sort == "merchant"
     assert parsed.merchant_direction == "desc"
+
+
+def test_parse_dashboard_request_accepts_legacy_merchant_search():
+    """Verify old dashboard URLs continue feeding the merchant query filter."""
+    parsed = parse_dashboard_request(MultiDict([("merchant_search", "  metro   grocery ")]))
+
+    assert parsed.selected_merchant_id is None
+    assert parsed.merchant_query == "metro grocery"
+    assert parsed.merchant_search == "metro grocery"

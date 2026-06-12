@@ -9,7 +9,7 @@ from finance_app.core.i18n import format_month_year, gettext
 from finance_app.core.money import format_money_display, money_to_float, rounded_money_float
 from finance_app.modules.comparison.constants import UNKNOWN_WARNING_THRESHOLD
 from finance_app.modules.comparison.statistics import build_descriptive_statistics, robust_anomaly_score
-from finance_app.modules.merchants.normalization import normalize_merchant
+from finance_app.modules.merchants.repository import merchant_identity_from_row
 
 DEFAULT_INSIGHT_CARD_LIMIT = 7
 DEFAULT_RANKED_INSIGHT_MIN_SCORE = 10.0
@@ -25,27 +25,27 @@ MERCHANT_RANK_INCREASE_MIN_PLACES = 3
 
 
 def build_monthly_spending(years: Any, rows: Any) -> Any:
-    """Build monthly spending."""
+    """Build monthly comparison values."""
     by_year = {year: [0.0 for _ in range(12)] for year in years}
     for row in rows:
         if row["year"] in by_year and 1 <= row["month"] <= 12:
-            by_year[row["year"]][row["month"] - 1] = rounded_money_float(row["spending"])
+            by_year[row["year"]][row["month"] - 1] = rounded_money_float(row["amount"])
     return by_year
 
 
 def build_monthly_spending_statistics(years: Any, rows: Any) -> Any:
-    """Build descriptive statistics for observed monthly spending totals by year.
+    """Build descriptive statistics for observed monthly comparison totals by year.
 
     The comparison chart keeps its existing zero-filled twelve-month shape.
     Statistics intentionally use only fetched monthly rows so months outside
     the imported data, especially future months in the current year, are not
-    treated as real zero-spending periods.
+    treated as real zero-activity periods.
     """
     values_by_year: dict[Any, list[Any]] = {year: [] for year in years}
     for row in rows:
         year = row["year"]
         if year in values_by_year:
-            values_by_year[year].append(row["spending"])
+            values_by_year[year].append(row["amount"])
 
     result = []
     for year in years:
@@ -67,7 +67,7 @@ def build_category_comparison(years: Any, rows: Any, baseline_year: Any = None) 
         category = row["category"]
         categories.setdefault(category, {year: 0 for year in years})
         if row["year"] in categories[category]:
-            categories[category][row["year"]] = rounded_money_float(row["spending"])
+            categories[category][row["year"]] = rounded_money_float(row["amount"])
 
     result = []
     for category, totals in categories.items():
@@ -163,18 +163,33 @@ def safe_date(year: Any, month: Any, day: Any) -> Any:
     return date(year, month, min(day, monthrange(year, month)[1]))
 
 
-def build_period_category_rows(current_rows: Any, previous_rows: Any) -> Any:
+def build_period_category_rows(
+    current_rows: Any,
+    previous_rows: Any,
+    analysis_noun: str = "spending",
+    positive_tone: str = "danger",
+) -> Any:
     """Build period category rows."""
-    current = {row["category"]: money_to_float(row["spending"]) for row in current_rows}
-    previous = {row["category"]: money_to_float(row["spending"]) for row in previous_rows}
-    return build_period_rows("category", sorted(set(current) | set(previous)), current, previous)
+    current = {row["category"]: money_to_float(row["amount"]) for row in current_rows}
+    previous = {row["category"]: money_to_float(row["amount"]) for row in previous_rows}
+    return build_period_rows(
+        "category", sorted(set(current) | set(previous)), current, previous, analysis_noun, positive_tone
+    )
 
 
-def build_period_merchant_rows(current_rows: Any, previous_rows: Any, conn: Any) -> Any:
+def build_period_merchant_rows(
+    current_rows: Any,
+    previous_rows: Any,
+    conn: Any,
+    analysis_noun: str = "spending",
+    positive_tone: str = "danger",
+) -> Any:
     """Build period merchant rows."""
     current = build_merchant_period_totals(current_rows, conn)
     previous = build_merchant_period_totals(previous_rows, conn)
-    rows = build_period_rows("merchant", sorted(set(current) | set(previous)), current, previous)
+    rows = build_period_rows(
+        "merchant", sorted(set(current) | set(previous)), current, previous, analysis_noun, positive_tone
+    )
 
     category_by_merchant = build_merchant_primary_categories(conn, current_rows, previous_rows)
     for row in rows:
@@ -187,7 +202,7 @@ def build_merchant_period_totals(rows: Any, conn: Any) -> Any:
     """Build merchant period totals."""
     totals: dict[Any, Any] = {}
     for row in rows:
-        merchant = normalize_merchant(row["description"], conn=conn).merchant_key
+        merchant = merchant_name_from_row(row, conn)
         if not merchant:
             continue
         totals[merchant] = totals.get(merchant, 0) + money_to_float(row["amount"])
@@ -199,7 +214,7 @@ def build_merchant_primary_categories(conn: Any, *row_groups: Any) -> Any:
     category_totals: dict[Any, dict[Any, Any]] = {}
     for rows in row_groups:
         for row in rows:
-            merchant = normalize_merchant(row["description"], conn=conn).merchant_key
+            merchant = merchant_name_from_row(row, conn)
             if not merchant:
                 continue
             totals = category_totals.setdefault(merchant, {})
@@ -207,15 +222,15 @@ def build_merchant_primary_categories(conn: Any, *row_groups: Any) -> Any:
 
     result = {}
     for merchant, totals in category_totals.items():
-        result[merchant] = max(totals, key=lambda category: (totals[category], category))
+        result[merchant] = max(totals, key=lambda category: (abs(totals[category]), category))
     return result
 
 
 def build_period_category_history(rows: Any) -> Any:
-    """Build category history values from historical monthly spending rows."""
+    """Build category history values from historical monthly analysis rows."""
     history: dict[Any, list[Any]] = {}
     for row in rows:
-        history.setdefault(row["category"], []).append(row["spending"])
+        history.setdefault(row["category"], []).append(row["amount"])
     return history
 
 
@@ -223,7 +238,7 @@ def build_period_merchant_history(rows: Any, conn: Any) -> Any:
     """Build merchant history values from historical monthly transaction rows."""
     monthly_totals: dict[Any, Any] = {}
     for row in rows:
-        merchant = normalize_merchant(row["description"], conn=conn).merchant_key
+        merchant = merchant_name_from_row(row, conn)
         if not merchant:
             continue
         key = (merchant, row["year"], row["month"])
@@ -240,7 +255,7 @@ def build_period_merchant_activity_history(rows: Any, conn: Any, current_start: 
     current_period_index = month_index_from_date(current_start)
     monthly_totals: dict[Any, Any] = {}
     for row in rows:
-        merchant = normalize_merchant(row["description"], conn=conn).merchant_key
+        merchant = merchant_name_from_row(row, conn)
         if not merchant:
             continue
         key = (merchant, row["year"], row["month"])
@@ -271,6 +286,11 @@ def build_period_merchant_activity_history(rows: Any, conn: Any, current_start: 
     return result
 
 
+def merchant_name_from_row(row: Any, conn: Any) -> Any:
+    """Return the durable merchant label for linked rows, else a normalized fallback."""
+    return merchant_identity_from_row(row, conn=conn)["name"]
+
+
 def month_index_from_date(value: Any) -> Any:
     """Return a comparable month index for a date or ISO date string."""
     if isinstance(value, str):
@@ -283,7 +303,14 @@ def month_index(year: Any, month: Any) -> Any:
     return (int(year) * 12) + int(month)
 
 
-def build_period_rows(label_key: Any, labels: Any, current: Any, previous: Any) -> Any:
+def build_period_rows(
+    label_key: Any,
+    labels: Any,
+    current: Any,
+    previous: Any,
+    analysis_noun: str,
+    positive_tone: str,
+) -> Any:
     """Build period rows."""
     rows = []
     for label in labels:
@@ -291,8 +318,9 @@ def build_period_rows(label_key: Any, labels: Any, current: Any, previous: Any) 
             label,
             current.get(label, 0),
             previous.get(label, 0),
-            "spending",
+            analysis_noun,
             "",
+            positive_tone=positive_tone,
         )
         rows.append(
             {
@@ -306,7 +334,13 @@ def build_period_rows(label_key: Any, labels: Any, current: Any, previous: Any) 
 
 
 def build_period_metric(
-    label: Any, current: Any, previous: Any, noun: Any, previous_label: Any, value_type: Any = "money"
+    label: Any,
+    current: Any,
+    previous: Any,
+    noun: Any,
+    previous_label: Any,
+    value_type: Any = "money",
+    positive_tone: str = "danger",
 ) -> Any:
     """Build period metric."""
     if value_type == "count":
@@ -320,8 +354,10 @@ def build_period_metric(
     percent = percentage_change(current, previous)
     direction = "up" if change > 0 else "down" if change < 0 else "flat"
     state = change_state(current, previous)
+    tone = direction_tone(direction, positive_tone)
     return {
         "label": label,
+        "noun": noun,
         "value_type": value_type,
         "current": current,
         "previous": previous,
@@ -332,8 +368,18 @@ def build_period_metric(
         "percent_label": format_change_label(current, previous, percent),
         "direction": direction,
         "state": state,
+        "tone": tone,
         "sentence": period_change_sentence(label, noun, change, percent, previous, current, previous_label),
     }
+
+
+def direction_tone(direction: str, positive_tone: str = "danger") -> str:
+    """Return a semantic tone for a positive or negative movement."""
+    if direction == "up":
+        return positive_tone
+    if direction == "down":
+        return "success" if positive_tone == "danger" else "danger"
+    return ""
 
 
 def percentage_change(current: Any, previous: Any) -> Any:
@@ -415,6 +461,8 @@ def build_period_insights(
     current_summary: Any,
     previous_summary: Any,
     *,
+    analysis_noun: str = "spending",
+    spending_insights: bool = True,
     category_history: Any = None,
     merchant_history: Any = None,
     merchant_activity_history: Any = None,
@@ -422,13 +470,30 @@ def build_period_insights(
     ranking_options: Any = None,
 ) -> Any:
     """Build period insights."""
-    scoring_context = build_insight_scoring_context(current_summary, previous_summary)
+    current_amount = period_row_total(category_rows, "current")
+    previous_amount = period_row_total(category_rows, "previous")
+    scoring_context = build_insight_scoring_context(
+        current_summary,
+        previous_summary,
+        current_amount,
+        previous_amount,
+    )
     insights = []
     insights.extend(period_change_insight_candidates(category_rows, merchant_rows, scoring_context))
-    insights.extend(new_dropped_spending_candidates(category_rows, merchant_rows, scoring_context))
-    insights.append(transaction_activity_candidate(current_summary, previous_summary, scoring_context))
+    if spending_insights:
+        insights.extend(new_dropped_spending_candidates(category_rows, merchant_rows, scoring_context))
+    insights.append(
+        transaction_activity_candidate(
+            current_summary,
+            previous_summary,
+            scoring_context,
+            current_amount,
+            previous_amount,
+            analysis_noun,
+        )
+    )
 
-    if ranked:
+    if ranked and spending_insights:
         mix_shift = spending_mix_shift_candidate(category_rows)
         if mix_shift:
             insights.append(mix_shift)
@@ -446,9 +511,16 @@ def build_period_insights(
                 merchant_history or {},
             )
         )
+
+    if ranked:
         return select_ranked_insight_candidates(insights, **(ranking_options or {}))
 
     return insights[:DEFAULT_INSIGHT_CARD_LIMIT]
+
+
+def period_row_total(rows: Any, value_key: str) -> Any:
+    """Return the signed total for a period row collection."""
+    return sum(money_to_float(row[value_key]) for row in rows)
 
 
 def period_change_insight_candidates(category_rows: Any, merchant_rows: Any, scoring_context: Any = None) -> Any:
@@ -639,21 +711,34 @@ def new_dropped_spending_candidates(category_rows: Any, merchant_rows: Any, scor
     return insights
 
 
-def transaction_activity_candidate(current_summary: Any, previous_summary: Any, scoring_context: Any = None) -> Any:
+def transaction_activity_candidate(
+    current_summary: Any,
+    previous_summary: Any,
+    scoring_context: Any = None,
+    current_amount: Any = None,
+    previous_amount: Any = None,
+    analysis_noun: str = "spending",
+) -> Any:
     """Build the transaction activity insight candidate."""
+    if current_amount is None:
+        current_amount = current_summary["spending"]
+    if previous_amount is None:
+        previous_amount = previous_summary["spending"]
     scoring_context = scoring_context or build_insight_scoring_context(
         current_summary,
         previous_summary,
+        current_amount,
+        previous_amount,
     )
     current_count = current_summary["transaction_count"] or 0
     previous_count = previous_summary["transaction_count"] or 0
     count_change = current_count - previous_count
-    average = money_to_float(current_summary["spending"]) / current_count if current_count else 0
+    average = money_to_float(current_amount) / current_count if current_count else 0
     score, rank_reason = score_transaction_activity_insight(
         current_count,
         previous_count,
-        current_summary["spending"],
-        previous_summary["spending"],
+        current_amount,
+        previous_amount,
         scoring_context,
     )
     return build_stat_insight_card(
@@ -663,8 +748,9 @@ def transaction_activity_candidate(current_summary: Any, previous_summary: Any, 
             count=current_count,
         ),
         detail=gettext(
-            "{change} versus prior period. Average transaction: {amount}",
+            "{change} versus prior period. Average {analysis}: {amount}",
             change=format_signed_count(count_change),
+            analysis=gettext(analysis_noun),
             amount=format_money_text(average),
         ),
         visual="activity",
@@ -685,8 +771,8 @@ def transaction_activity_candidate(current_summary: Any, previous_summary: Any, 
         selection_metrics=activity_selection_metrics(
             current_count,
             previous_count,
-            current_summary["spending"],
-            previous_summary["spending"],
+            current_amount,
+            previous_amount,
         ),
         current_width=comparison_bar_width(current_count, previous_count),
         previous_width=comparison_bar_width(previous_count, current_count),
@@ -1368,10 +1454,19 @@ def insight_direction_family(insight_type: Any) -> Any:
     return insight_type
 
 
-def build_insight_scoring_context(current_summary: Any, previous_summary: Any) -> Any:
+def build_insight_scoring_context(
+    current_summary: Any,
+    previous_summary: Any,
+    current_amount: Any = None,
+    previous_amount: Any = None,
+) -> Any:
     """Return period-level values used to score insight candidates."""
-    current_spending = abs(money_to_float(current_summary["spending"]))
-    previous_spending = abs(money_to_float(previous_summary["spending"]))
+    if current_amount is None:
+        current_amount = current_summary["spending"]
+    if previous_amount is None:
+        previous_amount = previous_summary["spending"]
+    current_spending = abs(money_to_float(current_amount))
+    previous_spending = abs(money_to_float(previous_amount))
     current_count = int(current_summary["transaction_count"] or 0)
     previous_count = int(previous_summary["transaction_count"] or 0)
     return {
@@ -1651,10 +1746,11 @@ def change_insight(
 ) -> Any:
     """Build insight."""
     name = row[label_key]
+    noun = gettext(row.get("noun") or "spending")
     if row["state"] == "new":
-        value = gettext("{name}: new spending this period", name=name)
+        value = gettext("{name}: new {noun} this period", name=name, noun=noun)
     elif row["state"] == "dropped":
-        value = gettext("{name}: dropped from current period", name=name)
+        value = gettext("{name}: no {noun} this period", name=name, noun=noun)
     else:
         value = f"{name} {format_signed_money_text(row['change'])} ({row['percent_label']})"
 
@@ -1672,6 +1768,8 @@ def change_insight(
 
 def change_insight_tone(row: Any) -> Any:
     """Return the visual tone for a period insight row."""
+    if row.get("tone"):
+        return row["tone"]
     return "danger" if row["direction"] == "up" else "success" if row["direction"] == "down" else "muted"
 
 
@@ -1839,12 +1937,29 @@ def build_account_context(account_name: Any = "") -> Any:
     return str(account_name or "").strip() or gettext("All accounts")
 
 
-def build_period_filter_context(option_label: Any, categories: Any, tags: Any = None, account_name: Any = "") -> Any:
+def build_merchant_context(merchant_name: Any = "") -> Any:
+    """Build merchant context."""
+    return str(merchant_name or "").strip() or gettext("All merchants")
+
+
+def build_period_filter_context(
+    option_label: Any,
+    categories: Any,
+    tags: Any = None,
+    account_name: Any = "",
+    merchant_name: Any = "",
+    analysis_noun: Any = "spending",
+) -> Any:
     """Build period filter context."""
     return gettext(
-        "{period} - Account: {account} - Categories: {categories} - Tags: {tags}",
+        (
+            "{period} - Analysis: {analysis} - Account: {account} - "
+            "Merchant: {merchant} - Categories: {categories} - Tags: {tags}"
+        ),
         period=gettext(option_label),
+        analysis=gettext(analysis_noun),
         account=build_account_context(account_name),
+        merchant=build_merchant_context(merchant_name),
         categories=build_category_context(categories),
         tags=build_tag_context(tags or []),
     )
@@ -1856,14 +1971,21 @@ def build_year_filter_context(
     categories: Any,
     tags: Any = None,
     account_name: Any = "",
+    merchant_name: Any = "",
+    analysis_noun: Any = "spending",
 ) -> Any:
     """Build year filter context."""
     baseline_label = str(baseline_year) if baseline_year else gettext("previous year")
     return gettext(
-        "Years: {years} - Baseline: {baseline} - Account: {account} - Categories: {categories} - Tags: {tags}",
+        (
+            "Years: {years} - Baseline: {baseline} - Analysis: {analysis} - Account: {account} - "
+            "Merchant: {merchant} - Categories: {categories} - Tags: {tags}"
+        ),
         years=", ".join(str(year) for year in years),
         baseline=baseline_label,
+        analysis=gettext(analysis_noun),
         account=build_account_context(account_name),
+        merchant=build_merchant_context(merchant_name),
         categories=build_category_context(categories),
         tags=build_tag_context(tags or []),
     )

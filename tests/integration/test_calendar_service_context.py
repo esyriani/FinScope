@@ -3,7 +3,7 @@
 from datetime import date as real_date
 
 from sqlalchemy import text
-from tests.support.database import insert_account, insert_transaction
+from tests.support.database import insert_account, insert_merchant, insert_transaction
 from werkzeug.datastructures import MultiDict
 
 from finance_app.modules.calendar import parsing as calendar_parsing
@@ -12,6 +12,8 @@ from finance_app.modules.calendar import recurrence as calendar_recurrence
 from finance_app.modules.calendar import service as calendar_service
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import set_transaction_tags
+from finance_app.modules.recurring import service as recurring_service
+from finance_app.modules.recurring.patterns import recurring_pattern_key, upsert_recurring_pattern
 
 
 class FixedDate(real_date):
@@ -103,6 +105,7 @@ def patch_calendar_today(monkeypatch):
     monkeypatch.setattr(calendar_presenter, "date", FixedDate)
     monkeypatch.setattr(calendar_parsing, "date", FixedDate)
     monkeypatch.setattr(calendar_recurrence, "date", FixedDate)
+    monkeypatch.setattr(recurring_service, "date", FixedDate)
 
 
 def calendar_day(context, day_key):
@@ -224,6 +227,96 @@ def test_calendar_context_filters_activity_by_account(app, core_conn, monkeypatc
     assert f"account_id={visa_id}" in may_2["transactions"][0]["url"]
 
 
+def test_calendar_context_combines_account_merchant_category_and_tag_filters(app, core_conn, monkeypatch):
+    """Verify calendar totals, days, and URLs preserve combined analytics filters."""
+    visa_id = insert_account(core_conn, "Visa")
+    checking_id = insert_account(core_conn, "Daily Checking")
+    netflix_id = insert_merchant(core_conn, "NETFLIX")
+    metro_id = insert_merchant(core_conn, "METRO")
+    netflix_rows = [
+        ("2026-02-05", "NETFLIX SUBSCRIPTION", "calendar-filter-netflix-feb"),
+        ("2026-03-05", "NETFLIX SUBSCRIPTION", "calendar-filter-netflix-mar"),
+        ("2026-04-05", "NETFLIX SUBSCRIPTION", "calendar-filter-netflix-apr"),
+        ("2026-05-05", "NETFLIX SUBSCRIPTION", "calendar-filter-netflix-may"),
+    ]
+    for tx_date, description, fingerprint in netflix_rows:
+        insert_transaction(
+            core_conn,
+            description,
+            18.99,
+            "Entertainment",
+            account_id=visa_id,
+            merchant_id=netflix_id,
+            tx_date=tx_date,
+            fingerprint=fingerprint,
+            category_source="rule",
+            needs_review=0,
+            tags=["Subscription"],
+        )
+    insert_transaction(
+        core_conn,
+        "NETFLIX CHECKING NOISE",
+        18.99,
+        "Entertainment",
+        account_id=checking_id,
+        merchant_id=netflix_id,
+        tx_date="2026-05-05",
+        fingerprint="calendar-filter-netflix-checking-noise",
+        category_source="rule",
+        needs_review=0,
+        tags=["Subscription"],
+    )
+    insert_transaction(
+        core_conn,
+        "METRO GROCERY",
+        42.00,
+        "Food",
+        account_id=visa_id,
+        merchant_id=metro_id,
+        tx_date="2026-05-06",
+        fingerprint="calendar-filter-metro-noise",
+        category_source="rule",
+        needs_review=0,
+        tags=["Subscription"],
+    )
+    patch_calendar_today(monkeypatch)
+    args = MultiDict(
+        [
+            ("month", "2026-05"),
+            ("account_id", str(visa_id)),
+            ("merchant_id", str(netflix_id)),
+            ("merchant_query", "NETFLIX"),
+            ("categories", "Entertainment"),
+            ("tags", "Subscription"),
+        ]
+    )
+
+    with app.test_request_context("/calendar"):
+        context = calendar_service.build_calendar_context(args)
+
+    may_5 = calendar_day(context, "2026-05-05")
+    may_6 = calendar_day(context, "2026-05-06")
+
+    assert context["selected_account_id"] == visa_id
+    assert context["selected_merchant_id"] == netflix_id
+    assert context["merchant_query"] == "NETFLIX"
+    assert context["selected_merchant_label"] == "NETFLIX"
+    assert context["summary"]["spending"] == 18.99
+    assert context["summary"]["transaction_count"] == 1
+    assert context["summary"]["recurring_count"] == 1
+    assert [transaction["description"] for transaction in may_5["transactions"]] == ["NETFLIX SUBSCRIPTION"]
+    assert may_6["transactions"] == []
+    assert f"account_id={visa_id}" in context["previous_month_url"]
+    assert f"merchant_id={netflix_id}" in context["previous_month_url"]
+    assert "merchant_query=NETFLIX" in context["previous_month_url"]
+    assert "categories=Entertainment" in context["previous_month_url"]
+    assert "tags=Subscription" in context["previous_month_url"]
+    assert f"account_id={visa_id}" in context["month_transactions_url"]
+    assert "search=NETFLIX" in context["month_transactions_url"]
+    assert f"merchant_id={netflix_id}" in context["recurring_calendar_url"]
+    assert "merchant_query=NETFLIX" in context["recurring_list_url"]
+
+
 def test_calendar_context_applies_untagged_filter(app, core_conn, monkeypatch):
     """Verify the virtual untagged tag filter finds transactions without tags."""
     seed_calendar_transactions(core_conn)
@@ -264,6 +357,139 @@ def test_recurring_activity_context_exposes_json_payload(app, core_conn, monkeyp
     assert payload["status"] == "occurred"
     assert payload["matchDetails"]["matched_date"] == "2026-05-05"
     assert payload["occurrences"][0]["date"] == "2026-04-05"
+
+
+def test_recurring_page_context_filters_confirmed_patterns_by_merchant_text(app, core_conn, monkeypatch):
+    """Verify recurring merchant filters match pattern merchants and examples."""
+    visa_id = insert_account(core_conn, "Visa")
+    netflix_id = insert_merchant(core_conn, "NETFLIX")
+    hydro_id = insert_merchant(core_conn, "HYDRO")
+    for tx_date, fingerprint in [
+        ("2026-02-05", "recurring-filter-streaming-feb"),
+        ("2026-03-05", "recurring-filter-streaming-mar"),
+        ("2026-04-05", "recurring-filter-streaming-apr"),
+        ("2026-05-05", "recurring-filter-streaming-may"),
+    ]:
+        insert_transaction(
+            core_conn,
+            "MONTHLY STREAMING CHARGE",
+            18.99,
+            "Entertainment",
+            account_id=visa_id,
+            merchant_id=netflix_id,
+            tx_date=tx_date,
+            fingerprint=fingerprint,
+            category_source="rule",
+            needs_review=0,
+        )
+    for tx_date, fingerprint in [
+        ("2026-02-08", "recurring-filter-hydro-feb"),
+        ("2026-03-08", "recurring-filter-hydro-mar"),
+        ("2026-04-08", "recurring-filter-hydro-apr"),
+        ("2026-05-08", "recurring-filter-hydro-may"),
+    ]:
+        insert_transaction(
+            core_conn,
+            "HYDRO BILL",
+            64.00,
+            "Utilities",
+            account_id=visa_id,
+            merchant_id=hydro_id,
+            tx_date=tx_date,
+            fingerprint=fingerprint,
+            category_source="rule",
+            needs_review=0,
+        )
+    upsert_recurring_pattern(
+        core_conn,
+        recurring_pattern_key("NETFLIX", "spending"),
+        "NETFLIX",
+        "spending",
+        merchant_id=netflix_id,
+        user_status="confirmed",
+    )
+    core_conn.commit()
+    patch_calendar_today(monkeypatch)
+
+    with app.test_request_context("/recurring"):
+        pattern_context = recurring_service.build_recurring_page_context(
+            MultiDict(
+                [
+                    ("month", "2026-05"),
+                    ("confidence", "all"),
+                    ("merchant_query", "NETFLIX"),
+                ]
+            )
+        )
+        example_context = recurring_service.build_recurring_page_context(
+            MultiDict(
+                [
+                    ("month", "2026-05"),
+                    ("confidence", "all"),
+                    ("merchant_query", "STREAMING"),
+                ]
+            )
+        )
+        no_match_context = recurring_service.build_recurring_page_context(
+            MultiDict(
+                [
+                    ("month", "2026-05"),
+                    ("confidence", "all"),
+                    ("merchant_query", "GROCERY"),
+                ]
+            )
+        )
+
+    assert [item["merchant"] for item in pattern_context["recurring_items"]] == ["NETFLIX"]
+    assert pattern_context["recurring_items"][0]["user_status"] == "confirmed"
+    assert [item["merchant"] for item in example_context["recurring_items"]] == ["NETFLIX"]
+    assert no_match_context["recurring_items"] == []
+    assert no_match_context["recurring_empty_state_message"] == "No recurring activity matches this merchant."
+    assert "merchant_query=NETFLIX" in pattern_context["previous_month_url"]
+    assert "merchant_query=STREAMING" in example_context["list_view_url"]
+
+
+def test_recurring_page_context_combines_account_and_exact_merchant_filters(app, core_conn, monkeypatch):
+    """Verify recurring account and exact merchant filters combine predictably."""
+    visa_id = insert_account(core_conn, "Visa")
+    checking_id = insert_account(core_conn, "Daily Checking")
+    netflix_id = insert_merchant(core_conn, "NETFLIX")
+    for account_id, suffix in [(visa_id, "visa"), (checking_id, "checking")]:
+        for tx_date in ["2026-02-05", "2026-03-05", "2026-04-05", "2026-05-05"]:
+            insert_transaction(
+                core_conn,
+                f"NETFLIX {suffix}",
+                18.99,
+                "Entertainment",
+                account_id=account_id,
+                merchant_id=netflix_id,
+                tx_date=tx_date,
+                fingerprint=f"recurring-filter-{suffix}-{tx_date}",
+                category_source="rule",
+                needs_review=0,
+            )
+    patch_calendar_today(monkeypatch)
+
+    with app.test_request_context("/recurring"):
+        context = recurring_service.build_recurring_page_context(
+            MultiDict(
+                [
+                    ("month", "2026-05"),
+                    ("confidence", "all"),
+                    ("account_id", str(visa_id)),
+                    ("merchant_id", str(netflix_id)),
+                    ("merchant_query", "NETFLIX"),
+                ]
+            )
+        )
+
+    assert context["selected_account_id"] == visa_id
+    assert context["selected_merchant_id"] == netflix_id
+    assert [item["merchant"] for item in context["recurring_items"]] == ["NETFLIX"]
+    assert context["recurring_summary"]["occurred_count"] == 1
+    assert f"account_id={visa_id}" in context["calendar_view_url"]
+    assert f"merchant_id={netflix_id}" in context["calendar_view_url"]
+    assert "merchant_query=NETFLIX" in context["calendar_view_url"]
 
 
 def test_recurring_activity_context_trains_on_prior_months_only(app, core_conn, monkeypatch):

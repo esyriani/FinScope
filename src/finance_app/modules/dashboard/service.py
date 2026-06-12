@@ -20,6 +20,8 @@ from finance_app.modules.accounts.queries import list_account_options
 from finance_app.modules.categories.service import get_category_options
 from finance_app.modules.categories.tag_filters import has_concrete_tag_filter
 from finance_app.modules.categories.taxonomy import get_tag_option_rows
+from finance_app.modules.merchants.repository import find_merchant_by_id
+from finance_app.modules.merchants.service import get_merchant_suggestion_limit
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 from finance_app.modules.transactions.constants import AMOUNT_TYPE_CREDIT, AMOUNT_TYPE_INCOME, AMOUNT_TYPE_SPENDING
 
@@ -78,6 +80,8 @@ class DashboardQueryData:
     category_options: list[str]
     tag_options: list[dict[str, Any]]
     account_options: list[dict[str, Any]]
+    selected_merchant_label: str
+    merchant_suggestion_limit: int
     quick_view_counts: dict[str, Any]
     data_quality: dict[str, Any]
     spending_by_category_all: list[Any]
@@ -134,7 +138,8 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
             dashboard_request.selected_tags,
             dashboard_request.filter_mode,
             unknown_category,
-            dashboard_request.merchant_search,
+            dashboard_request.selected_merchant_id,
+            dashboard_request.merchant_query,
         )
 
         quick_view_counts = fetch_quick_view_counts(
@@ -165,6 +170,12 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
         category_options = get_category_options(conn)
         tag_options = get_tag_option_rows(conn)
         account_options = list_account_options(conn)
+        merchant_suggestion_limit = get_merchant_suggestion_limit(conn)
+        selected_merchant_label = selected_merchant_option_name(
+            conn,
+            dashboard_request.selected_merchant_id,
+            dashboard_request.merchant_query,
+        )
         spending_by_category_all = fetch_spending_by_category(
             conn,
             filter_criteria,
@@ -200,7 +211,8 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
             dashboard_request.date_to,
             dashboard_request.quick_view,
             merchant_table_limit,
-            dashboard_request.merchant_search,
+            dashboard_request.selected_merchant_id,
+            dashboard_request.merchant_query,
             dashboard_request.selected_account_id,
         )
         summary = fetch_summary(
@@ -217,6 +229,8 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
         category_options=category_options,
         tag_options=tag_options,
         account_options=account_options,
+        selected_merchant_label=selected_merchant_label,
+        merchant_suggestion_limit=merchant_suggestion_limit,
         quick_view_counts=quick_view_counts,
         data_quality=data_quality,
         spending_by_category_all=spending_by_category_all,
@@ -435,6 +449,10 @@ def dashboard_filter_context(dashboard_request: DashboardRequest, query_data: Da
         "selected_tags": dashboard_request.selected_tags,
         "account_options": query_data.account_options,
         "selected_account_id": dashboard_request.selected_account_id,
+        "selected_merchant_id": dashboard_request.selected_merchant_id,
+        "selected_merchant_label": query_data.selected_merchant_label,
+        "merchant_suggestion_limit": query_data.merchant_suggestion_limit,
+        "merchant_query": dashboard_request.merchant_query,
         "merchant_search": dashboard_request.merchant_search,
         "quick_view": dashboard_request.quick_view,
         "quick_view_options": build_quick_view_options(
@@ -442,6 +460,16 @@ def dashboard_filter_context(dashboard_request: DashboardRequest, query_data: Da
             query_data.quick_view_counts,
         ),
     }
+
+
+def selected_merchant_option_name(conn: Any, selected_merchant_id: int | None, merchant_query: str = "") -> str:
+    """Return the selected merchant label for filter summaries and forms."""
+    if selected_merchant_id is None:
+        return merchant_query
+    merchant = find_merchant_by_id(conn, selected_merchant_id)
+    if merchant is None:
+        return merchant_query
+    return str(merchant["merchant_key"])
 
 
 def dashboard_breakdown_context(args: DashboardArgs, dashboard_request: DashboardRequest) -> dict[str, Any]:

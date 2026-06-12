@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from typing import Any, TypedDict
 
-from sqlalchemy import String, case, cast, false, func, or_, select
+from sqlalchemy import String, and_, case, cast, false, func, or_, select
 
 from finance_app.core.constants import (
     CATEGORY_SOURCE_AI,
@@ -47,6 +47,7 @@ from finance_app.modules.merchants.normalization import canonicalize_merchant_ke
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.merchants.sql_filters import (
     description_matches_any_candidate,
+    escape_like_token,
     merchant_identity_candidates,
 )
 from finance_app.modules.transactions.constants import (
@@ -267,7 +268,7 @@ def search_condition(search: object, unknown_category: str) -> Any | None:
     if not text:
         return None
 
-    pattern = f"%{text}%"
+    terms = [term for term in text.split() if term]
     account_name = func.coalesce(accounts_table.c.name, "Personal")
     category_value = func.coalesce(transactions_table.c.category, unknown_category)
     review_state = case(
@@ -288,7 +289,17 @@ def search_condition(search: object, unknown_category: str) -> Any | None:
         transactions_table.c.tx_date,
         cast(transactions_table.c.amount, String),
     )
-    return or_(*[func.lower(cast(expression, String)).like(pattern) for expression in expressions])
+    return and_(
+        *[
+            or_(
+                *[
+                    func.lower(cast(expression, String)).like(f"%{escape_like_token(term)}%", escape="\\")
+                    for expression in expressions
+                ]
+            )
+            for term in terms
+        ]
+    )
 
 
 def merchant_key_condition(conn: object | None, merchant_key: str) -> Any:

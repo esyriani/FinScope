@@ -78,6 +78,18 @@
 {{ pagination(page, total_pages, page_url, label) }}
 {% endmacro %}
 
+{% macro transaction_status_badge(tx) %}
+{% if tx["ignored"] %}
+    <span class="badge text-bg-secondary transaction-status-badge">{{ _("Ignored") }}</span>
+{% elif tx["needs_review"] %}
+    <span class="badge text-bg-warning transaction-status-badge">{{ _("Needs review") }}</span>
+{% elif tx["reviewed_at"] %}
+    <span class="badge text-bg-success transaction-status-badge">{{ _("Approved") }}</span>
+{% else %}
+    <span class="badge text-bg-secondary transaction-status-badge">{{ _("Pending approval") }}</span>
+{% endif %}
+{% endmacro %}
+
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Transactions") }}</h2>
@@ -403,15 +415,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if tx["ignored"] %}
-                                <span class="badge text-bg-secondary transaction-status-badge">{{ _("Ignored") }}</span>
-                            {% elif tx["needs_review"] %}
-                                <span class="badge text-bg-warning transaction-status-badge">{{ _("Needs review") }}</span>
-                            {% elif tx["reviewed_at"] %}
-                                <span class="badge text-bg-success transaction-status-badge">{{ _("Approved") }}</span>
-                            {% else %}
-                                <span class="badge text-bg-secondary transaction-status-badge">{{ _("Pending approval") }}</span>
-                            {% endif %}
+                            {{ transaction_status_badge(tx) }}
                         </td>
                         <td class="text-end">
                             {% if can_edit_transactions %}
@@ -552,6 +556,14 @@
                         <div>
                             <dt>{{ _("Kind") }}</dt>
                             <dd>{{ _(tx["transaction_kind_label"]) }}</dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Account") }}</dt>
+                            <dd>{{ tx["account_name"] or _("Personal") }}</dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Status") }}</dt>
+                            <dd>{{ transaction_status_badge(tx) }}</dd>
                         </div>
                         <div>
                             <dt>{{ _("Category source") }}</dt>

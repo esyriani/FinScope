@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from finance_app.core.config import settings
 from finance_app.core.constants import NON_REPORTABLE_TRANSACTION_KINDS
 from finance_app.core.periods import shift_months
 from finance_app.database.tables import (
@@ -19,41 +20,41 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.accounts.filters import account_filter_condition
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
-from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS, RecurrenceDetectionSettings
+from finance_app.modules.merchants.filters import merchant_filter_condition
+from finance_app.modules.recurring.settings import RecurrenceDetectionSettings
 from finance_app.modules.settings.runtime import get_float_setting, get_int_setting
 
 
 def get_recurrence_detection_settings(conn: Any) -> RecurrenceDetectionSettings:
     """Return recurrence detection settings."""
-    defaults = RECURRENCE_DETECTION_DEFAULTS
     return RecurrenceDetectionSettings(
         minimum_occurrences=get_int_setting(
             conn,
             "recurrence_minimum_occurrences",
-            defaults.minimum_occurrences,
+            settings.default_recurrence_minimum_occurrences,
         ),
         date_tolerance_days=get_int_setting(
             conn,
             "recurrence_date_tolerance_days",
-            defaults.date_tolerance_days,
+            settings.default_recurrence_date_tolerance_days,
         ),
         amount_tolerance_absolute=get_float_setting(
             conn,
             "recurrence_amount_tolerance_absolute",
-            defaults.amount_tolerance_absolute,
+            settings.default_recurrence_amount_tolerance_absolute,
             minimum=0,
         ),
         amount_tolerance_percent=get_float_setting(
             conn,
             "recurrence_amount_tolerance_percent",
-            defaults.amount_tolerance_percent,
+            settings.default_recurrence_amount_tolerance_percent,
             minimum=0,
             maximum=1,
         ),
         missed_cycles_before_inactive=get_int_setting(
             conn,
             "recurrence_missed_cycles_before_inactive",
-            defaults.missed_cycles_before_inactive,
+            settings.default_recurrence_missed_cycles_before_inactive,
         ),
     )
 
@@ -63,12 +64,17 @@ def build_category_filter(
     selected_tags: Sequence[str],
     unknown_category: str,
     account_id: int | None = None,
+    merchant_id: int | None = None,
+    merchant_query: str = "",
 ) -> tuple[Any, ...]:
-    """Build Core category and tag filters for calendar transaction queries."""
+    """Build Core filters for calendar transaction queries."""
     conditions: list[Any] = []
     account_condition = account_filter_condition(account_id)
     if account_condition is not None:
         conditions.append(account_condition)
+    merchant_condition = merchant_filter_condition(merchant_id, merchant_query)
+    if merchant_condition is not None:
+        conditions.append(merchant_condition)
     if selected_categories:
         conditions.append(func.coalesce(transactions_table.c.category, unknown_category).in_(selected_categories))
 

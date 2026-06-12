@@ -3,8 +3,15 @@
 from datetime import date as real_date
 
 from sqlalchemy import text
-from tests.support.html import assert_has_element, assert_markup, assert_not_visible_text, assert_visible_text
+from tests.support.html import (
+    assert_has_element,
+    assert_markup,
+    assert_not_visible_text,
+    assert_option,
+    assert_visible_text,
+)
 
+from finance_app.core.constants import TRANSACTION_KIND_INCOME
 from finance_app.modules.comparison import service as comparison_service
 
 
@@ -39,7 +46,7 @@ def test_comparison_route_renders_monthly_spending_distribution(client, core_con
     assert_visible_text(
         response,
         "Monthly spending distribution",
-        "Boxplot summarizes observed monthly totals for each selected year.",
+        "Boxplot summarizes observed monthly spending totals for each selected year.",
     )
     assert_not_visible_text(
         response,
@@ -69,8 +76,8 @@ def test_comparison_route_renders_monthly_spending_distribution(client, core_con
     assert french_response.status_code == 200
     assert_visible_text(
         french_response,
-        "Distribution des d\u00e9penses mensuelles",
-        "La bo\u00eete \u00e0 moustaches r\u00e9sume les totaux mensuels observ\u00e9s",
+        "Distribution mensuelle : d\u00e9penses",
+        "La bo\u00eete \u00e0 moustaches r\u00e9sume les totaux mensuels observ\u00e9s de d\u00e9penses",
     )
     assert_not_visible_text(
         french_response,
@@ -226,3 +233,49 @@ def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypat
         },
         text="Category table",
     )
+
+
+def test_comparison_route_renders_income_analysis_mode(client, core_conn, monkeypatch):
+    """Verify comparison renders and preserves the selected analysis mode."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            tx_date, description, amount, category, category_source,
+            transaction_kind, fingerprint
+        )
+        VALUES (:p0, :p1, :p2, 'Income', 'rule', :p3, :p4)
+        """),
+        [
+            {
+                "p0": "2025-05-02",
+                "p1": "Prior payroll",
+                "p2": -900.00,
+                "p3": TRANSACTION_KIND_INCOME,
+                "p4": "comparison-income-route-2025",
+            },
+            {
+                "p0": "2026-05-02",
+                "p1": "Current payroll",
+                "p2": -1200.00,
+                "p3": TRANSACTION_KIND_INCOME,
+                "p4": "comparison-income-route-2026",
+            },
+        ],
+    )
+    core_conn.commit()
+
+    response = client.get("/comparison?analysis_mode=income&comparison_view=year&years=2025&years=2026")
+
+    assert response.status_code == 200
+    assert_has_element(response, "select", attrs={"id": "comparison-year-analysis", "name": "analysis_mode"})
+    assert_has_element(response, "select", attrs={"id": "comparison-period-analysis", "name": "analysis_mode"})
+    assert_option(response, value="income", text="Income and credits", selected=True)
+    assert_visible_text(
+        response,
+        "Analysis: income and credits",
+        "Monthly income and credits by year",
+        "Monthly income and credits distribution",
+        "Category income and credits by year",
+    )
+    assert_markup(response, '"monthlyDistributionLabel": "Monthly income and credits distribution"')

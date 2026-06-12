@@ -21,10 +21,8 @@ from finance_app.core.constants import (
     STATEMENT_TYPE_PARSER_CREDIT_CARD,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
     STATEMENT_TYPE_PARSER_TYPES,
-    THEME_MODE_DARK,
     UNKNOWN_CATEGORY,
 )
-from finance_app.core.i18n import normalize_language
 from finance_app.database.engine import db_core_connection
 from finance_app.database.tables import (
     statement_types as statement_types_table,
@@ -33,7 +31,6 @@ from finance_app.database.tables import (
     user_settings as user_settings_table,
 )
 from finance_app.database.upsert import insert_or_select_unique_row
-from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
 from finance_app.modules.users import repository as user_repository
 
 CONFIRM_AI_TOKEN_USAGE_SETTING_KEY = "confirm_ai_token_usage_enabled"
@@ -44,21 +41,22 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "comparison_insight_card_limit": str(settings.default_comparison_insight_card_limit),
     "home_top_category_limit": str(settings.default_home_top_category_limit),
     "merchant_table_limit": str(settings.default_merchant_table_limit),
+    "merchant_suggestion_limit": str(settings.default_merchant_suggestion_limit),
     "rule_preview_limit": str(settings.default_rule_preview_limit),
     "rule_audit_transaction_limit": str(settings.default_rule_audit_transaction_limit),
-    "theme_mode": THEME_MODE_DARK,
-    "ui_language": normalize_language(settings.locale),
+    "theme_mode": settings.default_theme_mode,
+    "ui_language": settings.default_ui_language,
     "llm_confidence_threshold": str(settings.default_llm_confidence_threshold),
     "llm_review_threshold": str(settings.default_llm_review_threshold),
     "verify_threshold": str(settings.default_verify_threshold),
     "transaction_ai_rerun_enabled": "1" if settings.default_transaction_ai_rerun_enabled else "0",
-    CONFIRM_AI_TOKEN_USAGE_SETTING_KEY: "1",
+    CONFIRM_AI_TOKEN_USAGE_SETTING_KEY: "1" if settings.default_confirm_ai_token_usage_enabled else "0",
     "openai_model": settings.default_categorization_model,
-    "recurrence_minimum_occurrences": str(RECURRENCE_DETECTION_DEFAULTS.minimum_occurrences),
-    "recurrence_date_tolerance_days": str(RECURRENCE_DETECTION_DEFAULTS.date_tolerance_days),
-    "recurrence_amount_tolerance_absolute": str(RECURRENCE_DETECTION_DEFAULTS.amount_tolerance_absolute),
-    "recurrence_amount_tolerance_percent": str(RECURRENCE_DETECTION_DEFAULTS.amount_tolerance_percent),
-    "recurrence_missed_cycles_before_inactive": str(RECURRENCE_DETECTION_DEFAULTS.missed_cycles_before_inactive),
+    "recurrence_minimum_occurrences": str(settings.default_recurrence_minimum_occurrences),
+    "recurrence_date_tolerance_days": str(settings.default_recurrence_date_tolerance_days),
+    "recurrence_amount_tolerance_absolute": str(settings.default_recurrence_amount_tolerance_absolute),
+    "recurrence_amount_tolerance_percent": str(settings.default_recurrence_amount_tolerance_percent),
+    "recurrence_missed_cycles_before_inactive": str(settings.default_recurrence_missed_cycles_before_inactive),
 }
 
 GENERAL_SETTING_KEYS: tuple[str, ...] = (
@@ -67,6 +65,7 @@ GENERAL_SETTING_KEYS: tuple[str, ...] = (
     "comparison_insight_card_limit",
     "home_top_category_limit",
     "merchant_table_limit",
+    "merchant_suggestion_limit",
     "rule_preview_limit",
     "rule_audit_transaction_limit",
     "theme_mode",

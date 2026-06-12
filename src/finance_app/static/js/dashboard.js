@@ -19,6 +19,10 @@ function dashboardScopedElement(root, selector) {
     return root.matches?.(selector) ? root : root.querySelector(selector);
 }
 
+function dashboardRoot(root) {
+    return root && typeof root.querySelector === "function" ? root : document;
+}
+
 function setupDashboardDrilldownInteractions(root = document) {
     const scope = dashboardScopedElement(root, "[data-dashboard-drilldown-scope]");
     if (!scope) return;
@@ -88,6 +92,7 @@ function setupDashboardQualityPanel(root = document) {
 }
 
 function setupDashboardPage(root = document) {
+    root = dashboardRoot(root);
     if (!dashboardScopedElement(root, "[data-dashboard-drilldown-scope]")) {
         return;
     }
@@ -103,7 +108,7 @@ function setupDashboardPage(root = document) {
 window.financeApp?.registerInitializer("dashboard.page", setupDashboardPage);
 
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", setupDashboardPage);
+    document.addEventListener("DOMContentLoaded", () => setupDashboardPage());
 } else {
     setupDashboardPage();
 }

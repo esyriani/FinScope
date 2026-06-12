@@ -148,6 +148,7 @@ function setupRecurringActivityDetailModal() {
         button.className = `recurring-calendar-day-list-item recurring-status-${recurringStatusClass(item.status)}`;
         button.type = "button";
         button.dataset.recurringId = item.id || "";
+        button.dataset.recurringPatternKey = item.pattern_key || item.patternKey || "";
         button.dataset.recurringUserStatus = item.user_status || "detected";
         button.dataset.recurringActive = String(item.active ?? 1);
 
@@ -299,8 +300,17 @@ function setupRecurringActivityDetailModal() {
 
     function recurringElements(item) {
         return Array.from(document.querySelectorAll("[data-recurring-id]")).filter(
-            (element) => element.dataset.recurringId === item.id
+            (element) =>
+                element.dataset.recurringId === item.id ||
+                (item.patternKey && element.dataset.recurringPatternKey === item.patternKey)
         );
+    }
+
+    function recurringPatternItems(item) {
+        const items = Object.values(recurringData).filter(
+            (candidate) => candidate.patternKey && candidate.patternKey === item.patternKey
+        );
+        return items.length ? items : [item];
     }
 
     function syncVisibleRecurringState(item) {
@@ -374,17 +384,18 @@ function setupRecurringActivityDetailModal() {
             action === "confirm" ? "/recurring/patterns/confirm" : "/recurring/patterns/ignore",
             patternPayload(item)
         );
-        item.userStatus = result.userStatus;
-        item.active = result.active;
-
-        if (action === "remove") {
-            ignoredRecurringIds.add(id);
-        } else {
-            ignoredRecurringIds.delete(id);
-        }
+        recurringPatternItems(item).forEach((patternItem) => {
+            patternItem.userStatus = result.userStatus;
+            patternItem.active = result.active;
+            if (action === "remove") {
+                ignoredRecurringIds.add(patternItem.id);
+            } else {
+                ignoredRecurringIds.delete(patternItem.id);
+            }
+            syncVisibleRecurringState(patternItem);
+        });
 
         syncModalDecisionState(item);
-        syncVisibleRecurringState(item);
         applyIgnoredRecurringState();
         return item;
     }

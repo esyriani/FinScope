@@ -127,8 +127,112 @@ function setupCalendarHeatmapControls(root = document) {
     });
 }
 
+function setupCalendarAjaxNavigation() {
+    if (document.body.dataset.calendarAjaxReady === "true") return;
+    document.body.dataset.calendarAjaxReady = "true";
+
+    const dynamicSelector = "[data-calendar-dynamic]";
+
+    function calendarUrl(value) {
+        const url = new URL(value, window.location.href);
+        return url.origin === window.location.origin && url.pathname === "/calendar" ? url : null;
+    }
+
+    function setDynamicBusy(busy) {
+        const dynamic = document.querySelector(dynamicSelector);
+        if (!dynamic) return;
+        dynamic.setAttribute("aria-busy", busy ? "true" : "false");
+        dynamic.classList.toggle("calendar-dynamic-loading", busy);
+    }
+
+    function closeOpenCalendarModals() {
+        document.querySelectorAll(".modal.show").forEach((modalElement) => {
+            window.bootstrap?.Modal.getInstance(modalElement)?.hide();
+        });
+    }
+
+    function destroyDynamicFlatpickr(dynamic) {
+        dynamic.querySelectorAll("[data-flatpickr-date], [data-flatpickr-month]").forEach((input) => {
+            input.financeFlatpickr?.destroy();
+            delete input.financeFlatpickr;
+        });
+    }
+
+    function initializeCalendarDynamic(dynamic) {
+        window.financeApp?.runInitializers(dynamic);
+    }
+
+    async function replaceCalendarDynamic(url, pushState = true) {
+        const currentDynamic = document.querySelector(dynamicSelector);
+        if (!currentDynamic) {
+            window.location.href = url.toString();
+            return;
+        }
+
+        setDynamicBusy(true);
+        try {
+            const response = await fetch(url.toString(), {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (!response.ok) throw new Error("Calendar refresh failed.");
+
+            const documentText = await response.text();
+            const nextDocument = new DOMParser().parseFromString(documentText, "text/html");
+            const nextDynamic = nextDocument.querySelector(dynamicSelector);
+            if (!nextDynamic) throw new Error("Calendar refresh returned no content.");
+
+            closeOpenCalendarModals();
+            destroyDynamicFlatpickr(currentDynamic);
+            currentDynamic.replaceWith(document.importNode(nextDynamic, true));
+            if (pushState) {
+                window.history.pushState({ calendarAjax: true }, "", url.toString());
+            }
+            initializeCalendarDynamic(document.querySelector(dynamicSelector));
+        } catch (_error) {
+            window.location.href = url.toString();
+        } finally {
+            setDynamicBusy(false);
+        }
+    }
+
+    function formUrl(form) {
+        const url = new URL(form.getAttribute("action") || window.location.href, window.location.href);
+        url.search = new URLSearchParams(new FormData(form)).toString();
+        return url;
+    }
+
+    document.addEventListener("click", (event) => {
+        const link = event.target.closest("[data-calendar-ajax-link]");
+        if (!link) return;
+
+        const url = calendarUrl(link.href);
+        if (!url) return;
+
+        event.preventDefault();
+        replaceCalendarDynamic(url);
+    });
+
+    document.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-calendar-ajax-form]");
+        if (!form) return;
+
+        const url = calendarUrl(formUrl(form));
+        if (!url) return;
+
+        event.preventDefault();
+        replaceCalendarDynamic(url);
+    });
+
+    window.addEventListener("popstate", () => {
+        const url = calendarUrl(window.location.href);
+        if (url) replaceCalendarDynamic(url, false);
+    });
+}
+
 window.financeApp?.registerInitializer("calendar.day-modal", setupCalendarDayModal);
 window.financeApp?.registerInitializer("calendar.heatmap-controls", setupCalendarHeatmapControls);
+window.financeApp?.registerInitializer("calendar.ajax-navigation", setupCalendarAjaxNavigation);
 
 setupCalendarDayModal();
 setupCalendarHeatmapControls();
+setupCalendarAjaxNavigation();

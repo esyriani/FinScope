@@ -106,18 +106,25 @@ def test_dashboard_route_loads_dashboard_assets(client):
 def test_tabbed_pages_load_shared_tab_stylesheet(client):
     """Verify tabbed pages opt into shared tab styles without loading them globally."""
     comparison_response = client.get("/comparison")
+    recurring_response = client.get("/recurring")
     settings_response = client.get("/settings")
     taxonomy_response = client.get("/taxonomy")
 
     assert comparison_response.status_code == 200
+    assert recurring_response.status_code == 200
     assert settings_response.status_code == 200
     assert taxonomy_response.status_code == 200
     assert_asset_reference(comparison_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(recurring_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(settings_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(taxonomy_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert asset_reference_index(comparison_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         comparison_response,
         r"/static/css/comparison\.css",
+    )
+    assert asset_reference_index(recurring_response, r"/static/css/page-tabs\.css") < asset_reference_index(
+        recurring_response,
+        r"/static/css/calendar-recurring\.css",
     )
     assert asset_reference_index(settings_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         settings_response,

@@ -16,6 +16,7 @@ def build_calendar_transactions(
     rows: Iterable[Mapping[str, Any]],
     conn: Any = None,
     account_id: int | None = None,
+    merchant_search: str = "",
 ) -> list[dict[str, Any]]:
     """Build calendar transactions."""
     transactions = []
@@ -41,7 +42,12 @@ def build_calendar_transactions(
                 "type": tx_type,
                 "category": row["category"],
                 "account_name": row["account_name"],
-                "url": transactions_url(row["tx_date"], row["tx_date"], account_id=account_id),
+                "url": transactions_url(
+                    row["tx_date"],
+                    row["tx_date"],
+                    account_id=account_id,
+                    merchant_search=merchant_search,
+                ),
             }
         )
     return transactions
@@ -51,6 +57,7 @@ def build_calendar_days(
     month_start: date,
     transactions: Iterable[Mapping[str, Any]],
     account_id: int | None = None,
+    merchant_search: str = "",
 ) -> list[dict[str, Any]]:
     """Build calendar days."""
     transaction_by_date: dict[str, list[Mapping[str, Any]]] = {}
@@ -73,7 +80,7 @@ def build_calendar_days(
                 "income": round(income, 2),
                 "net": round(income - spending, 2),
                 "transactions": day_transactions,
-                "url": transactions_url(day_key, day_key, account_id=account_id),
+                "url": transactions_url(day_key, day_key, account_id=account_id, merchant_search=merchant_search),
             }
         )
 

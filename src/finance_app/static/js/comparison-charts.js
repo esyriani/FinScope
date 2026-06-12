@@ -143,7 +143,9 @@ function comparisonBoxplotOption() {
         },
         series: [
             {
-                name: comparisonChartUtils.translate("Monthly spending distribution"),
+                name:
+                    comparisonCharts.monthlyDistributionLabel ||
+                    comparisonChartUtils.translate("Monthly spending distribution"),
                 type: "boxplot",
                 data: rows.map(comparisonBoxplotDataItem),
             },

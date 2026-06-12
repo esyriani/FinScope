@@ -147,6 +147,12 @@
                         </div>
 
                         <div class="settings-field">
+                            <label for="merchant_suggestion_limit" class="form-label">{{ _("Merchant suggestion limit") }}</label>
+                            <input id="merchant_suggestion_limit" class="form-control" type="number" min="1" name="merchant_suggestion_limit" value="{{ merchant_suggestion_limit }}">
+                            <div class="form-text">{{ _("Merchant suggestions shown in autocomplete fields.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
                             <label for="rule_preview_limit" class="form-label">{{ _("Rule preview limit") }}</label>
                             <input id="rule_preview_limit" class="form-control" type="number" min="1" name="rule_preview_limit" value="{{ rule_preview_limit }}">
                             <div class="form-text">{{ _("Matching transactions shown while previewing rules.") }}</div>

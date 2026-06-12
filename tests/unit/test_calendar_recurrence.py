@@ -173,6 +173,18 @@ def test_recurring_frequency_label_weekly_monthly_and_noisy_edges():
     ]
 
     assert recurring_frequency_label(weekly_dates, {"2026-01"}) == "Weekly"
+    assert (
+        recurring_frequency_label(
+            [
+                date(2026, 1, 8),
+                date(2026, 1, 22),
+                date(2026, 2, 5),
+                date(2026, 2, 19),
+            ],
+            {"2026-01", "2026-02"},
+        )
+        == "Biweekly"
+    )
     assert recurring_frequency_label(monthly_dates, {"2026-01", "2026-02", "2026-03", "2026-04"}) == "Monthly-like"
     assert recurring_frequency_label(quarterly_dates, {"2026-01", "2026-04", "2026-07", "2026-10"}) == "Quarterly"
     assert recurring_frequency_label(irregular_dates, {"2026-01", "2026-03", "2026-07"}) == "Irregular recurring"
@@ -243,6 +255,59 @@ def test_infer_recurring_items_uses_current_month_matches_and_metadata_overrides
     assert item["match_details"]["date_difference_days"] == 1
     assert item["match_details"]["amount_difference"] == 0.5
     assert item["confidence"] == "Low"
+
+
+def test_infer_recurring_items_expands_biweekly_patterns_with_multiple_monthly_occurrences(app):
+    """Verify biweekly recurrence creates each expected current-month occurrence."""
+    rows = [
+        {
+            "tx_date": tx_date,
+            "description": "UDEM PAIE",
+            "amount": amount,
+            "category": "Income",
+            "account_name": "TD checking",
+        }
+        for tx_date, amount in [
+            ("2026-01-08", -3488.58),
+            ("2026-01-22", -3662.96),
+            ("2026-02-05", -3505.37),
+            ("2026-02-19", -3505.37),
+            ("2026-03-05", -3505.38),
+            ("2026-03-19", -3505.37),
+        ]
+    ]
+    month_transactions = [
+        {
+            "merchant_key": "UDEM PAIE",
+            "type": "income",
+            "date": tx_date,
+            "amount": amount,
+        }
+        for tx_date, amount in [
+            ("2026-04-02", 3505.36),
+            ("2026-04-16", 3505.37),
+            ("2026-04-30", 3505.37),
+        ]
+    ]
+
+    with app.test_request_context():
+        recurring = infer_recurring_items(
+            rows,
+            date(2026, 4, 1),
+            date(2026, 4, 30),
+            month_transactions,
+            recurrence_settings=settings(),
+        )
+
+    assert [item["date"] for item in recurring] == ["2026-04-02", "2026-04-16", "2026-04-30"]
+    assert [item["frequency"] for item in recurring] == ["Biweekly", "Biweekly", "Biweekly"]
+    assert [item["status"] for item in recurring] == ["occurred", "occurred", "occurred"]
+    assert [item["match_details"]["matched_date"] for item in recurring] == [
+        "2026-04-02",
+        "2026-04-16",
+        "2026-04-30",
+    ]
+    assert [item["last_seen"] for item in recurring] == ["2026-04-02", "2026-04-16", "2026-04-30"]
 
 
 def test_infer_recurring_items_supports_merchant_bound_and_keyword_fuzzy_metadata(app):

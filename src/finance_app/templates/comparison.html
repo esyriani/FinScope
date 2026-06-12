@@ -9,6 +9,7 @@
 ] %}
 {% set page_scripts = [
     "js/tag-multiselect.js",
+    "js/merchant-autocomplete.js",
     "js/tables.js",
     "js/comparison.js",
     "js/chart-utils.js",
@@ -27,11 +28,20 @@
 {% set tag_options = tag_options | default([]) %}
 {% set account_options = account_options | default([]) %}
 {% set selected_comparison_view = selected_comparison_view | default("period") %}
+{% set selected_merchant_id = selected_merchant_id | default(none) %}
+{% set merchant_query = merchant_query | default("") %}
+{% set selected_merchant_label = selected_merchant_label | default(merchant_query) %}
+{% set merchant_suggestion_limit = merchant_suggestion_limit | default(5) %}
+{% set comparison_merchant_filter_label = selected_merchant_label if selected_merchant_id else merchant_query %}
+{% set selected_analysis_mode = selected_analysis_mode | default("spending") %}
+{% set selected_analysis_mode_option = selected_analysis_mode_option | default({"label": "Spending", "noun": "spending"}) %}
+{% set analysis_mode_options = analysis_mode_options | default([{"value": "spending", "label": "Spending"}]) %}
+{% set analysis_noun = selected_analysis_mode_option.noun | default("spending") %}
 
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Comparison") }}</h2>
-        <p class="text-muted mb-0">{{ _("Review recent spending changes and longer-term category trends.") }}</p>
+        <p class="text-muted mb-0">{{ _("Review recent period changes and longer-term trends.") }}</p>
     </div>
 </div>
 
@@ -105,6 +115,15 @@
                 </div>
 
                 <div class="col-md-3">
+                    <label class="form-label" for="comparison-year-analysis">{{ _("Analysis") }}</label>
+                    <select id="comparison-year-analysis" class="form-select" name="analysis_mode">
+                        {% for option in analysis_mode_options %}
+                            <option value="{{ option.value }}" {% if option.value == selected_analysis_mode %}selected{% endif %}>{{ _(option.label) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
                     <label class="form-label" for="comparison-year-account">{{ _("Account") }}</label>
                     <select id="comparison-year-account" class="form-select" name="account_id">
                         <option value="">{{ _("All accounts") }}</option>
@@ -112,6 +131,32 @@
                             <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <div class="col-md-3 merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
+                    <label class="form-label" for="comparison-year-merchant">{{ _("Merchant") }}</label>
+                    <input
+                        type="hidden"
+                        name="merchant_id"
+                        value="{{ selected_merchant_id or '' }}"
+                        data-merchant-autocomplete-id
+                    >
+                    <input
+                        id="comparison-year-merchant"
+                        class="form-control"
+                        type="search"
+                        name="merchant_query"
+                        value="{{ comparison_merchant_filter_label }}"
+                        placeholder="{{ _('Search merchant') }}"
+                        autocomplete="off"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-expanded="false"
+                        aria-controls="comparison-year-merchant-suggestions"
+                        data-selected-merchant-label="{{ selected_merchant_label }}"
+                        data-merchant-autocomplete-input
+                    >
+                    <div id="comparison-year-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
                 </div>
 
                 <div class="col-md-3">
@@ -214,10 +259,10 @@
                 <section class="chart-card dashboard-wide" data-chart-export-scope>
                     <div class="section-title">
                         <div>
-                            <h5 class="card-title mb-1">{{ _("Monthly spending by year") }}</h5>
-                            <div class="text-muted small">{{ _("Compare monthly spending patterns across selected years.") }}</div>
+                            <h5 class="card-title mb-1">{{ _("Monthly {analysis} by year", analysis=_(analysis_noun)) }}</h5>
+                            <div class="text-muted small">{{ _("Compare monthly {analysis} patterns across selected years.", analysis=_(analysis_noun)) }}</div>
                         </div>
-                        <div class="chart-type-toggle" role="group" aria-label="{{ _('Monthly spending chart type') }}">
+                        <div class="chart-type-toggle" role="group" aria-label="{{ _('Monthly {analysis} chart type', analysis=_(analysis_noun)) }}">
                             <input class="btn-check" type="radio" name="comparison_chart_type" id="comparison_chart_line" value="line" autocomplete="off" checked>
                             <label class="chart-type-option" for="comparison_chart_line">
                                 <i class="bi bi-graph-up" aria-hidden="true"></i>
@@ -237,8 +282,8 @@
                 <section class="chart-card dashboard-wide" data-chart-export-scope>
                     <div class="section-title">
                         <div>
-                            <h5 class="card-title mb-1">{{ _("Monthly spending distribution") }}</h5>
-                            <div class="text-muted small">{{ _("Boxplot summarizes observed monthly totals for each selected year.") }}</div>
+                            <h5 class="card-title mb-1">{{ _("Monthly {analysis} distribution", analysis=_(analysis_noun)) }}</h5>
+                            <div class="text-muted small">{{ _("Boxplot summarizes observed monthly {analysis} totals for each selected year.", analysis=_(analysis_noun)) }}</div>
                         </div>
                     </div>
                     <div id="comparisonBoxplotChart" class="chart-viewport" data-chart-export></div>
@@ -253,7 +298,7 @@
 
             <div class="section-title">
                 <div>
-                    <h5 class="card-title mb-1">{{ _("Category spending by year") }}</h5>
+                    <h5 class="card-title mb-1">{{ _("Category {analysis} by year", analysis=_(analysis_noun)) }}</h5>
                     <div class="text-muted small">
                         {% if selected_baseline_year %}
                             {{ _("Each year is compared with {year}.", year=selected_baseline_year) }}
@@ -336,6 +381,15 @@
             </div>
 
             <div class="col-md-3">
+                <label class="form-label" for="comparison-period-analysis">{{ _("Analysis") }}</label>
+                <select id="comparison-period-analysis" class="form-select" name="analysis_mode">
+                    {% for option in analysis_mode_options %}
+                        <option value="{{ option.value }}" {% if option.value == selected_analysis_mode %}selected{% endif %}>{{ _(option.label) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
                 <label class="form-label" for="comparison-period-account">{{ _("Account") }}</label>
                 <select id="comparison-period-account" class="form-select" name="account_id">
                     <option value="">{{ _("All accounts") }}</option>
@@ -343,6 +397,32 @@
                         <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
                     {% endfor %}
                 </select>
+            </div>
+
+            <div class="col-md-3 merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
+                <label class="form-label" for="comparison-period-merchant">{{ _("Merchant") }}</label>
+                <input
+                    type="hidden"
+                    name="merchant_id"
+                    value="{{ selected_merchant_id or '' }}"
+                    data-merchant-autocomplete-id
+                >
+                <input
+                    id="comparison-period-merchant"
+                    class="form-control"
+                    type="search"
+                    name="merchant_query"
+                    value="{{ comparison_merchant_filter_label }}"
+                    placeholder="{{ _('Search merchant') }}"
+                    autocomplete="off"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded="false"
+                    aria-controls="comparison-period-merchant-suggestions"
+                    data-selected-merchant-label="{{ selected_merchant_label }}"
+                    data-merchant-autocomplete-input
+                >
+                <div id="comparison-period-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
             </div>
 
             <div class="col-md-3">
@@ -456,7 +536,7 @@
                         {% endif %}
                     </div>
                     <div class="metric-detail">
-                        <span class="{% if total.direction == 'up' %}text-danger{% elif total.direction == 'down' %}text-success{% endif %}">
+                        <span class="{% if total.tone == 'danger' %}text-danger{% elif total.tone == 'success' %}text-success{% endif %}">
                             {{ total.amount_label }} / {{ total.percent_label }}
                         </span>
                         {{ _("versus prior period") }}
@@ -601,7 +681,7 @@
                 <div class="section-title mb-2">
                     <div>
                         <h6 class="card-title mb-1">{{ _("Category changes") }}</h6>
-                        <div class="text-muted small">{{ _("All selected categories, sorted by largest absolute change.") }}</div>
+                        <div class="text-muted small">{{ _("All selected categories, sorted by largest absolute {analysis} change.", analysis=_(analysis_noun)) }}</div>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -621,14 +701,14 @@
                                 <td>{{ row.category }}</td>
                                 <td class="text-end" data-sort-value="{{ row.current }}">{{ row.current | moneyfmt }}</td>
                                 <td class="text-end" data-sort-value="{{ row.previous }}">{{ row.previous | moneyfmt }}</td>
-                                <td class="text-end {% if row.direction == 'up' %}text-danger{% elif row.direction == 'down' %}text-success{% endif %}" data-sort-value="{{ row.abs_change }}">
+                                <td class="text-end {% if row.tone == 'danger' %}text-danger{% elif row.tone == 'success' %}text-success{% endif %}" data-sort-value="{{ row.abs_change }}">
                                     {{ row.amount_label }}
                                 </td>
                                 <td class="text-end">{{ _(row.percent_label) }}</td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="5" class="text-muted">{{ _("No category spending in either period.") }}</td>
+                                <td colspan="5" class="text-muted">{{ _("No category {analysis} in either period.", analysis=_(analysis_noun)) }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -640,7 +720,7 @@
                 <div class="section-title mb-2">
                     <div>
                         <h6 class="card-title mb-1">{{ _("Merchant changes") }}</h6>
-                        <div class="text-muted small">{{ _("Top {count} merchants by absolute spending change.", count=merchant_table_limit) }}</div>
+                        <div class="text-muted small">{{ _("Top {count} merchants by absolute {analysis} change.", count=merchant_table_limit, analysis=_(analysis_noun)) }}</div>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -662,14 +742,14 @@
                                 <td>{{ row.category }}</td>
                                 <td class="text-end" data-sort-value="{{ row.current }}">{{ row.current | moneyfmt }}</td>
                                 <td class="text-end" data-sort-value="{{ row.previous }}">{{ row.previous | moneyfmt }}</td>
-                                <td class="text-end {% if row.direction == 'up' %}text-danger{% elif row.direction == 'down' %}text-success{% endif %}" data-sort-value="{{ row.abs_change }}">
+                                <td class="text-end {% if row.tone == 'danger' %}text-danger{% elif row.tone == 'success' %}text-success{% endif %}" data-sort-value="{{ row.abs_change }}">
                                     {{ row.amount_label }}
                                 </td>
                                 <td class="text-end">{{ _(row.percent_label) }}</td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="6" class="text-muted">{{ _("No merchant spending in either period.") }}</td>
+                                <td colspan="6" class="text-muted">{{ _("No merchant {analysis} in either period.", analysis=_(analysis_noun)) }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -687,7 +767,8 @@
 {{ {
     "monthLabels": month_labels,
     "monthlySpending": monthly_spending_json,
-    "monthlySpendingStatistics": monthly_spending_statistics_json
+    "monthlySpendingStatistics": monthly_spending_statistics_json,
+    "monthlyDistributionLabel": _("Monthly {analysis} distribution", analysis=_(analysis_noun))
 } | tojson }}
 </script>
 {% else %}

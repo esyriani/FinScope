@@ -262,7 +262,8 @@ def fetch_merchant_analytics(
     date_to: str = "",
     quick_view: str = QUICK_VIEW_ALL,
     merchant_table_limit: int = 10,
-    merchant_search: str = "",
+    merchant_id: int | None = None,
+    merchant_query: str = "",
     account_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch merchant analytics."""
@@ -276,7 +277,8 @@ def fetch_merchant_analytics(
         selected_tags,
         unknown_category,
         quick_view,
-        merchant_search,
+        merchant_id,
+        merchant_query,
         account_id,
     )
     rules = get_category_rules(conn)
@@ -310,7 +312,7 @@ def fetch_merchant_analytics(
                     date_to,
                     quick_view,
                     selected_tags=selected_tags,
-                    merchant_search=merchant_search,
+                    merchant_search=merchant_query,
                     account_id=account_id,
                     merchant_key=aggregate["merchant_key"],
                     amount_type=AMOUNT_TYPE_SPENDING,
@@ -358,7 +360,8 @@ def fetch_previous_merchant_totals(
     selected_tags: Sequence[str],
     unknown_category: str,
     quick_view: str = QUICK_VIEW_ALL,
-    merchant_search: str = "",
+    merchant_id: int | None = None,
+    merchant_query: str = "",
     account_id: int | None = None,
 ) -> dict[str, Any]:
     """Fetch previous merchant totals."""
@@ -377,7 +380,8 @@ def fetch_previous_merchant_totals(
         selected_tags,
         filter_mode,
         unknown_category,
-        merchant_search,
+        merchant_id,
+        merchant_query,
     )
     apply_quick_view_core_filter(
         filters,

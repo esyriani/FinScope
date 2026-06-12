@@ -7,6 +7,7 @@
     "vendor/flatpickr/4.6.13/plugins/monthSelect/index.js"
 ] %}
 {% set page_stylesheets = [
+    "css/page-tabs.css",
     "css/home-dashboard.css",
     "css/calendar-recurring.css",
     "css/tables.css",
@@ -16,6 +17,7 @@
 {% set page_scripts = [
     "js/dates.js",
     "js/tag-multiselect.js",
+    "js/merchant-autocomplete.js",
     "js/tables.js",
     "js/exports.js",
     "js/recurring.js"
@@ -27,6 +29,11 @@
 {% set selected_tags = selected_tags | default([]) %}
 {% set tag_options = tag_options | default([]) %}
 {% set account_options = account_options | default([]) %}
+{% set merchant_query = merchant_query | default("") %}
+{% set selected_merchant_id = selected_merchant_id | default(none) %}
+{% set selected_merchant_label = selected_merchant_label | default(merchant_query) %}
+{% set merchant_suggestion_limit = merchant_suggestion_limit | default(5) %}
+{% set recurring_merchant_filter_label = selected_merchant_label if selected_merchant_id else merchant_query %}
 {% set can_edit_recurring = current_user_can('edit_recurring') %}
 {% set recurring_account_label = namespace(value=_("All accounts")) %}
 {% for account in account_options %}
@@ -41,13 +48,41 @@
     {% endif %}
 {% endfor %}
 {% set recurring_filter_summary %}
-{{ _("Month") }}: {{ selected_month }} - {{ _("Account") }}: {{ recurring_account_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ recurring_status_labels.values | join(", ") if recurring_status_labels.values else _("All statuses") }} - {{ _("Confidence") }}: {{ _(selected_confidence) if selected_confidence else _("All confidence") }}
+{{ _("Month") }}: {{ selected_month }} - {{ _("Account") }}: {{ recurring_account_label.value }} - {{ _("Merchant") }}: {{ recurring_merchant_filter_label if recurring_merchant_filter_label else _("All") }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ recurring_status_labels.values | join(", ") if recurring_status_labels.values else _("All statuses") }} - {{ _("Confidence") }}: {{ _(selected_confidence) if selected_confidence else _("All confidence") }}
 {% endset %}
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Recurring") }}</h2>
         <p class="text-muted mb-0">{{ _("Review repeating merchants, confirm useful patterns, and remove noise.") }}</p>
     </div>
+</div>
+
+<div id="recurring-dynamic" data-recurring-dynamic>
+<div class="recurring-tabs page-tabs nav nav-tabs mb-4" role="tablist" aria-label="{{ _('Recurring views') }}">
+    <a
+        class="nav-link {% if selected_recurring_view == 'list' %}active{% endif %}"
+        id="recurring-list-tab"
+        href="{{ list_view_url }}"
+        role="tab"
+        aria-controls="recurring-list-section"
+        aria-selected="{% if selected_recurring_view == 'list' %}true{% else %}false{% endif %}"
+        data-recurring-ajax-link
+    >
+        <i class="bi bi-list-ul" aria-hidden="true"></i>
+        <span>{{ _("List") }}</span>
+    </a>
+    <a
+        class="nav-link {% if selected_recurring_view == 'calendar' %}active{% endif %}"
+        id="recurring-calendar-tab"
+        href="{{ calendar_view_url }}"
+        role="tab"
+        aria-controls="recurring-calendar-section"
+        aria-selected="{% if selected_recurring_view == 'calendar' %}true{% else %}false{% endif %}"
+        data-recurring-ajax-link
+    >
+        <i class="bi bi-calendar3" aria-hidden="true"></i>
+        <span>{{ _("Calendar") }}</span>
+    </a>
 </div>
 
 {% call collapsible_filter_panel("recurring-filters", recurring_filter_summary | trim) %}
@@ -66,6 +101,32 @@
                         <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
                     {% endfor %}
                 </select>
+            </div>
+
+            <div class="recurring-merchant-field merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
+                <label class="form-label" for="recurring-merchant">{{ _("Merchant") }}</label>
+                <input
+                    type="hidden"
+                    name="merchant_id"
+                    value="{{ selected_merchant_id or '' }}"
+                    data-merchant-autocomplete-id
+                >
+                <input
+                    id="recurring-merchant"
+                    class="form-control"
+                    type="search"
+                    name="merchant_query"
+                    value="{{ recurring_merchant_filter_label }}"
+                    placeholder="{{ _('Search merchant') }}"
+                    autocomplete="off"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded="false"
+                    aria-controls="recurring-merchant-suggestions"
+                    data-selected-merchant-label="{{ selected_merchant_label }}"
+                    data-merchant-autocomplete-input
+                >
+                <div id="recurring-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
             </div>
 
             <div class="recurring-category-field">
@@ -165,7 +226,6 @@
         </form>
 {% endcall %}
 
-<div id="recurring-dynamic" data-recurring-dynamic>
 <section class="recurring-summary-layout mb-4" aria-label="{{ _('Recurring summary') }}">
     <div class="recurring-primary-metrics">
         <div class="metric-card recurring-metric-card recurring-metric-attention">
@@ -248,6 +308,12 @@
             {% if selected_account_id %}
                 <input type="hidden" name="account_id" value="{{ selected_account_id }}">
             {% endif %}
+            {% if selected_merchant_id %}
+                <input type="hidden" name="merchant_id" value="{{ selected_merchant_id }}">
+            {% endif %}
+            {% if merchant_query %}
+                <input type="hidden" name="merchant_query" value="{{ merchant_query }}">
+            {% endif %}
             <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-recurring-ajax-link><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
             <div class="calendar-month-field">
                 <label class="form-label" for="recurring-month">{{ _("Month") }}</label>
@@ -256,27 +322,6 @@
             <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-recurring-ajax-link><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
             <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-recurring-ajax-link><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
         </form>
-        <div class="section-title mb-0" aria-label="{{ _('Recurring view') }}">
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <span class="metric-label">{{ _("View") }}</span>
-                <a
-                    class="btn btn-sm text-nowrap {% if selected_recurring_view == 'list' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                    href="{{ list_view_url }}"
-                    aria-pressed="{{ 'true' if selected_recurring_view == 'list' else 'false' }}"
-                    data-recurring-ajax-link
-                >
-                    {{ _("List") }}
-                </a>
-                <a
-                    class="btn btn-sm text-nowrap {% if selected_recurring_view == 'calendar' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                    href="{{ calendar_view_url }}"
-                    aria-pressed="{{ 'true' if selected_recurring_view == 'calendar' else 'false' }}"
-                    data-recurring-ajax-link
-                >
-                    {{ _("Calendar") }}
-                </a>
-            </div>
-        </div>
     </div>
     <div class="recurring-status-filter" aria-label="{{ _('Status filter') }}">
         <span class="metric-label">{{ _("Status") }}</span>
@@ -347,11 +392,17 @@
     </div>
 </div>
 
-{% if selected_recurring_view == "calendar" %}
-{% include "_recurring_calendar.html" %}
-{% else %}
-{% include "_recurring_activity.html" %}
-{% endif %}
+<div class="tab-content recurring-tab-content page-tab-content">
+    {% if selected_recurring_view == "calendar" %}
+        <section id="recurring-calendar-section" class="tab-pane fade show active" role="tabpanel" aria-labelledby="recurring-calendar-tab" tabindex="0">
+            {% include "_recurring_calendar.html" %}
+        </section>
+    {% else %}
+        <section id="recurring-list-section" class="tab-pane fade show active" role="tabpanel" aria-labelledby="recurring-list-tab" tabindex="0">
+            {% include "_recurring_activity.html" %}
+        </section>
+    {% endif %}
+</div>
 {% include "_recurring_detail_modal.html" %}
 </div>
 {% endblock %}

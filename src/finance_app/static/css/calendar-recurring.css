@@ -3,9 +3,9 @@
     display: grid;
     gap: 0.85rem;
     grid-template-areas:
-        "account categories tags actions"
-        "navigation navigation navigation navigation";
-    grid-template-columns: minmax(180px, 0.7fr) minmax(240px, 1fr) minmax(240px, 1fr) auto;
+        "account merchant categories tags"
+        ". . . actions";
+    grid-template-columns: minmax(180px, 0.7fr) repeat(3, minmax(220px, 1fr));
 }
 
 .recurring-control-row {
@@ -13,8 +13,8 @@
     display: grid;
     gap: 0.85rem;
     grid-template-areas:
-        "account categories tags confidence"
-        ". . . actions";
+        "account merchant categories tags"
+        "confidence . . actions";
     grid-template-columns: minmax(180px, 0.7fr) repeat(3, minmax(220px, 1fr));
 }
 
@@ -33,6 +33,12 @@
     flex: 0 0 auto;
 }
 
+.calendar-period-controls {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    width: max-content;
+}
+
 .calendar-month-field {
     flex: 0 0 12rem;
     min-width: 10rem;
@@ -40,6 +46,11 @@
 
 .calendar-account-field {
     grid-area: account;
+    min-width: 0;
+}
+
+.calendar-merchant-field {
+    grid-area: merchant;
     min-width: 0;
 }
 
@@ -55,6 +66,11 @@
 
 .recurring-account-field {
     grid-area: account;
+    min-width: 0;
+}
+
+.recurring-merchant-field {
+    grid-area: merchant;
     min-width: 0;
 }
 
@@ -83,7 +99,17 @@
     gap: 0.75rem;
 }
 
+.calendar-view-tools {
+    display: flex;
+    justify-content: flex-start;
+}
+
 .recurring-dynamic-loading {
+    opacity: 0.72;
+    pointer-events: none;
+}
+
+.calendar-dynamic-loading {
     opacity: 0.72;
     pointer-events: none;
 }
@@ -710,6 +736,28 @@
 }
 
 @media (max-width: 768px) {
+    .calendar-control-row,
+    .recurring-control-row {
+        grid-template-areas:
+            "account"
+            "merchant"
+            "categories"
+            "tags"
+            "confidence"
+            "actions"
+            "navigation";
+        grid-template-columns: 1fr;
+    }
+
+    .calendar-control-row {
+        grid-template-areas:
+            "account"
+            "merchant"
+            "categories"
+            "tags"
+            "actions";
+    }
+
     .recurring-detail-summary,
     .recurring-detail-evidence-grid,
     .recurring-calendar-day-list-item {
@@ -727,7 +775,7 @@
         width: 100%;
     }
 
-    .calendar-control-row .calendar-month-controls {
+    .calendar-period-controls {
         flex-wrap: wrap;
         width: 100%;
     }

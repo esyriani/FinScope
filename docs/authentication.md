@@ -56,7 +56,7 @@ General settings are editable by every authenticated user:
 
 - Theme mode.
 - Interface language.
-- Personal table and display limits.
+- Personal table, autocomplete, and display limits.
 
 Advanced settings are owner-only but still saved on the owner's user account:
 

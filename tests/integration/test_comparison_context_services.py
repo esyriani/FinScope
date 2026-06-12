@@ -7,9 +7,10 @@ from tests.support.context_services import (
     seed_reimbursable_comparison_data,
     seed_reporting_data,
 )
-from tests.support.database import insert_account, insert_transaction
+from tests.support.database import insert_account, insert_merchant, insert_transaction
 from werkzeug.datastructures import MultiDict
 
+from finance_app.core.constants import TRANSACTION_KIND_INCOME
 from finance_app.modules.comparison import service as comparison_service
 
 
@@ -279,6 +280,207 @@ def test_comparison_context_filters_year_and_period_by_account(app, core_conn, m
     assert "Account: Rewards Visa" in context["period_filter_context"]
     assert f"account_id={card_id}" in context["period_clear_url"]
     assert f"account_id={card_id}" in context["year_clear_url"]
+
+
+def test_comparison_context_filters_year_and_period_by_merchant(app, core_conn, monkeypatch):
+    """Verify comparison analytics can be scoped by exact or typed merchant."""
+    metro_id = insert_merchant(core_conn, "METRO GROCERY")
+    pharmacy_id = insert_merchant(core_conn, "METRO PHARMACY")
+    for merchant_id, tx_date, amount, fingerprint in [
+        (metro_id, "2025-05-02", 60.00, "comparison-merchant-metro-2025"),
+        (metro_id, "2026-04-02", 25.00, "comparison-merchant-metro-prior"),
+        (metro_id, "2026-05-02", 80.00, "comparison-merchant-metro-current"),
+        (pharmacy_id, "2025-05-02", 900.00, "comparison-merchant-pharmacy-2025"),
+        (pharmacy_id, "2026-04-02", 700.00, "comparison-merchant-pharmacy-prior"),
+        (pharmacy_id, "2026-05-02", 600.00, "comparison-merchant-pharmacy-current"),
+    ]:
+        insert_transaction(
+            core_conn,
+            "Card purchase",
+            amount,
+            "Food",
+            merchant_id=merchant_id,
+            tx_date=tx_date,
+            fingerprint=fingerprint,
+            category_source="rule",
+            needs_review=0,
+        )
+    insert_transaction(
+        core_conn,
+        "Metro Grocery receipt",
+        20.00,
+        "Food",
+        tx_date="2026-05-03",
+        fingerprint="comparison-merchant-partial-description",
+        category_source="rule",
+        needs_review=0,
+    )
+    for description, amount, tx_date, fingerprint in [
+        ("UDEM - PAIE payroll", 15.00, "2026-05-04", "comparison-merchant-spaced-current"),
+        ("UDEM PAIE tuition", 7.00, "2026-04-04", "comparison-merchant-spaced-previous"),
+        ("UDEM PAIE prior year", 5.00, "2025-05-04", "comparison-merchant-spaced-year"),
+    ]:
+        insert_transaction(
+            core_conn,
+            description,
+            amount,
+            "Food",
+            tx_date=tx_date,
+            fingerprint=fingerprint,
+            category_source="rule",
+            needs_review=0,
+        )
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+
+    with app.test_request_context("/comparison"):
+        exact_context = comparison_service.build_comparison_context(
+            MultiDict(
+                [
+                    ("years", "2025"),
+                    ("years", "2026"),
+                    ("baseline_year", "2025"),
+                    ("period_comparison", "month_previous"),
+                    ("merchant_id", str(metro_id)),
+                    ("merchant_query", "METRO GROCERY"),
+                ]
+            )
+        )
+        partial_context = comparison_service.build_comparison_context(
+            MultiDict(
+                [
+                    ("years", "2025"),
+                    ("years", "2026"),
+                    ("baseline_year", "2025"),
+                    ("period_comparison", "month_previous"),
+                    ("merchant_query", "metro grocery"),
+                ]
+            )
+        )
+        spaced_context = comparison_service.build_comparison_context(
+            MultiDict(
+                [
+                    ("years", "2025"),
+                    ("years", "2026"),
+                    ("baseline_year", "2025"),
+                    ("period_comparison", "month_previous"),
+                    ("merchant_query", "UDEM PAIE"),
+                ]
+            )
+        )
+
+    exact_food = next(row for row in exact_context["category_comparison"] if row["category"] == "Food")
+    exact_period_totals = {metric["label"]: metric for metric in exact_context["period_comparison"]["totals"]}
+    partial_food = next(row for row in partial_context["category_comparison"] if row["category"] == "Food")
+    partial_period_totals = {metric["label"]: metric for metric in partial_context["period_comparison"]["totals"]}
+    spaced_food = next(row for row in spaced_context["category_comparison"] if row["category"] == "Food")
+    spaced_period_totals = {metric["label"]: metric for metric in spaced_context["period_comparison"]["totals"]}
+
+    assert exact_context["selected_merchant_id"] == metro_id
+    assert exact_context["selected_merchant_label"] == "METRO GROCERY"
+    assert exact_context["available_years"] == [2026, 2025]
+    assert exact_context["monthly_spending"][2025][4] == 60.00
+    assert exact_context["monthly_spending"][2026][3] == 25.00
+    assert exact_context["monthly_spending"][2026][4] == 80.00
+    assert exact_food["totals"] == {2025: 60.00, 2026: 105.00}
+    assert exact_period_totals["Spending"]["current"] == 80.00
+    assert exact_period_totals["Spending"]["previous"] == 25.00
+    assert exact_context["period_comparison"]["merchant_rows"][0]["merchant"] == "METRO GROCERY"
+    assert "Merchant: METRO GROCERY" in exact_context["period_filter_context"]
+    assert "Merchant: METRO GROCERY" in exact_context["year_filter_context"]
+    assert f"merchant_id={metro_id}" in exact_context["period_clear_url"]
+    assert "merchant_query=METRO+GROCERY" in exact_context["period_clear_url"]
+    assert f"merchant_id={metro_id}" in exact_context["year_clear_url"]
+    assert "merchant_query=METRO+GROCERY" in exact_context["year_clear_url"]
+
+    assert partial_context["selected_merchant_id"] is None
+    assert partial_context["selected_merchant_label"] == "metro grocery"
+    assert partial_food["totals"] == {2025: 60.00, 2026: 125.00}
+    assert partial_period_totals["Spending"]["current"] == 100.00
+    assert partial_period_totals["Spending"]["previous"] == 25.00
+    assert "Merchant: metro grocery" in partial_context["period_filter_context"]
+    assert "merchant_query=metro+grocery" in partial_context["period_clear_url"]
+
+    assert spaced_context["selected_merchant_id"] is None
+    assert spaced_context["selected_merchant_label"] == "UDEM PAIE"
+    assert spaced_food["totals"] == {2025: 5.00, 2026: 22.00}
+    assert spaced_period_totals["Spending"]["current"] == 15.00
+    assert spaced_period_totals["Spending"]["previous"] == 7.00
+    assert "Merchant: UDEM PAIE" in spaced_context["period_filter_context"]
+    assert "merchant_query=UDEM+PAIE" in spaced_context["period_clear_url"]
+
+
+def test_comparison_context_income_mode_supports_income_only_merchant(app, core_conn, monkeypatch):
+    """Verify income-mode comparison populates details for income-only merchants."""
+    merchant_id = insert_merchant(core_conn, "UDEM PAIE")
+    for tx_date, amount, fingerprint in [
+        ("2025-05-04", -800.00, "comparison-income-merchant-2025"),
+        ("2026-04-04", -900.00, "comparison-income-merchant-prior"),
+        ("2026-05-04", -1200.00, "comparison-income-merchant-current"),
+    ]:
+        insert_transaction(
+            core_conn,
+            "Payroll deposit",
+            amount,
+            "Income",
+            merchant_id=merchant_id,
+            tx_date=tx_date,
+            fingerprint=fingerprint,
+            category_source="rule",
+            needs_review=0,
+            transaction_kind=TRANSACTION_KIND_INCOME,
+        )
+    insert_transaction(
+        core_conn,
+        "Bookstore expense noise",
+        75.00,
+        "Education",
+        tx_date="2026-05-05",
+        fingerprint="comparison-income-merchant-expense-noise",
+        category_source="rule",
+        needs_review=0,
+    )
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+
+    with app.test_request_context("/comparison"):
+        context = comparison_service.build_comparison_context(
+            MultiDict(
+                [
+                    ("years", "2025"),
+                    ("years", "2026"),
+                    ("baseline_year", "2025"),
+                    ("period_comparison", "month_previous"),
+                    ("merchant_query", "UDEM PAIE"),
+                    ("analysis_mode", "income"),
+                ]
+            )
+        )
+
+    income_comparison = next(row for row in context["category_comparison"] if row["category"] == "Income")
+    period_totals = {metric["label"]: metric for metric in context["period_comparison"]["totals"]}
+    period_income = context["period_comparison"]["category_rows"][0]
+    merchant_income = context["period_comparison"]["merchant_rows"][0]
+
+    assert context["selected_analysis_mode"] == "income"
+    assert context["selected_analysis_mode_option"]["noun"] == "income and credits"
+    assert context["monthly_spending"][2025][4] == 800.00
+    assert context["monthly_spending"][2026][3] == 900.00
+    assert context["monthly_spending"][2026][4] == 1200.00
+    assert income_comparison["totals"] == {2025: 800.00, 2026: 2100.00}
+    assert income_comparison["changes"][2026]["change"] == 1300.00
+    assert period_totals["Spending"]["current"] == 0.00
+    assert period_totals["Income and Credits"]["current"] == 1200.00
+    assert period_totals["Income and Credits"]["previous"] == 900.00
+    assert period_totals["Income and Credits"]["tone"] == "success"
+    assert period_income["category"] == "Income"
+    assert period_income["current"] == 1200.00
+    assert period_income["previous"] == 900.00
+    assert period_income["tone"] == "success"
+    assert merchant_income["merchant"] == "UDEM PAIE"
+    assert merchant_income["current"] == 1200.00
+    assert merchant_income["previous"] == 900.00
+    assert merchant_income["tone"] == "success"
+    assert "Analysis: income and credits" in context["period_filter_context"]
+    assert "analysis_mode=income" in context["period_clear_url"]
 
 
 def test_comparison_tag_cashflow_includes_tagged_transfer_credits(app, core_conn, monkeypatch):

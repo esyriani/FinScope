@@ -64,17 +64,35 @@ def test_statement_upload_extensions_default_to_csv_only(monkeypatch, tmp_path):
     assert settings.allowed_statement_extensions == {"csv"}
 
 
-def test_setting_defaults_include_llm_review_and_single_transaction_ai(monkeypatch, tmp_path):
-    """Verify LLM review and single-transaction AI defaults are configurable."""
+def test_setting_defaults_include_runtime_settings_seed_values(monkeypatch, tmp_path):
+    """Verify Settings-page runtime defaults are configurable."""
+    monkeypatch.setenv("FINANCE_DEFAULT_THEME_MODE", "light")
+    monkeypatch.setenv("FINANCE_DEFAULT_UI_LANGUAGE", "fr-CA")
     monkeypatch.setenv("FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT", "9")
+    monkeypatch.setenv("FINANCE_DEFAULT_MERCHANT_SUGGESTION_LIMIT", "6")
     monkeypatch.setenv("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", "0.62")
     monkeypatch.setenv("FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED", "false")
+    monkeypatch.setenv("FINANCE_DEFAULT_CONFIRM_AI_TOKEN_USAGE_ENABLED", "false")
+    monkeypatch.setenv("FINANCE_DEFAULT_RECURRENCE_MINIMUM_OCCURRENCES", "4")
+    monkeypatch.setenv("FINANCE_DEFAULT_RECURRENCE_DATE_TOLERANCE_DAYS", "6")
+    monkeypatch.setenv("FINANCE_DEFAULT_RECURRENCE_AMOUNT_TOLERANCE_ABSOLUTE", "12.5")
+    monkeypatch.setenv("FINANCE_DEFAULT_RECURRENCE_AMOUNT_TOLERANCE_PERCENT", "0.2")
+    monkeypatch.setenv("FINANCE_DEFAULT_RECURRENCE_MISSED_CYCLES_BEFORE_INACTIVE", "3")
 
     settings = config_module.load_settings(tmp_path / "missing.ini")
 
+    assert settings.default_theme_mode == "light"
+    assert settings.default_ui_language == "fr"
     assert settings.default_comparison_insight_card_limit == 9
+    assert settings.default_merchant_suggestion_limit == 6
     assert settings.default_llm_review_threshold == 0.62
     assert settings.default_transaction_ai_rerun_enabled is False
+    assert settings.default_confirm_ai_token_usage_enabled is False
+    assert settings.default_recurrence_minimum_occurrences == 4
+    assert settings.default_recurrence_date_tolerance_days == 6
+    assert settings.default_recurrence_amount_tolerance_absolute == 12.5
+    assert settings.default_recurrence_amount_tolerance_percent == 0.2
+    assert settings.default_recurrence_missed_cycles_before_inactive == 3
 
 
 def test_invalid_integer_settings_fall_back_without_import_crash(monkeypatch, tmp_path):
@@ -86,6 +104,17 @@ def test_invalid_integer_settings_fall_back_without_import_crash(monkeypatch, tm
 
     assert settings.max_upload_mb == 16
     assert settings.server_port == 5000
+
+
+def test_invalid_float_settings_fall_back_without_import_crash(monkeypatch, tmp_path):
+    """Verify malformed float config values fall back during settings loading."""
+    monkeypatch.setenv("FINANCE_DEFAULT_RECURRENCE_AMOUNT_TOLERANCE_ABSOLUTE", "-1")
+    monkeypatch.setenv("FINANCE_DEFAULT_RECURRENCE_AMOUNT_TOLERANCE_PERCENT", "1.5")
+
+    settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    assert settings.default_recurrence_amount_tolerance_absolute == 10.0
+    assert settings.default_recurrence_amount_tolerance_percent == 0.15
 
 
 def test_development_secret_key_is_rejected_for_non_local_runs(monkeypatch, tmp_path):

@@ -2,7 +2,11 @@
 
 from collections.abc import Iterable
 
-from finance_app.modules.comparison.constants import PERIOD_COMPARISON_OPTIONS
+from finance_app.modules.comparison.constants import (
+    ANALYSIS_MODE_OPTIONS,
+    ANALYSIS_MODE_SPENDING,
+    PERIOD_COMPARISON_OPTIONS,
+)
 
 COMPARISON_VIEW_OPTIONS = {"period", "year"}
 
@@ -46,6 +50,12 @@ def parse_comparison_view(value: object) -> str:
     """Parse the active comparison page tab."""
     value = str(value or "").strip()
     return value if value in COMPARISON_VIEW_OPTIONS else "period"
+
+
+def parse_analysis_mode(value: object) -> str:
+    """Parse the comparison analysis mode."""
+    value = str(value or "").strip()
+    return value if value in ANALYSIS_MODE_OPTIONS else ANALYSIS_MODE_SPENDING
 
 
 def parse_baseline_year(value: object, selected_years: Iterable[int]) -> int | None:
