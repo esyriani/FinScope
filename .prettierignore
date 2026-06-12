@@ -1,10 +1,11 @@
 .git
+.github
 .mypy_cache
 .pytest_cache
 .ruff_cache
 .venv
-docs/coverage.svg
-docs/db-schema.html
+.vscode
+docs
 node_modules
 runtime
 src/finance_app/static/vendor
