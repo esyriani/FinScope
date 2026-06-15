@@ -96,6 +96,72 @@ def test_taxonomy_page_exposes_yaml_import_and_export_controls(client):
     assert_has_element(response, "button", attrs={"data-bs-target": "#create-tag-modal"}, text="Add")
 
 
+def test_taxonomy_tables_export_description_and_llm_instruction_separately(client, core_conn):
+    """Verify taxonomy table exports do not collapse metadata into the name column."""
+    core_conn.execute(
+        categories_table.insert().values(
+            name="Export category",
+            description="Category export description",
+            instruction="Use this category for export coverage.",
+        )
+    )
+    core_conn.execute(
+        tags_table.insert().values(
+            name="Export tag",
+            color="#123abc",
+            description="Tag export description",
+            instruction="Use this tag for export coverage.",
+        )
+    )
+    core_conn.commit()
+
+    response = client.get("/taxonomy")
+
+    assert response.status_code == 200
+    assert_has_element(response, "div", attrs={"data-export-part": True}, text="Export category")
+    assert_has_element(response, "span", attrs={"data-export-part": True}, text="Export tag")
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-label": "Description",
+            "data-export-header": "Description",
+            "data-export-text": "Category export description",
+        },
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-label": "LLM instruction",
+            "data-export-header": "LLM instruction",
+            "data-export-text": "Use this category for export coverage.",
+        },
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-label": "Description",
+            "data-export-header": "Description",
+            "data-export-text": "Tag export description",
+        },
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-label": "LLM instruction",
+            "data-export-header": "LLM instruction",
+            "data-export-text": "Use this tag for export coverage.",
+        },
+    )
+
+
 def test_taxonomy_export_route_returns_yaml(client):
     """Verify taxonomy YAML export includes category and tag metadata."""
     response = client.get("/taxonomy/export.yml")

@@ -214,13 +214,67 @@ def test_recurring_page_all_confidence_filter_is_explicit(client):
 
 
 def test_table_export_script_prompts_for_displayed_or_entire_table():
-    """Verify shared table export asks which row scope should be downloaded."""
+    """Verify shared table export asks for row scope only when pages exist."""
     body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
 
+    assert "tableHasMultipleExportPages" in body
+    assert "tableExportScope(table)" in body
+    assert 'return "all"' in body
     assert "chooseTableExportScope" in body
     assert "Displayed rows" in body
     assert "Entire table" in body
     assert "Export rows" in body
+
+
+def test_table_export_script_fetches_all_server_pages_for_entire_table():
+    """Verify entire-table exports can combine server-rendered pagination pages."""
+    body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
+
+    assert "serverPaginationPlan" in body
+    assert "numericPaginationLinks" in body
+    assert "inferPaginationPageParameter" in body
+    assert "fetchExportTablePage" in body
+    assert "DOMParser" in body
+    assert "tableExportTablesForScope" in body
+    assert "tableRowsForExportTables" in body
+    assert "transactions" not in body
+    assert "dashboard" not in body
+    assert "taxonomy" not in body
+
+
+def test_table_export_script_builds_real_xlsx_tables_with_totals():
+    """Verify shared Excel exports build real workbooks with typed table totals."""
+    body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
+
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in body
+    assert "TableStyleLight1" in body
+    assert 'totalsRowFunction="sum"' in body
+    assert "SUBTOTAL(109," in body
+    assert "${filenameBase}.xlsx" in body
+    assert "application/vnd.ms-excel" not in body
+    assert "<?mso-application" not in body
+
+
+def test_table_export_script_removes_action_columns_from_downloads():
+    """Verify shared table exports drop action columns before CSV or Excel generation."""
+    body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
+
+    assert "tableExportColumnPlan" in body
+    assert "ACTION_HEADER_RE" in body
+    assert "[data-row-action]" in body
+    assert "hasActionBodyCell" in body
+
+
+def test_table_export_script_splits_multi_value_cells_into_export_columns():
+    """Verify shared table exports expand declared cell parts into separate columns."""
+    body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
+
+    assert "cellExportParts" in body
+    assert "[data-export-part]" in body
+    assert "exportLabel" in body
+    assert "exportHeader" in body
+    assert "exportHeaderName" in body
+    assert "const headers = tableHeaderNames" in body
 
 
 def test_recurring_page_explains_filtered_empty_states(client):

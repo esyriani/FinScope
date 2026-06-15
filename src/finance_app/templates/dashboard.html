@@ -544,16 +544,26 @@
                         {% for merchant in merchant_rows %}
                         <tr data-row-href="{{ merchant['url'] }}" data-row-drilldown="dblclick">
                             <td>
-                                <strong>{{ merchant["merchant"] }}</strong>
+                                <strong data-export-part>{{ merchant["merchant"] }}</strong>
                                 {% if merchant["examples"] %}
-                                    <div class="text-muted small">{{ merchant["examples"][0] }}</div>
+                                    <div
+                                        class="text-muted small"
+                                        data-export-part
+                                        data-export-label="{{ _('Description') }}"
+                                        data-export-header="{{ _('Description') }}"
+                                    >{{ merchant["examples"][0] }}</div>
                                 {% endif %}
                             </td>
                             <td class="merchant-category-cell">{{ merchant["category"] }}</td>
                             <td class="text-end">{{ merchant["transaction_count"] }}</td>
                             <td class="text-end">
                                 <div class="spending-cell-visual">
-                                    <span class="spending-cell-amount">{{ merchant["total"] | moneyfmt }}</span>
+                                    <span
+                                        class="spending-cell-amount"
+                                        data-export-part
+                                        data-export-type="money"
+                                        data-export-value="{{ merchant['total'] }}"
+                                    >{{ merchant["total"] | moneyfmt }}</span>
                                     <span class="spending-bar-track" aria-hidden="true">
                                         <span class="spending-bar-fill" style="width: {{ merchant['bar_width'] }}%;"></span>
                                     </span>
@@ -562,10 +572,15 @@
                             <td class="text-end">
                                 <span
                                     class="{% if merchant['period_change']['direction'] == 'up' %}text-danger{% elif merchant['period_change']['direction'] == 'down' %}text-success{% endif %}"
+                                    data-export-part
                                 >
                                     {{ _(merchant["period_change"]["label"]) }}
                                 </span>
-                                <div class="text-muted small">{{ merchant["period_change"]["detail"] }}</div>
+                                <div
+                                    class="text-muted small"
+                                    data-export-part
+                                    data-export-label="{{ _('Details') }}"
+                                >{{ merchant["period_change"]["detail"] }}</div>
                             </td>
                             <td>
                                 {% if merchant["rules"] %}

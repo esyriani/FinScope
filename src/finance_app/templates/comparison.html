@@ -302,13 +302,30 @@
                                         {% set change = row["changes"][year] %}
                                         {% set previous_year = year - 1 %}
                                         <td class="text-end text-nowrap">
-                                            <span>{{ row["totals"][year] | moneyfmt }}</span>
+                                            <span
+                                                data-export-part
+                                                data-export-type="money"
+                                                data-export-value="{{ row['totals'][year] }}"
+                                            >{{ row["totals"][year] | moneyfmt }}</span>
                                             {% if change %}
                                                 <span
                                                     class="small ms-2 {% if change.direction == 'up' %}text-danger{% elif change.direction == 'down' %}text-success{% else %}text-muted{% endif %}"
                                                     title="{{ _('Compared with {year}', year=change.baseline_year) }}"
                                                 >
-                                                    {{ change.amount_label }} | {{ _(change.percent_label) }}
+                                                    <span
+                                                        data-export-part
+                                                        data-export-label="{{ _('Change') }}"
+                                                        data-export-type="money"
+                                                        data-export-value="{{ change.change }}"
+                                                    >{{ change.amount_label }}</span>
+                                                    <span aria-hidden="true">|</span>
+                                                    <span
+                                                        data-export-part
+                                                        data-export-label="{{ _('Percent') }}"
+                                                        data-export-type="percent"
+                                                        data-export-value="{% if change.percent is not none %}{{ change.percent / 100 }}{% endif %}"
+                                                        {% if change.percent is none %}data-export-text=""{% endif %}
+                                                    >{{ _(change.percent_label) }}</span>
                                                 </span>
                                             {% else %}
                                                 <span class="small ms-2 text-muted">
@@ -323,7 +340,13 @@
                                             {% endif %}
                                         </td>
                                     {% endfor %}
-                                    <td class="text-end">{{ row["total"] | moneyfmt }}</td>
+                                    <td class="text-end">
+                                        <span
+                                            data-export-part
+                                            data-export-type="money"
+                                            data-export-value="{{ row['total'] }}"
+                                        >{{ row["total"] | moneyfmt }}</span>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -384,13 +407,30 @@
                                     {% set change = row["changes"][year] %}
                                     {% set previous_year = year - 1 %}
                                     <td class="text-end text-nowrap">
-                                        <span>{{ row["totals"][year] | moneyfmt }}</span>
+                                        <span
+                                            data-export-part
+                                            data-export-type="money"
+                                            data-export-value="{{ row['totals'][year] }}"
+                                        >{{ row["totals"][year] | moneyfmt }}</span>
                                         {% if change %}
                                             <span
                                                 class="small ms-2 {% if change.direction == 'up' %}text-danger{% elif change.direction == 'down' %}text-success{% else %}text-muted{% endif %}"
                                                 title="{{ _('Compared with {year}', year=change.baseline_year) }}"
                                             >
-                                                {{ change.amount_label }} | {{ _(change.percent_label) }}
+                                                <span
+                                                    data-export-part
+                                                    data-export-label="{{ _('Change') }}"
+                                                    data-export-type="money"
+                                                    data-export-value="{{ change.change }}"
+                                                >{{ change.amount_label }}</span>
+                                                <span aria-hidden="true">|</span>
+                                                <span
+                                                    data-export-part
+                                                    data-export-label="{{ _('Percent') }}"
+                                                    data-export-type="percent"
+                                                    data-export-value="{% if change.percent is not none %}{{ change.percent / 100 }}{% endif %}"
+                                                    {% if change.percent is none %}data-export-text=""{% endif %}
+                                                >{{ _(change.percent_label) }}</span>
                                             </span>
                                         {% else %}
                                             <span class="small ms-2 text-muted">
@@ -405,7 +445,13 @@
                                         {% endif %}
                                     </td>
                                 {% endfor %}
-                                <td class="text-end">{{ row["total"] | moneyfmt }}</td>
+                                <td class="text-end">
+                                    <span
+                                        data-export-part
+                                        data-export-type="money"
+                                        data-export-value="{{ row['total'] }}"
+                                    >{{ row["total"] | moneyfmt }}</span>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>

@@ -4,7 +4,7 @@ import io
 
 from sqlalchemy import text
 from tests.support.database import set_owner_setting
-from tests.support.html import assert_markup, assert_visible_text
+from tests.support.html import assert_has_element, assert_markup, assert_visible_text
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
@@ -132,6 +132,62 @@ def test_upload_route_renders_statement_detail_modal(client, core_conn):
         "Current statement transactions",
         "Main checking",
         "Date,Description,Amount",
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={"data-export-part": True, "data-export-header": "Import status"},
+        text="completed",
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-header": "Added transactions",
+            "data-export-value": "2",
+            "data-export-text": "2",
+        },
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-header": "Skipped rows",
+            "data-export-value": "1",
+            "data-export-text": "1",
+        },
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-header": "Ignored rows",
+            "data-export-value": "3",
+            "data-export-text": "3",
+        },
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-header": "AI candidates",
+            "data-export-value": "4",
+            "data-export-text": "4",
+        },
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-header": "Unknown transactions",
+            "data-export-value": "0",
+            "data-export-text": "0",
+        },
     )
 
 

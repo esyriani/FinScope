@@ -397,9 +397,22 @@
                         </td>
                         <td>
                             <div class="transaction-category-line">
-                                <span class="transaction-category-name">{{ tx["category"] }}</span>
+                                <span class="transaction-category-name" data-export-part>{{ tx["category"] }}</span>
                                 <span class="transaction-category-meta text-muted">
-                                    &middot; {{ _(tx["category_source_label"]) }}{% if tx["category_confidence_label"] %} {{ tx["category_confidence_label"] }}{% endif %}
+                                    &middot;
+                                    <span
+                                        data-export-part
+                                        data-export-label="{{ _('Method') }}"
+                                        data-export-header="{{ _('Method') }}"
+                                    >{{ _(tx["category_source_label"]) }}</span>
+                                    <span
+                                        data-export-part
+                                        data-export-label="{{ _('Score') }}"
+                                        data-export-header="{{ _('Score') }}"
+                                        data-export-type="percent"
+                                        data-export-value="{% if tx['category_confidence'] is not none %}{{ tx['category_confidence'] }}{% endif %}"
+                                        {% if not tx["category_confidence_label"] %}data-export-text=""{% endif %}
+                                    >{% if tx["category_confidence_label"] %}{{ tx["category_confidence_label"] }}{% endif %}</span>
                                 </span>
                             </div>
                         </td>

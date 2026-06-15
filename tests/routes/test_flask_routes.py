@@ -114,7 +114,6 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
 
     response = client.get(f"/transactions?period=all&account_id={account_id}")
     body = response_html(response)
-    compact_body = " ".join(body.split())
     expected_rule_url = f"/rules/audit/rule/{rule_id}"
     modal_summary = body.split('id="categorize-transaction-', 1)[1].split("</dl>", 1)[0]
 
@@ -123,7 +122,13 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     assert_has_element(response, "select", attrs={"id": "transaction-account", "name": "account_id"})
     assert_has_element(response, "option", attrs={"value": str(account_id), "selected": True}, text="Route Visa")
     assert_not_visible_text(response, "Ready to approve", "Unverified")
-    assert "&middot; AI 91%" in compact_body
+    assert_has_element(response, "span", attrs={"data-export-label": "Method"}, text="AI")
+    assert_has_element(
+        response,
+        "span",
+        attrs={"data-export-label": "Score", "data-export-value": "0.91"},
+        text="91%",
+    )
     assert "<th>Kind</th>" not in body
     assert "<span>Verify</span>" not in body
     assert '<th class="text-end">Actions</th>' in body

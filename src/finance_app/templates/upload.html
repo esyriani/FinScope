@@ -272,9 +272,59 @@
                         <td>{{ statement["filename"] }}</td>
                         <td>{{ statement["uploaded_at"] }}</td>
                         <td>
-                            <span class="badge text-bg-{% if import_status == 'completed' %}success{% elif import_status == 'failed' %}danger{% elif import_status == 'running' %}warning{% elif import_status == 'queued' %}secondary{% else %}light{% endif %}">
+                            <span
+                                class="badge text-bg-{% if import_status == 'completed' %}success{% elif import_status == 'failed' %}danger{% elif import_status == 'running' %}warning{% elif import_status == 'queued' %}secondary{% else %}light{% endif %}"
+                                data-export-part
+                                data-export-header="{{ _('Import status') }}"
+                            >
                                 {{ import_status }}
                             </span>
+                            <span
+                                data-export-part
+                                data-export-label="{{ _('Added transactions') }}"
+                                data-export-header="{{ _('Added transactions') }}"
+                                data-export-type="number"
+                                data-export-value="{{ statement['imported_count'] }}"
+                                data-export-text="{{ statement['imported_count'] }}"
+                            ></span>
+                            <span
+                                data-export-part
+                                data-export-label="{{ _('Skipped rows') }}"
+                                data-export-header="{{ _('Skipped rows') }}"
+                                data-export-type="number"
+                                data-export-value="{{ statement['skipped_count'] }}"
+                                data-export-text="{{ statement['skipped_count'] }}"
+                            ></span>
+                            <span
+                                data-export-part
+                                data-export-label="{{ _('Ignored rows') }}"
+                                data-export-header="{{ _('Ignored rows') }}"
+                                data-export-type="number"
+                                data-export-value="{{ statement['ignored_count'] }}"
+                                data-export-text="{{ statement['ignored_count'] }}"
+                            ></span>
+                            <span
+                                data-export-part
+                                data-export-label="{{ _('AI candidates') }}"
+                                data-export-header="{{ _('AI candidates') }}"
+                                data-export-type="number"
+                                data-export-value="{{ statement['llm_candidate_count'] }}"
+                                data-export-text="{{ statement['llm_candidate_count'] }}"
+                            ></span>
+                            <span
+                                data-export-part
+                                data-export-label="{{ _('Unknown transactions') }}"
+                                data-export-header="{{ _('Unknown transactions') }}"
+                                data-export-type="number"
+                                data-export-value="{{ statement['unknown_transaction_count'] }}"
+                                data-export-text="{{ statement['unknown_transaction_count'] }}"
+                            ></span>
+                            <span
+                                data-export-part
+                                data-export-label="{{ _('Details') }}"
+                                data-export-header="{{ _('Details') }}"
+                                data-export-text="{{ statement['import_error'] or '' }}"
+                            ></span>
                             <div class="small text-muted mt-1">
                                 {{ _("Added {count}", count=statement["imported_count"]) }},
                                 {{ _("skipped {count}", count=statement["skipped_count"]) }},

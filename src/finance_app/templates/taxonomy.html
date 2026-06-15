@@ -106,11 +106,23 @@
                                 >
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
-                                            <div class="fw-semibold">{{ category.name }}</div>
+                                            <div class="fw-semibold" data-export-part>{{ category.name }}</div>
                                             {% if category.is_builtin %}
                                                 <span class="badge text-bg-secondary">{{ _("Built-in") }}</span>
                                             {% endif %}
                                         </div>
+                                        <span
+                                            data-export-part
+                                            data-export-label="{{ _('Description') }}"
+                                            data-export-header="{{ _('Description') }}"
+                                            data-export-text="{{ category.description }}"
+                                        ></span>
+                                        <span
+                                            data-export-part
+                                            data-export-label="{{ _('LLM instruction') }}"
+                                            data-export-header="{{ _('LLM instruction') }}"
+                                            data-export-text="{{ category.instruction }}"
+                                        ></span>
                                         {% if category.description %}
                                             <div class="text-muted small taxonomy-description">{{ category.description }}</div>
                                         {% endif %}
@@ -205,8 +217,20 @@
                                 >
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
-                                            <span class="tag-pill" style="--tag-color: {{ tag.color }};">{{ tag.name }}</span>
+                                            <span class="tag-pill" style="--tag-color: {{ tag.color }};" data-export-part>{{ tag.name }}</span>
                                         </div>
+                                        <span
+                                            data-export-part
+                                            data-export-label="{{ _('Description') }}"
+                                            data-export-header="{{ _('Description') }}"
+                                            data-export-text="{{ tag.description }}"
+                                        ></span>
+                                        <span
+                                            data-export-part
+                                            data-export-label="{{ _('LLM instruction') }}"
+                                            data-export-header="{{ _('LLM instruction') }}"
+                                            data-export-text="{{ tag.instruction }}"
+                                        ></span>
                                         {% if tag.description %}
                                             <div class="text-muted small mt-1 taxonomy-description">{{ tag.description }}</div>
                                         {% endif %}

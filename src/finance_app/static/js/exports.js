@@ -303,17 +303,32 @@ function formControlExportValue(control) {
     return "";
 }
 
-function cellExportText(cell) {
-    const clone = cell.cloneNode(true);
-    const sourceControls = Array.from(cell.querySelectorAll("select, textarea, input"));
+function elementExportText(element, options = {}) {
+    if (element.matches("[data-row-action]")) {
+        return "";
+    }
+
+    const clone = element.cloneNode(true);
+    const sourceControls = Array.from(element.querySelectorAll("select, textarea, input"));
     const clonedControls = Array.from(clone.querySelectorAll("select, textarea, input"));
 
     clonedControls.forEach((control, index) => {
         control.replaceWith(document.createTextNode(formControlExportValue(sourceControls[index] || control)));
     });
 
-    clone.querySelectorAll("button, svg, script, style").forEach((node) => node.remove());
+    clone.querySelectorAll("[data-row-action], svg, script, style").forEach((node) => node.remove());
+    if (options.keepButtonText) {
+        clone.querySelectorAll("button").forEach((node) => {
+            node.replaceWith(document.createTextNode(normalizeExportText(node.textContent)));
+        });
+    } else {
+        clone.querySelectorAll("button").forEach((node) => node.remove());
+    }
     return normalizeExportText(clone.textContent);
+}
+
+function cellExportText(cell) {
+    return elementExportText(cell, { keepButtonText: cell.matches("th") });
 }
 
 const CSV_FORMULA_PREFIX_RE = /^[=+\-@\t\r]/;
@@ -360,6 +375,105 @@ function visibleExportSourceIds(table) {
     return new Set(ids);
 }
 
+function tableExportRoot(table) {
+    const sourceTable = tableVisibleSource(table) || table;
+    return (
+        sourceTable.closest("[data-table-export-scope]") ||
+        sourceTable.closest(".card") ||
+        sourceTable.closest(".modal-content") ||
+        document
+    );
+}
+
+function clientPaginatedTablePageCount(table) {
+    const sourceTable = tableVisibleSource(table) || table;
+    if (!sourceTable.matches("[data-paginated-table]")) {
+        return 1;
+    }
+
+    const pageSize = Math.max(1, Number(sourceTable.dataset.pageSize || 25) || 25);
+    const rows = Array.from(sourceTable.tBodies[0]?.rows || []).filter((row) => !row.hasAttribute("data-sort-ignore"));
+    return Math.max(1, Math.ceil(rows.length / pageSize));
+}
+
+function numericPaginationLinks(root) {
+    return Array.from(root.querySelectorAll("nav .pagination a.page-link[href]"))
+        .map((link) => {
+            const pageNumber = Number(normalizeExportText(link.textContent));
+            if (!Number.isInteger(pageNumber) || pageNumber <= 0) {
+                return null;
+            }
+
+            const url = new URL(link.href, window.location.href);
+            if (url.origin !== window.location.origin) {
+                return null;
+            }
+
+            return { pageNumber, url };
+        })
+        .filter(Boolean);
+}
+
+function activePaginationPage(root) {
+    const activeLink = root.querySelector("nav .pagination .page-item.active .page-link");
+    const pageNumber = Number(normalizeExportText(activeLink?.textContent || ""));
+    return Number.isInteger(pageNumber) && pageNumber > 0 ? pageNumber : 1;
+}
+
+function inferPaginationPageParameter(pageLinks) {
+    const scores = new Map();
+    pageLinks.forEach(({ pageNumber, url }) => {
+        url.searchParams.forEach((value, name) => {
+            if (Number(value) === pageNumber) {
+                scores.set(name, (scores.get(name) || 0) + 1);
+            }
+        });
+    });
+
+    return (
+        Array.from(scores.entries()).sort((left, right) => {
+            if (right[1] !== left[1]) return right[1] - left[1];
+            if (left[0] === "page") return -1;
+            if (right[0] === "page") return 1;
+            return left[0].localeCompare(right[0]);
+        })[0]?.[0] || ""
+    );
+}
+
+function serverPaginationPlan(table) {
+    const root = tableExportRoot(table);
+    const pageLinks = numericPaginationLinks(root);
+    if (!pageLinks.length) {
+        return null;
+    }
+
+    const pageNumbers = pageLinks.map((link) => link.pageNumber);
+    const totalPages = Math.max(...pageNumbers);
+    if (totalPages <= 1) {
+        return null;
+    }
+
+    const pageParameter = inferPaginationPageParameter(pageLinks);
+    const template = pageLinks.find((link) => link.pageNumber === totalPages) || pageLinks[0];
+    if (!pageParameter || !template) {
+        return null;
+    }
+
+    return {
+        activePage: Math.min(totalPages, activePaginationPage(root)),
+        pageUrls: Array.from({ length: totalPages }, (_value, index) => {
+            const pageNumber = index + 1;
+            const url = new URL(template.url.href);
+            url.searchParams.set(pageParameter, String(pageNumber));
+            return { pageNumber, url: url.href };
+        }),
+    };
+}
+
+function tableHasMultipleExportPages(table) {
+    return clientPaginatedTablePageCount(table) > 1 || Boolean(serverPaginationPlan(table));
+}
+
 function tableRowsForExport(table, scope) {
     const rows = Array.from(table.querySelectorAll("tr"));
     if (scope !== "displayed") return rows;
@@ -372,9 +486,83 @@ function tableRowsForExport(table, scope) {
     });
 }
 
-function tableMatrix(table, scope = "all") {
-    return tableRowsForExport(table, scope)
-        .map((row) => Array.from(row.cells).map(cellExportText))
+function exportableTablesIn(root) {
+    return Array.from(root.querySelectorAll("table")).filter((table) => !table.hasAttribute("data-no-export"));
+}
+
+function matchingTableInDocument(documentRoot, sourceTable, sourceIndex) {
+    if (sourceTable.id) {
+        return documentRoot.getElementById(sourceTable.id);
+    }
+
+    return exportableTablesIn(documentRoot)[sourceIndex] || null;
+}
+
+async function fetchExportTablePage(url, sourceTable, sourceIndex) {
+    const response = await fetch(url, {
+        credentials: "same-origin",
+        headers: { Accept: "text/html" },
+    });
+    if (!response.ok) {
+        throw new Error(`Table export page request failed: ${response.status}`);
+    }
+
+    const parsed = new DOMParser().parseFromString(await response.text(), "text/html");
+    const table = matchingTableInDocument(parsed, sourceTable, sourceIndex);
+    if (!table) {
+        throw new Error("Table export page did not contain the expected table.");
+    }
+    return table;
+}
+
+async function tableExportTablesForScope(table, scope) {
+    if (scope !== "all") {
+        return [table];
+    }
+
+    const plan = serverPaginationPlan(table);
+    if (!plan) {
+        return [table];
+    }
+
+    const sourceIndex = exportableTablesIn(document).indexOf(table);
+    if (sourceIndex < 0) {
+        return [table];
+    }
+
+    return Promise.all(
+        plan.pageUrls.map(({ pageNumber, url }) =>
+            pageNumber === plan.activePage ? Promise.resolve(table) : fetchExportTablePage(url, table, sourceIndex)
+        )
+    );
+}
+
+function tableRowsForExportTables(primaryTable, tables, scope) {
+    if (tables.length <= 1) {
+        return tableRowsForExport(primaryTable, scope);
+    }
+
+    return [
+        ...Array.from(primaryTable.tHead?.rows || []),
+        ...tables.flatMap((table) => Array.from(table.tBodies).flatMap((body) => Array.from(body.rows))),
+        ...Array.from(primaryTable.tFoot?.rows || []),
+    ];
+}
+
+function tableMatrix(table, scope = "all", exportTables = [table]) {
+    const columnPlan = tableExportColumnPlan(table, scope, exportTables);
+    const headers = tableHeaderNames(table, columnPlan);
+    const headerRow = table.tHead?.rows[0] || table.querySelector("tr");
+
+    return tableRowsForExportTables(table, exportTables, scope)
+        .map((row) => {
+            if (row === headerRow) {
+                return headers;
+            }
+
+            const cells = rowCellsExpanded(row);
+            return columnPlan.map((column) => cellExportPartText(cells[column.sourceIndex] || null, column.partLabel));
+        })
         .filter((row) => row.some((value) => value !== ""));
 }
 
@@ -457,15 +645,33 @@ function chooseTableExportScope() {
     });
 }
 
+async function tableExportScope(table) {
+    if (!tableHasMultipleExportPages(table)) {
+        return "all";
+    }
+
+    return chooseTableExportScope();
+}
+
+function notifyTableExportError(error) {
+    console.error(error);
+    window.alert?.(financeTranslate("Could not load every table page for export."));
+}
+
 async function exportTableCsv(table, filenameBase) {
-    const scope = await chooseTableExportScope();
+    const scope = await tableExportScope(table);
     if (!scope) return;
 
-    const csv = tableMatrix(table, scope)
-        .map((row) => row.map(csvEscape).join(","))
-        .join("\r\n");
+    try {
+        const exportTables = await tableExportTablesForScope(table, scope);
+        const csv = tableMatrix(table, scope, exportTables)
+            .map((row) => row.map(csvEscape).join(","))
+            .join("\r\n");
 
-    downloadBlob(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), `${filenameBase}.csv`);
+        downloadBlob(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), `${filenameBase}.csv`);
+    } catch (error) {
+        notifyTableExportError(error);
+    }
 }
 
 function xmlEscape(value) {
@@ -481,33 +687,701 @@ function excelSheetName(value) {
     return cleaned.slice(0, 31) || "Export";
 }
 
-async function exportTableExcel(table, filenameBase, sheetName) {
-    const scope = await chooseTableExportScope();
-    if (!scope) return;
+const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const XLSX_MONEY_FORMAT = '#,##0.00 [$$-C0C];-#,##0.00 [$$-C0C];"-" [$$-C0C]';
+const XLSX_NUMBER_FORMAT = "#,##0.00";
+const XLSX_MAX_TABLE_HEADER_LENGTH = 255;
+const XLSX_TABLE_NAME = "Table1";
+const ACTION_HEADER_RE = /^actions?$/i;
+const MONEY_HEADER_RE =
+    /\b(amount|spending|income|balance|debit|credit|payment|paid|current|prior|change|delta|expected|actual|budget)\b|\$/i;
+const PERCENT_HEADER_RE = /\b(percent|percentage|share|rate)\b|%/i;
+const CURRENCY_RE = /[$\u20ac\u00a3\u00a5]/;
+const PERCENT_RE = /%/;
+const STRICT_NUMBER_RE = /^[+-]?(?:(?:\d+)|(?:\d{1,3}(?:[ ,]\d{3})+))(?:[.,]\d+)?(?:e[+-]?\d+)?$/i;
+const NUMBER_TOKEN_RE = /[+-]?\(?\d[\d ,.]*\)?/;
+const EXPORT_PART_SELECTOR =
+    "[data-export-part], [data-export-label], [data-export-header], [data-export-text], [data-export-value], [data-export-type]";
 
-    const rows = tableMatrix(table, scope)
-        .map((row) => {
-            const cells = row.map((value) => `<Cell><Data ss:Type="String">${xmlEscape(value)}</Data></Cell>`).join("");
+function rowCellsExpanded(row) {
+    const cells = [];
+    Array.from(row?.cells || []).forEach((cell) => {
+        const colspan = Math.max(1, Number(cell.colSpan || 1) || 1);
+        cells.push(cell);
+        for (let index = 1; index < colspan; index += 1) {
+            cells.push(null);
+        }
+    });
+    return cells;
+}
 
-            return `<Row>${cells}</Row>`;
+function uniqueExcelHeaders(values) {
+    const used = new Map();
+
+    return values.map((value, index) => {
+        const rawBase = normalizeExportText(value) || `Column${index + 1}`;
+        const base = rawBase.slice(0, XLSX_MAX_TABLE_HEADER_LENGTH);
+        const key = base.toLocaleLowerCase();
+        const count = used.get(key) || 0;
+        used.set(key, count + 1);
+
+        if (!count) {
+            return base;
+        }
+
+        const suffix = String(count + 1);
+        return `${base.slice(0, XLSX_MAX_TABLE_HEADER_LENGTH - suffix.length)}${suffix}`;
+    });
+}
+
+function cellExportParts(cell) {
+    if (!cell || isActionExportCell(cell)) {
+        return [];
+    }
+
+    const partElements = [
+        ...(cell.matches(EXPORT_PART_SELECTOR) ? [cell] : []),
+        ...Array.from(cell.querySelectorAll(EXPORT_PART_SELECTOR)),
+    ];
+    if (!partElements.length) {
+        return [
+            {
+                header: cell.dataset.exportHeader || "",
+                explicitType: cell.dataset.exportType || "",
+                explicitValue: cell.getAttribute("data-export-value") ?? "",
+                label: normalizeExportText(cell.dataset.exportLabel || ""),
+                text: cell.hasAttribute("data-export-text")
+                    ? normalizeExportText(cell.getAttribute("data-export-text") || "")
+                    : cellExportText(cell),
+            },
+        ];
+    }
+
+    return partElements.map((part) => ({
+        header: normalizeExportText(part.dataset.exportHeader || ""),
+        explicitType: part.dataset.exportType || "",
+        explicitValue: part.getAttribute("data-export-value") ?? "",
+        label: normalizeExportText(part.dataset.exportLabel || ""),
+        text: part.hasAttribute("data-export-text")
+            ? normalizeExportText(part.getAttribute("data-export-text") || "")
+            : elementExportText(part),
+    }));
+}
+
+function cellExportPart(cell, partLabel) {
+    const parts = cellExportParts(cell);
+    const exact = parts.find((part) => part.label === partLabel);
+    if (exact) {
+        return exact;
+    }
+
+    if (!partLabel && parts.length === 1) {
+        return parts[0];
+    }
+
+    return {
+        explicitType: "",
+        explicitValue: "",
+        header: "",
+        label: partLabel,
+        text: "",
+    };
+}
+
+function cellExportPartText(cell, partLabel) {
+    const part = cellExportPart(cell, partLabel);
+    return part.text || part.explicitValue;
+}
+
+function isActionExportCell(cell) {
+    return Boolean(cell?.matches("[data-row-action]") || cell?.querySelector("[data-row-action]"));
+}
+
+function isActionExportColumn(columnIndex, expandedRows) {
+    const cells = expandedRows.map((row) => row[columnIndex]).filter(Boolean);
+    const headerText = normalizeExportText(
+        cells
+            .filter((cell) => cell.closest("thead"))
+            .map(cellExportText)
+            .join(" ")
+    );
+    const hasActionBodyCell = cells.some((cell) => !cell.closest("thead") && isActionExportCell(cell));
+
+    return ACTION_HEADER_RE.test(headerText) || hasActionBodyCell;
+}
+
+function tableExportColumnPlan(table, scope, exportTables = [table]) {
+    const rows = tableRowsForExportTables(table, exportTables, scope);
+    const expandedRows = rows.map(rowCellsExpanded);
+    const columnCount = Math.max(1, ...expandedRows.map((row) => row.length));
+
+    return Array.from({ length: columnCount }, (_value, sourceIndex) => sourceIndex)
+        .filter((sourceIndex) => !isActionExportColumn(sourceIndex, expandedRows))
+        .flatMap((sourceIndex) => {
+            const parts = [];
+            expandedRows.forEach((row) => {
+                const cell = row[sourceIndex];
+                if (!cell || cell.closest("thead, tfoot")) {
+                    return;
+                }
+                cellExportParts(cell).forEach((part) => {
+                    if (
+                        !parts.some(
+                            (knownPart) => knownPart.partLabel === part.label && knownPart.header === part.header
+                        )
+                    ) {
+                        parts.push({ header: part.header, partLabel: part.label });
+                    }
+                });
+            });
+
+            if (!parts.length) {
+                parts.push({ header: "", partLabel: "" });
+            }
+
+            return parts.map((part) => ({ ...part, sourceIndex }));
+        });
+}
+
+function exportHeaderName(baseHeader, column) {
+    if (column.header) {
+        return column.header;
+    }
+    if (!column.partLabel) {
+        return baseHeader;
+    }
+
+    return normalizeExportText(`${baseHeader} ${column.partLabel}`);
+}
+
+function tableHeaderNames(table, columnPlan) {
+    const headerRow = table.tHead?.rows[0] || table.querySelector("tr");
+    if (!headerRow) {
+        return ["Column1"];
+    }
+
+    const cells = rowCellsExpanded(headerRow);
+    return uniqueExcelHeaders(
+        columnPlan.map((column) =>
+            exportHeaderName(cells[column.sourceIndex] ? cellExportText(cells[column.sourceIndex]) : "", column)
+        )
+    );
+}
+
+function tableColumnSortTypes(table) {
+    const sortTypes = new Map();
+    table.querySelectorAll("[data-sort-column]").forEach((control) => {
+        const column = Number(control.dataset.sortColumn);
+        if (Number.isInteger(column) && column >= 0) {
+            sortTypes.set(column, control.dataset.sortType || "text");
+        }
+    });
+    return sortTypes;
+}
+
+function tableBodyRowsForExcel(table, scope, exportTables = [table]) {
+    return tableRowsForExportTables(table, exportTables, scope).filter(
+        (row) => row.closest("tbody") && !row.hasAttribute("data-sort-ignore")
+    );
+}
+
+function rowExportMetadata(row, columnPlan, sortTypes) {
+    const cells = rowCellsExpanded(row);
+    return columnPlan.map((column) => {
+        const part = cellExportPart(cells[column.sourceIndex] || null, column.partLabel);
+        return {
+            ...part,
+            explicitValue:
+                part.explicitValue ||
+                (sortTypes.get(column.sourceIndex) === "number" && !column.partLabel
+                    ? cells[column.sourceIndex]?.getAttribute("data-sort-value") || ""
+                    : ""),
+        };
+    });
+}
+
+function isBlankExcelValue(value) {
+    return normalizeExportText(value) === "";
+}
+
+function normalizeNumberToken(value) {
+    const raw = normalizeExportText(value)
+        .replace(/\u00a0/g, " ")
+        .replace(/[\u2212\u2013\u2014]/g, "-");
+    if (!raw) return null;
+
+    const negativeParentheses = /^\(.*\)$/.test(raw);
+    let cleaned = raw.replace(/[()]/g, "").replace(/[^\d,.\-+eE]/g, "");
+    if (!cleaned || cleaned === "-" || cleaned === "+") return null;
+
+    const commaCount = (cleaned.match(/,/g) || []).length;
+    const dotCount = (cleaned.match(/\./g) || []).length;
+    if (commaCount && dotCount) {
+        cleaned = cleaned.replace(/,/g, "");
+    } else if (commaCount === 1 && dotCount === 0) {
+        cleaned = cleaned.replace(",", ".");
+    } else if (commaCount > 1 && dotCount === 0) {
+        cleaned = cleaned.replace(/,/g, "");
+    }
+
+    const parsed = Number(cleaned);
+    if (!Number.isFinite(parsed)) return null;
+    return negativeParentheses ? -Math.abs(parsed) : parsed;
+}
+
+function parseWholeNumberText(value) {
+    const text = normalizeExportText(value);
+    if (!STRICT_NUMBER_RE.test(text.replace(/\u00a0/g, " "))) {
+        return null;
+    }
+    return normalizeNumberToken(text);
+}
+
+function parseFirstNumberText(value) {
+    const match = normalizeExportText(value).match(NUMBER_TOKEN_RE);
+    return match ? normalizeNumberToken(match[0]) : null;
+}
+
+function parsedExcelValue(cell, headerName, sortType) {
+    const explicitValue = normalizeExportText(cell.explicitValue);
+    const text = normalizeExportText(cell.text);
+    const source = explicitValue || text;
+
+    if (isBlankExcelValue(source)) {
+        return { kind: "blank", value: null };
+    }
+
+    const explicitKind = cell.explicitType;
+    const looksPercent = explicitKind === "percent" || PERCENT_RE.test(text) || PERCENT_HEADER_RE.test(headerName);
+    const looksMoney = explicitKind === "money" || CURRENCY_RE.test(text) || MONEY_HEADER_RE.test(headerName);
+
+    if (explicitValue) {
+        const explicitNumber = normalizeNumberToken(explicitValue);
+        if (explicitNumber !== null) {
+            return {
+                kind: explicitKind || (looksPercent ? "percent" : looksMoney ? "money" : "number"),
+                value: looksPercent && PERCENT_RE.test(explicitValue) ? explicitNumber / 100 : explicitNumber,
+            };
+        }
+    }
+
+    if (looksPercent) {
+        const percentNumber = parseFirstNumberText(text);
+        if (percentNumber !== null && PERCENT_RE.test(text)) {
+            return { kind: "percent", value: percentNumber / 100 };
+        }
+    }
+
+    if (looksMoney) {
+        const moneyNumber = CURRENCY_RE.test(text) ? parseFirstNumberText(text) : parseWholeNumberText(text);
+        if (moneyNumber !== null) {
+            return { kind: "money", value: moneyNumber };
+        }
+    }
+
+    const strictNumber = sortType === "number" ? parseFirstNumberText(text) : parseWholeNumberText(text);
+    if (strictNumber !== null) {
+        return { kind: "number", value: strictNumber };
+    }
+
+    return { kind: "string", value: text };
+}
+
+function analyzeExcelColumns(headers, rows, parsedRows, sortTypes) {
+    return headers.map((header, columnIndex) => {
+        const parsedCells = parsedRows.map((row) => row[columnIndex]);
+        const nonBlankCells = parsedCells.filter((cell) => cell.kind !== "blank");
+        const numeric = nonBlankCells.length > 0 && nonBlankCells.every((cell) => cell.kind !== "string");
+        const hasMoneyCells = nonBlankCells.some((cell) => cell.kind === "money");
+        const hasPercentCells = nonBlankCells.some((cell) => cell.kind === "percent");
+        const percent = numeric && !hasMoneyCells && (hasPercentCells || PERCENT_HEADER_RE.test(header));
+        const money = numeric && !percent && (hasMoneyCells || MONEY_HEADER_RE.test(header));
+        const type = money ? "money" : percent ? "percent" : numeric ? "number" : "string";
+        const sortType = sortTypes[columnIndex] || "";
+        const widthSamples = [
+            header,
+            ...rows.map((row) => row[columnIndex]?.text || row[columnIndex]?.explicitValue || ""),
+        ];
+        const maxLength = Math.max(8, ...widthSamples.map((value) => normalizeExportText(value).length));
+
+        return {
+            type,
+            sortType,
+            total: numeric,
+            width: Math.min(60, Math.max(8, maxLength + 2)),
+        };
+    });
+}
+
+function buildExcelTableModel(table, scope, exportTables = [table]) {
+    const columnPlan = tableExportColumnPlan(table, scope, exportTables);
+    const headers = tableHeaderNames(table, columnPlan);
+    const sortTypes = tableColumnSortTypes(table);
+    const exportSortTypes = columnPlan.map((column) => sortTypes.get(column.sourceIndex) || "");
+    const rows = tableBodyRowsForExcel(table, scope, exportTables)
+        .map((row) => rowExportMetadata(row, columnPlan, sortTypes))
+        .filter((row) => row.some((cell) => !isBlankExcelValue(cell.text) || !isBlankExcelValue(cell.explicitValue)));
+    const parsedRows = rows.map((row) =>
+        row.map((cell, columnIndex) => parsedExcelValue(cell, headers[columnIndex], exportSortTypes[columnIndex]))
+    );
+    const columns = analyzeExcelColumns(headers, rows, parsedRows, exportSortTypes);
+    const hasTotalRow = columns.some((column) => column.total);
+    const labelColumnIndex = columns.findIndex((column) => !column.total);
+
+    return {
+        columns,
+        hasTotalRow,
+        headers,
+        labelColumnIndex,
+        parsedRows,
+        rows,
+    };
+}
+
+function excelColumnName(index) {
+    let name = "";
+    let value = index + 1;
+    while (value > 0) {
+        const remainder = (value - 1) % 26;
+        name = String.fromCharCode(65 + remainder) + name;
+        value = Math.floor((value - 1) / 26);
+    }
+    return name;
+}
+
+function excelCellReference(columnIndex, rowIndex) {
+    return `${excelColumnName(columnIndex)}${rowIndex}`;
+}
+
+function excelRange(columnCount, rowCount) {
+    return `A1:${excelColumnName(columnCount - 1)}${rowCount}`;
+}
+
+function excelStyleIdForType(type) {
+    if (type === "money") return 1;
+    if (type === "percent") return 2;
+    if (type === "number") return 3;
+    return 0;
+}
+
+function excelNumberText(value) {
+    if (!Number.isFinite(value)) {
+        return "0";
+    }
+    return String(Math.round((value + Number.EPSILON) * 1000000000000) / 1000000000000);
+}
+
+function excelStringCell(reference, value) {
+    const text = xmlEscape(value);
+    return `<c r="${reference}" t="inlineStr"><is><t>${text}</t></is></c>`;
+}
+
+function excelNumberCell(reference, value, styleId, formula = "") {
+    const style = styleId ? ` s="${styleId}"` : "";
+    const formulaXml = formula ? `<f>${xmlEscape(formula)}</f>` : "";
+    return `<c r="${reference}"${style}>${formulaXml}<v>${excelNumberText(value)}</v></c>`;
+}
+
+function excelWorksheetRows(model) {
+    const rows = [
+        `<row r="1" spans="1:${model.headers.length}">${model.headers
+            .map((header, columnIndex) => excelStringCell(excelCellReference(columnIndex, 1), header))
+            .join("")}</row>`,
+    ];
+
+    model.rows.forEach((row, rowIndex) => {
+        const excelRowIndex = rowIndex + 2;
+        const cells = row
+            .map((cell, columnIndex) => {
+                const reference = excelCellReference(columnIndex, excelRowIndex);
+                const parsed = model.parsedRows[rowIndex][columnIndex];
+                const column = model.columns[columnIndex];
+
+                if (parsed.kind === "blank") {
+                    return "";
+                }
+                if (column.total && parsed.kind !== "string") {
+                    return excelNumberCell(reference, parsed.value, excelStyleIdForType(column.type));
+                }
+                return excelStringCell(reference, cell.text);
+            })
+            .join("");
+        rows.push(`<row r="${excelRowIndex}" spans="1:${model.headers.length}">${cells}</row>`);
+    });
+
+    if (model.hasTotalRow) {
+        const totalRowIndex = model.rows.length + 2;
+        const firstDataRow = 2;
+        const lastDataRow = model.rows.length + 1;
+        const totalLabel = typeof financeTranslate === "function" ? financeTranslate("Total") : "Total";
+        const cells = model.columns
+            .map((column, columnIndex) => {
+                const reference = excelCellReference(columnIndex, totalRowIndex);
+                if (column.total) {
+                    const sum = model.parsedRows.reduce((total, row) => total + (row[columnIndex].value || 0), 0);
+                    const columnName = excelColumnName(columnIndex);
+                    const formula = `SUBTOTAL(109,${columnName}${firstDataRow}:${columnName}${lastDataRow})`;
+                    return excelNumberCell(reference, sum, excelStyleIdForType(column.type), formula);
+                }
+                if (columnIndex === model.labelColumnIndex) {
+                    return excelStringCell(reference, totalLabel);
+                }
+                return "";
+            })
+            .join("");
+        rows.push(`<row r="${totalRowIndex}" spans="1:${model.headers.length}">${cells}</row>`);
+    }
+
+    return rows.join("");
+}
+
+function excelWorksheetXml(model) {
+    const dataEndRow = model.rows.length + 1;
+    const totalRowCount = model.hasTotalRow ? 1 : 0;
+    const rowCount = dataEndRow + totalRowCount;
+    const dimension = excelRange(model.headers.length, rowCount);
+    const columns = model.columns
+        .map(
+            (column, index) =>
+                `<col min="${index + 1}" max="${index + 1}" width="${column.width}" bestFit="1" customWidth="1"/>`
+        )
+        .join("");
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <dimension ref="${dimension}"/>
+    <sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>
+    <sheetFormatPr defaultRowHeight="15"/>
+    <cols>${columns}</cols>
+    <sheetData>${excelWorksheetRows(model)}</sheetData>
+    <tableParts count="1"><tablePart r:id="rId1"/></tableParts>
+</worksheet>`;
+}
+
+function excelTableXml(model) {
+    const dataEndRow = model.rows.length + 1;
+    const rowCount = dataEndRow + (model.hasTotalRow ? 1 : 0);
+    const tableRef = excelRange(model.headers.length, rowCount);
+    const autoFilterRef = excelRange(model.headers.length, dataEndRow);
+    const totalAttrs = model.hasTotalRow ? 'totalsRowCount="1"' : 'totalsRowShown="0"';
+    const totalLabel = typeof financeTranslate === "function" ? financeTranslate("Total") : "Total";
+    const columns = model.headers
+        .map((header, index) => {
+            const column = model.columns[index];
+            const attrs = [`id="${index + 1}"`, `name="${xmlEscape(header)}"`];
+            if (model.hasTotalRow && column.total) {
+                attrs.push('totalsRowFunction="sum"');
+            } else if (model.hasTotalRow && index === model.labelColumnIndex) {
+                attrs.push(`totalsRowLabel="${xmlEscape(totalLabel)}"`);
+            }
+            return `<tableColumn ${attrs.join(" ")}/>`;
         })
         .join("");
 
-    const workbook = `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-    xmlns:o="urn:schemas-microsoft-com:office:office"
-    xmlns:x="urn:schemas-microsoft-com:office:excel"
-    xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-    <Worksheet ss:Name="${xmlEscape(excelSheetName(sheetName))}">
-        <Table>${rows}</Table>
-    </Worksheet>
-</Workbook>`;
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="${XLSX_TABLE_NAME}" displayName="${XLSX_TABLE_NAME}" ref="${tableRef}" ${totalAttrs}>
+    <autoFilter ref="${autoFilterRef}"/>
+    <tableColumns count="${model.headers.length}">${columns}</tableColumns>
+    <tableStyleInfo name="TableStyleLight1" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>
+</table>`;
+}
 
-    downloadBlob(
-        new Blob([workbook], { type: "application/vnd.ms-excel;charset=utf-8" }),
-        `${filenameBase}.${table.dataset.exportExcelExtension || "xls"}`
-    );
+function excelStylesXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+    <numFmts count="2">
+        <numFmt numFmtId="164" formatCode="${xmlEscape(XLSX_MONEY_FORMAT)}"/>
+        <numFmt numFmtId="165" formatCode="${xmlEscape(XLSX_NUMBER_FORMAT)}"/>
+    </numFmts>
+    <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+    <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+    <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+    <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+    <cellXfs count="4">
+        <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+        <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+        <xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+        <xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+    </cellXfs>
+    <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+    <dxfs count="0"/>
+    <tableStyles count="1" defaultTableStyle="TableStyleLight1" defaultPivotStyle="PivotStyleLight16"/>
+</styleSheet>`;
+}
+
+function excelWorkbookXml(sheetName) {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <bookViews><workbookView/></bookViews>
+    <sheets><sheet name="${xmlEscape(excelSheetName(sheetName))}" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`;
+}
+
+function excelWorkbookRelationshipsXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+    <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+}
+
+function excelWorksheetRelationshipsXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/>
+</Relationships>`;
+}
+
+function excelPackageRelationshipsXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+}
+
+function excelContentTypesXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="xml" ContentType="application/xml"/>
+    <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+    <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+    <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+    <Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>
+</Types>`;
+}
+
+function xlsxPackageFiles(model, sheetName) {
+    return [
+        { name: "[Content_Types].xml", content: excelContentTypesXml() },
+        { name: "_rels/.rels", content: excelPackageRelationshipsXml() },
+        { name: "xl/workbook.xml", content: excelWorkbookXml(sheetName) },
+        { name: "xl/_rels/workbook.xml.rels", content: excelWorkbookRelationshipsXml() },
+        { name: "xl/worksheets/sheet1.xml", content: excelWorksheetXml(model) },
+        { name: "xl/worksheets/_rels/sheet1.xml.rels", content: excelWorksheetRelationshipsXml() },
+        { name: "xl/tables/table1.xml", content: excelTableXml(model) },
+        { name: "xl/styles.xml", content: excelStylesXml() },
+    ];
+}
+
+const CRC32_TABLE = Array.from({ length: 256 }, (_value, index) => {
+    let crc = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+        crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+    }
+    return crc >>> 0;
+});
+
+function crc32(bytes) {
+    let crc = 0xffffffff;
+    bytes.forEach((byte) => {
+        crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    });
+    return (crc ^ 0xffffffff) >>> 0;
+}
+
+function writeUint16(target, offset, value) {
+    target[offset] = value & 0xff;
+    target[offset + 1] = (value >>> 8) & 0xff;
+}
+
+function writeUint32(target, offset, value) {
+    target[offset] = value & 0xff;
+    target[offset + 1] = (value >>> 8) & 0xff;
+    target[offset + 2] = (value >>> 16) & 0xff;
+    target[offset + 3] = (value >>> 24) & 0xff;
+}
+
+function zipDateTime(date = new Date()) {
+    const year = Math.min(2107, Math.max(1980, date.getFullYear()));
+    return {
+        date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+        time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+    };
+}
+
+function createZipBlob(files, mimeType) {
+    const encoder = new TextEncoder();
+    const timestamp = zipDateTime();
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+
+    files.forEach((file) => {
+        const nameBytes = encoder.encode(file.name);
+        const contentBytes = typeof file.content === "string" ? encoder.encode(file.content) : file.content;
+        const checksum = crc32(contentBytes);
+        const localHeader = new Uint8Array(30 + nameBytes.length);
+        writeUint32(localHeader, 0, 0x04034b50);
+        writeUint16(localHeader, 4, 20);
+        writeUint16(localHeader, 6, 0x0800);
+        writeUint16(localHeader, 8, 0);
+        writeUint16(localHeader, 10, timestamp.time);
+        writeUint16(localHeader, 12, timestamp.date);
+        writeUint32(localHeader, 14, checksum);
+        writeUint32(localHeader, 18, contentBytes.length);
+        writeUint32(localHeader, 22, contentBytes.length);
+        writeUint16(localHeader, 26, nameBytes.length);
+        writeUint16(localHeader, 28, 0);
+        localHeader.set(nameBytes, 30);
+        localParts.push(localHeader, contentBytes);
+
+        const centralHeader = new Uint8Array(46 + nameBytes.length);
+        writeUint32(centralHeader, 0, 0x02014b50);
+        writeUint16(centralHeader, 4, 20);
+        writeUint16(centralHeader, 6, 20);
+        writeUint16(centralHeader, 8, 0x0800);
+        writeUint16(centralHeader, 10, 0);
+        writeUint16(centralHeader, 12, timestamp.time);
+        writeUint16(centralHeader, 14, timestamp.date);
+        writeUint32(centralHeader, 16, checksum);
+        writeUint32(centralHeader, 20, contentBytes.length);
+        writeUint32(centralHeader, 24, contentBytes.length);
+        writeUint16(centralHeader, 28, nameBytes.length);
+        writeUint16(centralHeader, 30, 0);
+        writeUint16(centralHeader, 32, 0);
+        writeUint16(centralHeader, 34, 0);
+        writeUint16(centralHeader, 36, 0);
+        writeUint32(centralHeader, 38, 0);
+        writeUint32(centralHeader, 42, offset);
+        centralHeader.set(nameBytes, 46);
+        centralParts.push(centralHeader);
+
+        offset += localHeader.length + contentBytes.length;
+    });
+
+    const centralDirectoryOffset = offset;
+    const centralDirectorySize = centralParts.reduce((total, part) => total + part.length, 0);
+    const endRecord = new Uint8Array(22);
+    writeUint32(endRecord, 0, 0x06054b50);
+    writeUint16(endRecord, 4, 0);
+    writeUint16(endRecord, 6, 0);
+    writeUint16(endRecord, 8, files.length);
+    writeUint16(endRecord, 10, files.length);
+    writeUint32(endRecord, 12, centralDirectorySize);
+    writeUint32(endRecord, 16, centralDirectoryOffset);
+    writeUint16(endRecord, 20, 0);
+
+    return new Blob([...localParts, ...centralParts, endRecord], { type: mimeType });
+}
+
+function createXlsxBlob(model, sheetName) {
+    return createZipBlob(xlsxPackageFiles(model, sheetName), XLSX_MIME_TYPE);
+}
+
+async function exportTableExcel(table, filenameBase, sheetName) {
+    const scope = await tableExportScope(table);
+    if (!scope) return;
+
+    try {
+        const exportTables = await tableExportTablesForScope(table, scope);
+        downloadBlob(
+            createXlsxBlob(buildExcelTableModel(table, scope, exportTables), sheetName),
+            `${filenameBase}.xlsx`
+        );
+    } catch (error) {
+        notifyTableExportError(error);
+    }
 }
 
 function insertTableExportToolbar(table, toolbar) {

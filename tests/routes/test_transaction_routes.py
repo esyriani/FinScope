@@ -3,7 +3,7 @@
 from sqlalchemy import text
 from tests.support.database import insert_transaction as insert_test_transaction
 from tests.support.database import set_owner_setting
-from tests.support.html import assert_visible_text
+from tests.support.html import assert_has_element, assert_visible_text
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
@@ -37,6 +37,49 @@ def transaction_state(conn, tx_id):
         )
         .mappings()
         .fetchone()
+    )
+
+
+def test_transactions_table_exports_category_method_and_score_separately(client, core_conn):
+    """Verify transaction category cells export category, method, and score fields."""
+    insert_test_transaction(
+        core_conn,
+        description="AI matched cafe",
+        amount=12.34,
+        category="Food",
+        category_source="ai",
+        category_confidence=0.96,
+        needs_review=0,
+        fingerprint="route-tx-export-category-parts",
+    )
+
+    response = client.get("/transactions?period=all")
+
+    assert response.status_code == 200
+    assert_has_element(
+        response, "span", attrs={"class": "transaction-category-name", "data-export-part": True}, text="Food"
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-label": "Method",
+            "data-export-header": "Method",
+        },
+        text="AI",
+    )
+    assert_has_element(
+        response,
+        "span",
+        attrs={
+            "data-export-part": True,
+            "data-export-label": "Score",
+            "data-export-header": "Score",
+            "data-export-type": "percent",
+            "data-export-value": "0.96",
+        },
+        text="96%",
     )
 
 
