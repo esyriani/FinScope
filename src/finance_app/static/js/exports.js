@@ -38,6 +38,21 @@ function downloadDataUrl(dataUrl, filename) {
 }
 
 function exportIcon(type) {
+    if (type === "expand") {
+        return `
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M8 3H3v5"></path>
+                <path d="M3 3l7 7"></path>
+                <path d="M16 3h5v5"></path>
+                <path d="M21 3l-7 7"></path>
+                <path d="M8 21H3v-5"></path>
+                <path d="M3 21l7-7"></path>
+                <path d="M16 21h5v-5"></path>
+                <path d="M21 21l-7-7"></path>
+            </svg>
+        `;
+    }
+
     if (type === "image") {
         return `
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -57,20 +72,199 @@ function exportIcon(type) {
     `;
 }
 
-function createExportButton(label, type, onClick) {
+function createToolbarButton(label, type, onClick, ariaLabel = label) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "btn btn-sm btn-outline-secondary export-button";
     button.innerHTML = `${exportIcon(type)}<span>${label}</span>`;
-    button.setAttribute("aria-label", financeTranslate("Export {label}", { label }));
+    button.setAttribute("aria-label", ariaLabel);
     button.addEventListener("click", onClick);
     return button;
+}
+
+function createIconToolbarButton(label, type, onClick, ariaLabel = label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-sm btn-outline-secondary export-button export-button-icon-only";
+    button.innerHTML = exportIcon(type);
+    button.title = label;
+    button.setAttribute("aria-label", ariaLabel);
+    button.addEventListener("click", onClick);
+    return button;
+}
+
+function createExportButton(label, type, onClick) {
+    return createToolbarButton(label, type, onClick, financeTranslate("Export {label}", { label }));
+}
+
+function createExpandButton(title, onClick) {
+    return createIconToolbarButton(
+        financeTranslate("Expand"),
+        "expand",
+        onClick,
+        financeTranslate("Expand {label}", { label: title })
+    );
 }
 
 function createExportToolbar() {
     const toolbar = document.createElement("div");
     toolbar.className = "export-toolbar";
     return toolbar;
+}
+
+let expandedExportState = null;
+
+function resizeChartElement(element) {
+    const chart = window.echarts?.getInstanceByDom(element);
+    if (chart) {
+        chart.resize();
+    }
+}
+
+function restoreExpandedExportContent() {
+    if (!expandedExportState) return;
+
+    const state = expandedExportState;
+    expandedExportState = null;
+    state.element.classList.remove("export-expanded-element", `export-expanded-${state.kind}`);
+
+    if (state.placeholder.parentNode) {
+        state.placeholder.replaceWith(state.element);
+    } else if (state.parent) {
+        state.parent.insertBefore(state.element, state.nextSibling);
+    }
+
+    if (state.kind === "chart") {
+        requestAnimationFrame(() => resizeChartElement(state.element));
+    }
+}
+
+function closeExpandedExportModal() {
+    const modalElement = document.getElementById("export-expand-modal");
+    if (!modalElement || !expandedExportState) return Promise.resolve();
+
+    if (!window.bootstrap?.Modal) {
+        restoreExpandedExportContent();
+        modalElement.style.display = "none";
+        modalElement.setAttribute("aria-hidden", "true");
+        return Promise.resolve();
+    }
+
+    const modal = bootstrap.Modal.getInstance(modalElement);
+    if (!modal || !modalElement.classList.contains("show")) {
+        restoreExpandedExportContent();
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+        modalElement.addEventListener("hidden.bs.modal", resolve, { once: true });
+        modal.hide();
+    });
+}
+
+function showModalAfterExpandedExportCloses(modalElement) {
+    if (!window.bootstrap?.Modal) return;
+
+    closeExpandedExportModal().then(() => {
+        bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    });
+}
+
+function ensureExportExpandModal() {
+    const existing = document.getElementById("export-expand-modal");
+    if (existing) return existing;
+
+    const modal = document.createElement("div");
+    modal.className = "modal fade export-expand-modal";
+    modal.id = "export-expand-modal";
+    modal.tabIndex = -1;
+    modal.setAttribute("aria-labelledby", "export-expand-title");
+    modal.setAttribute("aria-hidden", "true");
+    modal.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered export-expand-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="export-expand-title" data-export-expand-title></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${financeTranslate("Close")}"></button>
+                </div>
+                <div class="modal-body" data-export-expand-body></div>
+            </div>
+        </div>
+    `;
+    modal.addEventListener("hidden.bs.modal", restoreExpandedExportContent);
+    modal.querySelector(".btn-close")?.addEventListener("click", () => {
+        if (!window.bootstrap?.Modal) {
+            restoreExpandedExportContent();
+            modal.style.display = "none";
+        }
+    });
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function showExpandedExportModal(modalElement, kind, element) {
+    if (!window.bootstrap?.Modal) {
+        modalElement.style.display = "block";
+        modalElement.removeAttribute("aria-hidden");
+        if (kind === "chart") {
+            requestAnimationFrame(() => resizeChartElement(element));
+        }
+        return;
+    }
+
+    modalElement.addEventListener(
+        "shown.bs.modal",
+        () => {
+            if (kind === "chart") {
+                resizeChartElement(element);
+            }
+        },
+        { once: true }
+    );
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+function expandExportElement(element, title, kind) {
+    const modalElement = ensureExportExpandModal();
+    const modalBody = modalElement.querySelector("[data-export-expand-body]");
+    const modalTitle = modalElement.querySelector("[data-export-expand-title]");
+    const parent = element.parentNode;
+    if (!modalBody || !modalTitle || !parent) return;
+
+    restoreExpandedExportContent();
+
+    const placeholder = document.createElement("div");
+    const nextSibling = element.nextSibling;
+    placeholder.hidden = true;
+    placeholder.setAttribute("data-export-expand-placeholder", "");
+    parent.insertBefore(placeholder, element);
+    element.classList.add("export-expanded-element", `export-expanded-${kind}`);
+    modalTitle.textContent = title;
+    modalBody.replaceChildren(element);
+    expandedExportState = {
+        element,
+        kind,
+        nextSibling,
+        parent,
+        placeholder,
+    };
+
+    showExpandedExportModal(modalElement, kind, element);
+}
+
+function tableVisibleSource(table) {
+    const selector = table.dataset.exportVisibleSource;
+    if (!selector) return null;
+    return document.querySelector(selector);
+}
+
+function expandTable(table, title) {
+    const sourceTable = tableVisibleSource(table) || table;
+    expandExportElement(sourceTable.closest(".table-responsive") || sourceTable, title, "table");
+}
+
+function expandChart(element, title) {
+    expandExportElement(element, title, "chart");
 }
 
 function elementExportTitle(element, fallback) {
@@ -317,11 +511,12 @@ async function exportTableExcel(table, filenameBase, sheetName) {
 }
 
 function insertTableExportToolbar(table, toolbar) {
-    const card = table.closest(".card");
-    const localTitleBar = table.closest("[data-table-export-scope]")?.querySelector(".section-title");
+    const toolbarTable = tableVisibleSource(table) || table;
+    const card = toolbarTable.closest(".card");
+    const localTitleBar = toolbarTable.closest("[data-table-export-scope]")?.querySelector(".section-title");
     const titleBar = localTitleBar || card?.querySelector(".section-title");
     const cardHeader = card?.querySelector(".card-header");
-    const tableResponsive = table.closest(".table-responsive");
+    const tableResponsive = toolbarTable.closest(".table-responsive");
 
     if (titleBar) {
         titleBar.appendChild(toolbar);
@@ -360,6 +555,7 @@ function setupTableExports(root = document) {
                 exportTableExcel(table, filenameBase, title)
             )
         );
+        toolbar.appendChild(createExpandButton(title, () => expandTable(table, title)));
         insertTableExportToolbar(table, toolbar);
     });
 }
@@ -432,6 +628,7 @@ function setupChartExports(root = document) {
         const toolbar = createExportToolbar();
 
         toolbar.appendChild(createExportButton("PNG", "image", () => exportEChartPng(container, filenameBase)));
+        toolbar.appendChild(createExpandButton(title, () => expandChart(container, title)));
         insertChartExportToolbar(container, toolbar);
     });
 
@@ -445,12 +642,16 @@ function setupChartExports(root = document) {
         const toolbar = createExportToolbar();
 
         toolbar.appendChild(createExportButton("PNG", "image", () => exportCanvasPng(canvas, filenameBase)));
+        toolbar.appendChild(createExpandButton(title, () => expandChart(canvas, title)));
         insertChartExportToolbar(canvas, toolbar);
     });
 }
 
 window.financeApp?.registerInitializer("exports.tables", setupTableExports);
 window.financeApp?.registerInitializer("exports.charts", setupChartExports);
+window.financeApp = window.financeApp || {};
+window.financeApp.closeExpandedExportModal = closeExpandedExportModal;
+window.financeApp.showModalAfterExpandedExportCloses = showModalAfterExpandedExportCloses;
 
 setupTableExports();
 setupChartExports();

@@ -189,9 +189,12 @@ AI uses three configurable thresholds with separate responsibilities:
 
 LLM categorization is operationally separate from statement import. Imports apply
 rules and historical evidence first, then report remaining unknown rows that can
-be categorized with AI. Owners can run AI manually from Jobs or from an uploaded
-statement after reviewing the token estimate. Reruns only target
-active transactions that are still null or `UNKNOWN`, so existing manual,
-rule-based, historical, transfer, and accepted AI categories are not overwritten.
+be categorized with AI. By default, owners run AI manually from Jobs or from an
+uploaded statement after reviewing the token estimate. If the owner turns off
+token-usage confirmation in Settings > Categorization, statement imports
+automatically queue AI categorization for those remaining unknown rows. Reruns
+only target active transactions that are still null or `UNKNOWN`, so existing
+manual, rule-based, historical, transfer, and accepted AI categories are not
+overwritten.
 
 For focused review, the transaction table can show a synchronous Suggest category action for one row. This previews LLM categorization for the selected transaction only, displays model confidence, evidence, metadata, and failure reasons, and then lets the user explicitly apply the suggestion to the row or apply it and create a reusable rule.

@@ -226,13 +226,15 @@ def test_review_page_filters_by_merchant_search(client, core_conn):
     """Verify the review page can be filtered by merchant name."""
     insert_review_transaction(core_conn, "Metro Grocery", "review-route-search-metro")
     insert_review_transaction(core_conn, "Hydro Quebec", "review-route-search-hydro")
+    insert_review_transaction(core_conn, "UDEM - PAIE payroll", "review-route-search-udem-paie")
 
-    response = client.get("/review?merchant=hydro")
+    response = client.get("/review?merchant=UDEM+PAIE")
 
     assert response.status_code == 200
-    assert_input(response, name="merchant", value="hydro")
-    assert_visible_text(response, "HYDRO QUEBEC")
+    assert_input(response, name="merchant", value="UDEM PAIE")
+    assert_visible_text(response, "UDEM PAIE PAYROLL")
     assert_not_visible_text(response, "METRO GROCERY")
+    assert_not_visible_text(response, "HYDRO QUEBEC")
 
 
 def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypatch):

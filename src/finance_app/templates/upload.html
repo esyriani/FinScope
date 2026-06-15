@@ -272,7 +272,7 @@
                                 {{ _("ignored {count}", count=statement["ignored_count"]) }}
                             </div>
                             {% if statement["llm_candidate_count"] %}
-                                <div class="small text-muted">{{ _("{count} queued for categorization", count=statement["llm_candidate_count"]) }}</div>
+                                <div class="small text-muted">{{ _("AI candidates") }}: {{ statement["llm_candidate_count"] }}</div>
                             {% endif %}
                             {% if statement["unknown_transaction_count"] %}
                                 <div class="small text-muted">{{ _("{count} unknown", count=statement["unknown_transaction_count"]) }}</div>

@@ -24,9 +24,14 @@ def settings_defaults():
         default_comparison_insight_card_limit=4,
         default_home_top_category_limit=6,
         default_merchant_table_limit=10,
+        default_merchant_suggestion_limit=5,
         default_rule_preview_limit=20,
         default_rule_audit_transaction_limit=200,
+        default_recurrence_minimum_occurrences=3,
+        default_recurrence_date_tolerance_days=5,
+        default_recurrence_missed_cycles_before_inactive=2,
         default_categorization_model="gpt-default",
+        default_ui_language="en",
         locale="en",
     )
 
@@ -40,6 +45,7 @@ def test_parse_general_settings_form_normalizes_user_settings():
             ("comparison_insight_card_limit", "3"),
             ("home_top_category_limit", "7"),
             ("merchant_table_limit", "8"),
+            ("merchant_suggestion_limit", "6"),
             ("rule_preview_limit", "9"),
             ("rule_audit_transaction_limit", "100"),
             ("theme_mode", "dark"),
@@ -51,6 +57,7 @@ def test_parse_general_settings_form_normalizes_user_settings():
 
     assert parsed["default_table_page_size"] == 50
     assert parsed["comparison_max_years"] == 4
+    assert parsed["merchant_suggestion_limit"] == 6
     assert parsed["theme_mode"] == "dark"
     assert parsed["ui_language"] == "fr"
 

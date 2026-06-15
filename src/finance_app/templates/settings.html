@@ -117,7 +117,7 @@
                     <div class="settings-subsection-help">{{ _("Default row counts used throughout the app.") }}</div>
                     <div class="settings-grid settings-grid-compact">
                         <div class="settings-field">
-                            <label for="default_table_page_size" class="form-label">{{ _("Default table page size") }}</label>
+                            <label for="default_table_page_size" class="form-label">{{ _("Table page size") }}</label>
                             <input id="default_table_page_size" class="form-control" type="number" min="1" name="default_table_page_size" value="{{ default_table_page_size }}">
                             <div class="form-text">{{ _("Rows shown per page in paginated tables.") }}</div>
                         </div>
@@ -144,6 +144,12 @@
                             <label for="merchant_table_limit" class="form-label">{{ _("Merchant table limit") }}</label>
                             <input id="merchant_table_limit" class="form-control" type="number" min="1" name="merchant_table_limit" value="{{ merchant_table_limit }}">
                             <div class="form-text">{{ _("Merchant rows shown in comparison summaries.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="merchant_suggestion_limit" class="form-label">{{ _("Merchant suggestion limit") }}</label>
+                            <input id="merchant_suggestion_limit" class="form-control" type="number" min="1" name="merchant_suggestion_limit" value="{{ merchant_suggestion_limit }}">
+                            <div class="form-text">{{ _("Merchant suggestions shown in autocomplete fields.") }}</div>
                         </div>
 
                         <div class="settings-field">

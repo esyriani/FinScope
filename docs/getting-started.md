@@ -120,11 +120,12 @@ Rules created from the Rules page are keyword-fuzzy by default. Rules saved whil
 
 Open Dashboard after the first import to inspect categorization completeness, spending, income, net cash flow, savings rate, spending breakdowns, monthly cash flow, and merchant analytics.
 
-![Dashboard analytics](img/dashboard-analytics.png)
+![Dashboard](img/dashboard.png)
 
 Open Comparison after you have more than one useful period of data. Period changes compare the selected current period with a matching prior period. Year trends are more useful once multiple calendar years or enough months exist.
 
-![Comparison analytics](img/comparison-analytics.png)
+![Comparison period](img/comparison-period.png)
+![Comparison year](img/comparison-year.png)
 
 ## Next reads
 

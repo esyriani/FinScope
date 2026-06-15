@@ -8,6 +8,7 @@ from finance_app.modules.comparison.controller import comparison_bp
 from finance_app.modules.dashboard.controller import dashboard_bp
 from finance_app.modules.home.controller import home_bp
 from finance_app.modules.jobs.controller import jobs_bp
+from finance_app.modules.merchants.controller import merchants_bp
 from finance_app.modules.recurring.controller import recurring_bp
 from finance_app.modules.review.controller import review_bp
 from finance_app.modules.rules.controller import rules_bp
@@ -26,6 +27,7 @@ def register_blueprints(app: Any) -> None:
     app.register_blueprint(upload_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(comparison_bp)
+    app.register_blueprint(merchants_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(recurring_bp)
     app.register_blueprint(review_bp)

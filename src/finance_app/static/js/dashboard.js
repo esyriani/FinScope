@@ -19,6 +19,10 @@ function dashboardScopedElement(root, selector) {
     return root.matches?.(selector) ? root : root.querySelector(selector);
 }
 
+function dashboardRoot(root) {
+    return root && typeof root.querySelector === "function" ? root : document;
+}
+
 function setupDashboardDrilldownInteractions(root = document) {
     const scope = dashboardScopedElement(root, "[data-dashboard-drilldown-scope]");
     if (!scope) return;
@@ -66,36 +70,6 @@ function setupDashboardCustomRange(root = document) {
     updateVisibility();
 }
 
-function setupDashboardQuickView(root = document) {
-    const input = dashboardScopedElement(root, "[data-dashboard-quick-view-input]");
-    if (!input) return;
-
-    const buttons = root.querySelectorAll("[data-dashboard-quick-view]");
-    const updateButtons = () => {
-        buttons.forEach((button) => {
-            const isActive = button.dataset.dashboardQuickView === input.value;
-            button.classList.toggle("btn-primary", isActive);
-            button.classList.toggle("btn-outline-secondary", !isActive);
-            button.setAttribute("aria-pressed", isActive ? "true" : "false");
-        });
-    };
-
-    buttons.forEach((button) => {
-        if (button.dataset.dashboardQuickViewReady === "true") {
-            return;
-        }
-
-        button.dataset.dashboardQuickViewReady = "true";
-        button.addEventListener("click", () => {
-            const nextView = button.dataset.dashboardQuickView || "all";
-            input.value = nextView;
-            updateButtons();
-        });
-    });
-
-    updateButtons();
-}
-
 function setupDashboardQualityPanel(root = document) {
     const button = dashboardScopedElement(root, "[data-dashboard-quality-toggle]");
     if (!button || button.dataset.dashboardQualityReady === "true") return;
@@ -118,6 +92,7 @@ function setupDashboardQualityPanel(root = document) {
 }
 
 function setupDashboardPage(root = document) {
+    root = dashboardRoot(root);
     if (!dashboardScopedElement(root, "[data-dashboard-drilldown-scope]")) {
         return;
     }
@@ -127,14 +102,13 @@ function setupDashboardPage(root = document) {
     }
     setupDashboardDrilldownInteractions(root);
     setupDashboardCustomRange(root);
-    setupDashboardQuickView(root);
     setupDashboardQualityPanel(root);
 }
 
 window.financeApp?.registerInitializer("dashboard.page", setupDashboardPage);
 
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", setupDashboardPage);
+    document.addEventListener("DOMContentLoaded", () => setupDashboardPage());
 } else {
     setupDashboardPage();
 }

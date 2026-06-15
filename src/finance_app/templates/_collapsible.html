@@ -1,0 +1,66 @@
+{% macro collapse_toggle_button(target_id, show_label="Show", hide_label="Hide", expanded=false, button_class="btn btn-sm btn-outline-secondary") %}
+<button
+    class="{{ button_class }}"
+    type="button"
+    data-bs-toggle="collapse"
+    data-bs-target="#{{ target_id }}"
+    aria-expanded="{{ 'true' if expanded else 'false' }}"
+    aria-controls="{{ target_id }}"
+    data-collapse-label-toggle
+    data-show-label="{{ _(show_label) }}"
+    data-hide-label="{{ _(hide_label) }}"
+>
+    <i class="bi {{ 'bi-chevron-up' if expanded else 'bi-chevron-down' }}" aria-hidden="true" data-collapse-toggle-icon></i><span data-collapse-toggle-label>{{ _(hide_label) if expanded else _(show_label) }}</span>
+</button>
+{% endmacro %}
+
+{% macro selected_filter_values(values, empty_label) -%}
+    {%- if values -%}
+        {%- for value in values -%}
+            {%- if value == untagged_tag_filter_value -%}
+                {{- _("Untagged") -}}
+            {%- else -%}
+                {{- value -}}
+            {%- endif -%}
+            {%- if not loop.last %}, {% endif -%}
+        {%- endfor -%}
+    {%- else -%}
+        {{- _(empty_label) -}}
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro collapsible_filter_panel(target_id, summary, expanded=false) %}
+<section class="card mb-4 filter-panel" aria-labelledby="{{ target_id }}-heading">
+    <div class="card-body border-bottom filter-panel-header">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+            <div class="filter-panel-heading">
+                <h5 id="{{ target_id }}-heading" class="mb-1">{{ _("Filters") }}</h5>
+                <div class="text-muted small filter-panel-summary">{{ summary }}</div>
+            </div>
+            {{ collapse_toggle_button(target_id, "Show filters", "Hide filters", expanded) }}
+        </div>
+    </div>
+    <div class="collapse{% if expanded %} show{% endif %}" id="{{ target_id }}">
+        <div class="card-body">
+            {{ caller() }}
+        </div>
+    </div>
+</section>
+{% endmacro %}
+
+{% macro collapsible_filter_block(target_id, summary, expanded=false, block_class="page-block", header_class="page-block-header", section_id="") %}
+<section{% if section_id %} id="{{ section_id }}"{% endif %} class="{{ block_class }} filter-panel" aria-labelledby="{{ target_id }}-heading">
+    <div class="{{ header_class }} filter-panel-header">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+            <div class="filter-panel-heading">
+                <h6 id="{{ target_id }}-heading" class="card-title mb-1">{{ _("Filters") }}</h6>
+                <div class="text-muted small filter-panel-summary">{{ summary }}</div>
+            </div>
+            {{ collapse_toggle_button(target_id, "Show filters", "Hide filters", expanded) }}
+        </div>
+    </div>
+    <div class="collapse{% if expanded %} show{% endif %}" id="{{ target_id }}">
+        {{ caller() }}
+    </div>
+</section>
+{% endmacro %}

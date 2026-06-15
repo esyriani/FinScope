@@ -115,7 +115,7 @@ def test_build_period_insights_preserves_card_order_and_public_fields():
     assert public_fields(insights[2]) == {
         "label": "Transaction activity",
         "value": "1 transaction",
-        "detail": "0 versus prior period. Average transaction: 200.00 $",
+        "detail": "0 versus prior period. Average spending: 200.00 $",
         "visual": "activity",
         "group": "spending",
         "tone": "accent",

@@ -164,6 +164,10 @@ function setupBusyOverlayNavigation() {
 
     window.busyOverlayNavigationReady = true;
     document.addEventListener("submit", (event) => {
+        if (event.defaultPrevented) {
+            return;
+        }
+
         const form = event.target?.closest?.("form");
         if (!form || form.hasAttribute("data-ajax-refresh-form")) {
             return;

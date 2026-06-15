@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from flask import url_for
-from sqlalchemy import String, case, cast, func, literal, or_, select
+from sqlalchemy import String, and_, case, cast, func, literal, or_, select
 
 from finance_app.core.config import settings
 from finance_app.core.constants import (
@@ -36,6 +36,7 @@ from finance_app.modules.categories.taxonomy import (
     get_tag_color_map,
     get_tag_option_rows,
 )
+from finance_app.modules.merchants.sql_filters import escape_like_token
 from finance_app.modules.rules.service import count_rule_transaction_references_by_rule_id
 from finance_app.modules.settings.runtime import get_int_setting
 
@@ -216,7 +217,7 @@ def build_rule_filters(
 
 def rule_search_filter(search: str) -> Any:
     """Return a case-insensitive Core search condition for rule rows."""
-    pattern = f"%{search.lower()}%"
+    terms = [term for term in search.lower().split() if term]
     approval_text = case(
         (category_rules_table.c.ai_approved == 1, literal("approved")),
         else_=literal("not approved"),
@@ -233,7 +234,17 @@ def rule_search_filter(search: str) -> Any:
         category_rules_table.c.direction,
         func.coalesce(accounts_table.c.name, ""),
     )
-    return or_(*[func.lower(expression).like(pattern) for expression in expressions])
+    return and_(
+        *[
+            or_(
+                *[
+                    func.lower(cast(expression, String)).like(f"%{escape_like_token(term)}%", escape="\\")
+                    for expression in expressions
+                ]
+            )
+            for term in terms
+        ]
+    )
 
 
 def rule_tag_filter(selected_tags: Sequence[str]) -> Any:

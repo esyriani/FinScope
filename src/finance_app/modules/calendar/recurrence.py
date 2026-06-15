@@ -25,6 +25,8 @@ def infer_recurring_items(
     recurrence_settings: Any = None,
     recurring_pattern_metadata: Mapping[str, Mapping[str, Any]] | None = None,
     conn: Any = None,
+    account_id: int | None = None,
+    merchant_search: str = "",
 ) -> list[dict[str, Any]]:
     """Infer recurring items."""
     recurrence_settings = recurrence_settings or RECURRENCE_DETECTION_DEFAULTS
@@ -77,7 +79,12 @@ def infer_recurring_items(
                 "type": tx_type,
                 "category": row["category"],
                 "account_name": row["account_name"],
-                "url": transactions_url(row["tx_date"], row["tx_date"]),
+                "url": transactions_url(
+                    row["tx_date"],
+                    row["tx_date"],
+                    account_id=account_id,
+                    merchant_search=merchant_search,
+                ),
             }
         )
 
@@ -105,12 +112,6 @@ def infer_recurring_items(
         if pattern_metadata.get("user_status") == "ignored" or pattern_metadata.get("active") == 0:
             continue
 
-        expected_day = min(last_day, max(1, round(median(group["days"]))))
-        expected_day = pattern_metadata.get("expected_day") or expected_day
-        expected_date = month_start.replace(day=expected_day)
-        if expected_date < month_start or expected_date > month_end:
-            continue
-
         # Use the dominant historical category and median amount as defaults,
         # then let user-edited pattern metadata override those estimates.
         category = max(
@@ -130,39 +131,73 @@ def infer_recurring_items(
         )
         observed_months = len(group["months"])
         frequency = pattern_metadata.get("frequency") or recurring_frequency_label(group["dates"], group["months"])
-        match = classify_recurring_match(
-            candidates,
-            expected_date,
-            typical_amount,
-            evaluation_date,
-            pattern_recurrence_settings,
-            last_seen=last_seen,
-            frequency=frequency,
+        expected_day = min(last_day, max(1, round(median(group["days"]))))
+        expected_day_override = pattern_metadata.get("expected_day")
+        expected_day = expected_day_override or expected_day
+        expected_dates = recurring_expected_dates(
+            month_start,
+            month_end,
+            group["dates"],
+            expected_day,
+            frequency,
+            anchor_to_expected_day=expected_day_override is not None,
         )
-        recurring.append(
-            {
-                "id": f"recurring-{len(recurring)}",
-                "pattern_key": pattern_key,
-                "merchant_id": group["merchant_id"],
-                "match_type": match_type,
-                "date": expected_date.isoformat(),
-                "merchant": group["merchant"],
-                "amount": rounded_money_float(typical_amount),
-                "type": group["type"],
-                "category": category,
-                "last_seen": last_seen.isoformat(),
-                "observed_months": observed_months,
-                "frequency": frequency,
-                "confidence": recurring_confidence_label(observed_months, pattern_recurrence_settings),
-                "user_status": pattern_metadata.get("user_status") or "detected",
-                "active": pattern_metadata.get("active", 1),
-                "status": match["status"],
-                "match_details": match,
-                "amount_change": recurring_amount_change_details(typical_amount, match),
-                "occurrences": recent_recurring_occurrences(group["occurrences"]),
-                "url": transactions_url(expected_date.isoformat(), expected_date.isoformat()),
-            }
-        )
+        pattern_merchant_id = pattern_metadata.get("merchant_id") or group["merchant_id"]
+        pattern_merchant = pattern_metadata.get("merchant") or group["merchant"]
+        consumed_candidate_indexes: set[int] = set()
+        latest_seen = last_seen
+        for expected_date in expected_dates:
+            indexed_candidates = [
+                (index, candidate)
+                for index, candidate in enumerate(candidates)
+                if index not in consumed_candidate_indexes
+            ]
+            match = classify_recurring_match(
+                [candidate for _index, candidate in indexed_candidates],
+                expected_date,
+                typical_amount,
+                evaluation_date,
+                pattern_recurrence_settings,
+                last_seen=latest_seen,
+                frequency=frequency,
+            )
+            consumed_index = recurring_match_candidate_index(match, indexed_candidates)
+            if consumed_index is not None:
+                consumed_candidate_indexes.add(consumed_index)
+                matched_date = datetime.strptime(match["matched_date"], "%Y-%m-%d").date()
+                latest_seen = max(latest_seen, matched_date)
+
+            recurring.append(
+                {
+                    "id": f"recurring-{len(recurring)}",
+                    "pattern_key": pattern_key,
+                    "merchant_id": group["merchant_id"],
+                    "pattern_merchant_id": pattern_merchant_id,
+                    "match_type": match_type,
+                    "date": expected_date.isoformat(),
+                    "merchant": group["merchant"],
+                    "pattern_merchant": pattern_merchant,
+                    "amount": rounded_money_float(typical_amount),
+                    "type": group["type"],
+                    "category": category,
+                    "last_seen": latest_seen.isoformat(),
+                    "observed_months": observed_months,
+                    "frequency": frequency,
+                    "confidence": recurring_confidence_label(observed_months, pattern_recurrence_settings),
+                    "user_status": pattern_metadata.get("user_status") or "detected",
+                    "active": pattern_metadata.get("active", 1),
+                    "status": match["status"],
+                    "match_details": match,
+                    "amount_change": recurring_amount_change_details(typical_amount, match),
+                    "occurrences": recent_recurring_occurrences(group["occurrences"]),
+                    "url": transactions_url(
+                        expected_date.isoformat(),
+                        expected_date.isoformat(),
+                        account_id=account_id,
+                        merchant_search=merchant_search,
+                    ),
+                }
+            )
 
     recurring.sort(key=lambda item: (item["date"], item["type"], item["merchant"]))
     return recurring
@@ -206,6 +241,67 @@ def recurrence_settings_for_pattern(recurrence_settings: Any, pattern_metadata: 
         overrides["amount_tolerance_absolute"] = pattern_metadata["amount_tolerance"]
         overrides["amount_tolerance_percent"] = 0
     return replace(recurrence_settings, **overrides) if overrides else recurrence_settings
+
+
+def recurring_expected_dates(
+    month_start: date,
+    month_end: date,
+    historical_dates: Iterable[date],
+    expected_day: int,
+    frequency: str | None,
+    *,
+    anchor_to_expected_day: bool = False,
+) -> list[date]:
+    """Return expected recurrence dates for the selected month."""
+    interval_days = recurring_frequency_interval_days(frequency)
+    last_day = monthrange(month_start.year, month_start.month)[1]
+    fallback_date = month_start.replace(day=min(last_day, max(1, expected_day)))
+    if interval_days is None:
+        return [fallback_date]
+
+    if anchor_to_expected_day:
+        anchor = fallback_date
+        while anchor - timedelta(days=interval_days) >= month_start:
+            anchor -= timedelta(days=interval_days)
+    else:
+        prior_dates = sorted({historical_date for historical_date in historical_dates if historical_date < month_start})
+        anchor = prior_dates[-1] if prior_dates else fallback_date
+        while anchor < month_start:
+            anchor += timedelta(days=interval_days)
+
+    dates = []
+    expected_date = anchor
+    while expected_date <= month_end:
+        if expected_date >= month_start:
+            dates.append(expected_date)
+        expected_date += timedelta(days=interval_days)
+
+    return dates or [fallback_date]
+
+
+def recurring_frequency_interval_days(frequency: str | None) -> int | None:
+    """Return fixed interval days for frequencies that can occur more than once per month."""
+    return {
+        "Weekly": 7,
+        "Biweekly": 14,
+    }.get(frequency or "")
+
+
+def recurring_match_candidate_index(
+    match: Mapping[str, Any],
+    indexed_candidates: Iterable[tuple[int, Mapping[str, Any]]],
+) -> int | None:
+    """Return the original candidate index consumed by a matched recurring row."""
+    matched_date = match.get("matched_date")
+    if not matched_date:
+        return None
+
+    matched_amount = rounded_money_decimal(match.get("matched_amount"))
+    for index, candidate in indexed_candidates:
+        if candidate.get("date") == matched_date and rounded_money_decimal(candidate.get("amount")) == matched_amount:
+            return index
+
+    return None
 
 
 def recurring_amount_change_details(
@@ -287,6 +383,7 @@ def classify_recurring_match(
         "matched_date": None,
         "matched_amount": None,
         "date_tolerance_days": recurrence_settings.date_tolerance_days,
+        "likely_date_tolerance_days": likely_recurring_date_tolerance_days(recurrence_settings),
         "amount_tolerance": rounded_money_float(amount_tolerance),
         "missed_cycles_before_inactive": recurrence_settings.missed_cycles_before_inactive,
         "missed_cycles": None,
@@ -294,28 +391,20 @@ def classify_recurring_match(
     }
 
     if not candidates:
-        overdue_after = expected_date + timedelta(days=recurrence_settings.date_tolerance_days)
-        inactive_details = possible_inactive_details(
+        return missing_recurring_match(
+            base_match,
             expected_date,
             evaluation_date,
+            recurrence_settings,
             last_seen,
             frequency,
-            recurrence_settings,
         )
-        if inactive_details:
-            return {
-                **base_match,
-                **inactive_details,
-                "status": "possibly_inactive",
-            }
-        return {
-            **base_match,
-            "status": "overdue" if evaluation_date > overdue_after else "expected",
-        }
 
     strict_matches: list[dict[str, Any]] = []
     date_matches: list[dict[str, Any]] = []
+    likely_matches: list[dict[str, Any]] = []
     all_matches: list[dict[str, Any]] = []
+    likely_date_tolerance_days = base_match["likely_date_tolerance_days"]
 
     for candidate in candidates:
         candidate_date = datetime.strptime(candidate["date"], "%Y-%m-%d").date()
@@ -332,15 +421,19 @@ def classify_recurring_match(
         }
         within_date = abs(date_difference) <= recurrence_settings.date_tolerance_days
         within_amount = abs(amount_difference) <= amount_tolerance
+        within_likely_date = abs(date_difference) <= likely_date_tolerance_days
         all_matches.append(candidate_match)
 
         if within_date and within_amount:
             strict_matches.append(candidate_match)
         if within_date:
             date_matches.append(candidate_match)
+        elif within_likely_date and within_amount:
+            likely_matches.append(candidate_match)
 
-    # Prefer strict evidence, then near-date amount changes, then the closest
-    # same-merchant occurrence as a weak likely match.
+    # Prefer strict evidence, then near-date amount changes, then a soft-window
+    # same-merchant occurrence with a plausible amount. Far-away merchant visits
+    # are treated as missing evidence rather than weak matches.
     if strict_matches:
         best = min(strict_matches, key=recurring_match_sort_key)
         return {**best, "status": "occurred"}
@@ -349,8 +442,52 @@ def classify_recurring_match(
         best = min(date_matches, key=recurring_match_sort_key)
         return {**best, "status": "amount_changed"}
 
-    best = min(all_matches, key=recurring_match_sort_key)
-    return {**best, "status": "likely_occurred"}
+    if likely_matches:
+        best = min(likely_matches, key=recurring_match_sort_key)
+        return {**best, "status": "likely_occurred"}
+
+    return missing_recurring_match(
+        base_match,
+        expected_date,
+        evaluation_date,
+        recurrence_settings,
+        last_seen,
+        frequency,
+    )
+
+
+def likely_recurring_date_tolerance_days(recurrence_settings: Any) -> int:
+    """Return the outer date window for weak same-merchant recurrence matches."""
+    return max(0, int(recurrence_settings.date_tolerance_days)) * 2
+
+
+def missing_recurring_match(
+    base_match: Mapping[str, Any],
+    expected_date: date,
+    evaluation_date: date,
+    recurrence_settings: Any,
+    last_seen: date | None,
+    frequency: str | None,
+) -> dict[str, Any]:
+    """Return missing recurrence status details for unmatched current-month evidence."""
+    overdue_after = expected_date + timedelta(days=recurrence_settings.date_tolerance_days)
+    inactive_details = possible_inactive_details(
+        expected_date,
+        evaluation_date,
+        last_seen,
+        frequency,
+        recurrence_settings,
+    )
+    if inactive_details:
+        return {
+            **base_match,
+            **inactive_details,
+            "status": "possibly_inactive",
+        }
+    return {
+        **base_match,
+        "status": "overdue" if evaluation_date > overdue_after else "expected",
+    }
 
 
 def recurring_match_sort_key(match: Mapping[str, Any]) -> tuple[int, float, str]:

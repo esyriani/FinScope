@@ -89,7 +89,7 @@ def test_rules_context_filters_with_core_queries(app, core_conn):
 
 def test_rules_context_searches_merchant_and_amount_fields_with_core(app, core_conn):
     """Verify Core listing search includes merchant labels and amount fields."""
-    merchant = get_or_create_merchant_for_name(core_conn, "Core Market")
+    merchant = get_or_create_merchant_for_name(core_conn, "Core Payroll Market")
     insert_listing_rule(
         core_conn,
         "HIDDEN KEYWORD",

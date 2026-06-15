@@ -1,9 +1,6 @@
 Flask
 Flask-Login
 openai
-pytest
-pytest-cov
-pytest-xdist
 SQLAlchemy
 tiktoken
 PyMySQL

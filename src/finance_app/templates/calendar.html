@@ -16,21 +16,174 @@
 {% set page_scripts = [
     "js/dates.js",
     "js/tag-multiselect.js",
+    "js/merchant-autocomplete.js",
     "js/calendar.js",
     "js/tables.js",
     "js/exports.js"
 ] %}
 {% extends "base.html" %}
+{% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
 
 {% block content %}
+{% set selected_categories = selected_categories | default([]) %}
 {% set selected_tags = selected_tags | default([]) %}
 {% set tag_options = tag_options | default([]) %}
+{% set account_options = account_options | default([]) %}
+{% set merchant_query = merchant_query | default("") %}
+{% set selected_merchant_id = selected_merchant_id | default(none) %}
+{% set selected_merchant_label = selected_merchant_label | default(merchant_query) %}
+{% set merchant_suggestion_limit = merchant_suggestion_limit | default(5) %}
+{% set calendar_merchant_filter_label = selected_merchant_label if selected_merchant_id else merchant_query %}
+{% set calendar_account_label = namespace(value=_("All accounts")) %}
+{% for account in account_options %}
+    {% if selected_account_id == account.id %}
+        {% set calendar_account_label.value = account.name %}
+    {% endif %}
+{% endfor %}
+{% set calendar_heatmap_label = namespace(value=_("Spending")) %}
+{% for option in heatmap_options %}
+    {% if option.value == heatmap_metric %}
+        {% set calendar_heatmap_label.value = _(option.label) %}
+    {% endif %}
+{% endfor %}
+{% set calendar_filter_summary %}
+{{ _("Month") }}: {{ month_label }} - {{ _("Account") }}: {{ calendar_account_label.value }} - {{ _("Merchant") }}: {{ calendar_merchant_filter_label if calendar_merchant_filter_label else _("All") }} - {{ _("Heatmap") }}: {{ calendar_heatmap_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }}
+{% endset %}
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Calendar") }}</h2>
         <p class="text-muted mb-0">{{ _("Review cash-flow timing and posted daily transactions.") }}</p>
     </div>
 </div>
+
+<div id="calendar-dynamic" data-calendar-dynamic>
+{% call collapsible_filter_panel("calendar-filters", calendar_filter_summary | trim) %}
+<form method="get" class="calendar-control-row">
+    <input type="hidden" name="month" value="{{ selected_month }}">
+    <input type="hidden" name="heatmap" value="{{ heatmap_metric }}" data-calendar-heatmap-input>
+
+    <div class="calendar-account-field">
+        <label class="form-label" for="calendar-account">{{ _("Account") }}</label>
+        <select id="calendar-account" class="form-select" name="account_id">
+            <option value="">{{ _("All accounts") }}</option>
+            {% for account in account_options %}
+                <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="calendar-merchant-field merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
+        <label class="form-label" for="calendar-merchant">{{ _("Merchant") }}</label>
+        <input
+            type="hidden"
+            name="merchant_id"
+            value="{{ selected_merchant_id or '' }}"
+            data-merchant-autocomplete-id
+        >
+        <input
+            id="calendar-merchant"
+            class="form-control"
+            type="search"
+            name="merchant_query"
+            value="{{ calendar_merchant_filter_label }}"
+            placeholder="{{ _('Search merchant') }}"
+            autocomplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="calendar-merchant-suggestions"
+            data-selected-merchant-label="{{ selected_merchant_label }}"
+            data-merchant-autocomplete-input
+        >
+        <div id="calendar-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
+    </div>
+
+    <div class="calendar-category-field">
+        <label class="form-label" id="calendar-categories-label">{{ _("Categories") }}</label>
+        <div
+            class="tag-multiselect"
+            data-tag-multiselect
+            data-placeholder="{{ _('All categories') }}"
+            data-select-all-label="{{ _('Select all categories') }}"
+            data-select-preset-label="{{ _('Select analysis categories') }}"
+            data-select-preset-summary-label="{{ _('Analysis categories') }}"
+            data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
+        >
+            <div
+                class="tag-multiselect-control"
+                role="button"
+                tabindex="0"
+                aria-labelledby="calendar-categories-label"
+                aria-expanded="false"
+                data-tag-multiselect-toggle
+            >
+                <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+            </div>
+            <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                {% for option in category_options %}
+                    <label class="tag-multiselect-option">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="categories"
+                            value="{{ option }}"
+                            {% if option in selected_categories %}checked{% endif %}
+                        >
+                        <span>{{ option }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="calendar-tag-field">
+        <label class="form-label" id="calendar-tags-label">{{ _("Tags") }}</label>
+        <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
+            <div
+                class="tag-multiselect-control"
+                role="button"
+                tabindex="0"
+                aria-labelledby="calendar-tags-label"
+                aria-expanded="false"
+                data-tag-multiselect-toggle
+            >
+                <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+            </div>
+            <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                <label class="tag-multiselect-option">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        name="tags"
+                        value="{{ untagged_tag_filter_value }}"
+                        {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                    >
+                    <span>{{ _("Untagged") }}</span>
+                </label>
+                {% for option in tag_options %}
+                    <label class="tag-multiselect-option">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="tags"
+                            value="{{ option.name }}"
+                            {% if option.name in selected_tags %}checked{% endif %}
+                        >
+                        <span>{{ option.name }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="calendar-filter-actions filter-actions">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('calendar_page.calendar_view') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+    </div>
+</form>
+{% endcall %}
 
 <div class="metric-grid mb-4">
     <a class="metric-card text-reset text-decoration-none" href="{{ month_transactions_url }}">
@@ -70,10 +223,42 @@
             {{ summary.expected_spending | moneyfmt }} {{ _("expected spending") }} / {{ summary.expected_income | moneyfmt }} {{ _("expected income") }}
         </div>
         <div class="d-flex flex-wrap gap-2 mt-2">
-            <a class="btn btn-sm btn-primary" href="{{ url_for('recurring.recurring', month=selected_month, view='calendar') }}">{{ _("View recurring calendar") }}</a>
-            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('recurring.recurring', month=selected_month, view='list') }}">{{ _("View recurring list") }}</a>
+            <a class="btn btn-sm btn-primary" href="{{ recurring_calendar_url }}">{{ _("View recurring calendar") }}</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ recurring_list_url }}">{{ _("View recurring list") }}</a>
         </div>
     </div>
+</div>
+
+{% if summary.transaction_count == 0 %}
+<div class="empty-state compact mb-4">{{ _(calendar_empty_state_message) }}</div>
+{% endif %}
+
+<div class="calendar-view-tools mb-3">
+    <form method="get" class="calendar-month-controls calendar-period-controls" aria-label="{{ _('Calendar month navigation') }}" data-calendar-ajax-form>
+        <input type="hidden" name="heatmap" value="{{ heatmap_metric }}" data-calendar-heatmap-input>
+        {% for category in selected_categories %}
+            <input type="hidden" name="categories" value="{{ category }}">
+        {% endfor %}
+        {% for tag in selected_tags %}
+            <input type="hidden" name="tags" value="{{ tag }}">
+        {% endfor %}
+        {% if selected_account_id %}
+            <input type="hidden" name="account_id" value="{{ selected_account_id }}">
+        {% endif %}
+        {% if selected_merchant_id %}
+            <input type="hidden" name="merchant_id" value="{{ selected_merchant_id }}">
+        {% endif %}
+        {% if merchant_query %}
+            <input type="hidden" name="merchant_query" value="{{ merchant_query }}">
+        {% endif %}
+        <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+        <div class="calendar-month-field">
+            <label class="form-label" for="calendar-month">{{ _("Month") }}</label>
+            <input id="calendar-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month data-flatpickr-submit-on-change>
+        </div>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
+    </form>
 </div>
 
 <section class="card mb-4">
@@ -96,104 +281,6 @@
                 {% endfor %}
             </div>
         </div>
-
-        <form method="get" class="calendar-control-row">
-            <input type="hidden" name="heatmap" value="{{ heatmap_metric }}" data-calendar-heatmap-input>
-
-            <div class="calendar-category-field">
-                <label class="form-label" id="calendar-categories-label">{{ _("Categories") }}</label>
-                <div
-                    class="tag-multiselect"
-                    data-tag-multiselect
-                    data-placeholder="{{ _('All categories') }}"
-                    data-select-all-label="{{ _('Select all categories') }}"
-                    data-select-preset-label="{{ _('Select analysis categories') }}"
-                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
-                >
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="calendar-categories-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        {% for option in category_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="categories"
-                                    value="{{ option }}"
-                                    {% if option in selected_categories %}checked{% endif %}
-                                >
-                                <span>{{ option }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="calendar-tag-field">
-                <label class="form-label" id="calendar-tags-label">{{ _("Tags") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="calendar-tags-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        <label class="tag-multiselect-option">
-                            <input
-                                class="form-check-input"
-                                type="checkbox"
-                                name="tags"
-                                value="{{ untagged_tag_filter_value }}"
-                                {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
-                            >
-                            <span>{{ _("Untagged") }}</span>
-                        </label>
-                        {% for option in tag_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="tags"
-                                    value="{{ option.name }}"
-                                    {% if option.name in selected_tags %}checked{% endif %}
-                                >
-                                <span>{{ option.name }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="calendar-filter-actions filter-actions">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                <a class="btn btn-outline-secondary" href="{{ url_for('calendar_page.calendar_view') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
-            </div>
-
-            <div class="calendar-month-controls" aria-label="{{ _('Calendar month navigation') }}">
-                <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
-                <div class="calendar-month-field">
-                    <label class="form-label" for="calendar-month">{{ _("Month") }}</label>
-                    <input id="calendar-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month>
-                </div>
-                <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
-                <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-calendar-preserve-heatmap><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
-            </div>
-        </form>
 
         <div class="calendar-scroll">
             <div class="calendar-weekdays" aria-hidden="true">
@@ -288,4 +375,5 @@
 <script id="calendar-day-data" type="application/json">
 {{ calendar_day_json | tojson }}
 </script>
+</div>
 {% endblock %}

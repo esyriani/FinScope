@@ -6,6 +6,7 @@
 ] %}
 {% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
+{% from "_collapsible.html" import collapsible_filter_panel, collapse_toggle_button with context %}
 {% from "_pagination.html" import pagination with context %}
 
 {% block content %}
@@ -13,6 +14,15 @@
 {% set specificity_warning_table = audit_tables.specificity_warnings %}
 {% set shadowed_rule_table = audit_tables.shadowed_rules %}
 {% set stale_rule_table = audit_tables.stale_rules %}
+{% set overlap_filter_label = namespace(value=_("All overlaps")) %}
+{% for option in overlap_filter_options %}
+    {% if option.value == overlap_filter %}
+        {% set overlap_filter_label.value = _(option.label) %}
+    {% endif %}
+{% endfor %}
+{% set rule_audit_filter_summary %}
+{{ _("Search") }}: {{ overlap_query if overlap_query else _("All") }} - {{ _("Conflict type") }}: {{ overlap_filter_label.value }}
+{% endset %}
 
 {% macro severity_badge(row) %}
 <span class="badge {{ row.severity_badge_class }}">{{ _(row.severity_label) }}</span>
@@ -171,19 +181,7 @@
         <div class="d-flex flex-wrap align-items-center justify-content-end gap-3">
             {{ table_status(table) }}
             {{ audit_pagination(table, label) }}
-            <button
-                class="btn btn-sm btn-outline-secondary"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#{{ target_id }}"
-                aria-expanded="{{ 'true' if expanded else 'false' }}"
-                aria-controls="{{ target_id }}"
-                data-collapse-label-toggle
-                data-show-label="{{ _('Show table') }}"
-                data-hide-label="{{ _('Hide table') }}"
-            >
-                <i class="bi {{ 'bi-chevron-up' if expanded else 'bi-chevron-down' }}" aria-hidden="true" data-collapse-toggle-icon></i><span data-collapse-toggle-label>{{ _("Hide table") if expanded else _("Show table") }}</span>
-            </button>
+            {{ collapse_toggle_button(target_id, "Show table", "Hide table", expanded) }}
         </div>
     </div>
 </div>
@@ -254,8 +252,7 @@
 </section>
 {% endif %}
 
-<section class="card mb-4">
-    <div class="card-body">
+{% call collapsible_filter_panel("rule-audit-filters", rule_audit_filter_summary | trim) %}
         <form method="get" class="rule-audit-search-row" data-ajax-refresh-form>
             <input type="hidden" name="overlap_page" value="1">
             <input type="hidden" name="overlap_sort" value="{{ overlap_table.sort }}">
@@ -304,8 +301,7 @@
                 </div>
             </div>
         </form>
-    </div>
-</section>
+{% endcall %}
 
 <section class="card mb-4">
     {{ collapsible_header(

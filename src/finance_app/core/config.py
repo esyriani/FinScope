@@ -33,18 +33,27 @@ class AppSettings:
     secure_cookies: bool
     allowed_statement_extensions: set[str]
     openai_api_key: str
+    default_theme_mode: str
+    default_ui_language: str
     default_table_page_size: int
     default_comparison_max_years: int
     default_comparison_insight_card_limit: int
     default_home_top_category_limit: int
     default_merchant_table_limit: int
+    default_merchant_suggestion_limit: int
     default_rule_preview_limit: int
     default_rule_audit_transaction_limit: int
     default_llm_confidence_threshold: float
     default_llm_review_threshold: float
     default_verify_threshold: float
     default_transaction_ai_rerun_enabled: bool
+    default_confirm_ai_token_usage_enabled: bool
     default_categorization_model: str
+    default_recurrence_minimum_occurrences: int
+    default_recurrence_date_tolerance_days: int
+    default_recurrence_amount_tolerance_absolute: float
+    default_recurrence_amount_tolerance_percent: float
+    default_recurrence_missed_cycles_before_inactive: int
 
     @property
     def max_content_length(self) -> int:
@@ -85,12 +94,13 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
         server_debug=server_debug,
         server_host=server_host,
     )
+    locale = env("FINANCE_LOCALE", parser.get("app", "locale", fallback="en_CA"))
 
     return AppSettings(
         config_path=Path(config_path),
         secret_key=secret_key,
         timezone=env("FINANCE_TIMEZONE", parser.get("app", "timezone", fallback="America/Toronto")),
-        locale=env("FINANCE_LOCALE", parser.get("app", "locale", fallback="en_CA")),
+        locale=locale,
         currency=env("FINANCE_CURRENCY", parser.get("app", "currency", fallback="CAD")),
         currency_symbol=env("FINANCE_CURRENCY_SYMBOL", parser.get("app", "currency_symbol", fallback="$")),
         max_upload_mb=parse_positive_int(
@@ -108,6 +118,12 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
         ),
         allowed_statement_extensions=allowed_extensions,
         openai_api_key=env("OPENAI_API_KEY", parser.get("api_keys", "openai_api_key", fallback="")),
+        default_theme_mode=parse_theme_mode(
+            env("FINANCE_DEFAULT_THEME_MODE", parser.get("setting_defaults", "theme_mode", fallback="dark"))
+        ),
+        default_ui_language=parse_ui_language(
+            env("FINANCE_DEFAULT_UI_LANGUAGE", parser.get("setting_defaults", "ui_language", fallback=locale))
+        ),
         default_table_page_size=parse_positive_int(
             env("FINANCE_DEFAULT_TABLE_PAGE_SIZE", parser.get("setting_defaults", "table_page_size", fallback="50")),
             50,
@@ -139,6 +155,13 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
                 parser.get("setting_defaults", "merchant_table_limit", fallback="10"),
             ),
             10,
+        ),
+        default_merchant_suggestion_limit=parse_positive_int(
+            env(
+                "FINANCE_DEFAULT_MERCHANT_SUGGESTION_LIMIT",
+                parser.get("setting_defaults", "merchant_suggestion_limit", fallback="5"),
+            ),
+            5,
         ),
         default_rule_preview_limit=parse_positive_int(
             env(
@@ -180,11 +203,52 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
                 parser.get("setting_defaults", "transaction_ai_rerun_enabled", fallback="true"),
             )
         ),
+        default_confirm_ai_token_usage_enabled=parse_bool(
+            env(
+                "FINANCE_DEFAULT_CONFIRM_AI_TOKEN_USAGE_ENABLED",
+                parser.get("setting_defaults", "confirm_ai_token_usage_enabled", fallback="true"),
+            )
+        ),
         default_categorization_model=env(
             "FINANCE_DEFAULT_CATEGORIZATION_MODEL",
             parser.get("setting_defaults", "categorization_model", fallback="gpt-4o-mini"),
         ).strip()
         or "gpt-4o-mini",
+        default_recurrence_minimum_occurrences=parse_positive_int(
+            env(
+                "FINANCE_DEFAULT_RECURRENCE_MINIMUM_OCCURRENCES",
+                parser.get("setting_defaults", "recurrence_minimum_occurrences", fallback="3"),
+            ),
+            3,
+        ),
+        default_recurrence_date_tolerance_days=parse_positive_int(
+            env(
+                "FINANCE_DEFAULT_RECURRENCE_DATE_TOLERANCE_DAYS",
+                parser.get("setting_defaults", "recurrence_date_tolerance_days", fallback="5"),
+            ),
+            5,
+        ),
+        default_recurrence_amount_tolerance_absolute=parse_non_negative_float(
+            env(
+                "FINANCE_DEFAULT_RECURRENCE_AMOUNT_TOLERANCE_ABSOLUTE",
+                parser.get("setting_defaults", "recurrence_amount_tolerance_absolute", fallback="10"),
+            ),
+            10.0,
+        ),
+        default_recurrence_amount_tolerance_percent=parse_probability(
+            env(
+                "FINANCE_DEFAULT_RECURRENCE_AMOUNT_TOLERANCE_PERCENT",
+                parser.get("setting_defaults", "recurrence_amount_tolerance_percent", fallback="0.15"),
+            ),
+            0.15,
+        ),
+        default_recurrence_missed_cycles_before_inactive=parse_positive_int(
+            env(
+                "FINANCE_DEFAULT_RECURRENCE_MISSED_CYCLES_BEFORE_INACTIVE",
+                parser.get("setting_defaults", "recurrence_missed_cycles_before_inactive", fallback="2"),
+            ),
+            2,
+        ),
     )
 
 
@@ -229,6 +293,18 @@ def sqlite_path_from_database_url(database_url: object) -> Path | None:
 def parse_bool(value: object) -> bool:
     """Parse bool."""
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def parse_theme_mode(value: object) -> str:
+    """Parse the default UI theme mode."""
+    mode = str(value or "").strip().lower()
+    return mode if mode in {"dark", "light"} else "dark"
+
+
+def parse_ui_language(value: object) -> str:
+    """Parse the default UI language code."""
+    language = str(value or "").strip().lower().replace("_", "-").split("-", 1)[0]
+    return language if language in {"en", "fr"} else "en"
 
 
 def parse_secure_cookies(value: object, server_host: object) -> bool:
@@ -282,6 +358,16 @@ def parse_probability(value: object, fallback: float) -> float:
         return fallback
 
     return parsed if 0 <= parsed <= 1 else fallback
+
+
+def parse_non_negative_float(value: object, fallback: float) -> float:
+    """Parse a non-negative floating-point value."""
+    try:
+        parsed = float(str(value).strip())
+    except (TypeError, ValueError):
+        return fallback
+
+    return parsed if parsed >= 0 else fallback
 
 
 def resolve_path(value: str | Path) -> Path:

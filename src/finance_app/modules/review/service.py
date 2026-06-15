@@ -116,8 +116,8 @@ def filter_review_groups_by_merchant(
     if not merchant_search:
         return groups
 
-    needle = merchant_search.casefold()
-    return [group for group in groups if needle in str(group.get("merchant_key") or "").casefold()]
+    terms = [term.casefold() for term in merchant_search.split() if term]
+    return [group for group in groups if all(term in str(group.get("merchant_key") or "").casefold() for term in terms)]
 
 
 def review_groups(conn: Any, unknown_category: str, merchant_candidate: str = "") -> list[dict[str, Any]]:

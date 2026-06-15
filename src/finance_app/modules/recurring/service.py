@@ -10,6 +10,7 @@ from flask import url_for
 
 from finance_app.core.i18n import format_month_year, gettext, weekday_abbreviation_labels
 from finance_app.core.money import format_money_display
+from finance_app.modules.accounts.filters import parse_account_id
 from finance_app.modules.calendar.presenter import recurring_amount_change_cashflow_impact
 from finance_app.modules.calendar.service import (
     build_recurring_activity_context,
@@ -20,9 +21,11 @@ from finance_app.modules.calendar.service import (
     parse_month,
     shift_month,
 )
+from finance_app.modules.merchants.filters import parse_merchant_id, parse_merchant_query
 
 RECURRING_VIEWS = {"list", "calendar"}
 RECURRING_CALENDAR_VISIBLE_COUNT = 3
+RECURRING_CALENDAR_MERCHANT_LABEL_LENGTH = 23
 RECURRING_STATUS_PRIORITY: dict[str, int] = {
     "overdue": 0,
     "amount_changed": 1,
@@ -41,6 +44,8 @@ STATUS_OPTIONS: list[dict[str, str]] = [
     {"value": "possibly_inactive", "label": "Possibly inactive"},
 ]
 CONFIDENCE_OPTIONS: list[str] = ["High", "Medium", "Low"]
+ALL_CONFIDENCE_FILTER_VALUE = "all"
+DEFAULT_CONFIDENCE_FILTER = "High"
 
 
 def build_recurring_page_context(args: Any) -> dict[str, Any]:
@@ -51,11 +56,27 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
     selected_recurring_view = parse_recurring_view(args.get("view"))
     selected_statuses = clean_statuses(args.getlist("statuses"))
     selected_confidence = parse_confidence(args.get("confidence"))
-    has_applied_filters = bool(selected_categories or selected_tags or selected_statuses or selected_confidence)
+    selected_account_id = parse_account_id(args.get("account_id"))
+    selected_merchant_id = parse_merchant_id(args.get("merchant_id"))
+    merchant_query = parse_merchant_query(args.get("merchant_query"))
+    confidence_filter_applied = selected_confidence != DEFAULT_CONFIDENCE_FILTER
+    has_account_filter = selected_account_id is not None
+    has_merchant_filter = bool(selected_merchant_id or merchant_query)
+    has_applied_filters = bool(
+        selected_categories
+        or selected_tags
+        or selected_statuses
+        or confidence_filter_applied
+        or has_account_filter
+        or has_merchant_filter
+    )
     recurring_context = build_recurring_activity_context(
         selected_month,
         selected_categories,
         selected_tags,
+        selected_account_id,
+        selected_merchant_id,
+        merchant_query,
     )
     filtered_items = filter_recurring_items(
         recurring_context["recurring_items"],
@@ -75,9 +96,16 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
         "category_options": recurring_context["category_options"],
         "selected_tags": selected_tags,
         "tag_options": recurring_context["tag_options"],
+        "selected_account_id": selected_account_id,
+        "account_options": recurring_context["account_options"],
+        "selected_merchant_id": selected_merchant_id,
+        "merchant_query": merchant_query,
+        "selected_merchant_label": recurring_context["selected_merchant_label"],
+        "merchant_suggestion_limit": recurring_context["merchant_suggestion_limit"],
         "selected_recurring_view": selected_recurring_view,
         "selected_statuses": selected_statuses,
         "selected_confidence": selected_confidence,
+        "selected_confidence_filter_value": confidence_filter_value(selected_confidence),
         "status_options": STATUS_OPTIONS,
         "confidence_options": CONFIDENCE_OPTIONS,
         "previous_month_url": recurring_filter_url(
@@ -87,6 +115,9 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
             selected_recurring_view,
             selected_statuses,
             selected_confidence,
+            selected_account_id,
+            selected_merchant_id,
+            merchant_query,
         ),
         "next_month_url": recurring_filter_url(
             shift_month(recurring_context["month_start"], 1),
@@ -95,6 +126,9 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
             selected_recurring_view,
             selected_statuses,
             selected_confidence,
+            selected_account_id,
+            selected_merchant_id,
+            merchant_query,
         ),
         "current_month_url": recurring_filter_url(
             default_month(),
@@ -103,6 +137,9 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
             selected_recurring_view,
             selected_statuses,
             selected_confidence,
+            selected_account_id,
+            selected_merchant_id,
+            merchant_query,
         ),
         "list_view_url": recurring_view_url(
             recurring_context["month_start"],
@@ -111,6 +148,9 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
             "list",
             selected_statuses,
             selected_confidence,
+            selected_account_id,
+            selected_merchant_id,
+            merchant_query,
         ),
         "calendar_view_url": recurring_view_url(
             recurring_context["month_start"],
@@ -119,6 +159,9 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
             "calendar",
             selected_statuses,
             selected_confidence,
+            selected_account_id,
+            selected_merchant_id,
+            merchant_query,
         ),
         "recurring_status_filter_links": build_recurring_status_filter_links(
             recurring_context["month_start"],
@@ -127,6 +170,9 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
             selected_recurring_view,
             selected_statuses,
             selected_confidence,
+            selected_account_id,
+            selected_merchant_id,
+            merchant_query,
         ),
         "clear_filters_url": recurring_clear_url(
             selected_recurring_view,
@@ -134,8 +180,13 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
         ),
         "recurring_summary": build_recurring_summary(recurring_items),
         "recurring_items": recurring_items,
+        "all_recurring_ids": [item["id"] for item in recurring_items],
         "table_page_size": recurring_context["table_page_size"],
-        "recurring_empty_state_message": recurring_empty_state_message(has_applied_filters),
+        "recurring_empty_state_message": recurring_empty_state_message(
+            has_applied_filters,
+            has_account_filter=has_account_filter,
+            has_merchant_filter=has_merchant_filter,
+        ),
         "recurring_activity_json": build_recurring_activity_json(recurring_items),
         "recurring_calendar_days": build_recurring_calendar_days(
             recurring_context["month_start"],
@@ -160,12 +211,33 @@ def clean_statuses(values: Iterable[object]) -> list[str]:
 
 def parse_confidence(value: object) -> str:
     """Parse confidence."""
+    if value is None:
+        return DEFAULT_CONFIDENCE_FILTER
+
     value = str(value or "").strip()
-    return value if value in CONFIDENCE_OPTIONS else ""
+    if not value or value.lower() == ALL_CONFIDENCE_FILTER_VALUE:
+        return ""
+    return value if value in CONFIDENCE_OPTIONS else DEFAULT_CONFIDENCE_FILTER
 
 
-def recurring_empty_state_message(has_applied_filters: bool) -> str:
+def confidence_filter_value(selected_confidence: str) -> str:
+    """Return the query/form value for the selected confidence filter."""
+    return selected_confidence or ALL_CONFIDENCE_FILTER_VALUE
+
+
+def recurring_empty_state_message(
+    has_applied_filters: bool,
+    *,
+    has_account_filter: bool = False,
+    has_merchant_filter: bool = False,
+) -> str:
     """Return the recurring empty-state message for the active filter context."""
+    if has_account_filter and has_merchant_filter:
+        return gettext("No recurring activity matches this account and merchant.")
+    if has_account_filter:
+        return gettext("No recurring activity matches this account.")
+    if has_merchant_filter:
+        return gettext("No recurring activity matches this merchant.")
     if has_applied_filters:
         return gettext("No recurring activity matches the current filters.")
     return gettext("No recurring activity detected for this month.")
@@ -306,6 +378,9 @@ def recurring_view_url(
     view: str,
     selected_statuses: Iterable[str] | None = None,
     selected_confidence: str = "",
+    selected_account_id: int | None = None,
+    selected_merchant_id: int | None = None,
+    merchant_query: str = "",
 ) -> str:
     """Build view URL."""
     return recurring_filter_url(
@@ -315,6 +390,9 @@ def recurring_view_url(
         view,
         selected_statuses,
         selected_confidence,
+        selected_account_id,
+        selected_merchant_id,
+        merchant_query,
     )
 
 
@@ -325,6 +403,9 @@ def recurring_filter_url(
     view: str,
     selected_statuses: Iterable[str] | None = None,
     selected_confidence: str = "",
+    selected_account_id: int | None = None,
+    selected_merchant_id: int | None = None,
+    merchant_query: str = "",
 ) -> str:
     """Build a recurring URL while preserving filter state."""
     params: dict[str, object] = {
@@ -337,8 +418,16 @@ def recurring_filter_url(
         params["tags"] = selected_tags
     if selected_statuses:
         params["statuses"] = selected_statuses
-    if selected_confidence:
+    if selected_confidence == "":
+        params["confidence"] = ALL_CONFIDENCE_FILTER_VALUE
+    elif selected_confidence != DEFAULT_CONFIDENCE_FILTER:
         params["confidence"] = selected_confidence
+    if selected_account_id:
+        params["account_id"] = selected_account_id
+    if selected_merchant_id:
+        params["merchant_id"] = selected_merchant_id
+    if merchant_query:
+        params["merchant_query"] = merchant_query
 
     return f"{url_for('recurring.recurring')}?{urlencode(params, doseq=True)}"
 
@@ -358,6 +447,9 @@ def build_recurring_status_filter_links(
     view: str,
     selected_statuses: list[str],
     selected_confidence: str,
+    selected_account_id: int | None = None,
+    selected_merchant_id: int | None = None,
+    merchant_query: str = "",
 ) -> list[dict[str, Any]]:
     """Build status filter links that keep recurring summaries and views aligned."""
     return [
@@ -371,6 +463,9 @@ def build_recurring_status_filter_links(
                 view,
                 selected_statuses=[],
                 selected_confidence=selected_confidence,
+                selected_account_id=selected_account_id,
+                selected_merchant_id=selected_merchant_id,
+                merchant_query=merchant_query,
             ),
             "selected": not selected_statuses,
         },
@@ -385,6 +480,9 @@ def build_recurring_status_filter_links(
                     view,
                     selected_statuses=[option["value"]],
                     selected_confidence=selected_confidence,
+                    selected_account_id=selected_account_id,
+                    selected_merchant_id=selected_merchant_id,
+                    merchant_query=merchant_query,
                 ),
                 "selected": selected_statuses == [option["value"]],
             }
@@ -439,12 +537,15 @@ def recurring_calendar_item_date(item: Mapping[str, Any]) -> str:
 
 def recurring_calendar_chip(item: Mapping[str, Any]) -> dict[str, Any]:
     """Build calendar chip."""
+    merchant = item["merchant"]
     return {
         "id": item["id"],
+        "pattern_key": item["pattern_key"],
         "status": item["status"],
         "status_label": item.get("status_label") or recurring_status_label(item["status"]),
         "status_detail": item.get("status_detail", ""),
-        "merchant": item["merchant"],
+        "merchant": merchant,
+        "merchant_label": recurring_calendar_merchant_label(merchant),
         "category": item["category"],
         "frequency": item["frequency"],
         "user_status": item["user_status"],
@@ -454,6 +555,16 @@ def recurring_calendar_chip(item: Mapping[str, Any]) -> dict[str, Any]:
         "needs_attention": recurring_calendar_needs_attention(item),
         "aria_label": recurring_calendar_chip_label(item),
     }
+
+
+def recurring_calendar_merchant_label(merchant: object) -> str:
+    """Return a compact merchant label for constrained calendar chips."""
+    merchant_text = str(merchant or "")
+    label_limit = RECURRING_CALENDAR_MERCHANT_LABEL_LENGTH
+    if len(merchant_text) <= label_limit:
+        return merchant_text
+
+    return f"{merchant_text[: label_limit - 3]}..."
 
 
 def recurring_calendar_sort_key(chip: Mapping[str, Any]) -> tuple[int, str]:

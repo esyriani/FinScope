@@ -75,6 +75,7 @@ Development uses Python 3.10+ and Node.js 20+ with npm. See [Developer guide](do
 - [Getting started](docs/getting-started.md): first-run walkthrough from install to the first dashboard review.
 - [Tutorial](docs/tutorial.md): practical workflow and best-practices guide for the first month and beyond.
 - [User guide](docs/user-guide.md): concise feature reference for each major application area.
+- [Settings reference](docs/settings.md): all runtime settings available from the Settings page.
 - [Taxonomy and categorization](docs/taxonomy.md): detailed category, tag, rule, historical, and LLM categorization reference.
 - [Troubleshooting](docs/troubleshooting.md): problem/solution notes for local setup, imports, dates, duplicate uploads, and AI categorization.
 

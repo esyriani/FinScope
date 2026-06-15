@@ -3,7 +3,7 @@
 import io
 
 from sqlalchemy import select
-from tests.support.html import assert_has_element, assert_visible_text
+from tests.support.html import assert_has_element, assert_visible_text, parse_html
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
@@ -30,6 +30,7 @@ def test_taxonomy_admin_routes_are_registered_and_rules_category_routes_are_remo
 def test_taxonomy_page_exposes_yaml_import_and_export_controls(client):
     """Verify taxonomy import/export controls and category/tag tabs render."""
     response = client.get("/taxonomy")
+    document = parse_html(response)
 
     assert response.status_code == 200
     assert_visible_text(response, "Import taxonomy", "Export YAML", "Categories", "Tags")
@@ -81,6 +82,18 @@ def test_taxonomy_page_exposes_yaml_import_and_export_controls(client):
             "aria-labelledby": "taxonomy-tags-tab",
         },
     )
+    assert not document.has_element(
+        "button",
+        attrs={"data-bs-target": "#create-category-modal", "class": "btn-primary"},
+        text="New category",
+    )
+    assert not document.has_element(
+        "button",
+        attrs={"data-bs-target": "#create-tag-modal", "class": "btn-outline-primary"},
+        text="New tag",
+    )
+    assert_has_element(response, "button", attrs={"data-bs-target": "#create-category-modal"}, text="Add")
+    assert_has_element(response, "button", attrs={"data-bs-target": "#create-tag-modal"}, text="Add")
 
 
 def test_taxonomy_export_route_returns_yaml(client):

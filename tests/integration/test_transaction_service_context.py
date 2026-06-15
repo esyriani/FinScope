@@ -3,6 +3,7 @@
 import json
 
 from sqlalchemy import insert, select, text, update
+from tests.support.database import insert_transaction
 from werkzeug.datastructures import MultiDict
 
 from finance_app.database.tables import (
@@ -215,6 +216,68 @@ def test_transactions_context_merchant_filters_and_tag_rendering(core_conn):
     assert untagged_context["selected_tags"] == [UNTAGGED_TAG_FILTER]
     assert untagged_context["total_count"] == 3
     assert all(row["tag_label"] == "" for row in untagged_context["transactions"])
+
+
+def test_transactions_context_filters_by_account(core_conn):
+    """Verify transaction list context can be scoped to one account."""
+    seed_transactions(core_conn)
+    checking_id = core_conn.execute(select(accounts_table.c.id).where(accounts_table.c.name == "Checking")).scalar_one()
+    other_account_id = core_conn.execute(insert(accounts_table).values(name="Savings")).inserted_primary_key[0]
+    core_conn.execute(
+        insert(transactions_table).values(
+            account_id=other_account_id,
+            tx_date="2026-01-07",
+            description="Savings Store",
+            amount=500.00,
+            category="Food",
+            category_id=resolve_category_id(core_conn, "Food"),
+            category_source="rule",
+            needs_review=0,
+            ignored=0,
+            fingerprint="tx-list-savings-store",
+        )
+    )
+    core_conn.commit()
+
+    context = build_transactions_context(MultiDict([("period", "all"), ("account_id", str(checking_id))]))
+
+    assert context["selected_account_id"] == checking_id
+    assert {account["name"] for account in context["account_options"]} == {"Checking", "Savings"}
+    assert context["total_count"] == 5
+    assert "Savings Store" not in descriptions(context)
+
+
+def test_transactions_context_search_matches_spaced_description_terms(core_conn):
+    """Verify transaction search matches all words in spaced free text."""
+    seed_transactions(core_conn)
+    checking_id = core_conn.execute(select(accounts_table.c.id).where(accounts_table.c.name == "Checking")).scalar_one()
+    insert_transaction(
+        core_conn,
+        "UDEM - PAIE payroll",
+        15.00,
+        "Food",
+        account_id=checking_id,
+        tx_date="2026-01-07",
+        fingerprint="tx-list-udem-paie-payroll",
+        category_source="rule",
+        needs_review=0,
+    )
+    insert_transaction(
+        core_conn,
+        "UDEM Bookstore",
+        25.00,
+        "Food",
+        account_id=checking_id,
+        tx_date="2026-01-08",
+        fingerprint="tx-list-udem-bookstore",
+        category_source="rule",
+        needs_review=0,
+    )
+
+    context = build_transactions_context(MultiDict([("period", "all"), ("search", "UDEM PAIE")]))
+
+    assert context["total_count"] == 1
+    assert descriptions(context) == ["UDEM - PAIE payroll"]
 
 
 def test_transactions_context_merchant_filter_uses_deterministic_keys(core_conn):

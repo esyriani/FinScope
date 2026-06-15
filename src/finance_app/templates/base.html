@@ -1,3 +1,28 @@
+{% set hide_app_shell = auth_shell|default(false) %}
+{% set active_endpoint = request.endpoint|default('', true) %}
+{% set active_blueprint = active_endpoint.split('.')[0] %}
+{% set endpoint_titles = {
+    "home.home": "Home",
+    "auth.account": "Account",
+    "auth.users": "Users",
+    "auth.login": "Log in",
+    "auth.bootstrap": "Create owner account"
+} %}
+{% set blueprint_titles = {
+    "dashboard": "Dashboard",
+    "comparison": "Comparison",
+    "calendar_page": "Calendar",
+    "recurring": "Recurring",
+    "upload": "Statements",
+    "transactions": "Transactions",
+    "review": "Review",
+    "rules": "Rules",
+    "taxonomy_admin": "Taxonomy",
+    "jobs": "Jobs",
+    "settings_page": "Settings"
+} %}
+{% set route_title = endpoint_titles.get(active_endpoint) or blueprint_titles.get(active_blueprint) %}
+{% set page_title_label = page_title|default(route_title, true) %}
 <!DOCTYPE html>
 <html
     lang="{{ ui_language }}"
@@ -8,7 +33,7 @@
 >
 <head>
     <meta charset="UTF-8">
-    <title>FinScope</title>
+    <title>FinScope{% if page_title_label %} - {{ _(page_title_label) }}{% endif %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ static_asset('img/favicon.png') }}">
@@ -32,9 +57,6 @@
     {% endfor %}
 </head>
 <body>
-{% set hide_app_shell = auth_shell|default(false) %}
-{% set active_endpoint = request.endpoint|default('', true) %}
-{% set active_blueprint = active_endpoint.split('.')[0] %}
 {% if current_user.is_authenticated and not hide_app_shell %}
 <header class="mobile-topbar">
     <a class="mobile-brand {% if active_endpoint == 'home.home' %}active{% endif %}" href="{{ url_for('home.home') }}" aria-label="{{ _('Home') }}">

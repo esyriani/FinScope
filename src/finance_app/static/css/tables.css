@@ -86,6 +86,72 @@
     min-width: 64rem;
 }
 
+.filter-panel-heading {
+    min-width: 0;
+}
+
+.filter-panel-summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-panel {
+    overflow: visible;
+}
+
+.filter-panel .card-body,
+.filter-panel .collapse.show {
+    overflow: visible;
+}
+
+.filter-block-header {
+    border-bottom: 1px solid var(--app-border);
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+}
+
+.merchant-autocomplete {
+    position: relative;
+}
+
+.merchant-autocomplete-menu {
+    background: var(--app-surface-raised);
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    box-shadow: var(--app-shadow);
+    left: 0;
+    max-height: 16rem;
+    overflow-y: auto;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.25rem);
+    z-index: 1060;
+}
+
+.merchant-autocomplete-option {
+    background: transparent;
+    border: 0;
+    color: var(--app-text);
+    display: block;
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    width: 100%;
+}
+
+.merchant-autocomplete-option:hover,
+.merchant-autocomplete-option:focus,
+.merchant-autocomplete-option.active {
+    background: var(--table-row-hover);
+    color: var(--app-text);
+    outline: none;
+}
+
+.merchant-autocomplete-status {
+    color: var(--app-muted);
+    padding: 0.55rem 0.75rem;
+}
+
 .taxonomy-table-responsive {
     overflow-x: visible;
 }
@@ -134,6 +200,10 @@
 }
 
 @media (max-width: 640px) {
+    .filter-panel-summary {
+        white-space: normal;
+    }
+
     .taxonomy-table-responsive {
         overflow-x: auto;
     }

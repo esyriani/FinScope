@@ -13,6 +13,7 @@
     "js/exports.js"
 ] %}
 {% extends "base.html" %}
+{% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
 {% from "_pagination.html" import pagination with context %}
 
@@ -26,8 +27,10 @@
 {% set category_options = category_options | default([]) %}
 {% set category_descriptions = category_descriptions | default({}) %}
 {% set tag_options = tag_options | default([]) %}
+{% set account_options = account_options | default([]) %}
 {% set selected_categories = selected_categories | default([]) %}
 {% set selected_tags = selected_tags | default([]) %}
+{% set selected_account_id = selected_account_id | default(none) %}
 {% set sort = sort | default("date") %}
 {% set direction = direction | default("desc") %}
 {% set selected_review = selected_review | default("") %}
@@ -37,9 +40,54 @@
 {% set transaction_ai_result = transaction_ai_result | default(none) %}
 {% set all_transaction_ids = all_transaction_ids | default([]) %}
 {% set can_edit_transactions = current_user_can('edit_transactions') %}
+{% set transaction_period_label = namespace(value=_("All time")) %}
+{% for period_value, period_text in period_options %}
+    {% if selected_period == period_value %}
+        {% set transaction_period_label.value = _(period_text) %}
+    {% endif %}
+{% endfor %}
+{% set transaction_account_label = namespace(value=_("All accounts")) %}
+{% for account in account_options %}
+    {% if selected_account_id == account.id %}
+        {% set transaction_account_label.value = account.name %}
+    {% endif %}
+{% endfor %}
+{% set transaction_review_label = namespace(value=_("All statuses")) %}
+{% for review_value, review_text in review_filter_options %}
+    {% if selected_review == review_value %}
+        {% set transaction_review_label.value = _(review_text) %}
+    {% endif %}
+{% endfor %}
+{% set transaction_ignored_label = namespace(value=_("All")) %}
+{% for ignored_value, ignored_text in ignored_filter_options %}
+    {% if selected_ignored == ignored_value %}
+        {% set transaction_ignored_label.value = _(ignored_text) %}
+    {% endif %}
+{% endfor %}
+{% set transaction_source_label = namespace(value=_("All methods")) %}
+{% for source_value, source_text in category_source_filter_options %}
+    {% if selected_category_source == source_value %}
+        {% set transaction_source_label.value = _(source_text) %}
+    {% endif %}
+{% endfor %}
+{% set transaction_filter_summary %}
+{{ _("Search") }}: {{ search if search else _("All") }} - {{ _("Period") }}: {{ transaction_period_label.value }} - {{ _("Account") }}: {{ transaction_account_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ transaction_review_label.value }} - {{ _("Ignored") }}: {{ transaction_ignored_label.value }} - {{ _("Categorization method") }}: {{ transaction_source_label.value }}
+{% endset %}
 
 {% macro transaction_pagination(label) %}
 {{ pagination(page, total_pages, page_url, label) }}
+{% endmacro %}
+
+{% macro transaction_status_badge(tx) %}
+{% if tx["ignored"] %}
+    <span class="badge text-bg-secondary transaction-status-badge">{{ _("Ignored") }}</span>
+{% elif tx["needs_review"] %}
+    <span class="badge text-bg-warning transaction-status-badge">{{ _("Needs review") }}</span>
+{% elif tx["reviewed_at"] %}
+    <span class="badge text-bg-success transaction-status-badge">{{ _("Approved") }}</span>
+{% else %}
+    <span class="badge text-bg-secondary transaction-status-badge">{{ _("Pending approval") }}</span>
+{% endif %}
 {% endmacro %}
 
 <div class="page-header">
@@ -69,8 +117,7 @@
     {% endif %}
 {% endwith %}
 
-<div class="card mb-4">
-    <div class="card-body">
+{% call collapsible_filter_panel("transaction-filters", transaction_filter_summary | trim) %}
         <form method="get" class="row g-3 align-items-end">
             <input type="hidden" name="sort" value="{{ sort }}">
             <input type="hidden" name="direction" value="{{ direction }}">
@@ -95,7 +142,17 @@
                 </select>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-4">
+                <label class="form-label" for="transaction-account">{{ _("Account") }}</label>
+                <select id="transaction-account" class="form-select" name="account_id">
+                    <option value="">{{ _("All accounts") }}</option>
+                    {% for account in account_options %}
+                        <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-4">
                 <label class="form-label" id="transaction-categories-label">{{ _("Category") }}</label>
                 <div
                     class="tag-multiselect"
@@ -103,6 +160,7 @@
                     data-placeholder="{{ _('All categories') }}"
                     data-select-all-label="{{ _('Select all categories') }}"
                     data-select-preset-label="{{ _('Select analysis categories') }}"
+                    data-select-preset-summary-label="{{ _('Analysis categories') }}"
                     data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
                 >
                     <div
@@ -133,7 +191,7 @@
                 </div>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <label class="form-label" id="transaction-tags-label">{{ _("Tags") }}</label>
                 <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
                     <div
@@ -206,8 +264,7 @@
                 <a class="btn btn-outline-secondary" href="{{ url_for('transactions.transactions') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
             </div>
         </form>
-    </div>
-</div>
+{% endcall %}
 
 {% if transactions %}
 <div class="card">
@@ -358,15 +415,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if tx["ignored"] %}
-                                <span class="badge text-bg-secondary transaction-status-badge">{{ _("Ignored") }}</span>
-                            {% elif tx["needs_review"] %}
-                                <span class="badge text-bg-warning transaction-status-badge">{{ _("Needs review") }}</span>
-                            {% elif tx["reviewed_at"] %}
-                                <span class="badge text-bg-success transaction-status-badge">{{ _("Approved") }}</span>
-                            {% else %}
-                                <span class="badge text-bg-secondary transaction-status-badge">{{ _("Pending approval") }}</span>
-                            {% endif %}
+                            {{ transaction_status_badge(tx) }}
                         </td>
                         <td class="text-end">
                             {% if can_edit_transactions %}
@@ -507,6 +556,14 @@
                         <div>
                             <dt>{{ _("Kind") }}</dt>
                             <dd>{{ _(tx["transaction_kind_label"]) }}</dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Account") }}</dt>
+                            <dd>{{ tx["account_name"] or _("Personal") }}</dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Status") }}</dt>
+                            <dd>{{ transaction_status_badge(tx) }}</dd>
                         </div>
                         <div>
                             <dt>{{ _("Category source") }}</dt>

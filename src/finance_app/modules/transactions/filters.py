@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from typing import Any, TypedDict
 
-from sqlalchemy import String, case, cast, false, func, or_, select
+from sqlalchemy import String, and_, case, cast, false, func, or_, select
 
 from finance_app.core.constants import (
     CATEGORY_SOURCE_AI,
@@ -41,11 +41,13 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
+from finance_app.modules.accounts.filters import account_filter_condition, parse_account_id
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 from finance_app.modules.merchants.normalization import canonicalize_merchant_key
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.merchants.sql_filters import (
     description_matches_any_candidate,
+    escape_like_token,
     merchant_identity_candidates,
 )
 from finance_app.modules.transactions.constants import (
@@ -83,6 +85,7 @@ class TransactionFilters(TypedDict):
     category: str
     selected_categories: list[str]
     selected_tags: list[str]
+    account_id: int | None
     filter_mode: str
     review: str
     category_status: str
@@ -143,6 +146,7 @@ def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilte
         "category": legacy_category,
         "selected_categories": selected_categories,
         "selected_tags": selected_tags,
+        "account_id": parse_account_id(query_value(args, "account_id")),
         "filter_mode": filter_mode,
         "review": review,
         "category_status": category_status,
@@ -192,6 +196,7 @@ def build_transaction_core_filters(
         core_filters.add(transactions_table.c.tx_date >= start_date)
 
     core_filters.add(search_condition(filters["search"], unknown_category))
+    core_filters.add(account_filter_condition(filters["account_id"]))
     core_filters.add_in(
         category_value,
         filters["selected_categories"],
@@ -263,7 +268,7 @@ def search_condition(search: object, unknown_category: str) -> Any | None:
     if not text:
         return None
 
-    pattern = f"%{text}%"
+    terms = [term for term in text.split() if term]
     account_name = func.coalesce(accounts_table.c.name, "Personal")
     category_value = func.coalesce(transactions_table.c.category, unknown_category)
     review_state = case(
@@ -284,7 +289,17 @@ def search_condition(search: object, unknown_category: str) -> Any | None:
         transactions_table.c.tx_date,
         cast(transactions_table.c.amount, String),
     )
-    return or_(*[func.lower(cast(expression, String)).like(pattern) for expression in expressions])
+    return and_(
+        *[
+            or_(
+                *[
+                    func.lower(cast(expression, String)).like(f"%{escape_like_token(term)}%", escape="\\")
+                    for expression in expressions
+                ]
+            )
+            for term in terms
+        ]
+    )
 
 
 def merchant_key_condition(conn: object | None, merchant_key: str) -> Any:

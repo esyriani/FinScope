@@ -4,7 +4,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import func
 
 from finance_app.core.constants import FILTER_MODE_INCLUDE, FILTER_MODES
 from finance_app.core.periods import (
@@ -15,9 +15,14 @@ from finance_app.core.periods import (
     parse_iso_date,
 )
 from finance_app.core.query import CoreFilters, QueryArgs, parse_sort_direction, query_value, query_values
-from finance_app.database.tables import merchants as merchants_table
 from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.accounts.filters import parse_account_id
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
+from finance_app.modules.merchants.filters import (
+    merchant_filter_condition,
+    parse_merchant_id,
+    parse_merchant_query,
+)
 
 from .constants import (
     DASHBOARD_BREAKDOWN_CATEGORY,
@@ -60,6 +65,9 @@ class DashboardRequest:
     category_table_direction: str
     selected_categories: list[str]
     selected_tags: list[str]
+    selected_account_id: int | None
+    selected_merchant_id: int | None
+    merchant_query: str
     merchant_search: str
     quick_view: str
     date_from: str
@@ -94,6 +102,7 @@ def parse_dashboard_request(args: QueryArgs) -> DashboardRequest:
         DASHBOARD_CATEGORY_SORTS,
         DASHBOARD_CATEGORY_SORT_SPENDING,
     )
+    merchant_query = parse_merchant_query(query_value(args, "merchant_query") or query_value(args, "merchant_search"))
     return DashboardRequest(
         args=args,
         period=period,
@@ -113,7 +122,10 @@ def parse_dashboard_request(args: QueryArgs) -> DashboardRequest:
         ),
         selected_categories=selected_categories,
         selected_tags=selected_tags,
-        merchant_search=parse_merchant_search(query_value(args, "merchant_search")),
+        selected_account_id=parse_account_id(query_value(args, "account_id")),
+        selected_merchant_id=parse_merchant_id(query_value(args, "merchant_id")),
+        merchant_query=merchant_query,
+        merchant_search=merchant_query,
         quick_view=parse_quick_view(query_value(args, "quick_view"), selected_categories, selected_tags),
         date_from=date_from,
         date_to=date_to,
@@ -164,7 +176,7 @@ def parse_quick_view(
 
 def parse_merchant_search(value: object) -> str:
     """Return a normalized merchant search term for dashboard filters."""
-    return " ".join(str(value or "").strip().split())
+    return parse_merchant_query(value)
 
 
 def apply_dashboard_dimension_filters(
@@ -173,14 +185,15 @@ def apply_dashboard_dimension_filters(
     selected_tags: Sequence[str],
     filter_mode: str,
     unknown_category: str,
-    merchant_search: str = "",
+    merchant_id: int | None = None,
+    merchant_query: str = "",
 ) -> None:
     """Apply category, tag, and merchant filters to dashboard criteria."""
     category_value = func.coalesce(transactions_table.c.category, unknown_category)
     include = filter_mode == FILTER_MODE_INCLUDE
     filters.add_in(category_value, selected_categories, include=include)
     filters.add(transaction_tag_condition(selected_tags or [], include=include))
-    filters.add(merchant_search_condition(merchant_search))
+    filters.add(merchant_filter_condition(merchant_id, merchant_query))
 
 
 def apply_quick_view_core_filter(
@@ -205,21 +218,5 @@ def apply_quick_view_core_filter(
 
 
 def merchant_search_condition(value: object) -> Any | None:
-    """Return a merchant search condition for durable keys and descriptions."""
-    text = parse_merchant_search(value).casefold()
-    if not text:
-        return None
-
-    merchant_key_match = exists(
-        select(1)
-        .select_from(merchants_table)
-        .where(
-            merchants_table.c.id == transactions_table.c.merchant_id,
-            func.lower(merchants_table.c.merchant_key).contains(text, autoescape=True),
-        )
-        .correlate(transactions_table)
-    )
-    return or_(
-        func.lower(transactions_table.c.description).contains(text, autoescape=True),
-        merchant_key_match,
-    )
+    """Return the legacy dashboard merchant search condition."""
+    return merchant_filter_condition(None, value)

@@ -31,30 +31,65 @@ class FixedDate(real_date):
         return cls(2026, 5, 11)
 
 
+def test_navigation_pages_render_distinct_browser_titles(client):
+    """Verify browser history labels include the active navigation destination."""
+    expected_titles = {
+        "/": "FinScope - Home",
+        "/account": "FinScope - Account",
+        "/dashboard": "FinScope - Dashboard",
+        "/comparison": "FinScope - Comparison",
+        "/calendar": "FinScope - Calendar",
+        "/recurring": "FinScope - Recurring",
+        "/upload": "FinScope - Statements",
+        "/transactions": "FinScope - Transactions",
+        "/review": "FinScope - Review",
+        "/rules": "FinScope - Rules",
+        "/taxonomy": "FinScope - Taxonomy",
+        "/jobs": "FinScope - Jobs",
+        "/settings": "FinScope - Settings",
+        "/admin/users": "FinScope - Users",
+    }
+
+    for path, expected_title in expected_titles.items():
+        response = client.get(path)
+
+        assert response.status_code == 200
+        assert_has_element(response, "title", text=expected_title)
+
+
 def test_transactions_route_renders_category_source_badges_and_filter(client, core_conn):
     """Verify transaction source provenance is visible on the transaction page."""
+    account_id = core_conn.execute(text("""
+        INSERT INTO accounts (name)
+        VALUES ('Route Visa')
+        """)).lastrowid
     rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
         VALUES ('RULE CATEGORIZED STORE', 'Food', 'manual')
         """)).lastrowid
-    core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date,
-            description,
-            amount,
-            category,
-            category_source,
-            category_confidence,
-            fingerprint
-        )
-        VALUES ('2026-01-02', 'AI categorized store', 12.34, 'Food', 'ai', 0.91, 'route-ai-source')
-        """))
     core_conn.execute(
         text("""
         INSERT INTO transactions (
             tx_date,
             description,
             amount,
+            account_id,
+            category,
+            category_source,
+            category_confidence,
+            fingerprint
+        )
+        VALUES ('2026-01-02', 'AI categorized store', 12.34, :p0, 'Food', 'ai', 0.91, 'route-ai-source')
+        """),
+        {"p0": account_id},
+    )
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            account_id,
             category,
             category_source,
             category_confidence,
@@ -65,6 +100,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
             '2026-01-03',
             'Rule categorized store',
             23.45,
+            :p1,
             'Food',
             'rule',
             0.96,
@@ -72,17 +108,20 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
             'route-rule-source-link'
         )
         """),
-        {"p0": rule_id},
+        {"p0": rule_id, "p1": account_id},
     )
     core_conn.commit()
 
-    response = client.get("/transactions?period=all")
+    response = client.get(f"/transactions?period=all&account_id={account_id}")
     body = response_html(response)
     compact_body = " ".join(body.split())
     expected_rule_url = f"/rules/audit/rule/{rule_id}"
+    modal_summary = body.split('id="categorize-transaction-', 1)[1].split("</dl>", 1)[0]
 
     assert response.status_code == 200
-    assert_visible_text(response, "Categorization method", "All methods", "Pending approval")
+    assert_visible_text(response, "Categorization method", "All methods", "Pending approval", "Route Visa")
+    assert_has_element(response, "select", attrs={"id": "transaction-account", "name": "account_id"})
+    assert_has_element(response, "option", attrs={"value": str(account_id), "selected": True}, text="Route Visa")
     assert_not_visible_text(response, "Ready to approve", "Unverified")
     assert "&middot; AI 91%" in compact_body
     assert "<th>Kind</th>" not in body
@@ -99,6 +138,10 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     assert "js/busy-overlay.js" in body
     assert 'data-busy-message="Recategorizing selected transactions..."' in body
     assert 'data-busy-message="Suggesting category..."' in body
+    assert modal_summary.index("<dt>Kind</dt>") < modal_summary.index("<dt>Account</dt>")
+    assert modal_summary.index("<dt>Account</dt>") < modal_summary.index("<dt>Status</dt>")
+    assert "Route Visa" in modal_summary
+    assert "Pending approval" in modal_summary
     assert 'class="transaction-date text-nowrap"' in body
     assert "transaction-action-menu" in body
     assert "Edit category" in body
@@ -202,7 +245,7 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, core_conn):
         "Show untagged",
     )
     assert_not_visible_text(response, "Choose filters")
-    assert_markup(response, 'name="merchant_search"', 'placeholder="Search merchant"', "data-ajax-refresh-link")
+    assert_markup(response, 'name="merchant_query"', 'placeholder="Search merchant"', "data-merchant-autocomplete")
     assert_not_markup(response, "data-dashboard-custom-categories", "data-dashboard-custom-tags")
     assert_markup(tag_response, '"categoryLabels": []')
     assert_visible_text(untagged_response, "Hide untagged")
@@ -236,11 +279,38 @@ def test_category_filters_offer_analysis_category_preset(client, core_conn):
 
         assert response.status_code == 200
         assert body.count('data-select-preset-label="Select analysis categories"') == expected_count
+        assert body.count('data-select-preset-summary-label="Analysis categories"') == expected_count
         preset_values = re.findall(r"data-select-preset-exclude-values='([^']+)'", body)
         assert len(preset_values) == expected_count
         assert all("System adjustment" in value for value in preset_values)
         assert "Transfers" in body
         assert "UNKNOWN" in body
+
+
+def test_calendar_route_renders_bookmarkable_merchant_filter(client):
+    """Verify calendar exposes merchant autocomplete and preserves query filters."""
+    response = client.get("/calendar?month=2026-05&account_id=12&merchant_id=34&merchant_query=NETFLIX")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert_markup(
+        response,
+        "data-calendar-dynamic",
+        "data-calendar-ajax-form",
+        "data-calendar-ajax-link",
+        "data-flatpickr-submit-on-change",
+        "js/merchant-autocomplete.js",
+        "data-merchant-autocomplete",
+        'name="merchant_id"',
+        'value="34"',
+        'name="merchant_query"',
+        'value="NETFLIX"',
+        "merchant_id=34",
+        "merchant_query=NETFLIX",
+    )
+    assert body.index('id="calendar-filters"') < body.index("data-calendar-ajax-form")
+    assert body.index("data-calendar-ajax-form") < body.index("Daily summaries.")
+    assert_visible_text(response, "Merchant: NETFLIX", "No posted transactions match this account and merchant.")
 
 
 def test_comparison_route_renders_complete_unknown_warning(client, core_conn, monkeypatch):
@@ -453,12 +523,17 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
         None,
         attrs={"data-select-preset-label": "Sélectionner les catégories d’analyse"},
     )
+    assert_has_element(
+        dashboard_response,
+        None,
+        attrs={"data-select-preset-summary-label": "Catégories d’analyse"},
+    )
     assert_not_visible_text(dashboard_response, "year to date", "Merchant analytics")
 
     assert_visible_text(
         comparison_response,
         "Tendances annuelles",
-        "Dépenses mensuelles par année",
+        "Analyse mensuelle par année : dépenses",
         "Changements de période",
         "La comparaison par catégorie peut être peu fiable",
         "Les constats par catégorie peuvent être incomplets",

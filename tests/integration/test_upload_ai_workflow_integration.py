@@ -3,6 +3,7 @@
 import json
 
 from sqlalchemy import text
+from tests.support.database import set_owner_setting
 from tests.support.upload import (
     assert_llm_progress_log_entries,
     assert_llm_progress_updates,
@@ -65,6 +66,45 @@ def test_import_statement_job_keeps_ai_candidates_for_manual_estimate_first_run(
     ).fetchone()
     assert tuple(statement) == ("completed", 1, 0, 0, 1, None)
     assert submitted_jobs == []
+
+
+def test_import_statement_job_auto_queues_ai_when_token_confirmation_disabled(app, core_conn, monkeypatch):
+    """Verify imports queue statement AI automatically when token confirmation is disabled."""
+    set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
+    account_id, statement_id = create_account_statement(core_conn, "auto-ai.csv")
+    submitted_jobs = []
+
+    def capture_job(label, func, *args, **kwargs):
+        """Capture LLM follow-up job submission details."""
+        submitted_jobs.append(
+            {
+                "label": label,
+                "func": func,
+                "args": args,
+                "kwargs": kwargs,
+            }
+        )
+        return "llm-auto-job-id"
+
+    monkeypatch.setattr(upload_workflow, "submit_background_job", capture_job)
+
+    message = upload_workflow.import_statement_transactions_job(
+        statement_id,
+        account_id,
+        "credit_card",
+        "csv",
+        "Date,Description,Amount\n2026-01-02,UNKNOWN SHOP,12.34\n",
+    )
+
+    assert "1 unknown transaction queued for AI categorization. AI job: llm-auto." in message
+    assert submitted_jobs == [
+        {
+            "label": f"AI categorize statement {statement_id}",
+            "func": upload_workflow.categorize_statement_unknown_transactions_job,
+            "args": (statement_id,),
+            "kwargs": {"queue": "ai"},
+        }
+    ]
 
 
 def test_import_statement_job_reports_no_ai_candidates_when_none_remain(app, core_conn, monkeypatch):

@@ -28,6 +28,7 @@ def settings_form_data(conn, **overrides):
         "comparison_insight_card_limit": "5",
         "home_top_category_limit": "7",
         "merchant_table_limit": "11",
+        "merchant_suggestion_limit": "4",
         "rule_preview_limit": "9",
         "rule_audit_transaction_limit": "13",
         "llm_confidence_threshold": "0.75",
@@ -81,6 +82,7 @@ def test_settings_page_uses_dark_theme_by_default(client):
     assert_has_element(response, "input", attrs={"id": "theme_mode_dark", "checked": True})
     assert_has_element(response, "input", attrs={"id": "confirm_ai_token_usage_enabled", "checked": True})
     assert_has_element(response, "input", attrs={"id": "comparison_insight_card_limit"})
+    assert_has_element(response, "input", attrs={"id": "merchant_suggestion_limit", "value": "5"})
     assert "auto_llm_categorization_enabled" not in response.get_data(as_text=True)
 
 
@@ -114,6 +116,7 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert owner_settings["comparison_insight_card_limit"] == "5"
     assert owner_settings["home_top_category_limit"] == "7"
     assert owner_settings["merchant_table_limit"] == "11"
+    assert owner_settings["merchant_suggestion_limit"] == "4"
     assert owner_settings["rule_preview_limit"] == "9"
     assert owner_settings["rule_audit_transaction_limit"] == "13"
     assert settings["llm_confidence_threshold"] == "0.75"
@@ -266,6 +269,7 @@ def test_viewer_can_only_save_own_general_settings(app, core_conn):
     assert viewer_settings["theme_mode"] == "light"
     assert viewer_settings["ui_language"] == "fr"
     assert viewer_settings["comparison_insight_card_limit"] == "5"
+    assert viewer_settings["merchant_suggestion_limit"] == "4"
     assert global_settings["openai_model"] == original_global_settings["openai_model"]
     assert (
         global_settings["recurrence_minimum_occurrences"] == original_global_settings["recurrence_minimum_occurrences"]

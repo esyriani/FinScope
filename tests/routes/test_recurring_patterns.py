@@ -140,14 +140,29 @@ def test_recurring_routes_reject_incomplete_payloads(client, payload):
 
 def test_recurring_page_uses_shared_status_filter_links(client):
     """Verify recurring status filters are URL-driven instead of client-only buttons."""
-    response = client.get("/recurring?view=list&statuses=overdue")
+    response = client.get("/recurring?view=list&statuses=overdue&account_id=12&merchant_id=34&merchant_query=NETFLIX")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert 'aria-label="Status filter"' in body
+    assert 'class="recurring-tabs page-tabs nav nav-tabs mb-4"' in body
+    assert 'id="recurring-list-tab"' in body
+    assert 'role="tab"' in body
+    assert 'href="/recurring?month=' in body
+    assert "view=list" in body
+    assert 'id="recurring-calendar-tab"' in body
+    assert "view=calendar" in body
+    assert 'aria-selected="true"' in body
     assert 'data-recurring-status-filter="overdue"' in body
     assert "data-recurring-ajax-link" in body
     assert 'name="statuses" value="overdue"' in body
+    assert 'name="account_id" value="12"' in body
+    assert 'name="merchant_id" value="34"' in body
+    assert 'name="merchant_query" value="NETFLIX"' in body
+    assert "account_id=12" in body
+    assert "merchant_id=34" in body
+    assert "merchant_query=NETFLIX" in body
+    assert "Merchant: NETFLIX" in body
     assert 'aria-pressed="true"' in body
     assert 'id="recurring-status"' not in body
     assert "data-recurring-activity-filter" not in body
@@ -167,15 +182,35 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
     assert "data-flatpickr-submit-on-change" in body
     assert "Repeating merchants detected for the selected month." in body
     assert "No recurring activity detected for this month." in body
-    assert 'data-sort-column="7" data-sort-type="number"' in body
+    assert "Confidence: High" in body
+    assert '<option value="High" selected>High</option>' in body
+    assert 'data-sort-column="8" data-sort-type="number"' in body
     assert "data-paginated-table" in body
     assert 'data-pagination-label="Recurring activity pages"' in body
     assert 'data-export-visible-source="#recurring-activity-table"' in body
     assert 'data-export-excel-extension="xlsx"' not in body
-    assert 'colspan="8"' in body
+    assert "data-recurring-batch-table" in body
+    assert "data-all-recurring-ids" in body
+    assert "data-recurring-select-all" in body
+    assert "Confirm selected" in body
+    assert "Remove selected" in body
+    assert 'colspan="10"' in body
     assert "Status detail" in body
     assert "Matched date" in body
     assert "Actual amount" in body
+
+
+def test_recurring_page_all_confidence_filter_is_explicit(client):
+    """Verify All confidence is opt-in now that High confidence is the default."""
+    response = client.get("/recurring?view=list&confidence=all")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Confidence: All confidence" in body
+    assert '<option value="all" selected>All confidence</option>' in body
+    assert 'name="confidence" value="all"' in body
+    assert "confidence=all" in body
+    assert "No recurring activity matches the current filters." in body
 
 
 def test_table_export_script_prompts_for_displayed_or_entire_table():
@@ -214,7 +249,14 @@ def test_recurring_activity_template_keeps_post_action_state_hooks():
 
     assert "data-recurring-user-status" in body
     assert "data-recurring-active" in body
+    assert "data-recurring-pattern-key" in body
     assert "data-recurring-row-state" in body
+    assert "data-recurring-batch-table" in body
+    assert "data-recurring-batch-action" in body
+    assert "data-recurring-row-checkbox" in body
+    assert "data-recurring-row-confirm" in body
+    assert "data-recurring-row-edit" in body
+    assert "data-recurring-row-remove" in body
 
 
 def test_recurring_calendar_template_places_amount_on_its_own_chip_line():
@@ -222,6 +264,9 @@ def test_recurring_calendar_template_places_amount_on_its_own_chip_line():
     body = (PROJECT_ROOT / "src" / "finance_app" / "templates" / "_recurring_calendar.html").read_text(encoding="utf-8")
 
     assert "recurring-calendar-chip-amount" in body
+    assert "data-recurring-pattern-key" in body
+    assert "<strong>{{ item.merchant_label }}</strong>" in body
+    assert 'title="{{ _(item.status_label) }} - {{ item.merchant }} - {{ item.amount_label }}"' in body
 
 
 def test_recurring_detail_modal_exposes_decision_summary_hooks(client):
@@ -269,6 +314,18 @@ def test_recurring_empty_state_message_mentions_filters_when_applied(app):
     with app.app_context():
         assert recurring_empty_state_message(False) == "No recurring activity detected for this month."
         assert recurring_empty_state_message(True) == "No recurring activity matches the current filters."
+        assert (
+            recurring_empty_state_message(True, has_account_filter=True)
+            == "No recurring activity matches this account."
+        )
+        assert (
+            recurring_empty_state_message(True, has_merchant_filter=True)
+            == "No recurring activity matches this merchant."
+        )
+        assert (
+            recurring_empty_state_message(True, has_account_filter=True, has_merchant_filter=True)
+            == "No recurring activity matches this account and merchant."
+        )
 
 
 def test_recurring_calendar_days_prioritize_dense_day_attention_items():
@@ -293,8 +350,24 @@ def test_recurring_calendar_days_prioritize_dense_day_attention_items():
     ]
     assert day["all_recurring_items"][0]["status_detail"] == "Needs payment."
     assert day["all_recurring_items"][0]["category"] == "Utilities"
+    assert day["all_recurring_items"][0]["pattern_key"] == "HYDRO::spending"
     assert day["all_recurring_items"][0]["user_status"] == "detected"
     assert day["all_recurring_items"][0]["active"] == 1
+
+
+def test_recurring_calendar_days_truncate_long_chip_merchants():
+    """Verify calendar chip labels stay compact while full merchant details remain available."""
+    merchant = "COSTCO WHOLESALE W527 MONTREAL"
+    days = build_recurring_calendar_days(
+        date(2026, 5, 1),
+        [recurring_calendar_item("expected", merchant)],
+    )
+    chip = next(item for item in days if item["date"] == "2026-05-10")["recurring_items"][0]
+
+    assert chip["merchant"] == merchant
+    assert chip["merchant_label"] == "COSTCO WHOLESALE W52..."
+    assert len(chip["merchant_label"]) == 23
+    assert merchant in chip["aria_label"]
 
 
 def test_recurring_activity_json_exposes_detail_modal_status_context():
