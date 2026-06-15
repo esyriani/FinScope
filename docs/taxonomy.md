@@ -25,7 +25,7 @@ For example:
 
 Category `Food` can coexist with tags such as `Work`, `Travel`, and `Reimbursable`.
 
-Tags are commonly used for, reimbursements, work-related expenses, vacations, medical claims, tax-related purchases, temporary projects or events.
+Tags are commonly used for reimbursements, work-related expenses, vacations, medical claims, tax-related purchases, temporary projects or events.
 
 A good category remains meaningful over years of historical data. A good tag adds contextual information without replacing the category.
 
@@ -101,6 +101,8 @@ Typical examples include paying a credit card balance, moving money between chec
 This category is managed by FinScope and cannot be renamed, edited, or deleted from the UI.
 
 > Transfer transactions are excluded from income and spending analytics to avoid double-counting money movement as real financial activity.
+
+Reimbursements that offset earlier expenses should also use `Transfers`, not `Income` or the original expense category. Keep the original expenses in their natural category, such as `Travel`, `Food`, or `Work`, and tag them with the relevant context, such as `Conference` and `Reimbursable`. Tag the reimbursement credit with the same context tags. For example, $1,000 of conference travel expenses tagged `Conference` and `Reimbursable`, followed by a $900 reimbursement credit categorized as `Transfers` and tagged `Conference` and `Reimbursable`, leaves a $100 outstanding net amount in tag-filtered reimbursement views.
 
 ## Taxonomy administration
 

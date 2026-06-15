@@ -12,7 +12,7 @@ Start from the repository root.
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install .
+python -m pip install -r requirements.txt
 Copy-Item config.example.ini config.ini
 finscope
 ```
@@ -25,7 +25,7 @@ finscope
 ```bat
 python -m venv .venv
 .venv\Scripts\activate.bat
-python -m pip install .
+python -m pip install -r requirements.txt
 copy /Y config.example.ini config.ini
 finscope
 ```
@@ -38,7 +38,7 @@ finscope
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install .
+python -m pip install -r requirements.txt
 cp config.example.ini config.ini
 finscope
 ```
@@ -51,7 +51,7 @@ finscope
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install .
+python -m pip install -r requirements.txt
 cp config.example.ini config.ini
 finscope
 ```

@@ -70,9 +70,9 @@ def normalize_date_text(value: object) -> str:
     return " ".join(tokens)
 
 
-SLASH_DATE_RE = re.compile(r"^\s*(\d{1,2})/(\d{1,2})/(\d{2,4})\s*$")
-MONTH_FIRST_DATE_FORMATS = ("%m/%d/%Y", "%m/%d/%y")
-DAY_FIRST_DATE_FORMATS = ("%d/%m/%Y", "%d/%m/%y")
+DATE_ORDER_RE = re.compile(r"^\s*(\d{1,2})([./-])(\d{1,2})\2(\d{2,4})\s*$")
+MONTH_FIRST_DATE_FORMATS = ("%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y", "%m.%d.%Y", "%m.%d.%y")
+DAY_FIRST_DATE_FORMATS = ("%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y", "%d-%m-%y", "%d.%m.%Y", "%d.%m.%y")
 SUPPORTED_DATE_ORDERS = {
     DATE_ORDER_AUTO,
     DATE_ORDER_MONTH_FIRST,
@@ -115,13 +115,13 @@ def preferred_date_formats_for_values(
     values: Iterable[object],
     date_order: object = DATE_ORDER_AUTO,
 ) -> tuple[str, ...]:
-    """Return date formats ordered by the selected or inferred slash-date pattern."""
+    """Return date formats ordered by the selected or inferred numeric date pattern."""
     analysis = analyze_slash_date_order(values, date_order=date_order)
     return date_formats_for_order(analysis["effective_order"])
 
 
 def date_formats_for_order(date_order: object) -> tuple[str, ...]:
-    """Return parser formats with the requested slash-date order first."""
+    """Return parser formats with the requested numeric date order first."""
     normalized = normalize_date_order(date_order)
     if normalized == DATE_ORDER_MONTH_FIRST:
         preferred_formats = MONTH_FIRST_DATE_FORMATS
@@ -134,14 +134,14 @@ def date_formats_for_order(date_order: object) -> tuple[str, ...]:
 
 
 def infer_slash_date_order(values: Iterable[object]) -> str | None:
-    """Infer whether slash dates in one statement are month-first or day-first."""
+    """Infer whether separated numeric dates are month-first or day-first."""
     return analyze_slash_date_order(values)["inferred_order"]
 
 
 def analyze_slash_date_order(values: Iterable[object], date_order: object = DATE_ORDER_AUTO) -> dict[str, Any]:
-    """Return slash-date order evidence and the effective order for parsing."""
+    """Return numeric date-order evidence and the effective order for parsing."""
     selected_order = normalize_date_order(date_order)
-    month_first_count, day_first_count, ambiguous_count, slash_count = slash_date_order_counts(values)
+    month_first_count, day_first_count, ambiguous_count, numeric_date_count = slash_date_order_counts(values)
     inferred_order = None
     if month_first_count and not day_first_count:
         inferred_order = DATE_ORDER_MONTH_FIRST
@@ -160,7 +160,7 @@ def analyze_slash_date_order(values: Iterable[object], date_order: object = DATE
 
     requires_choice = (
         selected_order == DATE_ORDER_AUTO
-        and slash_count > 0
+        and numeric_date_count > 0
         and inferred_order is None
         and (ambiguous_count > 0 or (month_first_count and day_first_count))
     )
@@ -170,29 +170,31 @@ def analyze_slash_date_order(values: Iterable[object], date_order: object = DATE
         "inferred_order": inferred_order,
         "source": source,
         "requires_choice": requires_choice,
-        "has_slash_dates": slash_count > 0,
+        "has_date_order_dates": numeric_date_count > 0,
+        "has_slash_dates": numeric_date_count > 0,
         "ambiguous_count": ambiguous_count,
         "month_first_evidence_count": month_first_count,
         "day_first_evidence_count": day_first_count,
-        "slash_date_count": slash_count,
+        "date_order_date_count": numeric_date_count,
+        "slash_date_count": numeric_date_count,
     }
 
 
 def slash_date_order_counts(values: Iterable[object]) -> tuple[int, int, int, int]:
-    """Return evidence counts for month-first, day-first, and ambiguous slash dates."""
+    """Return evidence counts for month-first, day-first, and ambiguous numeric dates."""
     month_first_count = 0
     day_first_count = 0
     ambiguous_count = 0
-    slash_count = 0
+    numeric_date_count = 0
 
     for value in values:
-        match = SLASH_DATE_RE.match(str(value or ""))
+        match = DATE_ORDER_RE.match(str(value or ""))
         if not match:
             continue
 
-        slash_count += 1
+        numeric_date_count += 1
         first = int(match.group(1))
-        second = int(match.group(2))
+        second = int(match.group(3))
         if first > 12 and second <= 12:
             day_first_count += 1
         elif second > 12 and first <= 12:
@@ -200,7 +202,7 @@ def slash_date_order_counts(values: Iterable[object]) -> tuple[int, int, int, in
         elif first <= 12 and second <= 12:
             ambiguous_count += 1
 
-    return month_first_count, day_first_count, ambiguous_count, slash_count
+    return month_first_count, day_first_count, ambiguous_count, numeric_date_count
 
 
 def parse_money(value: object) -> float | None:

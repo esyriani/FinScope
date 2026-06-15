@@ -50,7 +50,7 @@ Minimal local setup on Windows PowerShell:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install .
+python -m pip install -r requirements.txt
 Copy-Item config.example.ini config.ini
 finscope
 ```
@@ -59,7 +59,7 @@ Open `http://127.0.0.1:5000`, then create the owner account on the bootstrap pag
 
 ## Development setup
 
-The quick start installs FinScope and its runtime dependencies from `pyproject.toml`. For development, install the Python and frontend toolchains too:
+The quick start installs FinScope and its runtime dependencies from `pyproject.toml` using the tested constraints in `constraints.txt`. For development, install the Python and frontend toolchains too:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt

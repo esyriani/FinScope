@@ -108,6 +108,11 @@ function showBusyOverlay(options = {}) {
         return token;
     }
 
+    if (options.immediate === true) {
+        renderBusyOverlay(token);
+        return token;
+    }
+
     clearBusyOverlayTimer();
     busyOverlayState.showTimer = window.setTimeout(
         () => {

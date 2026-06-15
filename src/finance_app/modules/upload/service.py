@@ -265,7 +265,7 @@ def build_statement_preview(
         raw_text: Decoded CSV contents from the submitted statement file.
         statement_type: Parser type selected for the upload.
         interac_direction: Optional Interac direction override.
-        date_order: Optional user-selected slash-date order.
+        date_order: Optional user-selected numeric date order.
         preview_limit: Maximum parsed transaction rows to include.
 
     Returns:
@@ -295,7 +295,7 @@ def build_statement_preview(
     parsed_dates = [tx["tx_date"] for tx in parse_result["transactions"]]
     date_range = preview_date_range(parsed_dates)
     date_ranges: dict[str, dict[str, str]] = {}
-    if date_analysis["has_slash_dates"]:
+    if date_analysis["has_date_order_dates"]:
         date_ranges = {
             DATE_ORDER_MONTH_FIRST: preview_date_range_for_order(
                 raw_text,
@@ -340,7 +340,7 @@ def preview_date_range_for_order(
     interac_direction: str,
     date_order: str,
 ) -> dict[str, str]:
-    """Return the parsed date range for one slash-date order option."""
+    """Return the parsed date range for one numeric date-order option."""
     parse_result = parse_csv_transactions(
         raw_text,
         statement_type=statement_type,
@@ -485,7 +485,7 @@ def preview_rows_for_records(
         date_formats: Ordered parser date formats for the effective date order.
         preview_limit: Maximum number of rows to return.
         prefer_ambiguous_dates: When true, rows that parse differently under
-            month-first and day-first slash-date orders are shown before other
+            month-first and day-first numeric date orders are shown before other
             sample rows.
 
     Returns:
@@ -519,7 +519,7 @@ def preview_rows_for_records(
 
 
 def preview_row_has_ambiguous_date(row: Mapping[str, Any]) -> bool:
-    """Return whether a preview row has conflicting slash-date interpretations."""
+    """Return whether a preview row has conflicting numeric date interpretations."""
     month_first_date = row.get("month_first_date") or ""
     day_first_date = row.get("day_first_date") or ""
     return bool(month_first_date and day_first_date and month_first_date != day_first_date)

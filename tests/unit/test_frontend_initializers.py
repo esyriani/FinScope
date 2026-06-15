@@ -42,6 +42,63 @@ def test_busy_overlay_ignores_prevented_submits():
     assert "event.defaultPrevented" in submit_listener.split("showBusyOverlayForElement", 1)[0]
 
 
+def test_upload_preview_shows_busy_overlay_while_loading():
+    """Verify statement preview parsing gives immediate busy feedback."""
+    upload_js = read_script("upload.js")
+
+    submit_listener = upload_js.split('form.addEventListener("submit", async (event) => {', 1)[1]
+    preview_fetch = submit_listener.split("const response = await fetch(previewUrl", 1)[0]
+    preview_finally = submit_listener.split("} finally {", 1)[1]
+
+    assert "window.showBusyOverlay?.({" in preview_fetch
+    assert 'message: translate("Preparing statement preview...")' in preview_fetch
+    assert "window.hideBusyOverlay?.(previewBusyToken);" in preview_finally.split("modal?.show()", 1)[0]
+
+
+def test_upload_file_picker_feedback_paints_before_native_selector():
+    """Verify file selection shows busy feedback before the native picker opens."""
+    upload_template = (TEMPLATES / "upload.html").read_text(encoding="utf-8")
+    upload_js = read_script("upload.js")
+    busy_overlay = read_script("busy-overlay.js")
+
+    file_picker_setup = upload_js.split("function setupUploadFileSelectionFeedback", 1)[1].split(
+        "function setupUploadPreview", 1
+    )[0]
+    open_helper = file_picker_setup.split("const openFilePickerAfterOverlayPaint", 1)[1].split(
+        'browseButton.addEventListener("click"', 1
+    )[0]
+    assert "data-upload-file-input" in upload_template
+    assert "data-upload-file-browse" in upload_template
+    assert "data-upload-file-name" in upload_template
+    assert "options.immediate === true" in busy_overlay
+    assert (
+        "renderBusyOverlay(token);"
+        in busy_overlay.split("options.immediate === true", 1)[1].split("busyOverlayState.showTimer", 1)[0]
+    )
+    assert 'message: translate("Opening statement...")' in file_picker_setup
+    assert "immediate: true" in file_picker_setup
+    assert "fileInput.click();" in open_helper
+    assert "window.requestAnimationFrame(() =>" in open_helper
+    assert "window.requestAnimationFrame(openPicker);" in open_helper
+    assert (
+        "openFilePickerAfterOverlayPaint();" in file_picker_setup.split('browseButton.addEventListener("click"', 1)[1]
+    )
+    assert "fileNameNode.textContent = label;" in file_picker_setup
+    assert "window.hideBusyOverlay?.(selectionBusyToken);" in file_picker_setup
+
+
+def test_transaction_action_dropdowns_escape_table_scroll_clipping():
+    """Verify row action menus can render outside short responsive table scrollers."""
+    transactions_template = (TEMPLATES / "transactions.html").read_text(encoding="utf-8")
+    action_menu = transactions_template.split('class="dropdown transaction-action-menu"', 1)[1].split(
+        "aria-label=\"{{ _('More actions') }}\"", 1
+    )[0]
+
+    assert 'data-bs-toggle="dropdown"' in action_menu
+    assert 'data-bs-boundary="viewport"' in action_menu
+    assert """data-bs-popper-config='{"strategy":"fixed"}'""" in action_menu
+
+
 def test_static_scripts_do_not_export_setup_globals():
     """Verify page setup hooks register with financeApp instead of window.setup names."""
     core = read_script("core.js")
@@ -143,6 +200,11 @@ def test_comparison_monthly_table_view_switches_export_toolbars():
     assert "tableElement.hidden = !tableSelected" in comparison_js
     assert "visualization.dataset.comparisonMonthlyView = selectedView" in comparison_js
     assert 'window.dispatchEvent(new CustomEvent("finance:layoutchange"))' in comparison_js
+    assert "function scheduleComparisonChartPaints()" in comparison_js
+    assert "comparisonChartUtils.forceResize(chart)" in comparison_js
+    assert 'window.addEventListener("finance:layoutchange", scheduleComparisonChartPaints)' in comparison_js
+    assert "queueInitialComparisonChartRender()" in comparison_js
+    assert "animation: false" in comparison_js
     assert 'toolbar.classList.add("table-export-toolbar")' in exports_js
     assert 'toolbar.classList.add("chart-export-toolbar")' in exports_js
     assert (

@@ -33,6 +33,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
+            constraints.txt
             requirements.txt
             requirements-dev.txt
 

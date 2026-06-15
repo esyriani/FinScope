@@ -58,6 +58,119 @@ function setupUploadAccountBehavior() {
     updateFromStatementType();
 }
 
+function setupUploadFileSelectionFeedback(root = document) {
+    const form = root.querySelector?.("[data-upload-form]") || document.querySelector("[data-upload-form]");
+    if (!form || form.dataset.uploadFileSelectionReady === "true") {
+        return;
+    }
+
+    const fileInput = form.querySelector("[data-upload-file-input]");
+    const browseButton = form.querySelector("[data-upload-file-browse]");
+    const fileNameNode = form.querySelector("[data-upload-file-name]");
+
+    if (!fileInput || !browseButton || !fileNameNode) {
+        return;
+    }
+
+    form.dataset.uploadFileSelectionReady = "true";
+
+    const translate = (message, variables) =>
+        window.financeTranslate ? window.financeTranslate(message, variables) : message;
+
+    let selectionBusyToken = null;
+    let hideSelectionTimer = null;
+
+    const clearHideSelectionTimer = () => {
+        if (!hideSelectionTimer) {
+            return;
+        }
+
+        window.clearTimeout(hideSelectionTimer);
+        hideSelectionTimer = null;
+    };
+
+    const selectedFileLabel = () => {
+        const files = Array.from(fileInput.files || []);
+        if (!files.length) {
+            return translate("No file selected");
+        }
+
+        return files.map((file) => file.name).join(", ");
+    };
+
+    const updateFileName = () => {
+        const label = selectedFileLabel();
+        fileNameNode.textContent = label;
+        fileNameNode.title = label;
+    };
+
+    const hideSelectionBusy = (delayMs = 350) => {
+        clearHideSelectionTimer();
+        if (!selectionBusyToken) {
+            browseButton.removeAttribute("aria-busy");
+            return;
+        }
+
+        hideSelectionTimer = window.setTimeout(
+            () => {
+                window.hideBusyOverlay?.(selectionBusyToken);
+                selectionBusyToken = null;
+                hideSelectionTimer = null;
+                browseButton.removeAttribute("aria-busy");
+            },
+            Math.max(0, delayMs)
+        );
+    };
+
+    const showSelectionBusy = () => {
+        clearHideSelectionTimer();
+        browseButton.setAttribute("aria-busy", "true");
+        if (selectionBusyToken) {
+            return;
+        }
+
+        selectionBusyToken =
+            window.showBusyOverlay?.({
+                immediate: true,
+                message: translate("Opening statement..."),
+            }) || null;
+    };
+
+    const openFilePickerAfterOverlayPaint = () => {
+        const openPicker = () => {
+            fileInput.click();
+            window.setTimeout(() => {
+                if (selectionBusyToken && document.hasFocus()) {
+                    hideSelectionBusy(0);
+                }
+            }, 1200);
+        };
+
+        window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(openPicker);
+        });
+    };
+
+    browseButton.addEventListener("click", () => {
+        showSelectionBusy();
+        openFilePickerAfterOverlayPaint();
+    });
+
+    fileInput.addEventListener("change", () => {
+        updateFileName();
+        hideSelectionBusy(500);
+    });
+
+    fileInput.addEventListener("cancel", () => hideSelectionBusy(250));
+    window.addEventListener("focus", () => {
+        if (selectionBusyToken) {
+            hideSelectionBusy(650);
+        }
+    });
+
+    updateFileName();
+}
+
 function setupUploadPreview(root = document) {
     const form = root.querySelector?.("[data-upload-form]") || document.querySelector("[data-upload-form]");
     if (!form || form.dataset.uploadPreviewReady === "true") {
@@ -211,7 +324,7 @@ function setupUploadPreview(root = document) {
 
     const updateDateChoice = () => {
         const dateFormat = currentPreview?.date_format || {};
-        const showChoice = Boolean(dateFormat.has_slash_dates);
+        const showChoice = Boolean(dateFormat.has_date_order_dates || dateFormat.has_slash_dates);
         dateChoiceNode?.classList.toggle("d-none", !showChoice);
 
         selectedDateOrder = dateFormat.effective_order || "";
@@ -227,7 +340,7 @@ function setupUploadPreview(root = document) {
             } else if (dateFormat.source === "selected") {
                 dateMessageNode.textContent = translate("Date format selected for this import.");
             } else {
-                dateMessageNode.textContent = translate("No slash-date choice is needed for this file.");
+                dateMessageNode.textContent = translate("No date-format choice is needed for this file.");
             }
         }
 
@@ -294,6 +407,12 @@ function setupUploadPreview(root = document) {
             submitButton.setAttribute("aria-busy", "true");
         }
 
+        const previewBusyToken =
+            window.showBusyOverlay?.({
+                delayMs: 0,
+                message: translate("Preparing statement preview..."),
+            }) || null;
+
         try {
             const formData = new FormData(form);
             const response = await fetch(previewUrl, {
@@ -318,6 +437,7 @@ function setupUploadPreview(root = document) {
                 confirmButton.disabled = true;
             }
         } finally {
+            window.hideBusyOverlay?.(previewBusyToken);
             if (submitButton) {
                 submitButton.disabled = false;
                 submitButton.removeAttribute("aria-busy");
@@ -328,7 +448,9 @@ function setupUploadPreview(root = document) {
 }
 
 window.financeApp?.registerInitializer("upload.account-behavior", setupUploadAccountBehavior);
+window.financeApp?.registerInitializer("upload.file-selection-feedback", setupUploadFileSelectionFeedback);
 window.financeApp?.registerInitializer("upload.preview", setupUploadPreview);
 
 setupUploadAccountBehavior();
+setupUploadFileSelectionFeedback();
 setupUploadPreview();

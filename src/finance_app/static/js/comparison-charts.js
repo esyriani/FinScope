@@ -9,6 +9,7 @@ function comparisonChartOption(chartType = "line") {
     const isBarChart = chartType === "bar";
 
     return {
+        animation: false,
         textStyle: {
             color: comparisonTheme.text,
         },
@@ -145,6 +146,7 @@ function comparisonBoxplotOption() {
     const rows = comparisonBoxplotRows();
 
     return {
+        animation: false,
         textStyle: {
             color: comparisonTheme.text,
         },
@@ -231,8 +233,50 @@ function renderComparisonBoxplotChart() {
     comparisonChartUtils.create(element, comparisonBoxplotOption(), { handlerKey: "comparisonBoxplotResizeHandler" });
 }
 
-window.financeApp?.registerInitializer("comparison.chart", renderComparisonChart);
-window.financeApp?.registerInitializer("comparison.boxplot-chart", renderComparisonBoxplotChart);
+function comparisonChartInstances() {
+    return ["comparisonChart", "comparisonBoxplotChart"]
+        .map((id) => comparisonChartUtils.element(id))
+        .filter(Boolean)
+        .map((element) => window.echarts?.getInstanceByDom(element))
+        .filter(Boolean);
+}
 
-renderComparisonChart();
-renderComparisonBoxplotChart();
+function refreshComparisonCharts() {
+    comparisonChartInstances().forEach((chart) => comparisonChartUtils.forceResize(chart));
+}
+
+function scheduleComparisonChartPaints() {
+    [0, 50, 150, 350, 750, 1250].forEach((delay) => {
+        window.setTimeout(() => window.requestAnimationFrame(refreshComparisonCharts), delay);
+    });
+}
+
+function renderComparisonCharts() {
+    renderComparisonChart();
+    renderComparisonBoxplotChart();
+    scheduleComparisonChartPaints();
+}
+
+function queueInitialComparisonChartRender() {
+    const render = () => window.requestAnimationFrame(renderComparisonCharts);
+
+    if (document.readyState === "complete") {
+        render();
+        return;
+    }
+
+    document.addEventListener("DOMContentLoaded", render, { once: true });
+    window.addEventListener("load", render, { once: true });
+}
+
+window.addEventListener("finance:layoutchange", scheduleComparisonChartPaints);
+window.addEventListener("pageshow", scheduleComparisonChartPaints);
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+        scheduleComparisonChartPaints();
+    }
+});
+
+window.financeApp?.registerInitializer("comparison.chart", renderComparisonCharts);
+
+queueInitialComparisonChartRender();

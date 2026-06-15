@@ -59,6 +59,7 @@ def test_dashboard_and_comparison_chart_helpers_are_shared():
         "tooltip",
         "baseGrid",
         "create",
+        "forceResize",
         "resize",
     ]:
         assert helper_name in chart_utils_js
@@ -71,6 +72,20 @@ def test_dashboard_and_comparison_chart_helpers_are_shared():
         assert "getComputedStyle(document.documentElement)" not in script
         assert 'window.addEventListener("resize"' not in script
         assert "new ResizeObserver" not in script
+
+
+def test_shared_chart_helper_refreshes_after_late_layout_events():
+    """Verify ECharts canvases are refreshed after tab, page, and font layout settles."""
+    chart_utils_js = (ROOT / "src" / "finance_app" / "static" / "js" / "chart-utils.js").read_text(encoding="utf-8")
+
+    assert "function financeChartCanResize(chart)" in chart_utils_js
+    assert "getBoundingClientRect()" in chart_utils_js
+    assert "refreshImmediately" in chart_utils_js
+    assert "renderer?.refresh?.()" in chart_utils_js
+    assert 'window.addEventListener("finance:layoutchange", resizeHandler)' in chart_utils_js
+    assert 'window.addEventListener("pageshow", resizeHandler)' in chart_utils_js
+    assert 'window.addEventListener("load", resizeHandler, { once: true })' in chart_utils_js
+    assert "document.fonts?.ready?.then(resizeHandler)" in chart_utils_js
 
 
 def test_dashboard_quality_panel_links_are_normal_click_targets():

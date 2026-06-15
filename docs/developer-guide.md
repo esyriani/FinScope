@@ -74,19 +74,30 @@ npm ci
 </details>
 
 `requirements-dev.txt` installs the editable package with the Python development
-extra, including pytest, Black, djlint, mypy, and Ruff. `package-lock.json`
-pins the npm formatter and linting dependencies: Prettier, ESLint, Stylelint,
-and their shared configs.
+extra, including pytest, Black, djlint, mypy, and Ruff. Python requirements
+files use [constraints.txt](../constraints.txt) to install the tested dependency
+resolution. `package-lock.json` pins the npm formatter and linting dependencies:
+Prettier, ESLint, Stylelint, and their shared configs.
 
 Python packaging and declared dependencies are configured in [pyproject.toml](../pyproject.toml). Runtime dependencies live in `[project].dependencies`; development tools live in the `dev` optional dependency extra. [requirements.txt](../requirements.txt) is a non-editable pip compatibility wrapper for normal installs, and [requirements-dev.txt](../requirements-dev.txt) is an editable wrapper for contributor installs. Do not duplicate Python dependency names in requirements files.
 
-Contributors can also install the development extra directly:
+Contributors can also install the development extra directly with the same constraints:
 
 ```powershell
-python -m pip install -e .[dev]
+python -m pip install -e .[dev] -c constraints.txt
 ```
 
-The repository does not currently maintain a Python lock file or constraints file. For stricter release reproducibility, generate and publish a constraints file from the tested environment as a deliberate release step rather than adding ad hoc pins to `pyproject.toml`.
+Update [constraints.txt](../constraints.txt) only after changing declared Python dependencies, intentionally refreshing the tested dependency resolution, or preparing a release. Refresh from a clean virtual environment so unrelated local packages are not captured:
+
+```powershell
+python -m pip install --upgrade --upgrade-strategy eager -e .[dev]
+python -m pip freeze --exclude-editable | Sort-Object > constraints.txt
+python -m pip install -r requirements-dev.txt
+python -m pip check
+.\.venv\Scripts\python.exe -B -m pytest
+```
+
+Review the generated file before committing it. Remove packages that are not part of the FinScope runtime or development dependency graph, and keep declared dependency ranges in `pyproject.toml` rather than adding direct dependency names to requirements files.
 
 Pytest, frontend, and formatter tooling also use [pytest.ini](../pytest.ini), [package.json](../package.json), [eslint.config.mjs](../eslint.config.mjs), [stylelint.config.mjs](../stylelint.config.mjs), and [.prettierrc.json](../.prettierrc.json).
 

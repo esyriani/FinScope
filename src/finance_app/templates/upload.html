@@ -136,14 +136,23 @@
             </div>
 
             <div class="col-lg-5 col-md-7">
-                <label for="statement" class="form-label">{{ _("Statement file") }}</label>
+                <label id="statement-file-label" class="form-label">{{ _("Statement file") }}</label>
                 <input
-                    class="form-control"
+                    class="visually-hidden"
                     type="file"
                     id="statement"
                     name="statement"
                     accept=".csv"
+                    tabindex="-1"
+                    aria-labelledby="statement-file-label"
+                    data-upload-file-input
                 >
+                <div class="input-group" data-upload-file-picker>
+                    <button class="btn btn-outline-secondary" type="button" aria-controls="statement" data-upload-file-browse>
+                        <i class="bi bi-folder2-open" aria-hidden="true"></i>{{ _("Browse") }}
+                    </button>
+                    <div class="form-control text-truncate" role="status" aria-live="polite" aria-atomic="true" data-upload-file-name>{{ _("No file selected") }}</div>
+                </div>
             </div>
             <div class="col-lg-3 col-md-5">
                 <label class="form-label">&nbsp;</label>

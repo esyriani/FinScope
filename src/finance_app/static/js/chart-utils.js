@@ -114,8 +114,29 @@ function financeChartElement(id, root = document) {
     return root.getElementById ? root.getElementById(id) : root.querySelector(`#${id}`);
 }
 
+function financeChartCanResize(chart) {
+    const element = chart?.getDom?.();
+    if (!element?.isConnected) return false;
+
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+}
+
+function financeChartRefresh(chart) {
+    const renderer = chart?.getZr?.();
+    renderer?.refreshImmediately?.();
+    renderer?.refresh?.();
+}
+
+function financeChartForceResize(chart) {
+    if (!financeChartCanResize(chart)) return;
+
+    chart.resize();
+    financeChartRefresh(chart);
+}
+
 function financeChartResize(chart) {
-    window.requestAnimationFrame(() => chart.resize());
+    window.requestAnimationFrame(() => financeChartForceResize(chart));
 }
 
 function financeChartObserveResize(chart, element, handlerKey = "financeChartResizeHandler") {
@@ -123,6 +144,8 @@ function financeChartObserveResize(chart, element, handlerKey = "financeChartRes
     if (existingHandler) {
         window.removeEventListener("resize", existingHandler);
         window.removeEventListener("finance:layoutchange", existingHandler);
+        window.removeEventListener("pageshow", existingHandler);
+        window.removeEventListener("load", existingHandler);
     }
     if (element.financeChartResizeObserver) {
         element.financeChartResizeObserver.disconnect();
@@ -136,6 +159,8 @@ function financeChartObserveResize(chart, element, handlerKey = "financeChartRes
     element[handlerKey] = resizeHandler;
     window.addEventListener("resize", resizeHandler);
     window.addEventListener("finance:layoutchange", resizeHandler);
+    window.addEventListener("pageshow", resizeHandler);
+    window.addEventListener("load", resizeHandler, { once: true });
 
     if (window.ResizeObserver) {
         element.financeChartResizeObserver = new ResizeObserver(() => financeChartResize(chart));
@@ -143,6 +168,9 @@ function financeChartObserveResize(chart, element, handlerKey = "financeChartRes
     }
 
     financeChartResize(chart);
+    window.requestAnimationFrame(resizeHandler);
+    window.setTimeout(resizeHandler, 120);
+    document.fonts?.ready?.then(resizeHandler).catch(() => undefined);
 }
 
 function financeChartDispose(element, handlerKey = "financeChartResizeHandler") {
@@ -157,6 +185,8 @@ function financeChartDispose(element, handlerKey = "financeChartResizeHandler") 
     if (resizeHandler) {
         window.removeEventListener("resize", resizeHandler);
         window.removeEventListener("finance:layoutchange", resizeHandler);
+        window.removeEventListener("pageshow", resizeHandler);
+        window.removeEventListener("load", resizeHandler);
         delete element[handlerKey];
     }
 
@@ -170,6 +200,7 @@ function financeChartCreate(element, option, options = {}) {
     financeChartDispose(element, handlerKey);
     const chart = echarts.init(element, null, { renderer: options.renderer || "canvas" });
     chart.setOption(option);
+    financeChartRefresh(chart);
     options.beforeObserve?.(chart);
     financeChartObserveResize(chart, element, handlerKey);
     return chart;
@@ -185,6 +216,7 @@ window.financeCharts = {
     element: financeChartElement,
     formatAxisMoney: financeChartFormatAxisMoney,
     formatMoney: financeChartFormatMoney,
+    forceResize: financeChartForceResize,
     legend: financeChartLegend,
     observeResize: financeChartObserveResize,
     palette: financeChartPalette,

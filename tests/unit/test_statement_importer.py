@@ -39,6 +39,7 @@ def test_parse_money_accepts_statement_number_formats(raw_value, expected):
     ("raw_value", "expected"),
     [
         ("2026-01-02", "2026-01-02"),
+        ("01-01-24", "2024-01-01"),
         ("13/02/2026", "2026-02-13"),
         ("2 janvier 2026", "2026-01-02"),
         ("08-May-26", "2026-05-08"),
@@ -69,6 +70,20 @@ def test_parse_date_accepts_supported_statement_formats(raw_value, expected):
         ),
         (
             ["18/05/2026", "07/05/2026"],
+            DATE_ORDER_AUTO,
+            {
+                "effective_order": DATE_ORDER_DAY_FIRST,
+                "inferred_order": DATE_ORDER_DAY_FIRST,
+                "source": "detected",
+                "requires_choice": False,
+                "month_first_evidence_count": 0,
+                "day_first_evidence_count": 1,
+                "ambiguous_count": 1,
+                "slash_date_count": 2,
+            },
+        ),
+        (
+            ["18-05-26", "07-05-26"],
             DATE_ORDER_AUTO,
             {
                 "effective_order": DATE_ORDER_DAY_FIRST,
@@ -126,7 +141,7 @@ def test_parse_date_accepts_supported_statement_formats(raw_value, expected):
     ],
 )
 def test_analyze_slash_date_order_table_driven(values, date_order, expected):
-    """Verify slash-date order inference reports evidence and selected overrides."""
+    """Verify numeric date-order inference reports evidence and selected overrides."""
     analysis = analyze_slash_date_order(values, date_order=date_order)
 
     for key, expected_value in expected.items():
@@ -143,7 +158,7 @@ def test_analyze_slash_date_order_table_driven(values, date_order, expected):
     ],
 )
 def test_parse_date_respects_selected_slash_date_order(raw_value, date_order, expected):
-    """Verify selected date-order formats drive ambiguous slash-date parsing."""
+    """Verify selected date-order formats drive ambiguous numeric date parsing."""
     assert parse_date(raw_value, date_formats=date_formats_for_order(date_order)) == expected
 
 
@@ -232,7 +247,7 @@ def test_parse_csv_transactions_keeps_day_first_slash_dates_when_inferred():
 
 
 def test_parse_csv_transactions_respects_date_order_override():
-    """Verify confirmed slash-date order overrides ambiguous CSV parsing."""
+    """Verify confirmed date order overrides ambiguous numeric CSV parsing."""
     raw_text = "05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64"
 
     month_first = parse_csv_transactions(
@@ -265,6 +280,24 @@ def test_parse_csv_transactions_parses_quoted_iso_debit_credit_without_header():
     assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
         ("2026-04-29", "PMT PRET  *326060301", 2400.00),
         ("2026-04-30", "UDEM            PAIE", -3505.37),
+    ]
+
+
+def test_parse_csv_transactions_parses_td_checking_two_digit_hyphen_dates():
+    """Verify TD-style headerless checking exports import debit and credit rows."""
+    raw_text = "\n".join(
+        [
+            "01-01-24,Recept - VFC ***F3I REN,,1440.8,19866.4",
+            "13-01-24,HYPOTHEQUE MAISON DESJARDINS,1760.38,,19776.81",
+        ]
+    )
+
+    result = parse_csv_transactions(raw_text, statement_type="bank_account")
+
+    assert result["ignored_rows"] == 0
+    assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
+        ("2024-01-01", "Recept - VFC ***F3I REN", -1440.80),
+        ("2024-01-13", "HYPOTHEQUE MAISON DESJARDINS", 1760.38),
     ]
 
 
