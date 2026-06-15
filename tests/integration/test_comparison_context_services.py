@@ -43,6 +43,14 @@ def test_comparison_context_year_and_period_metrics(app, core_conn, monkeypatch)
     assert context["selected_period_categories"] == ["Food"]
     assert context["monthly_spending"][2025][0] == 80.00
     assert context["monthly_spending"][2026][0] == 140.00
+    january_comparison = context["monthly_spending_comparison"][0]
+    assert january_comparison["month_index"] == 0
+    assert january_comparison["totals"] == {2025: 80.00, 2026: 140.00}
+    assert january_comparison["changes"][2025] is None
+    assert january_comparison["changes"][2026]["baseline_year"] == 2025
+    assert january_comparison["changes"][2026]["change"] == 60.00
+    assert january_comparison["changes"][2026]["percent_label"] == "+75.0%"
+    assert january_comparison["total"] == 220.00
     assert context["monthly_spending_statistics"] == [
         {
             "year": 2025,

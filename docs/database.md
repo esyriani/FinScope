@@ -23,27 +23,27 @@ The schema uses generated columns, foreign keys, check constraints, unique const
 
 ## Choosing a database
 
-FinScope selects the active database from a SQLAlchemy database URL. The URL can be provided in [src/finance_app/config.ini](../src/finance_app/config.ini) or with an environment variable.
+FinScope selects the active database from a SQLAlchemy database URL. The URL can be provided in root `config.ini` or with an environment variable.
 
 Database URL priority:
 
 1. `FINANCE_DATABASE_URL`, when set.
-2. `database.url` in [src/finance_app/config.ini](../src/finance_app/config.ini), when non-empty.
+2. `database.url` in root `config.ini`, when non-empty.
 3. A generated SQLite URL from the configured database path.
 
 SQLite path priority, used only when no database URL is provided:
 
 1. `FINANCE_DB_PATH`, when set.
-2. `database.path` in [src/finance_app/config.ini](../src/finance_app/config.ini), when present.
-3. `database.path` in [src/finance_app/config.example.ini](../src/finance_app/config.example.ini).
+2. `database.path` in root `config.ini`, when present.
+3. `database.path` in root [config.example.ini](../config.example.ini).
 
-Use these [src/finance_app/config.ini](../src/finance_app/config.ini) values for common local setups:
+Use these root `config.ini` values for common local setups:
 
 | Scenario | `database.url` | `database.path` |
 | --- | --- | --- |
-| Default SQLite | Leave blank | [../../runtime/finescope.db](../runtime/finescope.db) |
-| Explicit SQLite | `sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finescope.db` | [../../runtime/finescope.db](../runtime/finescope.db) |
-| MySQL | `mysql+pymysql://user:password@127.0.0.1:3306/finscope` | [../../runtime/finescope.db](../runtime/finescope.db) |
+| Default SQLite | Leave blank | [runtime/finescope.db](../runtime/finescope.db) |
+| Explicit SQLite | `sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finescope.db` | [runtime/finescope.db](../runtime/finescope.db) |
+| MySQL | `mysql+pymysql://user:password@127.0.0.1:3306/finscope` | [runtime/finescope.db](../runtime/finescope.db) |
 
 When `database.url` points to MySQL, `database.path` is not active. FinScope creates the configured MySQL database when the account has server-level `CREATE DATABASE` permission; otherwise create the empty database first, then FinScope initializes tables and seed rows inside it.
 
@@ -243,7 +243,7 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 - Credit card statements are ledger sources because they contain purchase-level detail. The card purchases count as expenses; card payment rows and matching checking-account payment rows are marked as payments/transfers so spending is not double-counted.
 - Recurring pattern overrides use nullable merchant scope. `recurring_patterns.merchant_id` plus `type` stores merchant-bound overrides when a durable merchant is known. Rows with a null merchant ID remain keyword-fuzzy and are looked up by pattern key.
 
-The default database path configured in [src/finance_app/config.example.ini](../src/finance_app/config.example.ini) is [../../runtime/finescope.db](../runtime/finescope.db). From [src/finance_app/](../src/finance_app/), this resolves to the repository-level [runtime/finescope.db](../runtime/finescope.db).
+The default database path configured in root [config.example.ini](../config.example.ini) is [runtime/finescope.db](../runtime/finescope.db), resolved relative to the repository root.
 
 
 ## Updating the schema documentation

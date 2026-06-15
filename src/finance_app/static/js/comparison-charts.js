@@ -62,6 +62,50 @@ function comparisonChartOption(chartType = "line") {
     };
 }
 
+function applyComparisonMonthlyView(view, chart) {
+    const visualization = document.querySelector("[data-comparison-monthly-visualization]");
+    const chartElement = comparisonChartUtils.element("comparisonChart");
+    const tableElement = comparisonChartUtils.element("comparisonMonthlyTable");
+    const selectedView = view === "table" || view === "bar" ? view : "line";
+    const tableSelected = selectedView === "table";
+
+    if (visualization) {
+        visualization.dataset.comparisonMonthlyView = selectedView;
+    }
+
+    if (chartElement) {
+        chartElement.hidden = tableSelected;
+    }
+
+    if (tableElement) {
+        tableElement.hidden = !tableSelected;
+    }
+
+    if (!tableSelected && chart) {
+        chart.setOption(comparisonChartOption(selectedView), true);
+        comparisonChartUtils.resize(chart);
+    }
+}
+
+function setupComparisonMonthlyView(chart) {
+    const visualization = document.querySelector("[data-comparison-monthly-visualization]");
+    const inputs = Array.from(document.querySelectorAll("input[name='comparison_chart_type']"));
+    if (!visualization || !inputs.length) return;
+
+    if (visualization.dataset.comparisonMonthlyViewReady !== "true") {
+        visualization.dataset.comparisonMonthlyViewReady = "true";
+        inputs.forEach((input) => {
+            input.addEventListener("change", () => {
+                if (!input.checked) return;
+                applyComparisonMonthlyView(input.value, chart);
+                window.dispatchEvent(new CustomEvent("finance:layoutchange"));
+            });
+        });
+    }
+
+    applyComparisonMonthlyView(inputs.find((input) => input.checked)?.value || "line", chart);
+}
+
 function comparisonBoxplotRows() {
     return (comparisonCharts.monthlySpendingStatistics || []).filter((row) => Array.isArray(row.boxplot));
 }
@@ -154,23 +198,26 @@ function comparisonBoxplotOption() {
 }
 
 function renderComparisonChart() {
-    if (!comparisonCharts.monthlySpending?.length) return;
+    if (!comparisonCharts.monthlySpending?.length) {
+        setupComparisonMonthlyView(null);
+        return;
+    }
 
     const element = comparisonChartUtils.element("comparisonChart");
     if (!element) return;
-    if (element.dataset.comparisonChartReady === "true") return;
-    element.dataset.comparisonChartReady = "true";
+    if (element.dataset.comparisonChartReady === "true") {
+        setupComparisonMonthlyView(window.echarts?.getInstanceByDom(element));
+        return;
+    }
 
     const chart = comparisonChartUtils.create(element, comparisonChartOption());
-    if (!chart) return;
+    setupComparisonMonthlyView(chart);
+    if (!chart) {
+        element.dataset.comparisonChartReady = "true";
+        return;
+    }
 
-    document.querySelectorAll("input[name='comparison_chart_type']").forEach((input) => {
-        input.addEventListener("change", () => {
-            if (!input.checked) return;
-            chart.setOption(comparisonChartOption(input.value), true);
-            comparisonChartUtils.resize(chart);
-        });
-    });
+    element.dataset.comparisonChartReady = "true";
 }
 
 function renderComparisonBoxplotChart() {

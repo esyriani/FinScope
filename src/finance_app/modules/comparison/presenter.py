@@ -60,6 +60,25 @@ def build_monthly_spending_statistics(years: Any, rows: Any) -> Any:
     return result
 
 
+def build_monthly_spending_comparison(years: Any, monthly_spending: Any, baseline_year: Any = None) -> Any:
+    """Build monthly table rows with per-year totals and year deltas."""
+    result = []
+    for month_index in range(12):
+        totals = {
+            year: rounded_money_float((monthly_spending.get(year) or [0 for _ in range(12)])[month_index])
+            for year in years
+        }
+        result.append(
+            {
+                "month_index": month_index,
+                "totals": totals,
+                "changes": build_year_changes(years, totals, baseline_year),
+                "total": rounded_money_float(sum(totals.values())),
+            }
+        )
+    return result
+
+
 def build_category_comparison(years: Any, rows: Any, baseline_year: Any = None) -> Any:
     """Build category comparison."""
     categories: dict[Any, dict[Any, Any]] = {}

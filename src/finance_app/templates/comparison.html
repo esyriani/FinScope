@@ -256,13 +256,13 @@
             </div>
 
             <div class="dashboard-grid mt-3">
-                <section class="chart-card dashboard-wide" data-chart-export-scope>
+                <section class="chart-card dashboard-wide" data-chart-export-scope data-table-export-scope data-comparison-monthly-visualization data-comparison-monthly-view="line">
                     <div class="section-title">
                         <div>
                             <h5 class="card-title mb-1">{{ _("Monthly {analysis} by year", analysis=_(analysis_noun)) }}</h5>
                             <div class="text-muted small">{{ _("Compare monthly {analysis} patterns across selected years.", analysis=_(analysis_noun)) }}</div>
                         </div>
-                        <div class="chart-type-toggle" role="group" aria-label="{{ _('Monthly {analysis} chart type', analysis=_(analysis_noun)) }}">
+                        <div class="chart-type-toggle" role="group" aria-label="{{ _('Monthly {analysis} visualization', analysis=_(analysis_noun)) }}">
                             <input class="btn-check" type="radio" name="comparison_chart_type" id="comparison_chart_line" value="line" autocomplete="off" checked>
                             <label class="chart-type-option" for="comparison_chart_line">
                                 <i class="bi bi-graph-up" aria-hidden="true"></i>
@@ -274,9 +274,61 @@
                                 <i class="bi bi-bar-chart" aria-hidden="true"></i>
                                 <span>{{ _("Bar") }}</span>
                             </label>
+
+                            <input class="btn-check" type="radio" name="comparison_chart_type" id="comparison_chart_table" value="table" autocomplete="off">
+                            <label class="chart-type-option" for="comparison_chart_table">
+                                <i class="bi bi-table" aria-hidden="true"></i>
+                                <span>{{ _("Table") }}</span>
+                            </label>
                         </div>
                     </div>
-                    <div id="comparisonChart" class="chart-viewport" data-chart-export></div>
+                    <div id="comparisonChart" class="chart-viewport" data-chart-export data-export-title="{{ _('Monthly {analysis} by year', analysis=_(analysis_noun)) }}"></div>
+                    <div id="comparisonMonthlyTable" class="comparison-monthly-table table-responsive" hidden>
+                        <table id="comparisonMonthlyByYearTable" class="table table-hover align-middle mb-0" data-export-title="{{ _('Monthly {analysis} by year', analysis=_(analysis_noun)) }}">
+                            <thead>
+                                <tr>
+                                    <th>{{ _("Month") }}</th>
+                                    {% for year in selected_years %}
+                                        <th class="text-end">{{ year }}</th>
+                                    {% endfor %}
+                                    <th class="text-end">{{ _("Total") }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in monthly_spending_comparison %}
+                                <tr>
+                                    <td>{{ month_labels[row["month_index"]] }}</td>
+                                    {% for year in selected_years %}
+                                        {% set change = row["changes"][year] %}
+                                        {% set previous_year = year - 1 %}
+                                        <td class="text-end text-nowrap">
+                                            <span>{{ row["totals"][year] | moneyfmt }}</span>
+                                            {% if change %}
+                                                <span
+                                                    class="small ms-2 {% if change.direction == 'up' %}text-danger{% elif change.direction == 'down' %}text-success{% else %}text-muted{% endif %}"
+                                                    title="{{ _('Compared with {year}', year=change.baseline_year) }}"
+                                                >
+                                                    {{ change.amount_label }} | {{ _(change.percent_label) }}
+                                                </span>
+                                            {% else %}
+                                                <span class="small ms-2 text-muted">
+                                                    {% if selected_baseline_year == year %}
+                                                        {{ _("baseline") }}
+                                                    {% elif not selected_baseline_year and previous_year not in selected_years %}
+                                                        {{ _("baseline") }}
+                                                    {% else %}
+                                                        {{ _("n/a") }}
+                                                    {% endif %}
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                    <td class="text-end">{{ row["total"] | moneyfmt }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
 
                 <section class="chart-card dashboard-wide" data-chart-export-scope>

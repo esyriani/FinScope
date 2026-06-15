@@ -87,7 +87,7 @@ Run on another port:
 
 ```powershell
 $env:FINANCE_PORT = "5001"
-.\.venv\Scripts\python.exe -B src\finance_app\app.py
+finscope
 ```
 
 </details>
@@ -97,7 +97,7 @@ $env:FINANCE_PORT = "5001"
 
 ```bat
 set "FINANCE_PORT=5001"
-.venv\Scripts\python.exe -B src\finance_app\app.py
+finscope
 ```
 
 </details>
@@ -107,7 +107,7 @@ set "FINANCE_PORT=5001"
 
 ```bash
 export FINANCE_PORT=5001
-.venv/bin/python -B src/finance_app/app.py
+finscope
 ```
 
 </details>
@@ -117,7 +117,7 @@ export FINANCE_PORT=5001
 
 ```bash
 export FINANCE_PORT=5001
-.venv/bin/python -B src/finance_app/app.py
+finscope
 ```
 
 </details>

@@ -16,7 +16,7 @@ This guide covers repository onboarding and development workflow. Detailed archi
 ## Repository layout
 
 - [src/finance_app/__init__.py](../src/finance_app/__init__.py): Flask application factory.
-- [src/finance_app/app.py](../src/finance_app/app.py): application entry point.
+- [src/finance_app/app.py](../src/finance_app/app.py): application entry point used by the `finscope` console command.
 - [src/finance_app/core/](../src/finance_app/core/): configuration, constants, SQLAlchemy query helpers, CSRF, filters, and i18n helpers.
 - [src/finance_app/database/](../src/finance_app/database/): SQLAlchemy lifecycle, metadata, schema validation, and initialization seeds.
 - [src/finance_app/background/](../src/finance_app/background/): in-memory background job runner and undo orchestration.
@@ -24,6 +24,7 @@ This guide covers repository onboarding and development workflow. Detailed archi
 - [src/finance_app/templates/](../src/finance_app/templates/): Jinja templates.
 - [src/finance_app/static/](../src/finance_app/static/): CSS, JavaScript, image assets, and vendored browser libraries.
 - [src/finance_app/translations/](../src/finance_app/translations/): JSON translation catalogs for user interface text.
+- [config.example.ini](../config.example.ini): sample root runtime configuration copied to ignored `config.ini` for local runs.
 - [tests/](../tests/): unit, integration, route, smoke, and shared support helpers.
 - [docs/](./): project documentation.
 - [runtime/](../runtime/): local runtime data, including the default SQLite database.
@@ -72,12 +73,22 @@ npm ci
 
 </details>
 
-`requirements-dev.txt` installs the runtime/test dependencies from
-`requirements.txt` plus Black, djlint, mypy, and Ruff. `package-lock.json`
+`requirements-dev.txt` installs the editable package with the Python development
+extra, including pytest, Black, djlint, mypy, and Ruff. `package-lock.json`
 pins the npm formatter and linting dependencies: Prettier, ESLint, Stylelint,
 and their shared configs.
 
-Developer tooling is configured in [pyproject.toml](../pyproject.toml), [pytest.ini](../pytest.ini), [package.json](../package.json), [eslint.config.mjs](../eslint.config.mjs), [stylelint.config.mjs](../stylelint.config.mjs), and [.prettierrc.json](../.prettierrc.json).
+Python packaging and declared dependencies are configured in [pyproject.toml](../pyproject.toml). Runtime dependencies live in `[project].dependencies`; development tools live in the `dev` optional dependency extra. [requirements.txt](../requirements.txt) is a non-editable pip compatibility wrapper for normal installs, and [requirements-dev.txt](../requirements-dev.txt) is an editable wrapper for contributor installs. Do not duplicate Python dependency names in requirements files.
+
+Contributors can also install the development extra directly:
+
+```powershell
+python -m pip install -e .[dev]
+```
+
+The repository does not currently maintain a Python lock file or constraints file. For stricter release reproducibility, generate and publish a constraints file from the tested environment as a deliberate release step rather than adding ad hoc pins to `pyproject.toml`.
+
+Pytest, frontend, and formatter tooling also use [pytest.ini](../pytest.ini), [package.json](../package.json), [eslint.config.mjs](../eslint.config.mjs), [stylelint.config.mjs](../stylelint.config.mjs), and [.prettierrc.json](../.prettierrc.json).
 
 ## Quality checks
 

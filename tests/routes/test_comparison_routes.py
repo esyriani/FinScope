@@ -88,6 +88,63 @@ def test_comparison_route_renders_monthly_spending_distribution(client, core_con
     )
 
 
+def test_comparison_route_renders_monthly_spending_table_option(client, core_conn, monkeypatch):
+    """Verify yearly monthly totals can be viewed as an exportable table."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, 'Food', 'rule', :p3)
+        """),
+        [
+            {"p0": "2025-01-02", "p1": "Prior grocery", "p2": 50.00, "p3": "comparison-table-2025-jan"},
+            {"p0": "2026-01-02", "p1": "Current grocery", "p2": 120.00, "p3": "comparison-table-2026-jan"},
+            {"p0": "2026-02-02", "p1": "Current grocery", "p2": 80.00, "p3": "comparison-table-2026-feb"},
+        ],
+    )
+    core_conn.commit()
+
+    response = client.get("/comparison?comparison_view=year&years=2025&years=2026&baseline_year=2025")
+
+    assert response.status_code == 200
+    assert_has_element(
+        response,
+        "section",
+        attrs={
+            "data-chart-export-scope": True,
+            "data-table-export-scope": True,
+            "data-comparison-monthly-visualization": True,
+            "data-comparison-monthly-view": "line",
+        },
+    )
+    assert_has_element(
+        response,
+        "div",
+        attrs={"role": "group", "aria-label": "Monthly spending visualization"},
+    )
+    assert_has_element(response, "input", attrs={"id": "comparison_chart_table", "value": "table"})
+    assert_has_element(response, "label", attrs={"for": "comparison_chart_table"}, text="Table")
+    assert_has_element(
+        response,
+        "div",
+        attrs={
+            "id": "comparisonChart",
+            "data-chart-export": True,
+            "data-export-title": "Monthly spending by year",
+        },
+    )
+    assert_has_element(response, "div", attrs={"id": "comparisonMonthlyTable", "hidden": True})
+    assert_has_element(
+        response,
+        "table",
+        attrs={
+            "id": "comparisonMonthlyByYearTable",
+            "data-export-title": "Monthly spending by year",
+        },
+        text="Jan 50.00 $ baseline 120.00 $ +70.00 $ | +140.0% 170.00 $",
+    )
+
+
 def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypatch):
     """Verify comparison separates period changes from yearly trends with tabs."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)

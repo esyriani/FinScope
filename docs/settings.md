@@ -2,7 +2,7 @@
 
 Settings stores runtime preferences in the active database. General settings are personal to each signed-in user. Owner-only settings control shared behavior for the deployment and are saved on the owner account so background jobs and non-request workflows can resolve the same values.
 
-Initial values come from the `[setting_defaults]` entries in `src/finance_app/config.ini`, environment variables, or built-in defaults when a setting has not been saved yet. `src/finance_app/config.example.ini` lists a seed value for every Settings-page parameter. Changing configuration defaults later does not overwrite settings already stored in the database; use the Settings page to change saved runtime behavior.
+Initial values come from the `[setting_defaults]` entries in root `config.ini`, environment variables, or built-in defaults when a setting has not been saved yet. Root [config.example.ini](../config.example.ini) lists a seed value for every Settings-page parameter. Changing configuration defaults later does not overwrite settings already stored in the database; use the Settings page to change saved runtime behavior.
 
 See [Authentication and authorization](authentication.md#settings-permissions) for role-specific access rules.
 

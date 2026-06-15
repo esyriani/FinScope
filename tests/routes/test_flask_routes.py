@@ -655,7 +655,7 @@ def test_comparison_route_renders_ranked_anomaly_insights(client, core_conn, mon
 
 
 def test_comparison_route_renders_year_chart_type_toggle(client, core_conn):
-    """Verify the year comparison chart exposes line and bar display modes."""
+    """Verify the year comparison chart exposes line, bar, and table display modes."""
     core_conn.execute(
         text("""
         INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
@@ -671,8 +671,8 @@ def test_comparison_route_renders_year_chart_type_toggle(client, core_conn):
     response = client.get("/comparison")
 
     assert response.status_code == 200
-    assert_markup(response, "comparison_chart_line", "comparison_chart_bar")
-    assert_has_element(response, "div", attrs={"role": "group", "aria-label": "Monthly spending chart type"})
+    assert_markup(response, "comparison_chart_line", "comparison_chart_bar", "comparison_chart_table")
+    assert_has_element(response, "div", attrs={"role": "group", "aria-label": "Monthly spending visualization"})
     assert_no_asset_reference(response, "cdn.jsdelivr.net")
     assert_no_asset_reference(response, "js/comparison-charts.js?v=40")
     assert_asset_reference(response, r"/static/js/comparison\.js\?v=[0-9a-f]{12}")

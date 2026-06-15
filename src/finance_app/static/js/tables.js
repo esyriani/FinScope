@@ -222,6 +222,89 @@ function transactionBatchIds(table, rowCheckboxes) {
     return rowCheckboxes.map((checkbox) => String(checkbox.value));
 }
 
+const filterPanelHeaderInteractiveSelector = [
+    "a",
+    "button",
+    "input",
+    "select",
+    "textarea",
+    "label",
+    "summary",
+    "[role='button']",
+    "[data-bs-toggle]",
+].join(", ");
+
+function collapseTargetForToggle(toggle) {
+    const targetSelector = toggle.dataset.filterPanelTarget || toggle.getAttribute("data-bs-target") || "";
+    return targetSelector ? document.querySelector(targetSelector) : null;
+}
+
+function filterPanelHeadingToggles(target) {
+    if (!target?.id) return [];
+    return Array.from(document.querySelectorAll("[data-filter-panel-heading-toggle]")).filter(
+        (heading) => heading.getAttribute("aria-controls") === target.id
+    );
+}
+
+function setFilterPanelHeadingExpanded(target, expanded) {
+    filterPanelHeadingToggles(target).forEach((heading) => {
+        heading.setAttribute("aria-expanded", expanded ? "true" : "false");
+    });
+}
+
+function toggleFilterPanelTarget(target) {
+    if (!target) return;
+
+    if (window.bootstrap?.Collapse) {
+        window.bootstrap.Collapse.getOrCreateInstance(target, { toggle: false }).toggle();
+        return;
+    }
+
+    target.classList.toggle("show");
+    setFilterPanelHeadingExpanded(target, target.classList.contains("show"));
+}
+
+function setupFilterPanelHeaderToggles(root = document) {
+    root.querySelectorAll("[data-filter-panel-header-toggle]").forEach((header) => {
+        if (header.dataset.filterPanelHeaderReady === "true") {
+            return;
+        }
+
+        const target = collapseTargetForToggle(header);
+        if (!target) return;
+
+        header.dataset.filterPanelHeaderReady = "true";
+        header.addEventListener("click", (event) => {
+            const headingToggle = event.target.closest("[data-filter-panel-heading-toggle]");
+            const interactiveElement = event.target.closest(filterPanelHeaderInteractiveSelector);
+            if (interactiveElement && !headingToggle?.contains(interactiveElement)) {
+                return;
+            }
+
+            toggleFilterPanelTarget(target);
+        });
+    });
+
+    root.querySelectorAll("[data-filter-panel-heading-toggle]").forEach((heading) => {
+        if (heading.dataset.filterPanelHeadingReady === "true") {
+            return;
+        }
+
+        const target = collapseTargetForToggle(heading);
+        if (!target) return;
+
+        heading.dataset.filterPanelHeadingReady = "true";
+        heading.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") {
+                return;
+            }
+
+            event.preventDefault();
+            toggleFilterPanelTarget(target);
+        });
+    });
+}
+
 function setupCollapseToggleLabels(root = document) {
     root.querySelectorAll("[data-collapse-label-toggle]").forEach((button) => {
         if (button.dataset.collapseLabelReady === "true") {
@@ -238,6 +321,7 @@ function setupCollapseToggleLabels(root = document) {
 
         function setExpanded(expanded) {
             button.setAttribute("aria-expanded", expanded ? "true" : "false");
+            setFilterPanelHeadingExpanded(target, expanded);
             if (label) {
                 label.textContent = expanded ? hideLabel : showLabel;
             }
@@ -301,6 +385,7 @@ function openAuditSectionFromLocation(root = document) {
 
 setupTableRowInteractions();
 setupTransactionBatchActions();
+setupFilterPanelHeaderToggles();
 setupCollapseToggleLabels();
 setupAuditSectionLinks();
 openAuditSectionFromLocation();
@@ -537,6 +622,7 @@ setupPaginatedTables();
 
 window.financeApp?.registerInitializer("tables.row-interactions", setupTableRowInteractions);
 window.financeApp?.registerInitializer("tables.transaction-batch-actions", setupTransactionBatchActions);
+window.financeApp?.registerInitializer("tables.filter-panel-header-toggles", setupFilterPanelHeaderToggles);
 window.financeApp?.registerInitializer("tables.collapse-toggle-labels", setupCollapseToggleLabels);
 window.financeApp?.registerInitializer("tables.audit-section-links", setupAuditSectionLinks);
 window.financeApp?.registerInitializer("tables.open-audit-section", openAuditSectionFromLocation);

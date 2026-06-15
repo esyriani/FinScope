@@ -16,7 +16,7 @@
     border-radius: 8px;
     display: inline-grid;
     gap: 0.2rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     padding: 0.2rem;
 }
 
@@ -52,6 +52,15 @@
 
 .btn-check:focus-visible + .chart-type-option {
     box-shadow: var(--focus-shadow);
+}
+
+.comparison-monthly-table {
+    margin-top: 1rem;
+}
+
+[data-comparison-monthly-visualization]:not([data-comparison-monthly-view="table"]) .table-export-toolbar,
+[data-comparison-monthly-visualization][data-comparison-monthly-view="table"] .chart-export-toolbar {
+    display: none;
 }
 
 .insight-grid {

@@ -31,9 +31,17 @@
 
 {% macro collapsible_filter_panel(target_id, summary, expanded=false) %}
 <section class="card mb-4 filter-panel" aria-labelledby="{{ target_id }}-heading">
-    <div class="card-body border-bottom filter-panel-header">
+    <div class="card-body border-bottom filter-panel-header" data-filter-panel-header-toggle data-filter-panel-target="#{{ target_id }}">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-            <div class="filter-panel-heading">
+            <div
+                class="filter-panel-heading"
+                role="button"
+                tabindex="0"
+                aria-expanded="{{ 'true' if expanded else 'false' }}"
+                aria-controls="{{ target_id }}"
+                data-filter-panel-heading-toggle
+                data-filter-panel-target="#{{ target_id }}"
+            >
                 <h5 id="{{ target_id }}-heading" class="mb-1">{{ _("Filters") }}</h5>
                 <div class="text-muted small filter-panel-summary">{{ summary }}</div>
             </div>
@@ -50,9 +58,17 @@
 
 {% macro collapsible_filter_block(target_id, summary, expanded=false, block_class="page-block", header_class="page-block-header", section_id="") %}
 <section{% if section_id %} id="{{ section_id }}"{% endif %} class="{{ block_class }} filter-panel" aria-labelledby="{{ target_id }}-heading">
-    <div class="{{ header_class }} filter-panel-header">
+    <div class="{{ header_class }} filter-panel-header" data-filter-panel-header-toggle data-filter-panel-target="#{{ target_id }}">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-            <div class="filter-panel-heading">
+            <div
+                class="filter-panel-heading"
+                role="button"
+                tabindex="0"
+                aria-expanded="{{ 'true' if expanded else 'false' }}"
+                aria-controls="{{ target_id }}"
+                data-filter-panel-heading-toggle
+                data-filter-panel-target="#{{ target_id }}"
+            >
                 <h6 id="{{ target_id }}-heading" class="card-title mb-1">{{ _("Filters") }}</h6>
                 <div class="text-muted small filter-panel-summary">{{ summary }}</div>
             </div>

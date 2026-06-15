@@ -546,6 +546,7 @@ function setupTableExports(root = document) {
         const filenameBase =
             table.dataset.exportFilenameBase || `${slugifyExportName(title)}-${index + 1}-${exportDateStamp()}`;
         const toolbar = createExportToolbar();
+        toolbar.classList.add("table-export-toolbar");
 
         toolbar.appendChild(
             createExportButton(financeTranslate("CSV"), "download", () => exportTableCsv(table, filenameBase))
@@ -626,6 +627,7 @@ function setupChartExports(root = document) {
         const title = elementExportTitle(container, financeTranslate("Chart {number}", { number: index + 1 }));
         const filenameBase = `${slugifyExportName(title)}-${index + 1}-${exportDateStamp()}`;
         const toolbar = createExportToolbar();
+        toolbar.classList.add("chart-export-toolbar");
 
         toolbar.appendChild(createExportButton("PNG", "image", () => exportEChartPng(container, filenameBase)));
         toolbar.appendChild(createExpandButton(title, () => expandChart(container, title)));
@@ -640,6 +642,7 @@ function setupChartExports(root = document) {
         const title = elementExportTitle(canvas, financeTranslate("Chart {number}", { number: index + 1 }));
         const filenameBase = `${slugifyExportName(title)}-${index + 1}-${exportDateStamp()}`;
         const toolbar = createExportToolbar();
+        toolbar.classList.add("chart-export-toolbar");
 
         toolbar.appendChild(createExportButton("PNG", "image", () => exportCanvasPng(canvas, filenameBase)));
         toolbar.appendChild(createExpandButton(title, () => expandChart(canvas, title)));

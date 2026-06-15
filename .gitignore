@@ -3,6 +3,9 @@
 node_modules/
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+dist/
 .coverage
 npm-debug.log*
 coverage.xml
@@ -13,7 +16,7 @@ htmlcov/
 *.db
 *.log
 
-src/finance_app/config.ini
+config.ini
 src/finance_app/*.db
 src/finance_app/db_backups/
 src/finance_app/uploads/

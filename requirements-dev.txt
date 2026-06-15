@@ -1,9 +1,1 @@
--r requirements.txt
-
-pytest
-pytest-cov
-pytest-xdist
-black
-djlint
-mypy
-ruff
+-e .[dev]

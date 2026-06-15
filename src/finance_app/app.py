@@ -15,7 +15,8 @@ from finance_app.database.connection import init_db  # noqa: E402
 app = create_app()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Initialize storage and run the local FinScope development server."""
     init_db()
     app.run(
         host=settings.server_host,
@@ -23,3 +24,7 @@ if __name__ == "__main__":
         debug=settings.server_debug,
         use_reloader=False,
     )
+
+
+if __name__ == "__main__":
+    main()

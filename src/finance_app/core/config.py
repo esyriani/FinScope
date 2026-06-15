@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from finance_app.core.constants import BASE_DIR
+from finance_app.core.constants import PROJECT_DIR
 
-CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(BASE_DIR) / "config.ini"))
-EXAMPLE_CONFIG_PATH = Path(BASE_DIR) / "config.example.ini"
+CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(PROJECT_DIR) / "config.ini"))
+EXAMPLE_CONFIG_PATH = Path(PROJECT_DIR) / "config.example.ini"
 DEVELOPMENT_SECRET_KEY = "dev-secret-key"
 LOCAL_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
@@ -371,13 +371,13 @@ def parse_non_negative_float(value: object, fallback: float) -> float:
 
 
 def resolve_path(value: str | Path) -> Path:
-    """Resolve path."""
+    """Resolve a filesystem path relative to the project root."""
     path = Path(value).expanduser()
 
     if path.is_absolute():
         return path
 
-    return Path(BASE_DIR) / path
+    return Path(PROJECT_DIR) / path
 
 
 settings = load_settings()

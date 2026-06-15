@@ -128,6 +128,33 @@ def test_comparison_insight_carousel_uses_responsive_three_card_grid():
     assert "grid-template-columns: 1fr;" in comparison_css
 
 
+def test_comparison_monthly_table_view_switches_export_toolbars():
+    """Verify the monthly yearly comparison can switch from chart PNG export to table export."""
+    comparison_template = (TEMPLATES / "comparison.html").read_text(encoding="utf-8")
+    comparison_js = read_script("comparison-charts.js")
+    comparison_css = read_style("comparison.css")
+    exports_js = read_script("exports.js")
+
+    assert 'id="comparison_chart_table" value="table"' in comparison_template
+    assert "data-comparison-monthly-visualization" in comparison_template
+    assert 'id="comparisonMonthlyByYearTable"' in comparison_template
+    assert "monthly_spending_comparison" in comparison_template
+    assert "chartElement.hidden = tableSelected" in comparison_js
+    assert "tableElement.hidden = !tableSelected" in comparison_js
+    assert "visualization.dataset.comparisonMonthlyView = selectedView" in comparison_js
+    assert 'window.dispatchEvent(new CustomEvent("finance:layoutchange"))' in comparison_js
+    assert 'toolbar.classList.add("table-export-toolbar")' in exports_js
+    assert 'toolbar.classList.add("chart-export-toolbar")' in exports_js
+    assert (
+        '[data-comparison-monthly-visualization]:not([data-comparison-monthly-view="table"]) .table-export-toolbar'
+        in comparison_css
+    )
+    assert (
+        '[data-comparison-monthly-visualization][data-comparison-monthly-view="table"] .chart-export-toolbar'
+        in comparison_css
+    )
+
+
 def test_tag_multiselect_summarizes_preset_selection():
     """Verify preset category selections render as one compact summary tag."""
     tag_multiselect_js = read_script("tag-multiselect.js")
@@ -150,15 +177,28 @@ def test_scrollable_modals_fit_content_height():
 def test_filter_panels_use_shared_collapsible_summary_macros():
     """Verify page filters collapse by default and reuse the shared toggle markup."""
     collapsible_template = (TEMPLATES / "_collapsible.html").read_text(encoding="utf-8")
+    tables_js = read_script("tables.js")
     tables_css = read_style("tables.css")
 
     assert "macro collapsible_filter_panel" in collapsible_template
     assert "macro collapsible_filter_block" in collapsible_template
     assert "data-collapse-label-toggle" in collapsible_template
+    assert "data-filter-panel-header-toggle" in collapsible_template
+    assert "data-filter-panel-heading-toggle" in collapsible_template
+    assert 'role="button"' in collapsible_template
+    assert 'tabindex="0"' in collapsible_template
     assert '"Show filters", "Hide filters"' in collapsible_template
     assert 'class="collapse{% if expanded %} show{% endif %}"' in collapsible_template
     assert "filter-panel-summary" in collapsible_template
+    assert "function setupFilterPanelHeaderToggles" in tables_js
+    assert "filterPanelHeaderInteractiveSelector" in tables_js
+    assert "toggleFilterPanelTarget(target)" in tables_js
+    assert 'event.key !== "Enter" && event.key !== " "' in tables_js
+    assert 'registerInitializer("tables.filter-panel-header-toggles"' in tables_js
+    assert "setFilterPanelHeadingExpanded(target, expanded)" in tables_js
     assert ".filter-panel-summary" in tables_css
+    assert ".filter-panel-header[data-filter-panel-header-toggle]" in tables_css
+    assert '.filter-panel-heading[role="button"]:focus-visible' in tables_css
 
     panel_templates = [
         "dashboard.html",

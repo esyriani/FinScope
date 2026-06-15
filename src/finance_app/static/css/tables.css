@@ -87,7 +87,17 @@
 }
 
 .filter-panel-heading {
+    border-radius: 6px;
     min-width: 0;
+}
+
+.filter-panel-heading[role="button"]:focus-visible {
+    box-shadow: var(--focus-shadow);
+    outline: none;
+}
+
+.filter-panel-header[data-filter-panel-header-toggle] {
+    cursor: pointer;
 }
 
 .filter-panel-summary {
