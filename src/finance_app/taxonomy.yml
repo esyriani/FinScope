@@ -1,7 +1,7 @@
 categories:
   - name: Income
     description: Ordinary money received by the household, excluding rental-property cash flow, refunds, reimbursements, and account transfers.
-    instruction: Use for clear household income such as salary, payroll deposits, benefits, pensions, investment income, and other income credits. Do not use for rental-property transactions, refunds, reimbursements, internal transfers, account adjustments, cash withdrawals, or credit card payments. Use "Rental" for rental-property income or expenses. Use "Transfers" for refunds, reimbursements, and balance movements.
+    instruction: Use for clear household income such as salary, payroll deposits, benefits, pensions, investment income, and other income credits. Do not use for rental-property transactions, refunds, reimbursements, internal transfers, account adjustments, cash withdrawals, or credit card payments. Use "Rental" for rental-property income or expenses. Use "Reimbursement" for credits that repay expenses the user paid upfront. Use "Transfers" for balance movements and account transfers.
 
   - name: Housing
     description: Costs related to the household's primary residence, excluding utilities and income-generating rental properties.
@@ -49,7 +49,7 @@ categories:
 
   - name: Administrative
     description: Fees, interest, taxes, debt payments, legal, accounting, government, permits, licenses, and administrative expenses.
-    instruction: Use for bank fees, service fees, interest charges, credit card fees, loan payments, tax payments, accounting, legal services, government fees, permits, licenses, and other administrative charges. Do not use for account transfers, credit card payments, refunds, or reimbursements that are only movements of money; use "Transfers" for those. Use "Rental" instead when the administrative expense is clearly tied to an income-generating rental property.
+    instruction: Use for bank fees, service fees, interest charges, credit card fees, loan payments, tax payments, accounting, legal services, government fees, permits, licenses, and other administrative charges. Do not use for account transfers, credit card payments, returned-purchase refunds, or reimbursements that are only movements of money. Use "Reimbursement" for credits that repay expenses the user paid upfront, and "Transfers" for account movements. Use "Rental" instead when the administrative expense is clearly tied to an income-generating rental property.
 
 tags:
   - name: Reimbursable
@@ -94,7 +94,7 @@ tags:
 
   - name: Insurance
     description: Marks insurance premiums, insurance reimbursements, or insurance-related administrative transactions.
-    instruction: Use for health, vehicle, home, rental property, travel, life, or other insurance-related transactions. This tag can apply across Health, Transportation, Housing, Rental, Travel, Administrative, or Transfers when the insurance context is clear.
+    instruction: Use for health, vehicle, home, rental property, travel, life, or other insurance-related transactions. This tag can apply across Health, Transportation, Housing, Rental, Travel, Administrative, Reimbursement, or Transfers when the insurance context is clear.
 
   - name: Donation
     description: Marks charitable, nonprofit, community, religious, school, association, or fundraising contributions.
@@ -114,4 +114,4 @@ tags:
   
   - name: Judo
     description: Marks transactions related to judo activities, including courses, competitions, coaching, refereeing, travel, transportation, equipment, reimbursements, per diems, and judo-related income.
-    instruction: Use when the transaction is clearly related to judo, regardless of category. This tag can apply to expenses such as courses, competition fees, travel, local transportation, meals during events, equipment, and administrative fees, as well as incoming payments such as coaching salary, refereeing payments, reimbursements, and per diems. For reimbursements or per diems that offset expenses, usually use the "Transfers" category with this tag. For coaching salary or compensation, usually use the "Income" category with this tag. Do not use this tag for general sports, fitness, or travel transactions unless the judo connection is clear.
+    instruction: Use when the transaction is clearly related to judo, regardless of category. This tag can apply to expenses such as courses, competition fees, travel, local transportation, meals during events, equipment, and administrative fees, as well as incoming payments such as coaching salary, refereeing payments, reimbursements, and per diems. For reimbursements or per diems that offset expenses, usually use the "Reimbursement" category with this tag. For coaching salary or compensation, usually use the "Income" category with this tag. Do not use this tag for general sports, fitness, or travel transactions unless the judo connection is clear.

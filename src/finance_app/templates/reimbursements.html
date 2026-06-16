@@ -1,0 +1,615 @@
+{% set page_stylesheets = ["css/home-dashboard.css", "css/tables.css", "css/page-tabs.css", "css/reimbursements.css"] %}
+{% set page_scripts = ["js/tables.js", "js/reimbursements.js"] %}
+{% extends "base.html" %}
+
+{% macro amount_fact(label, value, tone="neutral") %}
+    <div class="reimbursement-amount-fact reimbursement-amount-{{ tone }}">
+        <span>{{ _(label) }}</span>
+        <strong>{{ value|moneyfmt }}</strong>
+    </div>
+{% endmacro %}
+
+{% macro sort_header(column, label, type="text", header_class="") %}
+    <th{% if header_class %} class="{{ header_class }}"{% endif %}>
+        <button class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %}" type="button" data-sort-column="{{ column }}" data-sort-type="{{ type }}">
+            <span>{{ _(label) }}</span>
+        </button>
+    </th>
+{% endmacro %}
+
+{% macro progress_meter(percent, label) %}
+    <div class="reimbursement-progress">
+        <div class="reimbursement-progress-label">{{ _("{percent}% complete", percent=percent) }}</div>
+        <div
+            class="progress reimbursement-progress-track"
+            role="progressbar"
+            aria-label="{{ _(label) }}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="{{ percent }}"
+        >
+            <div class="progress-bar" style="width: {{ percent }}%"></div>
+        </div>
+    </div>
+{% endmacro %}
+
+{% block content %}
+{% set table_page_size = table_page_size | default(50) %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Reimbursements") }}</h2>
+        <p class="text-muted mb-0">{{ _("Match received reimbursements to expenses paid upfront.") }}</p>
+    </div>
+</div>
+
+<div id="reimbursements-page" data-ajax-refresh-target="reimbursements-page">
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">
+                {{ _(message) }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<section class="mb-4 reimbursement-summary" aria-label="{{ _('Reimbursement summary') }}">
+    <div class="metric-grid">
+        <div class="metric-card reimbursement-summary-card reimbursement-summary-received">
+            <div class="metric-label">{{ _("Reimbursements received") }}</div>
+            <div class="metric-value">{{ summary.reimbursement_count }}</div>
+            <div class="metric-detail">{{ summary.total_reimbursed|moneyfmt }}</div>
+        </div>
+        <div class="metric-card reimbursement-summary-card reimbursement-summary-matched">
+            <div class="metric-label">{{ _("Matched") }}</div>
+            <div class="metric-value">{{ summary.allocation_count }}</div>
+            <div class="metric-detail">{{ summary.total_allocated|moneyfmt }}</div>
+        </div>
+        <div class="metric-card reimbursement-summary-card reimbursement-summary-unmatched">
+            <div class="metric-label">{{ _("Unmatched received money") }}</div>
+            <div class="metric-value">{{ summary.pending_reimbursement_credits|moneyfmt }}</div>
+            <div class="metric-detail">{{ _("Available to match") }}</div>
+        </div>
+        <div class="metric-card reimbursement-summary-card reimbursement-summary-owed">
+            <div class="metric-label">{{ _("Expenses awaiting reimbursement") }}</div>
+            <div class="metric-value">{{ summary.pending_reimbursable_expenses|moneyfmt }}</div>
+            <div class="metric-detail">{{ _("{count} expenses", count=summary.pending_expense_count) }}</div>
+        </div>
+    </div>
+</section>
+
+<section class="card command-pulse reimbursement-command mb-4">
+    <div class="card-body">
+        <div class="command-pulse-layout">
+            <div class="command-pulse-summary">
+                <span class="badge command-pulse-badge">{{ _("Action needed") }}</span>
+                <h3>{{ _("Reimbursement matching") }}</h3>
+                <p>
+                    {{ _("You still have {expenses} in expenses awaiting reimbursement. {reimbursements} of received reimbursement money has not yet been matched to expenses.", expenses=summary.pending_reimbursable_expenses|moneyfmt, reimbursements=summary.pending_reimbursement_credits|moneyfmt) }}
+                </p>
+            </div>
+            <div class="pulse-support">
+                <div class="pulse-facts">
+                    <div class="pulse-fact">
+                        <span>{{ _("Unmatched") }}</span>
+                        <strong>{{ summary.pending_reimbursement_credits|moneyfmt }}</strong>
+                    </div>
+                    <div class="pulse-fact">
+                        <span>{{ _("Still owed") }}</span>
+                        <strong>{{ summary.pending_reimbursable_expenses|moneyfmt }}</strong>
+                    </div>
+                </div>
+                {% if action_needed.first_reimbursement_id %}
+                    <button
+                        class="btn btn-primary command-primary-action"
+                        type="button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#match-reimbursement-{{ action_needed.first_reimbursement_id }}-modal"
+                    >
+                        <i class="bi bi-link-45deg" aria-hidden="true"></i>{{ _("Match reimbursement") }}
+                    </button>
+                {% elif summary.pending_expense_count %}
+                    <button class="btn btn-outline-secondary command-primary-action" type="button" disabled>
+                        <i class="bi bi-cash-coin" aria-hidden="true"></i>{{ _("No reimbursement money to match") }}
+                    </button>
+                {% else %}
+                    <button class="btn btn-outline-secondary command-primary-action" type="button" disabled>
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("No matching needed") }}
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="reimbursement-tabs page-tabs nav nav-tabs mb-4" role="tablist" aria-label="{{ _('Reimbursement views') }}">
+    <button class="nav-link active" id="reimbursements-action-tab" data-bs-toggle="tab" data-bs-target="#reimbursements-action-panel" type="button" role="tab" aria-controls="reimbursements-action-panel" aria-selected="true">
+        <i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ _("Action needed") }}
+    </button>
+    <button class="nav-link" id="reimbursements-received-tab" data-bs-toggle="tab" data-bs-target="#reimbursements-received-panel" type="button" role="tab" aria-controls="reimbursements-received-panel" aria-selected="false">
+        <i class="bi bi-cash-coin" aria-hidden="true"></i>{{ _("Reimbursements received") }}
+    </button>
+    <button class="nav-link" id="reimbursements-expenses-tab" data-bs-toggle="tab" data-bs-target="#reimbursements-expenses-panel" type="button" role="tab" aria-controls="reimbursements-expenses-panel" aria-selected="false">
+        <i class="bi bi-receipt" aria-hidden="true"></i>{{ _("Expenses awaiting reimbursement") }}
+    </button>
+    <button class="nav-link" id="reimbursements-history-tab" data-bs-toggle="tab" data-bs-target="#reimbursements-history-panel" type="button" role="tab" aria-controls="reimbursements-history-panel" aria-selected="false">
+        <i class="bi bi-clock-history" aria-hidden="true"></i>{{ _("Match history") }}
+    </button>
+</div>
+
+<div class="tab-content page-tab-content">
+    <section id="reimbursements-action-panel" class="tab-pane fade show active" role="tabpanel" aria-labelledby="reimbursements-action-tab" tabindex="0">
+        {% if action_needed.has_items %}
+            <section class="card mb-4">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <h3 class="card-title">{{ _("Active reimbursements") }}</h3>
+                    <span class="text-muted small">{{ _("{count} credits", count=action_needed.total_reimbursement_count) }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table
+                            class="table table-hover align-middle mb-0 reimbursement-action-table"
+                            data-sortable-table
+                            data-paginated-table
+                            data-page-size="{{ table_page_size }}"
+                            data-pagination-label="{{ _('Reimbursement action pages') }}"
+                        >
+                            <thead>
+                                <tr>
+                                    {{ sort_header(0, "Date") }}
+                                    {{ sort_header(1, "Description") }}
+                                    {{ sort_header(2, "Received", "number", "text-end") }}
+                                    {{ sort_header(3, "Matched", "number", "text-end") }}
+                                    {{ sort_header(4, "Unmatched", "number", "text-end") }}
+                                    {{ sort_header(5, "Progress", "number") }}
+                                    {{ sort_header(6, "Status") }}
+                                    <th class="text-end"><span class="visually-hidden">{{ _("Actions") }}</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in action_needed.reimbursements %}
+                                    <tr id="match-reimbursement-{{ item.id }}" data-row-edit-target="#match-reimbursement-{{ item.id }}-modal">
+                                        <td data-sort-value="{{ item.date }}">{{ item.date|datefmt }}</td>
+                                        <td>{{ item.description }}</td>
+                                        <td class="text-end amount-received" data-sort-value="{{ item.amount }}">{{ item.amount|moneyfmt }}</td>
+                                        <td class="text-end amount-matched" data-sort-value="{{ item.allocated }}">{{ item.allocated|moneyfmt }}</td>
+                                        <td class="text-end amount-unmatched" data-sort-value="{{ item.remaining }}">{{ item.remaining|moneyfmt }}</td>
+                                        <td class="reimbursement-progress-cell" data-sort-value="{{ item.matched_percent }}">{{ progress_meter(item.matched_percent, "Reimbursement matched percentage") }}</td>
+                                        <td data-sort-value="{{ item.status_label }}"><span class="badge {{ item.status_class }}">{{ _(item.status_label) }}</span></td>
+                                        <td class="text-end" data-row-action>
+                                            <button
+                                                class="btn btn-sm btn-outline-secondary"
+                                                type="button"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#match-reimbursement-{{ item.id }}-modal"
+                                            >
+                                                <i class="bi bi-link-45deg" aria-hidden="true"></i>{{ _("Match") }}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr data-sort-ignore>
+                                        <td colspan="8" class="text-center text-muted py-4">{{ _("No active reimbursements need matching.") }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card mb-4">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <h3 class="card-title">{{ _("Active expenses") }}</h3>
+                    <span class="text-muted small">{{ _("{count} expenses", count=action_needed.total_expense_count) }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table
+                            class="table table-hover align-middle mb-0 reimbursement-action-expense-table"
+                            data-sortable-table
+                            data-paginated-table
+                            data-page-size="{{ table_page_size }}"
+                            data-pagination-label="{{ _('Reimbursable expense action pages') }}"
+                        >
+                            <thead>
+                                <tr>
+                                    {{ sort_header(0, "Date") }}
+                                    {{ sort_header(1, "Category") }}
+                                    {{ sort_header(2, "Description") }}
+                                    {{ sort_header(3, "Paid", "number", "text-end") }}
+                                    {{ sort_header(4, "Reimbursed", "number", "text-end") }}
+                                    {{ sort_header(5, "Still owed", "number", "text-end") }}
+                                    {{ sort_header(6, "Progress", "number") }}
+                                    {{ sort_header(7, "Status") }}
+                                    <th class="text-end">{{ _("Actions") }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in action_needed.expenses %}
+                                    <tr id="action-expense-{{ row.id }}">
+                                        <td data-sort-value="{{ row.date }}">{{ row.date|datefmt }}</td>
+                                        <td>{{ row.category }}</td>
+                                        <td>{{ row.description }}</td>
+                                        <td class="text-end amount-paid" data-sort-value="{{ row.amount }}">{{ row.amount|moneyfmt }}</td>
+                                        <td class="text-end amount-reimbursed" data-sort-value="{{ row.allocated }}">{{ row.allocated|moneyfmt }}</td>
+                                        <td class="text-end amount-owed" data-sort-value="{{ row.pending_remaining }}">{{ row.pending_remaining|moneyfmt }}</td>
+                                        <td class="reimbursement-progress-cell" data-sort-value="{{ row.reimbursed_percent }}">{{ progress_meter(row.reimbursed_percent, "Expense reimbursed percentage") }}</td>
+                                        <td data-sort-value="{{ row.status_label }}"><span class="badge {{ row.status_class }}">{{ _(row.status_label) }}</span></td>
+                                        <td class="text-end" data-row-action>
+                                            <form method="post" action="{{ url_for('reimbursements.complete_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Close") }}
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr data-sort-ignore>
+                                        <td colspan="9" class="text-center text-muted py-4">{{ _("No active reimbursable expenses need closing.") }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        {% else %}
+            <div class="reimbursement-empty-state">
+                <h3>{{ _("No matching needed") }}</h3>
+                <p>{{ _("All received reimbursement money is matched, and no reimbursable expenses are still owed.") }}</p>
+            </div>
+        {% endif %}
+    </section>
+
+    <div class="reimbursement-match-modals">
+        {% for item in action_needed.reimbursements %}
+                    <div class="modal fade reimbursement-match-modal" id="match-reimbursement-{{ item.id }}-modal" tabindex="-1" aria-labelledby="match-reimbursement-{{ item.id }}-modal-label" aria-hidden="true">
+                        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                            <div class="modal-content">
+                                {% if item.match_candidates %}
+                                    <form
+                                        method="post"
+                                        action="{{ url_for('reimbursements.add_allocation') }}"
+                                        data-reimbursement-match-form
+                                        data-ajax-refresh-form
+                                        data-reimbursement-remaining="{{ item.remaining }}"
+                                    >
+                                        <div class="modal-header">
+                                            <div>
+                                                <h5 class="modal-title" id="match-reimbursement-{{ item.id }}-modal-label">{{ _("Match reimbursement") }}</h5>
+                                                <div class="small text-muted">{{ item.date|datefmt }} - {{ item.description }}</div>
+                                            </div>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="match_mode" value="multiple">
+                                            <input type="hidden" name="reimbursement_transaction_id" value="{{ item.id }}">
+
+                                            <div class="reimbursement-amount-grid reimbursement-modal-amounts">
+                                                {{ amount_fact("Received", item.amount, "received") }}
+                                                {{ amount_fact("Already matched", item.allocated, "matched") }}
+                                                {{ amount_fact("Unmatched", item.remaining, "unmatched") }}
+                                            </div>
+
+                                            <div class="reimbursement-panel-title reimbursement-modal-candidates-title">
+                                                <h5>{{ _("Candidate expenses") }}</h5>
+                                                <span>{{ _("{count} expenses", count=item.match_candidate_count) }}</span>
+                                            </div>
+                                            <div class="reimbursement-candidate-list">
+                                                {% for candidate in item.match_candidates %}
+                                                    <div class="reimbursement-candidate" data-match-candidate>
+                                                        <div class="form-check reimbursement-candidate-choice">
+                                                            <input
+                                                                class="form-check-input"
+                                                                type="checkbox"
+                                                                name="expense_transaction_ids"
+                                                                value="{{ candidate.id }}"
+                                                                id="match-{{ item.id }}-expense-{{ candidate.id }}"
+                                                                data-match-checkbox
+                                                            >
+                                                            <label class="form-check-label" for="match-{{ item.id }}-expense-{{ candidate.id }}">
+                                                                <span class="reimbursement-candidate-title">{{ candidate.date|datefmt }} - {{ candidate.category }}</span>
+                                                                <span class="reimbursement-candidate-description">{{ candidate.description }}</span>
+                                                            </label>
+                                                        </div>
+                                                        <div class="reimbursement-candidate-money">
+                                                            <div>
+                                                                <span>{{ _("Paid") }}</span>
+                                                                <strong class="amount-paid">{{ candidate.amount|moneyfmt }}</strong>
+                                                            </div>
+                                                            <div>
+                                                                <span>{{ _("Reimbursed") }}</span>
+                                                                <strong class="amount-reimbursed">{{ candidate.allocated|moneyfmt }}</strong>
+                                                            </div>
+                                                            <div>
+                                                                <span>{{ _("Still owed") }}</span>
+                                                                <strong class="amount-owed">{{ candidate.pending_remaining|moneyfmt }}</strong>
+                                                            </div>
+                                                            <div class="reimbursement-match-amount">
+                                                                <label class="form-label" for="match-{{ item.id }}-expense-{{ candidate.id }}-amount">{{ _("Match amount") }}</label>
+                                                                <input
+                                                                    id="match-{{ item.id }}-expense-{{ candidate.id }}-amount"
+                                                                    class="form-control form-control-sm text-end"
+                                                                    type="number"
+                                                                    name="amount_{{ candidate.id }}"
+                                                                    min="0.01"
+                                                                    max="{{ candidate.max_amount }}"
+                                                                    step="0.01"
+                                                                    value="{{ candidate.default_amount }}"
+                                                                    data-match-amount
+                                                                >
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% if item.hidden_match_candidate_count %}
+                                                <div class="reimbursement-list-note">
+                                                    {{ _("Showing {shown} of {total} candidate expenses. Use the Expenses tab to review all.", shown=item.match_candidates|length, total=item.match_candidate_count) }}
+                                                </div>
+                                            {% endif %}
+                                            <div class="reimbursement-match-review">
+                                                <div class="reimbursement-review-matched">
+                                                    <span>{{ _("Selected to match") }}</span>
+                                                    <strong data-match-total>{{ 0|moneyfmt }}</strong>
+                                                </div>
+                                                <div class="reimbursement-review-unmatched">
+                                                    <span>{{ _("Remaining after this match") }}</span>
+                                                    <strong data-match-remaining>{{ item.remaining|moneyfmt }}</strong>
+                                                </div>
+                                                <div class="reimbursement-match-error" data-match-error hidden>
+                                                    {{ _("Selected amount exceeds unmatched reimbursement money.") }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+                                                <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}
+                                            </button>
+                                            <button class="btn btn-primary" type="submit" data-match-submit>
+                                                <i class="bi bi-check2" aria-hidden="true"></i>{{ _("Save selected matches") }}
+                                            </button>
+                                        </div>
+                                    </form>
+                                {% else %}
+                                    <div class="modal-header">
+                                        <div>
+                                            <h5 class="modal-title" id="match-reimbursement-{{ item.id }}-modal-label">{{ _("Match reimbursement") }}</h5>
+                                            <div class="small text-muted">{{ item.date|datefmt }} - {{ item.description }}</div>
+                                        </div>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="reimbursement-empty-state">
+                                            {{ _("No expenses are available for this reimbursement yet.") }}
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+                                            <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Close") }}
+                                        </button>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+        {% endfor %}
+    </div>
+
+    <section id="reimbursements-received-panel" class="tab-pane fade" role="tabpanel" aria-labelledby="reimbursements-received-tab" tabindex="0">
+        <section class="card mb-4">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <h3 class="card-title">{{ _("Reimbursements received") }}</h3>
+                <span class="text-muted small">{{ _("{count} received", count=reimbursements|length) }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table
+                        class="table table-hover align-middle mb-0 reimbursement-received-table"
+                        data-sortable-table
+                        data-paginated-table
+                        data-page-size="{{ table_page_size }}"
+                        data-pagination-label="{{ _('Reimbursement received pages') }}"
+                    >
+                        <thead>
+                            <tr>
+                                {{ sort_header(0, "Date") }}
+                                {{ sort_header(1, "Description") }}
+                                {{ sort_header(2, "Received", "number", "text-end") }}
+                                {{ sort_header(3, "Matched", "number", "text-end") }}
+                                {{ sort_header(4, "Unmatched", "number", "text-end") }}
+                                {{ sort_header(5, "Status") }}
+                                <th class="text-end"><span class="visually-hidden">{{ _("Actions") }}</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in reimbursements %}
+                                <tr{% if row.remaining > 0 %} data-row-edit-target="#match-reimbursement-{{ row.id }}-modal"{% endif %}>
+                                    <td data-sort-value="{{ row.date }}">{{ row.date|datefmt }}</td>
+                                    <td>{{ row.description }}</td>
+                                    <td class="text-end amount-received" data-sort-value="{{ row.amount }}">{{ row.amount|moneyfmt }}</td>
+                                    <td class="text-end amount-matched" data-sort-value="{{ row.allocated }}">{{ row.allocated|moneyfmt }}</td>
+                                    <td class="text-end {{ 'amount-unmatched' if row.remaining > 0 else 'amount-matched' }}" data-sort-value="{{ row.remaining }}">{{ row.remaining|moneyfmt }}</td>
+                                    <td data-sort-value="{{ row.status_label }}"><span class="badge {{ row.status_class }}">{{ _(row.status_label) }}</span></td>
+                                    <td class="text-end" data-row-action>
+                                        {% if row.remaining > 0 %}
+                                            <button
+                                                class="btn btn-sm btn-outline-secondary"
+                                                type="button"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#match-reimbursement-{{ row.id }}-modal"
+                                            >
+                                                <i class="bi bi-link-45deg" aria-hidden="true"></i>{{ _("Match") }}
+                                            </button>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr data-sort-ignore>
+                                    <td colspan="7" class="text-center text-muted py-4">{{ _("No reimbursements received.") }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </section>
+
+    <section id="reimbursements-expenses-panel" class="tab-pane fade" role="tabpanel" aria-labelledby="reimbursements-expenses-tab" tabindex="0">
+        <section class="card mb-4">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <h3 class="card-title">{{ _("Expenses awaiting reimbursement") }}</h3>
+                <span class="text-muted small">{{ _("{count} expenses", count=reimbursable_expenses|length) }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table
+                        class="table table-hover align-middle mb-0 reimbursement-expense-table"
+                        data-sortable-table
+                        data-paginated-table
+                        data-page-size="{{ table_page_size }}"
+                        data-pagination-label="{{ _('Reimbursable expense pages') }}"
+                    >
+                        <thead>
+                            <tr>
+                                {{ sort_header(0, "Date") }}
+                                {{ sort_header(1, "Category") }}
+                                {{ sort_header(2, "Description") }}
+                                {{ sort_header(3, "Paid", "number", "text-end") }}
+                                {{ sort_header(4, "Reimbursed", "number", "text-end") }}
+                                {{ sort_header(5, "Still owed", "number", "text-end") }}
+                                {{ sort_header(6, "Status") }}
+                                <th class="text-end">{{ _("Actions") }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in reimbursable_expenses %}
+                                <tr>
+                                    <td data-sort-value="{{ row.date }}">{{ row.date|datefmt }}</td>
+                                    <td>{{ row.category }}</td>
+                                    <td>{{ row.description }}</td>
+                                    <td class="text-end amount-paid" data-sort-value="{{ row.amount }}">{{ row.amount|moneyfmt }}</td>
+                                    <td class="text-end amount-reimbursed" data-sort-value="{{ row.allocated }}">{{ row.allocated|moneyfmt }}</td>
+                                    <td class="text-end {{ 'amount-owed' if row.pending_remaining > 0 else 'amount-reimbursed' }}" data-sort-value="{{ row.pending_remaining }}">{{ row.pending_remaining|moneyfmt }}</td>
+                                    <td data-sort-value="{{ row.status_label }}"><span class="badge {{ row.status_class }}">{{ _(row.status_label) }}</span></td>
+                                    <td class="text-end" data-row-action>
+                                        {% if row.is_complete %}
+                                            <form method="post" action="{{ url_for('reimbursements.reopen_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Reopen") }}
+                                                </button>
+                                            </form>
+                                        {% elif row.pending_remaining > 0 %}
+                                            <form method="post" action="{{ url_for('reimbursements.complete_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Close") }}
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr data-sort-ignore>
+                                    <td colspan="8" class="text-center text-muted py-4">{{ _("No reimbursable expenses found.") }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </section>
+
+    <section id="reimbursements-history-panel" class="tab-pane fade" role="tabpanel" aria-labelledby="reimbursements-history-tab" tabindex="0">
+        <section class="card mb-4">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <h3 class="card-title">{{ _("Match history") }}</h3>
+                <span class="text-muted small">{{ _("{count} matches", count=allocations|length) }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table
+                        class="table table-hover align-middle mb-0 reimbursement-history-table"
+                        data-sortable-table
+                        data-paginated-table
+                        data-page-size="{{ table_page_size }}"
+                        data-pagination-label="{{ _('Reimbursement match history pages') }}"
+                    >
+                        <thead>
+                            <tr>
+                                {{ sort_header(0, "Reimbursement") }}
+                                {{ sort_header(1, "Reimbursed expense") }}
+                                {{ sort_header(2, "Matched amount", "number", "text-end") }}
+                                <th class="text-end">{{ _("Actions") }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for allocation in allocations %}
+                                <tr>
+                                    <td data-sort-value="{{ allocation.reimbursement_date }} {{ allocation.reimbursement_description }}">
+                                        <div>{{ allocation.reimbursement_date|datefmt }}</div>
+                                        <div class="small text-muted">{{ allocation.reimbursement_description }}</div>
+                                    </td>
+                                    <td data-sort-value="{{ allocation.expense_date }} {{ allocation.expense_category }} {{ allocation.expense_description }}">
+                                        <div>{{ allocation.expense_date|datefmt }} - {{ allocation.expense_category }}</div>
+                                        <div class="small text-muted">{{ allocation.expense_description }}</div>
+                                    </td>
+                                    <td class="text-end amount-matched" data-sort-value="{{ allocation.amount }}">{{ allocation.amount|moneyfmt }}</td>
+                                    <td class="text-end" data-row-action>
+                                        <div class="reimbursement-history-actions">
+                                            <form
+                                                method="post"
+                                                action="{{ url_for('reimbursements.update_allocation', allocation_id=allocation.id) }}"
+                                                class="d-flex gap-2"
+                                                data-ajax-refresh-form
+                                            >
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <label class="visually-hidden" for="match-{{ allocation.id }}-amount">{{ _("Matched amount") }}</label>
+                                                <input
+                                                    id="match-{{ allocation.id }}-amount"
+                                                    class="form-control form-control-sm text-end"
+                                                    type="number"
+                                                    name="amount"
+                                                    min="0.01"
+                                                    max="{{ allocation.max_amount }}"
+                                                    step="0.01"
+                                                    value="{{ allocation.amount }}"
+                                                    required
+                                                >
+                                                <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                                    <i class="bi bi-check2" aria-hidden="true"></i>{{ _("Update match") }}
+                                                </button>
+                                            </form>
+                                            <form method="post" action="{{ url_for('reimbursements.delete_allocation', allocation_id=allocation.id) }}" data-ajax-refresh-form>
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button class="btn btn-sm btn-outline-danger" type="submit">
+                                                    <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Remove") }}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr data-sort-ignore>
+                                    <td colspan="4" class="text-center text-muted py-4">{{ _("No reimbursement matches found.") }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </section>
+</div>
+</div>
+{% endblock %}

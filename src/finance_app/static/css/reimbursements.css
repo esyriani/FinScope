@@ -1,0 +1,399 @@
+.reimbursement-command {
+    border-color: rgba(var(--app-accent-rgb), 0.28);
+}
+
+.reimbursement-summary .metric-card {
+    min-height: 96px;
+}
+
+.reimbursement-summary .metric-label {
+    font-size: 0.78rem;
+    font-weight: 650;
+    text-transform: none;
+}
+
+.reimbursement-summary .metric-value {
+    font-size: 1.35rem;
+    font-weight: 680;
+}
+
+.reimbursement-summary-card {
+    border-left: 3px solid var(--app-border);
+}
+
+.reimbursement-summary-received,
+.reimbursement-summary-matched {
+    border-left-color: var(--app-success);
+}
+
+.reimbursement-summary-unmatched {
+    border-left-color: var(--app-warning);
+}
+
+.reimbursement-summary-owed {
+    border-left-color: var(--app-danger);
+}
+
+.reimbursement-summary-received .metric-detail,
+.reimbursement-summary-matched .metric-detail,
+.amount-received,
+.amount-matched,
+.amount-reimbursed,
+.reimbursement-amount-matched strong,
+.reimbursement-review-matched strong {
+    color: var(--app-success);
+}
+
+.reimbursement-summary-unmatched .metric-value,
+.amount-unmatched,
+.reimbursement-amount-unmatched strong,
+.reimbursement-review-unmatched strong {
+    color: var(--app-warning);
+}
+
+.reimbursement-summary-owed .metric-value,
+.amount-paid,
+.amount-owed,
+.reimbursement-amount-paid strong,
+.reimbursement-amount-owed strong {
+    color: var(--app-danger);
+}
+
+.amount-received,
+.amount-matched,
+.amount-reimbursed,
+.amount-unmatched,
+.amount-paid,
+.amount-owed {
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+.reimbursement-command .command-pulse-summary h3 {
+    font-size: 1.22rem;
+    font-weight: 680;
+}
+
+.reimbursement-command .pulse-fact span {
+    font-weight: 620;
+}
+
+.reimbursement-command .pulse-fact strong {
+    font-weight: 650;
+}
+
+.reimbursement-tabs .nav-link {
+    font-weight: 620;
+}
+
+.reimbursement-empty-state {
+    background: var(--app-surface);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    box-shadow: var(--app-shadow);
+    color: var(--app-text);
+    min-width: 0;
+    padding: 1rem;
+}
+
+.reimbursement-panel-title {
+    align-items: start;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.reimbursement-empty-state h3 {
+    color: var(--app-heading);
+    font-size: 1rem;
+    font-weight: 650;
+    margin: 0.1rem 0 0;
+    overflow-wrap: anywhere;
+}
+
+.reimbursement-received-table td,
+.reimbursement-received-table th {
+    white-space: nowrap;
+}
+
+.reimbursement-action-table td,
+.reimbursement-action-table th,
+.reimbursement-action-expense-table td,
+.reimbursement-action-expense-table th {
+    white-space: nowrap;
+}
+
+.reimbursement-received-table td:nth-child(2),
+.reimbursement-received-table th:nth-child(2) {
+    min-width: 16rem;
+    white-space: normal;
+}
+
+.reimbursement-action-table td:nth-child(2),
+.reimbursement-action-table th:nth-child(2),
+.reimbursement-action-expense-table td:nth-child(3),
+.reimbursement-action-expense-table th:nth-child(3) {
+    min-width: 16rem;
+    white-space: normal;
+}
+
+.reimbursement-progress {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 8rem;
+}
+
+.reimbursement-progress-label {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    font-weight: 560;
+}
+
+.reimbursement-progress-track {
+    background: var(--app-surface-soft);
+    height: 0.45rem;
+}
+
+.reimbursement-progress-track .progress-bar {
+    background-color: var(--app-accent);
+}
+
+.reimbursement-amount-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 1rem;
+}
+
+.reimbursement-amount-fact {
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    display: grid;
+    gap: 0.18rem;
+    min-width: 0;
+    padding: 0.65rem 0.75rem;
+}
+
+.reimbursement-amount-fact span {
+    color: var(--app-muted);
+    font-size: 0.74rem;
+    font-weight: 620;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reimbursement-amount-fact strong {
+    color: var(--app-heading);
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reimbursement-match-modal .modal-content {
+    background: var(--app-surface);
+    color: var(--app-text);
+}
+
+.reimbursement-match-modal .modal-header,
+.reimbursement-match-modal .modal-footer {
+    border-color: var(--app-border);
+}
+
+.reimbursement-modal-amounts {
+    margin-top: 0;
+}
+
+.reimbursement-modal-candidates-title {
+    margin-top: 1.1rem;
+}
+
+.reimbursement-panel-title {
+    margin-bottom: 0.75rem;
+}
+
+.reimbursement-panel-title h5 {
+    color: var(--app-heading);
+    font-size: 0.98rem;
+    font-weight: 650;
+    margin: 0;
+}
+
+.reimbursement-panel-title span {
+    color: var(--app-muted);
+    font-size: 0.84rem;
+    font-weight: 560;
+}
+
+.reimbursement-candidate-list {
+    display: grid;
+    gap: 0.65rem;
+    max-height: 25rem;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.reimbursement-candidate {
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    display: grid;
+    gap: 0.9rem;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.68fr);
+    min-width: 0;
+    padding: 0.85rem;
+}
+
+.reimbursement-candidate-choice {
+    min-width: 0;
+}
+
+.reimbursement-candidate-title {
+    align-items: center;
+    color: var(--app-heading);
+    display: flex;
+    flex-wrap: wrap;
+    font-weight: 620;
+    gap: 0.4rem 0.55rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.reimbursement-candidate-description {
+    color: var(--app-muted);
+    display: block;
+    font-size: 0.86rem;
+    font-weight: 600;
+    margin-top: 0.18rem;
+    overflow-wrap: anywhere;
+}
+
+.reimbursement-candidate-money {
+    align-items: end;
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(8rem, 0.95fr);
+    min-width: 0;
+}
+
+.reimbursement-candidate-money span {
+    color: var(--app-muted);
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 620;
+}
+
+.reimbursement-candidate-money strong {
+    color: var(--app-heading);
+    display: block;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    margin-top: 0.1rem;
+    white-space: nowrap;
+}
+
+.reimbursement-candidate-money .amount-reimbursed {
+    color: var(--app-success);
+}
+
+.reimbursement-candidate-money .amount-paid,
+.reimbursement-candidate-money .amount-owed {
+    color: var(--app-danger);
+}
+
+.reimbursement-match-amount .form-label {
+    color: var(--app-muted);
+    font-size: 0.72rem;
+    font-weight: 620;
+    margin-bottom: 0.2rem;
+}
+
+.reimbursement-match-review {
+    align-items: center;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 1.2fr) auto;
+    margin-top: 0.85rem;
+    min-width: 0;
+    padding: 0.85rem;
+}
+
+.reimbursement-match-review span {
+    color: var(--app-muted);
+    display: block;
+    font-size: 0.74rem;
+    font-weight: 620;
+}
+
+.reimbursement-match-review strong {
+    color: var(--app-heading);
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+.reimbursement-match-error {
+    color: var(--app-danger);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.reimbursement-history-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: end;
+}
+
+.reimbursement-history-actions .form-control {
+    max-width: 8rem;
+}
+
+.reimbursement-empty-state {
+    color: var(--app-muted);
+    display: grid;
+    gap: 0.35rem;
+}
+
+.reimbursement-empty-state p {
+    margin: 0;
+}
+
+.reimbursement-history-actions .btn {
+    font-weight: 560;
+}
+
+.reimbursement-list-note {
+    color: var(--app-muted);
+    font-size: 0.84rem;
+    font-weight: 560;
+    margin-top: 0.65rem;
+}
+
+@media (max-width: 1100px) {
+    .reimbursement-candidate,
+    .reimbursement-match-review {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .reimbursement-amount-grid,
+    .reimbursement-candidate-money {
+        grid-template-columns: 1fr;
+    }
+
+    .reimbursement-panel-title {
+        align-items: start;
+        flex-direction: column;
+    }
+
+    .reimbursement-history-actions {
+        justify-content: start;
+    }
+}

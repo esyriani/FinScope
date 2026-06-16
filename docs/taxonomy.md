@@ -102,7 +102,16 @@ This category is managed by FinScope and cannot be renamed, edited, or deleted f
 
 > Transfer transactions are excluded from income and spending analytics to avoid double-counting money movement as real financial activity.
 
-Reimbursements that offset earlier expenses should also use `Transfers`, not `Income` or the original expense category. Keep the original expenses in their natural category, such as `Travel`, `Food`, or `Work`, and tag them with the relevant context, such as `Conference` and `Reimbursable`. Tag the reimbursement credit with the same context tags. For example, $1,000 of conference travel expenses tagged `Conference` and `Reimbursable`, followed by a $900 reimbursement credit categorized as `Transfers` and tagged `Conference` and `Reimbursable`, leaves a $100 outstanding net amount in tag-filtered reimbursement views.
+### Reimbursement
+
+The built-in `Reimbursement` category is reserved for incoming credits that repay expenses the user paid upfront. Keep the original expenses in their natural category, such as `Travel`, `Food`, or `Work`, and tag those expenses with context such as `Conference` and `Reimbursable`. Categorize the incoming credit as `Reimbursement`, then link it to the covered expense transactions so FinScope can track paid and pending amounts. The credit can keep context tags such as `Conference` or `Insurance`, but it does not need the `Reimbursable` tag because the allocation link records what was repaid.
+
+For example, $1,000 of conference travel expenses tagged `Conference` and `Reimbursable`, followed by a $900 reimbursement credit categorized as `Reimbursement` and allocated to those expenses, leaves $100 pending reimbursement while preserving the natural `Travel` spending category.
+
+If the missing $100 is never expected because of an eligibility policy,
+close the expense on the Reimbursements page. Closing removes the item from
+the active reimbursement queue but does not create an artificial reimbursement
+or change the underlying category treatment.
 
 ## Taxonomy administration
 

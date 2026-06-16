@@ -8,9 +8,12 @@ from sqlalchemy import case, exists, func, select
 from finance_app.core.periods import DatePeriod, previous_period_date_range
 from finance_app.core.query import CoreFilters
 from finance_app.core.reporting import (
+    cashflow_amount_expression,
+    income_amount_expression,
     income_or_tagged_transfer_credit_clause,
     reportable_or_tagged_transfer_credit_clause,
     reportable_transaction_clause,
+    spending_impact_amount_expression,
     spending_impact_clause,
 )
 from finance_app.database.dates import date_month, date_month_identity, date_year, month_label
@@ -60,7 +63,8 @@ def fetch_spending_by_category(
 ) -> list[Mapping[str, Any]]:
     """Fetch spending by category, optionally retaining rows categorized as income."""
     category = func.coalesce(transactions_table.c.category, unknown_category)
-    total = func.sum(transactions_table.c.amount)
+    spending_amount = spending_impact_amount_expression()
+    total = func.sum(spending_amount)
     income_filter = [] if include_income_category else [category != DASHBOARD_INCOME_CATEGORY]
     return (
         conn.execute(
@@ -95,7 +99,8 @@ def fetch_spending_by_tag(
     contribute to multiple rows.
     """
     category = func.coalesce(transactions_table.c.category, "")
-    total = func.sum(transactions_table.c.amount)
+    spending_amount = spending_impact_amount_expression()
+    total = func.sum(spending_amount)
     income_filter = [] if include_income_category else [category != DASHBOARD_INCOME_CATEGORY]
     tagged_rows = (
         conn.execute(
@@ -157,7 +162,7 @@ def fetch_monthly_expenses(conn: Any, filters: Sequence[Any]) -> list[dict[str, 
     """Fetch monthly expenses."""
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
-    total = func.sum(transactions_table.c.amount)
+    total = func.sum(spending_impact_amount_expression())
     rows = (
         conn.execute(
             select(
@@ -187,7 +192,7 @@ def fetch_monthly_income(
     """Fetch monthly income, optionally including filtered transfer credits."""
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
-    total = func.sum(-transactions_table.c.amount)
+    total = func.sum(income_amount_expression())
     rows = (
         conn.execute(
             select(
@@ -218,7 +223,7 @@ def fetch_monthly_net(
     """Fetch monthly net, optionally including filtered transfer credits."""
     year = date_year(transactions_table.c.tx_date)
     month = date_month(transactions_table.c.tx_date)
-    total = func.sum(-transactions_table.c.amount)
+    total = func.sum(cashflow_amount_expression())
     rows = (
         conn.execute(
             select(
@@ -332,7 +337,7 @@ def fetch_merchant_transaction_rows(conn: Any, filters: Sequence[Any], unknown_c
                 transactions_table.c.merchant_id,
                 merchants_table.c.merchant_key.label("merchant_name"),
                 merchants_table.c.merchant_key.label("merchant_key"),
-                transactions_table.c.amount,
+                spending_impact_amount_expression().label("amount"),
                 func.coalesce(transactions_table.c.category, unknown_category).label("category"),
             )
             .select_from(
@@ -414,6 +419,7 @@ def fetch_summary(
     has_tag = exists(select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id))
     categorized = category != unknown_category
     untagged_spending = spending_impact_clause() & non_transfer_clause() & ~has_tag
+    spending_amount = spending_impact_amount_expression()
     return (
         conn.execute(
             select(
@@ -422,7 +428,7 @@ def fetch_summary(
                         case(
                             (
                                 spending_impact_clause() & non_transfer_clause(),
-                                transactions_table.c.amount,
+                                spending_amount,
                             ),
                             else_=0,
                         )
@@ -436,7 +442,7 @@ def fetch_summary(
                                 (transactions_table.c.amount < 0)
                                 & income_or_tagged_transfer_credit_clause(include_transfer_credits)
                                 & reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
-                                -transactions_table.c.amount,
+                                income_amount_expression(),
                             ),
                             else_=0,
                         )
@@ -450,7 +456,7 @@ def fetch_summary(
                 ),
                 func.coalesce(func.sum(case((untagged_spending, 1), else_=0)), 0).label("untagged_spending_count"),
                 func.coalesce(
-                    func.sum(case((untagged_spending, transactions_table.c.amount), else_=0)),
+                    func.sum(case((untagged_spending, spending_amount), else_=0)),
                     0,
                 ).label("untagged_spending_total"),
                 func.coalesce(

@@ -45,8 +45,10 @@ def test_taxonomy_categories_tags_and_builtins_are_persisted(core_conn):
 
     assert "Income" in categories
     assert "UNKNOWN" in categories
+    assert "Reimbursement" in categories
     assert "Transfers" in categories
     assert categories["UNKNOWN"]["builtin_key"] == "unknown"
+    assert categories["Reimbursement"]["builtin_key"] == "reimbursement"
     assert categories["Transfers"]["builtin_key"] == "transfers"
     assert categories["Income"]["builtin_key"] is None
     assert "salary" in categories["Income"]["instruction"].casefold()
@@ -71,6 +73,7 @@ def test_category_options_seed_empty_db_from_taxonomy_file(core_conn):
 
     assert "Income" in category_options
     assert "UNKNOWN" in category_options
+    assert "Reimbursement" in category_options
     assert "Transfers" in category_options
     assert core_conn.execute(select(func.count()).select_from(categories_table)).scalar_one() > 1
 
@@ -92,8 +95,8 @@ def test_taxonomy_options_sort_user_values_before_builtins(core_conn):
     taxonomy_categories = fetch_category_rows(core_conn)
     taxonomy_tags = fetch_tag_rows(core_conn)
 
-    assert category_options[-2:] == ["Transfers", "UNKNOWN"]
-    assert [row["name"] for row in taxonomy_categories][-2:] == ["Transfers", "UNKNOWN"]
+    assert category_options[-3:] == ["Reimbursement", "Transfers", "UNKNOWN"]
+    assert [row["name"] for row in taxonomy_categories][-3:] == ["Reimbursement", "Transfers", "UNKNOWN"]
     assert tag_options[:2] == ["Audit", "Zulu tag"]
     assert [row["name"] for row in tag_option_rows[:2]] == ["Audit", "Zulu tag"]
     assert [row["name"] for row in taxonomy_tags[:2]] == ["Audit", "Zulu tag"]

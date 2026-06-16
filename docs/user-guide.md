@@ -20,6 +20,18 @@ Editors and owners can approve rows, ignore or restore rows, edit categories and
 
 Ignored rows stay in the database but are excluded from normal active-transaction views and rule matching unless a feature explicitly includes ignored rows.
 
+## Reimbursements
+
+Reimbursements tracks incoming credits that repay expenses paid upfront.
+
+Keep reimbursable expenses in their natural category and tag them `Reimbursable` plus any context tags. Categorize the incoming credit as `Reimbursement`, then create allocations that link the credit to the covered expenses. Allocated amounts reduce the original expense category in Dashboard and Comparison, while the reimbursement credit itself is not counted as ordinary income.
+
+When an expense is only partially eligible for reimbursement, allocate the
+amount actually paid back, then close the expense. This removes the
+remaining balance from reimbursement follow-up without inventing a credit or
+changing the original expense category. Reopen the expense if more money later
+needs to be matched.
+
 ## Rules
 
 Rules assign categories and optional tags to matching transactions.
@@ -52,7 +64,7 @@ It includes categorization completeness, spending, income and credits, net cash 
 
 Use the account filter to scope dashboard totals, charts, merchant rows, and transaction drill-downs to one imported account. Use the merchant filter to select a known merchant from suggestions or type partial merchant text; selected suggestions use the durable merchant identity, while typed text can match merchant names and imported descriptions.
 
-Transfers and payments are visible as transactions but excluded from spending and income totals to avoid double-counting internal money movement. When concrete tag filters are applied, matching transfer credits can be included so reimbursement-style tags can show a net view.
+Transfers and payments are visible as transactions but excluded from spending and income totals to avoid double-counting internal money movement. Reimbursement credits are also excluded from ordinary income; their allocations reduce the covered expense categories instead.
 
 Unknown categories reduce report usefulness. Use the categorization completeness panel to find transactions that need review.
 

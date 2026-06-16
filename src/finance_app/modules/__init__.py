@@ -10,6 +10,7 @@ from finance_app.modules.home.controller import home_bp
 from finance_app.modules.jobs.controller import jobs_bp
 from finance_app.modules.merchants.controller import merchants_bp
 from finance_app.modules.recurring.controller import recurring_bp
+from finance_app.modules.reimbursements.controller import reimbursements_bp
 from finance_app.modules.review.controller import review_bp
 from finance_app.modules.rules.controller import rules_bp
 from finance_app.modules.settings.controller import settings_bp
@@ -30,6 +31,7 @@ def register_blueprints(app: Any) -> None:
     app.register_blueprint(merchants_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(recurring_bp)
+    app.register_blueprint(reimbursements_bp)
     app.register_blueprint(review_bp)
     app.register_blueprint(transactions_bp)
     app.register_blueprint(rules_bp)

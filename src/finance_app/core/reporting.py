@@ -7,21 +7,34 @@ include transfer credits as reimbursement offsets.
 
 from typing import Any
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, case, func, or_, select
 
 from finance_app.core.constants import (
     NON_REPORTABLE_TRANSACTION_KINDS,
+    REIMBURSEMENT_CATEGORY,
     TRANSACTION_KIND_EXPENSE,
     TRANSACTION_KIND_INCOME,
     TRANSACTION_KIND_REFUND,
     TRANSACTION_KIND_TRANSFER,
 )
+from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import transactions as transactions_table
 
 
 def reportable_transaction_clause() -> Any:
     """Return the standard reporting scope that excludes payments and transfers."""
-    return transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS)
+    return and_(
+        transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS),
+        ~reimbursement_credit_clause(),
+    )
+
+
+def reimbursement_credit_clause() -> Any:
+    """Return reimbursement credits that should offset expenses through allocations."""
+    return and_(
+        func.coalesce(transactions_table.c.category, "") == REIMBURSEMENT_CATEGORY,
+        transactions_table.c.amount < 0,
+    )
 
 
 def spending_impact_clause() -> Any:
@@ -38,7 +51,55 @@ def spending_impact_clause() -> Any:
         and_(
             transactions_table.c.transaction_kind == TRANSACTION_KIND_REFUND,
             transactions_table.c.amount < 0,
+            func.coalesce(transactions_table.c.category, "") != REIMBURSEMENT_CATEGORY,
         ),
+    )
+
+
+def reimbursed_expense_allocation_amount() -> Any:
+    """Return a correlated allocation total for the current expense row."""
+    return (
+        select(func.coalesce(func.sum(reimbursement_allocations_table.c.amount), 0))
+        .where(reimbursement_allocations_table.c.expense_transaction_id == transactions_table.c.id)
+        .scalar_subquery()
+    )
+
+
+def spending_impact_amount_expression() -> Any:
+    """Return the signed spending amount after reimbursement allocations."""
+    return case(
+        (
+            and_(
+                transactions_table.c.transaction_kind == TRANSACTION_KIND_EXPENSE,
+                transactions_table.c.amount > 0,
+            ),
+            transactions_table.c.amount - reimbursed_expense_allocation_amount(),
+        ),
+        (
+            and_(
+                transactions_table.c.transaction_kind == TRANSACTION_KIND_REFUND,
+                transactions_table.c.amount < 0,
+                func.coalesce(transactions_table.c.category, "") != REIMBURSEMENT_CATEGORY,
+            ),
+            transactions_table.c.amount,
+        ),
+        else_=0,
+    )
+
+
+def income_amount_expression() -> Any:
+    """Return the positive income amount for ordinary income rows."""
+    return -transactions_table.c.amount
+
+
+def cashflow_amount_expression() -> Any:
+    """Return signed net cash-flow impact after reimbursement allocations."""
+    return case(
+        (
+            spending_impact_clause(),
+            -spending_impact_amount_expression(),
+        ),
+        else_=income_amount_expression(),
     )
 
 
@@ -63,7 +124,10 @@ def reportable_or_tagged_transfer_credit_clause(include_transfer_credits: bool =
 
 def income_or_tagged_transfer_credit_clause(include_transfer_credits: bool = False) -> Any:
     """Return income rows, optionally including tagged reimbursement credits."""
-    income_clause = transactions_table.c.transaction_kind == TRANSACTION_KIND_INCOME
+    income_clause = and_(
+        transactions_table.c.transaction_kind == TRANSACTION_KIND_INCOME,
+        ~reimbursement_credit_clause(),
+    )
     if not include_transfer_credits:
         return income_clause
 

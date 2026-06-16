@@ -28,6 +28,7 @@ It is built with Flask, SQLAlchemy Core, SQLite or MySQL, Bootstrap, ECharts, Ji
 - Categorize transactions with rules, historical matches, manual edits, optional LLM assistance, and persisted decision evidence.
 - Review grouped unknown merchants and save reusable categorization rules.
 - Audit overlapping rules and preview rule changes before applying them.
+- Track reimbursements by linking repayment credits to covered expenses.
 - Manage categories, tags, merchants, statement types, accounts, jobs, and recurring activity.
 - Analyze spending, income, transfers, tags, merchants, calendars, period changes, and year trends.
 - Use owner-managed access for owner, editor, and viewer workflows.

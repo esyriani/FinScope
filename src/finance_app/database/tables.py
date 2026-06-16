@@ -421,6 +421,54 @@ transaction_tags = Table(
     **MYSQL_TABLE_OPTIONS,
 )
 
+reimbursement_allocations = Table(
+    "reimbursement_allocations",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "reimbursement_transaction_id",
+        Integer,
+        ForeignKey("transactions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "expense_transaction_id",
+        Integer,
+        ForeignKey("transactions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("amount", MONEY_AMOUNT_TYPE, nullable=False),
+    Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    Column("updated_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    UniqueConstraint(
+        "reimbursement_transaction_id",
+        "expense_transaction_id",
+        name="uq_reimbursement_allocations_pair",
+    ),
+    CheckConstraint("amount > 0", name="reimbursement_allocations_amount_positive"),
+    CheckConstraint(
+        "reimbursement_transaction_id <> expense_transaction_id",
+        name="reimbursement_allocations_distinct_transactions",
+    ),
+    **AUTOINCREMENT_TABLE_OPTIONS,
+)
+
+reimbursement_expense_completions = Table(
+    "reimbursement_expense_completions",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "expense_transaction_id",
+        Integer,
+        ForeignKey("transactions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    Column("updated_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    UniqueConstraint("expense_transaction_id", name="uq_reimbursement_expense_completions_expense"),
+    **AUTOINCREMENT_TABLE_OPTIONS,
+)
+
 category_rule_tags = Table(
     "category_rule_tags",
     metadata,
@@ -466,6 +514,18 @@ Index("idx_statements_statement_type", statements.c.statement_type_id)
 Index("idx_statements_uploaded_at", statements.c.uploaded_at)
 Index("idx_recurring_patterns_status", recurring_patterns.c.user_status, recurring_patterns.c.active)
 Index("idx_transaction_tags_tag", transaction_tags.c.tag_id)
+Index(
+    "idx_reimbursement_allocations_reimbursement",
+    reimbursement_allocations.c.reimbursement_transaction_id,
+)
+Index(
+    "idx_reimbursement_allocations_expense",
+    reimbursement_allocations.c.expense_transaction_id,
+)
+Index(
+    "idx_reimbursement_expense_completions_expense",
+    reimbursement_expense_completions.c.expense_transaction_id,
+)
 Index("idx_category_rule_tags_tag", category_rule_tags.c.tag_id)
 Index("idx_users_role_active", users.c.role, users.c.is_active)
 Index("idx_users_locked_until", users.c.locked_until)
@@ -486,5 +546,7 @@ SCHEMA_TABLES = (
     recurring_patterns,
     tags,
     transaction_tags,
+    reimbursement_allocations,
+    reimbursement_expense_completions,
     category_rule_tags,
 )

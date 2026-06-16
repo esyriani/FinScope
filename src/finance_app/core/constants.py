@@ -10,6 +10,7 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 UNKNOWN_CATEGORY = "UNKNOWN"
 TRANSFER_CATEGORY = "Transfers"
+REIMBURSEMENT_CATEGORY = "Reimbursement"
 
 FILTER_MODE_INCLUDE = "include"
 FILTER_MODE_EXCLUDE = "exclude"

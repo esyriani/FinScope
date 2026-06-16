@@ -9,6 +9,7 @@ from sqlalchemy import text
 from werkzeug.datastructures import MultiDict
 
 from finance_app.core.constants import (
+    REIMBURSEMENT_CATEGORY,
     TRANSACTION_KIND_EXPENSE,
     TRANSACTION_KIND_INCOME,
     TRANSACTION_KIND_PAYMENT,
@@ -16,6 +17,7 @@ from finance_app.core.constants import (
 )
 from finance_app.modules.comparison import service as comparison_service
 from finance_app.modules.dashboard.service import build_dashboard_context
+from finance_app.modules.reimbursements.service import create_reimbursement_allocation
 
 
 class FixedComparisonDate:
@@ -44,7 +46,7 @@ def insert_financial_transaction(
     ignored=0,
 ):
     """Insert one report transaction for analytics assertions."""
-    conn.execute(
+    result = conn.execute(
         text("""
         INSERT INTO transactions (
             tx_date,
@@ -70,6 +72,7 @@ def insert_financial_transaction(
         },
     )
     conn.commit()
+    return result.lastrowid
 
 
 def dashboard_for_range(app, date_from, date_to):
@@ -192,6 +195,39 @@ def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app,
     assert context["income_month_totals"] == [1000.00]
 
 
+def test_dashboard_reimbursements_reduce_original_expense_category(app, core_conn):
+    """Verify allocated reimbursements reduce spending without becoming income."""
+    expense_id = insert_financial_transaction(
+        core_conn,
+        "2026-02-01",
+        "Conference hotel",
+        1000.00,
+        "Travel",
+        TRANSACTION_KIND_EXPENSE,
+        "financial-reimbursement-expense",
+    )
+    reimbursement_id = insert_financial_transaction(
+        core_conn,
+        "2026-02-15",
+        "Conference reimbursement",
+        -900.00,
+        REIMBURSEMENT_CATEGORY,
+        TRANSACTION_KIND_INCOME,
+        "financial-reimbursement-credit",
+    )
+    create_reimbursement_allocation(reimbursement_id, expense_id, 900.00, conn=core_conn)
+
+    context = dashboard_for_range(app, "2026-02-01", "2026-02-28")
+
+    assert context["total_spending"] == 100.00
+    assert context["total_income"] == 0.00
+    assert context["net_cashflow"] == -100.00
+    assert context["transaction_count"] == 1
+    assert context["category_totals"] == [100.00]
+    assert context["expense_month_totals"] == [100.00]
+    assert context["income_month_totals"] == []
+
+
 def test_dashboard_custom_date_boundaries_are_inclusive_for_leap_months(app, core_conn):
     """Verify custom dashboard ranges include exact start/end dates only."""
     rows = [
@@ -253,3 +289,38 @@ def test_comparison_refunds_reduce_current_and_previous_period_spending(app, cor
     assert totals["Transactions"]["previous"] == 2
     assert category_rows["Food"]["current"] == 150.00
     assert category_rows["Food"]["previous"] == 100.00
+
+
+def test_comparison_reimbursements_reduce_original_expense_category(app, core_conn, monkeypatch):
+    """Verify comparison views use allocated reimbursements as expense offsets."""
+    monkeypatch.setattr(comparison_service, "date", FixedComparisonDate)
+    expense_id = insert_financial_transaction(
+        core_conn,
+        "2026-03-01",
+        "Conference hotel",
+        1000.00,
+        "Travel",
+        TRANSACTION_KIND_EXPENSE,
+        "financial-comparison-reimbursement-expense",
+    )
+    reimbursement_id = insert_financial_transaction(
+        core_conn,
+        "2026-03-02",
+        "Conference reimbursement",
+        -900.00,
+        REIMBURSEMENT_CATEGORY,
+        TRANSACTION_KIND_INCOME,
+        "financial-comparison-reimbursement-credit",
+    )
+    create_reimbursement_allocation(reimbursement_id, expense_id, 900.00, conn=core_conn)
+
+    with app.test_request_context("/comparison"):
+        context = comparison_service.build_comparison_context(MultiDict([("period_comparison", "month_previous")]))
+
+    totals = {metric["label"]: metric for metric in context["period_comparison"]["totals"]}
+    category_rows = {row["category"]: row for row in context["period_comparison"]["category_rows"]}
+
+    assert totals["Spending"]["current"] == 100.00
+    assert totals["Income and Credits"]["current"] == 0.00
+    assert totals["Transactions"]["current"] == 1
+    assert category_rows["Travel"]["current"] == 100.00

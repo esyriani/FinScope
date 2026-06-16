@@ -33,7 +33,7 @@ The first month is about building reliable history, not perfect dashboards.
 7. Open Review and categorize the biggest unknown groups.
 8. Save rules for stable merchant patterns.
 9. Use Rules > Preview apply all after creating or importing several rules.
-10. Open Dashboard, Calendar, Recurring, and Comparison to find obvious cleanup needs.
+10. Open Reimbursements, Dashboard, Calendar, Recurring, and Comparison to find obvious cleanup needs.
 
 Repeat that loop for the next statement. The app becomes more useful as rules and reviewed history accumulate.
 
@@ -172,7 +172,7 @@ Dashboard is the current analysis view. It includes categorization completeness,
 
 Unknown categories reduce report usefulness. Use the categorization completeness panel and Review link when Dashboard warns about data quality.
 
-Transfers are visible in the ledger but are excluded from spending and income totals to avoid double-counting internal money movement. Credit card payment rows and matching funding-account payment rows are treated as payments/transfers. When a concrete tag filter is applied, matching transfer credits can be included so reimbursement-style tags can show a net view.
+Transfers are visible in the ledger but are excluded from spending and income totals to avoid double-counting internal money movement. Credit card payment rows and matching funding-account payment rows are treated as payments/transfers. Reimbursement credits use the `Reimbursement` category and explicit allocations; allocated amounts reduce the original expense category instead of appearing as ordinary income.
 
 Use account and merchant filters when you want an analysis slice you can return to later, such as one credit card and one merchant across several months. Analytics pages keep those filters in the URL so refresh, back/forward navigation, and copied links preserve the view.
 

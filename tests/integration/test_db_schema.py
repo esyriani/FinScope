@@ -44,6 +44,9 @@ from finance_app.database.tables import (
     recurring_patterns as recurring_patterns_table,
 )
 from finance_app.database.tables import (
+    reimbursement_expense_completions as reimbursement_expense_completions_table,
+)
+from finance_app.database.tables import (
     statement_types as statement_types_table,
 )
 from finance_app.database.tables import (
@@ -310,6 +313,37 @@ def test_core_schema_tracks_account_roles_and_transaction_kinds(schema_conn):
     )
 
 
+def test_core_schema_tracks_reimbursement_expense_completion_markers(schema_conn):
+    """Verify reimbursement completion rows link one marker to one expense."""
+    completion_columns = column_names(schema_conn, "reimbursement_expense_completions")
+    completion_foreign_keys = foreign_key_triplets(schema_conn, "reimbursement_expense_completions")
+
+    assert {"id", "expense_transaction_id", "created_at", "updated_at"}.issubset(completion_columns)
+    assert ("expense_transaction_id", "transactions", "id") in completion_foreign_keys
+
+    expense_id = schema_conn.execute(
+        insert(transactions_table).values(
+            tx_date="2026-01-01",
+            description="REIMBURSABLE EXPENSE",
+            amount=100,
+            transaction_kind="expense",
+            fingerprint="tx-reimbursement-completion",
+        )
+    ).inserted_primary_key[0]
+    schema_conn.execute(
+        insert(reimbursement_expense_completions_table).values(
+            expense_transaction_id=expense_id,
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        schema_conn.execute(
+            insert(reimbursement_expense_completions_table).values(
+                expense_transaction_id=expense_id,
+            )
+        )
+
+
 def test_core_schema_accepts_interac_statement_parser_type(schema_conn):
     """Verify the statement type parser constraint accepts Interac history."""
     schema_conn.execute(
@@ -541,6 +575,7 @@ def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
 def test_builtin_categories_are_seeded_and_protected(schema_conn):
     """Verify built-in categories use stable keys and cannot be renamed."""
     unknown_id = category_id(schema_conn, "UNKNOWN")
+    reimbursement_id = category_id(schema_conn, "Reimbursement")
     transfers_id = category_id(schema_conn, "Transfers")
 
     rows = {
@@ -550,11 +585,13 @@ def test_builtin_categories_are_seeded_and_protected(schema_conn):
                 categories_table.c.id,
                 categories_table.c.name,
                 categories_table.c.builtin_key,
-            ).where(categories_table.c.id.in_((unknown_id, transfers_id)))
+            ).where(categories_table.c.id.in_((unknown_id, reimbursement_id, transfers_id)))
         ).mappings()
     }
     assert rows["UNKNOWN"]["builtin_key"] == "unknown"
+    assert rows["Reimbursement"]["builtin_key"] == "reimbursement"
     assert rows["Transfers"]["builtin_key"] == "transfers"
     assert rename_category(schema_conn, "UNKNOWN", "UNCATEGORIZED") is None
+    assert rename_category(schema_conn, "Reimbursement", "Repayments") is None
     assert rename_category(schema_conn, "Transfers", "Balance movement") is None
     assert get_unknown_category(schema_conn) == "UNKNOWN"

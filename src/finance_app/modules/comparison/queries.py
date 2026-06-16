@@ -6,9 +6,12 @@ from typing import Any
 from sqlalchemy import and_, case, func, select
 
 from finance_app.core.reporting import (
+    cashflow_amount_expression,
+    income_amount_expression,
     income_or_tagged_transfer_credit_clause,
     reportable_or_tagged_transfer_credit_clause,
     reportable_transaction_clause,
+    spending_impact_amount_expression,
     spending_impact_clause,
 )
 from finance_app.database.dates import date_month, date_year
@@ -37,9 +40,11 @@ def transaction_month() -> Any:
 
 def analysis_amount_expression(analysis_mode: str) -> Any:
     """Return the signed amount expression for the selected analysis mode."""
-    if analysis_mode in {ANALYSIS_MODE_INCOME, ANALYSIS_MODE_NET}:
-        return -transactions_table.c.amount
-    return transactions_table.c.amount
+    if analysis_mode == ANALYSIS_MODE_INCOME:
+        return income_amount_expression()
+    if analysis_mode == ANALYSIS_MODE_NET:
+        return cashflow_amount_expression()
+    return spending_impact_amount_expression()
 
 
 def analysis_scope_clause(analysis_mode: str, include_transfer_credits: bool = False) -> Any:
@@ -191,7 +196,7 @@ def fetch_period_summary(
                         case(
                             (
                                 spending_impact_clause(),
-                                transactions_table.c.amount,
+                                spending_impact_amount_expression(),
                             ),
                             else_=0,
                         )
@@ -204,7 +209,7 @@ def fetch_period_summary(
                             (
                                 (transactions_table.c.amount < 0)
                                 & income_or_tagged_transfer_credit_clause(include_transfer_credits),
-                                -transactions_table.c.amount,
+                                income_amount_expression(),
                             ),
                             else_=0,
                         )

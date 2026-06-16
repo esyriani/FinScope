@@ -5,9 +5,10 @@ the editable taxonomy seed file. Category services use the stable keys here to
 protect built-in rows from user edits and deletes.
 """
 
-from finance_app.core.constants import TRANSFER_CATEGORY, UNKNOWN_CATEGORY
+from finance_app.core.constants import REIMBURSEMENT_CATEGORY, TRANSFER_CATEGORY, UNKNOWN_CATEGORY
 
 BUILTIN_CATEGORY_UNKNOWN = "unknown"
+BUILTIN_CATEGORY_REIMBURSEMENT = "reimbursement"
 BUILTIN_CATEGORY_TRANSFERS = "transfers"
 
 BUILTIN_CATEGORIES = (
@@ -20,6 +21,20 @@ BUILTIN_CATEGORIES = (
         ),
     },
     {
+        "key": BUILTIN_CATEGORY_REIMBURSEMENT,
+        "name": REIMBURSEMENT_CATEGORY,
+        "description": (
+            "Incoming credits that repay user-paid expenses and should be linked "
+            "to the covered expense transactions."
+        ),
+        "instruction": (
+            "Use for reimbursements, repayments, and employer or organization "
+            "credits that offset expenses the user paid upfront. Do not use for "
+            "ordinary payroll income, transfers between the user's accounts, or "
+            "merchant refunds for returned purchases."
+        ),
+    },
+    {
         "key": BUILTIN_CATEGORY_TRANSFERS,
         "name": TRANSFER_CATEGORY,
         "description": (
@@ -28,10 +43,11 @@ BUILTIN_CATEGORIES = (
         ),
         "instruction": (
             "Use for transfers between accounts, credit card payments, cash withdrawals, "
-            "refunds, reimbursements, repayments, returned purchases, deposits, and "
-            "account adjustments. This category is mainly for cash-flow correction "
-            "and balance movement, not ordinary spending. Do not use Income merely "
-            "because the transaction amount is positive."
+            "returned-purchase refunds, deposits, and account adjustments. This category "
+            "is mainly for cash-flow correction and balance movement, not ordinary "
+            "spending. Use Reimbursement instead for credits that repay expenses the "
+            "user paid upfront. Do not use Income merely because the transaction amount "
+            "is positive."
         ),
     },
 )

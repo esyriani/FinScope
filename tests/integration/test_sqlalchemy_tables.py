@@ -119,6 +119,20 @@ EXPECTED_TABLE_COLUMNS = {
     ],
     "tags": ["id", "name", "description", "instruction", "color", "created_at"],
     "transaction_tags": ["transaction_id", "tag_id", "source", "rule_id", "assigned_at"],
+    "reimbursement_allocations": [
+        "id",
+        "reimbursement_transaction_id",
+        "expense_transaction_id",
+        "amount",
+        "created_at",
+        "updated_at",
+    ],
+    "reimbursement_expense_completions": [
+        "id",
+        "expense_transaction_id",
+        "created_at",
+        "updated_at",
+    ],
     "category_rule_tags": ["rule_id", "tag_id"],
 }
 
@@ -135,6 +149,9 @@ EXPECTED_EXPLICIT_INDEXES = {
     "idx_category_rules_source_approval",
     "idx_merchants_key",
     "idx_recurring_patterns_status",
+    "idx_reimbursement_allocations_expense",
+    "idx_reimbursement_allocations_reimbursement",
+    "idx_reimbursement_expense_completions_expense",
     "idx_statement_types_active",
     "idx_statements_account",
     "idx_statements_statement_type",
@@ -192,6 +209,15 @@ EXPECTED_UNIQUE_CONSTRAINTS = {
     "recurring_patterns": {
         "uq_recurring_patterns_merchant_type": ["merchant_id", "type"],
     },
+    "reimbursement_allocations": {
+        "uq_reimbursement_allocations_pair": [
+            "reimbursement_transaction_id",
+            "expense_transaction_id",
+        ],
+    },
+    "reimbursement_expense_completions": {
+        "uq_reimbursement_expense_completions_expense": ["expense_transaction_id"],
+    },
 }
 
 
@@ -248,6 +274,7 @@ def test_core_metadata_uses_fixed_scale_numeric_for_money_columns():
         metadata.tables["category_rules"].c.amount_max,
         metadata.tables["category_rules"].c.amount_min_key,
         metadata.tables["category_rules"].c.amount_max_key,
+        metadata.tables["reimbursement_allocations"].c.amount,
         metadata.tables["recurring_patterns"].c.typical_amount,
         metadata.tables["recurring_patterns"].c.amount_tolerance,
     ]
@@ -277,6 +304,10 @@ def test_core_metadata_uses_typed_date_and_timestamp_columns():
         metadata.tables["transactions"].c.categorized_at,
         metadata.tables["transactions"].c.reviewed_at,
         metadata.tables["transactions"].c.created_at,
+        metadata.tables["reimbursement_allocations"].c.created_at,
+        metadata.tables["reimbursement_allocations"].c.updated_at,
+        metadata.tables["reimbursement_expense_completions"].c.created_at,
+        metadata.tables["reimbursement_expense_completions"].c.updated_at,
         metadata.tables["recurring_patterns"].c.created_at,
         metadata.tables["recurring_patterns"].c.updated_at,
         metadata.tables["tags"].c.created_at,

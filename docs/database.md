@@ -8,7 +8,7 @@ User-bound runtime settings, statement type management, account persistence, mer
 
 Runtime-facing persistence helpers require SQLAlchemy Core connections. SQLite uses `sqlite:///` database URLs, while MySQL uses `mysql+pymysql://` URLs. Compatible MariaDB deployments use the same MySQL URL form through PyMySQL.
 
-Money amounts are modeled in SQLAlchemy Core as fixed-scale `Numeric(14, 2)` values. This applies to transaction amounts, category rule amount bounds, and recurring pattern amount settings; probability-style fields such as category confidence remain floating point.
+Money amounts are modeled in SQLAlchemy Core as fixed-scale `Numeric(14, 2)` values. This applies to transaction amounts, reimbursement allocation amounts, category rule amount bounds, and recurring pattern amount settings; probability-style fields such as category confidence remain floating point.
 
 Persisted enum-like text values, such as import statuses, parser types, category sources, rule sources, and recurring pattern statuses, are defined in [src/finance_app/core/constants.py](../src/finance_app/core/constants.py). The schema derives `CHECK` constraints from those constants so Python validation and database constraints stay aligned across SQLite and MySQL.
 
@@ -145,7 +145,7 @@ Maps cleaned statement variants to canonical merchants.
 Stores transaction category definitions.
 
 - `name`: Unique category name.
-- `builtin_key`: Stable FinScope-managed key for protected built-in categories such as `UNKNOWN` and `Transfers`; null for user-managed categories.
+- `builtin_key`: Stable FinScope-managed key for protected built-in categories such as `UNKNOWN`, `Reimbursement`, and `Transfers`; null for user-managed categories.
 - `description`: Optional explanatory text for users.
 - `instruction`: Optional LLM instruction used during automated categorization.
 - `created_at`: Creation timestamp.
@@ -172,6 +172,35 @@ Stores imported ledger rows and their categorization state.
 - `transaction_kind`: Cash-flow role used by reports. Expenses and income are reportable; payments and transfers remain visible but are excluded from spending/income totals.
 - `fingerprint`: Unique transaction fingerprint used to prevent duplicate ledger rows.
 - `created_at`: Import timestamp for the row.
+
+#### `reimbursement_allocations`
+
+Links incoming reimbursement credits to the expense transactions they repay.
+The reimbursement transaction is categorized as `Reimbursement`, while covered
+expenses keep their natural spending category and reimbursement-related tags.
+
+- `reimbursement_transaction_id`: Incoming credit transaction that provides the reimbursement amount.
+- `expense_transaction_id`: Positive expense transaction covered by the reimbursement.
+- `amount`: Positive amount allocated from the reimbursement to the expense.
+- `created_at` and `updated_at`: Allocation lifecycle timestamps.
+
+The pair of reimbursement and expense transactions is unique, the two
+transaction ids must be different, and allocation amounts must be positive.
+Application services enforce that allocations do not exceed either the credit
+amount or the covered expense amount.
+
+#### `reimbursement_expense_completions`
+
+Marks reimbursable expenses that no longer need reimbursement follow-up even
+when their allocation total is less than the original expense. This supports
+policy-limited reimbursements without creating fake credits or changing the
+expense category.
+
+- `expense_transaction_id`: Positive expense transaction closed for reimbursement monitoring.
+- `created_at` and `updated_at`: Completion marker lifecycle timestamps.
+
+Each expense can have at most one completion marker. Removing the marker
+reopens the expense for reimbursement matching.
 
 #### `category_rules`
 
@@ -238,6 +267,7 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 - Merchant identity is modeled separately from imported transaction descriptions. `transactions.description` stores the display text, `transactions.merchant_id` links rows to `merchants`, and `merchant_aliases` maps cleaned statement variants to the stable merchant row.
 - Category names are still cached in `transactions.category` and `category_rules.category`, while `category_id` is the stable key for renames. Application write paths keep the text cache and foreign key synchronized.
 - Tags use many-to-many join tables so both transactions and category rules can share the same tag definitions.
+- Reimbursement allocations are explicit links rather than category rewrites. This keeps reimbursable spending visible in its natural category while allowing reports and monitoring pages to compute reimbursed and pending amounts from the allocation table. Reimbursement expense completions close policy-limited or otherwise settled expenses for monitoring only; they do not add reimbursement money or alter analytics offsets.
 - Statement checksums reject exact duplicate files, while transaction fingerprints prevent duplicate ledger rows.
 - Interac e-Transfer history uploads are enrichment sources. They match existing checking-account transactions by account, direction, amount, and nearby posting date, then update the matched transaction with the actual counterparty merchant. They do not insert duplicate Interac ledger rows.
 - Credit card statements are ledger sources because they contain purchase-level detail. The card purchases count as expenses; card payment rows and matching checking-account payment rows are marked as payments/transfers so spending is not double-counted.
