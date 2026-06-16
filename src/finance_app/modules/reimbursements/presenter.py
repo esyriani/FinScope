@@ -1,10 +1,11 @@
 """Presentation shaping for reimbursement monitoring views."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
 from finance_app.core.money import money_to_decimal
+from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 
 MATCH_CANDIDATE_LIMIT = 5
 
@@ -13,14 +14,24 @@ def build_reimbursements_view_model(
     reimbursement_rows: Sequence[dict[str, Any]],
     expense_rows: Sequence[dict[str, Any]],
     allocation_rows: Sequence[dict[str, Any]],
+    expense_tag_map: Mapping[Any, Sequence[str]] | None = None,
+    tag_colors: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build a template-friendly reimbursement monitoring model."""
     reimbursements = [build_reimbursement_row(row) for row in reimbursement_rows]
-    expenses = [build_expense_row(row) for row in expense_rows]
     allocations = [build_allocation_row(row) for row in allocation_rows]
     allocations = with_allocation_update_limits(allocations)
+    expenses = [
+        build_expense_row(
+            row,
+            list((expense_tag_map or {}).get(row["id"], ())),
+            tag_colors or {},
+        )
+        for row in expense_rows
+    ]
+    expenses = with_expense_matches(expenses, allocations)
     reimbursement_options = [row for row in reimbursements if row["remaining"] > 0]
-    expense_options = [row for row in expenses if row["pending_remaining"] > 0]
+    expense_options = active_reimbursable_expenses(expenses)
     return {
         "summary": build_summary(reimbursements, expenses, allocations),
         "reimbursements": reimbursements,
@@ -50,27 +61,39 @@ def build_reimbursement_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_expense_row(row: dict[str, Any]) -> dict[str, Any]:
+def build_expense_row(
+    row: dict[str, Any],
+    tags: Sequence[str] | None = None,
+    tag_colors: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     """Return one display row for an expense that can be reimbursed."""
     amount = money_to_decimal(row["amount"])
     allocated = money_to_decimal(row["allocated"])
     remaining = amount - allocated
     completed = bool(row.get("completion_id"))
     pending_remaining = Decimal("0") if completed else remaining
+    tag_list = list(tags or ())
+    has_reimbursable_tag = bool(row.get("has_reimbursable_tag")) or REIMBURSABLE_TAG in tag_list
     return {
         "id": row["id"],
         "date": row["tx_date"],
         "description": row["description"],
         "category": row["category"],
+        "account_name": row.get("account_name"),
         "amount": amount,
         "allocated": allocated,
         "remaining": remaining,
         "pending_remaining": pending_remaining,
         "is_complete": completed,
         "completed_at": row.get("completed_at"),
+        "has_reimbursable_tag": has_reimbursable_tag,
+        "tags": tag_list,
+        "tag_pills": tag_pills(tag_list, tag_colors or {}),
         "reimbursed_percent": percentage(allocated, amount),
         "status_label": expense_status_label(allocated, remaining, completed),
         "status_class": expense_status_class(allocated, remaining, completed),
+        "matched_reimbursements": [],
+        "matched_reimbursement_count": 0,
     }
 
 
@@ -118,18 +141,51 @@ def with_allocation_update_limits(allocations: Sequence[dict[str, Any]]) -> list
     return limited_rows
 
 
+def with_expense_matches(
+    expenses: Sequence[dict[str, Any]],
+    allocations: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Attach reimbursement matches to each expense row."""
+    matches_by_expense: dict[int, list[dict[str, Any]]] = {}
+    for row in allocations:
+        expense_id = int(row["expense_transaction_id"])
+        matches_by_expense.setdefault(expense_id, []).append(
+            {
+                "allocation_id": row["id"],
+                "reimbursement_transaction_id": row["reimbursement_transaction_id"],
+                "date": row["reimbursement_date"],
+                "description": row["reimbursement_description"],
+                "amount": row["amount"],
+                "reimbursement_amount": row["reimbursement_amount"],
+            }
+        )
+
+    matched_rows = []
+    for row in expenses:
+        matches = matches_by_expense.get(int(row["id"]), [])
+        matched_rows.append(
+            {
+                **row,
+                "matched_reimbursements": matches,
+                "matched_reimbursement_count": len(matches),
+            }
+        )
+    return matched_rows
+
+
 def build_summary(
     reimbursements: Sequence[dict[str, Any]],
     expenses: Sequence[dict[str, Any]],
     allocations: Sequence[dict[str, Any]],
 ) -> dict[str, Any]:
     """Return aggregate metrics for the reimbursement page."""
+    active_expenses = active_reimbursable_expenses(expenses)
     total_reimbursed = sum((row["amount"] for row in reimbursements), Decimal("0"))
     total_allocated = sum((row["amount"] for row in allocations), Decimal("0"))
     pending_credits = sum((positive_remaining(row) for row in reimbursements), Decimal("0"))
-    pending_expenses = sum((positive_pending_remaining(row) for row in expenses), Decimal("0"))
+    pending_expenses = sum((positive_pending_remaining(row) for row in active_expenses), Decimal("0"))
     pending_credit_count = sum(1 for row in reimbursements if positive_remaining(row) > 0)
-    pending_expense_count = sum(1 for row in expenses if positive_pending_remaining(row) > 0)
+    pending_expense_count = len(active_expenses)
     return {
         "reimbursement_count": len(reimbursements),
         "expense_count": len(expenses),
@@ -165,6 +221,15 @@ def build_action_needed(
         "total_reimbursement_count": len(reimbursements),
         "total_expense_count": len(expenses),
     }
+
+
+def active_reimbursable_expenses(expenses: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return tagged, open expense rows that still need reimbursement action."""
+    return [
+        row
+        for row in expenses
+        if row["has_reimbursable_tag"] and not row["is_complete"] and positive_pending_remaining(row) > 0
+    ]
 
 
 def build_match_candidate_summary(
@@ -217,6 +282,17 @@ def percentage(part: Decimal, total: Decimal) -> int:
     if total <= 0:
         return 0
     return min(100, max(0, int((part / total) * 100)))
+
+
+def tag_pills(tags: Sequence[str], tag_colors: Mapping[str, str]) -> list[dict[str, str]]:
+    """Return tag display pills for an expense detail modal."""
+    return [
+        {
+            "name": tag,
+            "color": tag_colors.get(tag, "#64748b"),
+        }
+        for tag in tags
+    ]
 
 
 def reimbursement_status_label(allocated: Decimal, remaining: Decimal) -> str:

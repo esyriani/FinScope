@@ -23,7 +23,12 @@ from finance_app.modules.reimbursements.service import (
 
 
 def expense_transaction(
-    data_factory, *, amount="1000.00", category="Travel", transaction_kind=TRANSACTION_KIND_EXPENSE
+    data_factory,
+    *,
+    amount="1000.00",
+    category="Travel",
+    transaction_kind=TRANSACTION_KIND_EXPENSE,
+    tags=("Conference", "Reimbursable"),
 ):
     """Create a positive expense transaction for reimbursement tests."""
     return data_factory.transactions.create(
@@ -32,7 +37,7 @@ def expense_transaction(
         category=category,
         transaction_kind=transaction_kind,
         needs_review=0,
-        tags=["Conference", "Reimbursable"],
+        tags=list(tags),
     )
 
 
@@ -104,6 +109,27 @@ def test_reimbursable_expense_completion_closes_and_reopens_pending_balance(core
     assert context["expense_options"] == []
     assert context["reimbursable_expenses"][0]["status_label"] == "Complete"
     assert reopened is True
+
+
+def test_action_needed_expenses_only_include_tagged_open_pending_rows(core_conn, data_factory):
+    """Verify active expenses exclude untagged matches and closed tagged rows."""
+    tagged_expense_id = expense_transaction(data_factory, amount="1000.00")
+    untagged_expense_id = expense_transaction(data_factory, amount="1000.00", tags=("Conference",))
+    closed_expense_id = expense_transaction(data_factory, amount="1000.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-100.00")
+    create_reimbursement_allocation(reimbursement_id, untagged_expense_id, Decimal("100.00"), conn=core_conn)
+    complete_reimbursable_expense(closed_expense_id, conn=core_conn)
+
+    context = presenter.build_reimbursements_view_model(
+        queries.fetch_reimbursement_transactions(core_conn),
+        queries.fetch_reimbursable_expense_transactions(core_conn),
+        queries.fetch_reimbursement_allocations(core_conn),
+    )
+    active_expense_ids = {row["id"] for row in context["action_needed"]["expenses"]}
+    all_expense_ids = {row["id"] for row in context["reimbursable_expenses"]}
+
+    assert active_expense_ids == {tagged_expense_id}
+    assert {tagged_expense_id, untagged_expense_id, closed_expense_id}.issubset(all_expense_ids)
 
 
 def test_reimbursement_allocation_rejects_duplicate_transaction_pair(core_conn, data_factory):

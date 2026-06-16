@@ -32,6 +32,7 @@ def expense_row(index: int) -> dict[str, object]:
         "category": "Travel",
         "transaction_kind": "expense",
         "allocated": Decimal("0.00"),
+        "has_reimbursable_tag": True,
     }
 
 

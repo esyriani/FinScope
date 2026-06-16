@@ -10,6 +10,7 @@ from tests.support.html import (
     assert_not_visible_text,
     assert_visible_text,
 )
+from tests.support.rules import set_default_table_page_size
 
 from finance_app.core.constants import (
     REIMBURSEMENT_CATEGORY,
@@ -18,25 +19,39 @@ from finance_app.core.constants import (
 )
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import reimbursement_expense_completions as expense_completions_table
+from finance_app.modules.categories.taxonomy import get_transaction_tag_names
 from finance_app.modules.reimbursements.service import create_reimbursement_allocation
 
 
-def expense_transaction(data_factory, *, amount="1000.00", transaction_kind=TRANSACTION_KIND_EXPENSE):
+def expense_transaction(
+    data_factory,
+    *,
+    amount="1000.00",
+    transaction_kind=TRANSACTION_KIND_EXPENSE,
+    description="Conference expense",
+    tags=("Conference", "Reimbursable"),
+):
     """Create a positive reimbursable expense transaction."""
     return data_factory.transactions.create(
-        description="Conference expense",
+        description=description,
         amount=Decimal(amount),
         category="Travel",
         transaction_kind=transaction_kind,
         needs_review=0,
-        tags=["Conference", "Reimbursable"],
+        tags=list(tags),
     )
 
 
-def reimbursement_transaction(data_factory, *, amount="-900.00", category=REIMBURSEMENT_CATEGORY):
+def reimbursement_transaction(
+    data_factory,
+    *,
+    amount="-900.00",
+    category=REIMBURSEMENT_CATEGORY,
+    description="Employer reimbursement",
+):
     """Create an incoming reimbursement credit transaction."""
     return data_factory.transactions.create(
-        description="Employer reimbursement",
+        description=description,
         amount=Decimal(amount),
         category=category,
         transaction_kind=TRANSACTION_KIND_INCOME,
@@ -54,8 +69,9 @@ def completion_rows(conn):
     return conn.execute(select(expense_completions_table)).mappings().fetchall()
 
 
-def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, data_factory):
+def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_conn, data_factory):
     """Verify the reimbursement page renders available credits and expenses."""
+    set_default_table_page_size(core_conn, 1)
     expense_id = expense_transaction(data_factory, amount="1000.00")
     reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
 
@@ -72,7 +88,7 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, data_f
             "class": "reimbursement-action-table",
             "data-sortable-table": True,
             "data-paginated-table": True,
-            "data-page-size": True,
+            "data-page-size": "1",
         },
     )
     assert_has_element(
@@ -82,7 +98,7 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, data_f
             "class": "reimbursement-action-expense-table",
             "data-sortable-table": True,
             "data-paginated-table": True,
-            "data-page-size": True,
+            "data-page-size": "1",
         },
     )
     assert_has_element(
@@ -92,7 +108,27 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, data_f
             "class": "reimbursement-received-table",
             "data-sortable-table": True,
             "data-paginated-table": True,
-            "data-page-size": True,
+            "data-page-size": "1",
+        },
+    )
+    assert_has_element(
+        response,
+        "table",
+        attrs={
+            "class": "reimbursement-expense-table",
+            "data-sortable-table": True,
+            "data-paginated-table": True,
+            "data-page-size": "1",
+        },
+    )
+    assert_has_element(
+        response,
+        "table",
+        attrs={
+            "class": "reimbursement-history-table",
+            "data-sortable-table": True,
+            "data-paginated-table": True,
+            "data-page-size": "1",
         },
     )
     assert_has_element(
@@ -100,7 +136,19 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, data_f
         "tr",
         attrs={"data-row-edit-target": f"#match-reimbursement-{reimbursement_id}-modal"},
     )
-    assert_has_element(response, "tr", attrs={"id": f"action-expense-{expense_id}"})
+    assert_has_element(
+        response,
+        "tr",
+        attrs={
+            "id": f"action-expense-{expense_id}",
+            "data-row-edit-target": f"#reimbursement-expense-{expense_id}-modal",
+        },
+    )
+    assert_has_element(
+        response,
+        "div",
+        attrs={"id": f"reimbursement-expense-{expense_id}-modal", "class": "reimbursement-expense-modal"},
+    )
     assert_has_element(
         response,
         "div",
@@ -121,14 +169,50 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, data_f
         "Action needed",
         "Active reimbursements",
         "Active expenses",
+        "Expense details",
         "Match reimbursement",
         "Candidate expenses",
+        "Matched reimbursements",
+        "No reimbursements are matched to this expense.",
+        "Remove reimbursable tag",
         "Employer reimbursement",
         "Conference expense",
         "Unmatched",
         "Awaiting reimbursement",
     )
     assert_not_visible_text(response, "Create allocation", "Open credits", "Pending expenses")
+
+
+def test_reimbursements_action_expenses_include_only_tagged_open_pending_rows(
+    csrf_client,
+    core_conn,
+    data_factory,
+):
+    """Verify the active expense queue excludes untagged and closed reimbursement history."""
+    tagged_expense_id = expense_transaction(data_factory, amount="1000.00", description="Tagged work hotel")
+    untagged_expense_id = expense_transaction(
+        data_factory,
+        amount="1000.00",
+        description="Matched but untagged hotel",
+        tags=("Conference",),
+    )
+    closed_expense_id = expense_transaction(data_factory, amount="1000.00", description="Closed work hotel")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-100.00")
+    create_reimbursement_allocation(reimbursement_id, untagged_expense_id, Decimal("100.00"), conn=core_conn)
+    csrf_client.post(f"/reimbursements/expenses/{closed_expense_id}/complete")
+
+    response = csrf_client.get("/reimbursements")
+
+    assert response.status_code == 200
+    assert_has_element(response, "tr", attrs={"id": f"action-expense-{tagged_expense_id}"})
+    assert_no_element(response, "tr", attrs={"id": f"action-expense-{untagged_expense_id}"})
+    assert_no_element(response, "tr", attrs={"id": f"action-expense-{closed_expense_id}"})
+    assert_has_element(
+        response,
+        "tr",
+        attrs={"data-row-edit-target": f"#reimbursement-expense-{untagged_expense_id}-modal"},
+    )
+    assert_visible_text(response, "Tagged work hotel", "Matched but untagged hotel", "Closed work hotel")
 
 
 def test_reimbursements_allocation_post_persists_link(csrf_client, core_conn, data_factory):
@@ -179,6 +263,73 @@ def test_reimbursements_multiple_match_post_persists_links(csrf_client, core_con
     assert {row["expense_transaction_id"] for row in rows} == {first_expense_id, second_expense_id}
     assert sum((row["amount"] for row in rows), Decimal("0.00")) == Decimal("900.00")
     assert_visible_text(response, "2 reimbursement matches saved.", "Fully matched")
+
+
+def test_reimbursements_expense_modal_lists_multiple_matches(csrf_client, core_conn, data_factory):
+    """Verify expense detail modals show every reimbursement matched to an expense."""
+    expense_id = expense_transaction(data_factory, amount="1000.00", description="Conference flight")
+    first_reimbursement_id = reimbursement_transaction(
+        data_factory,
+        amount="-300.00",
+        description="First employer reimbursement",
+    )
+    second_reimbursement_id = reimbursement_transaction(
+        data_factory,
+        amount="-200.00",
+        description="Second employer reimbursement",
+    )
+    create_reimbursement_allocation(first_reimbursement_id, expense_id, Decimal("300.00"), conn=core_conn)
+    create_reimbursement_allocation(second_reimbursement_id, expense_id, Decimal("200.00"), conn=core_conn)
+
+    response = csrf_client.get("/reimbursements")
+
+    assert response.status_code == 200
+    assert_has_element(
+        response,
+        "div",
+        attrs={"id": f"reimbursement-expense-{expense_id}-modal", "class": "reimbursement-expense-modal"},
+    )
+    assert_visible_text(
+        response,
+        "Expense details",
+        "Matched reimbursements",
+        "First employer reimbursement",
+        "Second employer reimbursement",
+        "300.00",
+        "200.00",
+    )
+
+
+def test_reimbursements_expense_reimbursable_tag_route_toggles_active_queue(
+    csrf_client,
+    core_conn,
+    data_factory,
+):
+    """Verify the reimbursement page can add or remove the Reimbursable tag."""
+    expense_id = expense_transaction(data_factory, amount="1000.00")
+
+    remove_response = csrf_client.post(
+        f"/reimbursements/expenses/{expense_id}/reimbursable-tag",
+        data={"reimbursable": "0"},
+        follow_redirects=True,
+    )
+    tags_after_remove = get_transaction_tag_names(core_conn, expense_id)
+
+    add_response = csrf_client.post(
+        f"/reimbursements/expenses/{expense_id}/reimbursable-tag",
+        data={"reimbursable": "1"},
+        follow_redirects=True,
+    )
+    tags_after_add = get_transaction_tag_names(core_conn, expense_id)
+
+    assert remove_response.status_code == 200
+    assert "Reimbursable" not in tags_after_remove
+    assert_visible_text(remove_response, "Reimbursable tag removed.")
+    assert_no_element(remove_response, "tr", attrs={"id": f"action-expense-{expense_id}"})
+    assert add_response.status_code == 200
+    assert "Reimbursable" in tags_after_add
+    assert_visible_text(add_response, "Reimbursable tag added.")
+    assert_has_element(add_response, "tr", attrs={"id": f"action-expense-{expense_id}"})
 
 
 def test_reimbursements_allocation_post_flashes_validation_errors(csrf_client, core_conn, data_factory):

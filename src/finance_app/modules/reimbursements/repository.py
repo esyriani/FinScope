@@ -9,10 +9,13 @@ from typing import Any
 
 from sqlalchemy import delete, func, insert, select, update
 
+from finance_app.core.constants import CATEGORY_SOURCE_MANUAL
 from finance_app.core.money import MoneyValue, money_to_decimal
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import reimbursement_expense_completions as expense_completions_table
+from finance_app.database.tables import tags as tags_table
+from finance_app.database.tables import transaction_tags as transaction_tags_table
 from finance_app.database.tables import transactions as transactions_table
 
 
@@ -198,6 +201,45 @@ def delete_expense_completion(conn: Any, expense_transaction_id: int) -> bool:
     cursor = conn.execute(
         delete(expense_completions_table).where(
             expense_completions_table.c.expense_transaction_id == expense_transaction_id
+        )
+    )
+    return cursor.rowcount > 0
+
+
+def set_transaction_tag_state(conn: Any, transaction_id: int, tag_name: str, enabled: bool) -> bool:
+    """Add or remove one transaction tag while preserving other tag rows."""
+    tag_id = conn.execute(select(tags_table.c.id).where(tags_table.c.name == tag_name)).scalar_one_or_none()
+    if tag_id is None:
+        return False
+
+    existing = (
+        conn.execute(
+            select(transaction_tags_table.c.tag_id).where(
+                transaction_tags_table.c.transaction_id == transaction_id,
+                transaction_tags_table.c.tag_id == tag_id,
+            )
+        )
+        .mappings()
+        .fetchone()
+    )
+    if enabled:
+        if existing is not None:
+            return False
+        conn.execute(
+            insert(transaction_tags_table).values(
+                transaction_id=transaction_id,
+                tag_id=tag_id,
+                source=CATEGORY_SOURCE_MANUAL,
+                rule_id=None,
+                assigned_at=func.current_timestamp(),
+            )
+        )
+        return True
+
+    cursor = conn.execute(
+        delete(transaction_tags_table).where(
+            transaction_tags_table.c.transaction_id == transaction_id,
+            transaction_tags_table.c.tag_id == tag_id,
         )
     )
     return cursor.rowcount > 0

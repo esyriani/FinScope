@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select
 
 from finance_app.core.constants import REIMBURSEMENT_CATEGORY, TRANSACTION_KIND_EXPENSE
+from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import reimbursement_expense_completions as expense_completions_table
@@ -12,8 +13,7 @@ from finance_app.database.tables import tags as tags_table
 from finance_app.database.tables import transaction_tags as transaction_tags_table
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.builtins import BUILTIN_CATEGORY_REIMBURSEMENT
-
-REIMBURSABLE_TAG = "Reimbursable"
+from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 
 
 def reimbursement_category_clause(transaction_table: Any, category_table: Any) -> Any:
@@ -85,7 +85,7 @@ def fetch_reimbursement_transactions(conn: Any) -> list[dict[str, Any]]:
 
 
 def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
-    """Fetch expense transactions that are reimbursable or already allocated."""
+    """Fetch expense transactions that are reimbursable, matched, or closed."""
     allocated = expense_allocation_totals()
     has_reimbursable_tag = (
         select(1)
@@ -125,15 +125,22 @@ def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
                 transactions_table.c.amount,
                 transactions_table.c.category,
                 transactions_table.c.transaction_kind,
+                accounts_table.c.name.label("account_name"),
                 func.coalesce(allocated.c.allocated, 0).label("allocated"),
+                has_reimbursable_tag.label("has_reimbursable_tag"),
                 expense_completions_table.c.id.label("completion_id"),
                 expense_completions_table.c.created_at.label("completed_at"),
             )
             .select_from(
                 transactions_table.outerjoin(
+                    accounts_table,
+                    accounts_table.c.id == transactions_table.c.account_id,
+                )
+                .outerjoin(
                     allocated,
                     allocated.c.transaction_id == transactions_table.c.id,
-                ).outerjoin(
+                )
+                .outerjoin(
                     expense_completions_table,
                     expense_completions_table.c.expense_transaction_id == transactions_table.c.id,
                 )

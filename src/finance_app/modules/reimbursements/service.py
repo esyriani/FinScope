@@ -18,7 +18,9 @@ from finance_app.core.constants import (
 from finance_app.core.money import MoneyValue, money_to_decimal, quantize_money
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.builtins import BUILTIN_CATEGORY_REIMBURSEMENT
+from finance_app.modules.categories.taxonomy import get_tag_color_map, get_transaction_tags_by_id, upsert_tag_metadata
 from finance_app.modules.reimbursements import presenter, queries, repository
+from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 from finance_app.modules.settings.runtime import get_int_setting
 
 
@@ -46,12 +48,16 @@ def build_reimbursements_context() -> dict[str, Any]:
         reimbursement_rows = queries.fetch_reimbursement_transactions(conn)
         expense_rows = queries.fetch_reimbursable_expense_transactions(conn)
         allocation_rows = queries.fetch_reimbursement_allocations(conn)
+        expense_tag_map = get_transaction_tags_by_id(conn, [row["id"] for row in expense_rows])
+        tag_colors = get_tag_color_map(conn)
         table_page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
 
     context = presenter.build_reimbursements_view_model(
         reimbursement_rows,
         expense_rows,
         allocation_rows,
+        expense_tag_map,
+        tag_colors,
     )
     context["table_page_size"] = table_page_size
     return context
@@ -198,6 +204,25 @@ def reopen_reimbursable_expense(expense_transaction_id: object, conn: Any | None
     normalized_expense_id = positive_int(expense_transaction_id, "expense transaction id")
     with db_core_transaction(conn) as active_conn:
         return repository.delete_expense_completion(active_conn, normalized_expense_id)
+
+
+def set_expense_reimbursable_tag(
+    expense_transaction_id: object,
+    enabled: bool,
+    conn: Any | None = None,
+) -> bool:
+    """Add or remove the Reimbursable tag for one expense transaction."""
+    normalized_expense_id = positive_int(expense_transaction_id, "expense transaction id")
+    with db_core_transaction(conn) as active_conn:
+        expense = require_transaction(active_conn, normalized_expense_id, "Expense transaction")
+        validate_expense_transaction(expense)
+        upsert_tag_metadata(active_conn, REIMBURSABLE_TAG)
+        return repository.set_transaction_tag_state(
+            active_conn,
+            normalized_expense_id,
+            REIMBURSABLE_TAG,
+            enabled,
+        )
 
 
 def _save_reimbursement_allocation(

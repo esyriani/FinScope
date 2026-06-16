@@ -13,6 +13,7 @@ from finance_app.modules.reimbursements.service import (
     create_reimbursement_matches,
     delete_reimbursement_allocation,
     reopen_reimbursable_expense,
+    set_expense_reimbursable_tag,
     update_reimbursement_allocation_amount,
 )
 
@@ -99,6 +100,23 @@ def reopen_expense(expense_transaction_id: int) -> ResponseReturnValue:
         flash(gettext("Expense reopened for reimbursement matching."))
     else:
         flash(gettext("Expense was already open for reimbursement matching."))
+    return redirect(reimbursements_url())
+
+
+@reimbursements_bp.route("/reimbursements/expenses/<int:expense_transaction_id>/reimbursable-tag", methods=["POST"])
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
+def update_expense_reimbursable_tag(expense_transaction_id: int) -> ResponseReturnValue:
+    """Add or remove the Reimbursable tag on one expense transaction."""
+    enabled = request.form.get("reimbursable") == "1"
+    try:
+        changed = set_expense_reimbursable_tag(expense_transaction_id, enabled)
+    except ReimbursementAllocationError as exc:
+        flash(gettext(str(exc)))
+    else:
+        if changed:
+            flash(gettext("Reimbursable tag added." if enabled else "Reimbursable tag removed."))
+        else:
+            flash(gettext("Reimbursable tag was already set." if enabled else "Reimbursable tag was already removed."))
     return redirect(reimbursements_url())
 
 
