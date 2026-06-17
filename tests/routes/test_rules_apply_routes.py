@@ -64,7 +64,7 @@ def test_apply_single_rule_route_updates_only_transactions_where_rule_wins(csrf_
         {"p0": losing_tx_id},
     ).fetchone()
     assert response.status_code == 200
-    assert_visible_text(response, "Rule applied where it wins to 1 existing transactions.")
+    assert_visible_text(response, "Rule applied where it has priority to 1 existing transactions.")
     assert tuple(winning_tx) == ("Food", 0, "rule", broad_rule_id)
     assert tuple(losing_tx) == ("UNKNOWN", 1, None)
 

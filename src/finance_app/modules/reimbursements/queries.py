@@ -85,7 +85,7 @@ def fetch_reimbursement_transactions(conn: Any) -> list[dict[str, Any]]:
 
 
 def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
-    """Fetch expense transactions that are reimbursable, matched, or closed."""
+    """Fetch expense transactions that are reimbursable, matched, or completed."""
     allocated = expense_allocation_totals()
     has_reimbursable_tag = (
         select(1)

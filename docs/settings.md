@@ -21,7 +21,7 @@ Every authenticated user can edit General settings for their own account.
 | Merchant table limit | Whole number, minimum `1` | Limits merchant rows shown in comparison summaries. |
 | Merchant suggestion limit | Whole number, minimum `1`; default `5` | Limits merchant suggestions shown in autocomplete fields. |
 | Rule preview limit | Whole number, minimum `1` | Limits matching transactions shown while previewing rule changes. |
-| Rule audit transaction limit | Whole number, minimum `1` | Sets how many newest historical transactions Rule audit analyzes before showing its limited-audit notice. |
+| Rule health check transaction limit | Whole number, minimum `1` | Sets how many newest historical transactions the rule health check analyzes before showing its limited-check notice. |
 
 ## Categorization
 
@@ -30,9 +30,9 @@ Owners can edit Categorization settings. Optional AI behavior still requires an 
 | Setting | Allowed values | Effect |
 | --- | --- | --- |
 | Single-transaction AI | On or off | Shows or hides the Suggest category action on transaction rows. The action previews one AI category suggestion and lets the user decide whether to apply it or save a rule. |
-| Confirm token usage | On or off | When on, AI actions show a token estimate and require confirmation before sending a request. When off, statement imports can automatically queue AI categorization for remaining unknown rows. |
-| LLM confidence threshold | Number from `0` to `1` | Minimum confidence required before AI can create an automatic rule for a no-review result. |
-| LLM review threshold | Number from `0` to `1` | Minimum confidence required to keep the best-fit AI category as a review item instead of leaving the transaction as `UNKNOWN`. |
+| Review AI usage | On or off | When on, AI actions show an estimated AI usage summary and ask before sending a request. When off, statement imports can automatically queue AI categorization for remaining unknown rows. |
+| AI acceptance threshold | Number from `0` to `1` | Minimum confidence required before AI can create an automatic rule for a no-review result. |
+| AI review threshold | Number from `0` to `1` | Minimum confidence required to keep the best-fit AI category as a review item instead of leaving the transaction as `UNKNOWN`. |
 | Verify threshold | Number from `0` to `1` | Accepted AI categories below this confidence stay marked for review. |
 | OpenAI model | Model name containing letters, numbers, `.`, `_`, `:`, `/`, `+`, or `-` | Sets the categorization model. The Validate button checks whether the configured API key can see the model through the OpenAI models API. |
 

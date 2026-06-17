@@ -270,7 +270,7 @@ def import_rules() -> ResponseReturnValue:
 
     flash(
         gettext(
-            "Rules import queued in the background. Track progress on the Jobs page. Job: {job_id}",
+            "Rules import queued in the background. Track progress on the Processing page. Job: {job_id}",
             job_id=job_id[:8],
         )
     )
@@ -376,7 +376,9 @@ def apply_rule(rule_id: int) -> ResponseReturnValue:
             message = gettext("Rule force-applied to {count} existing transactions.", count=updated_count)
         elif mode == "apply_where_wins":
             updated_count = apply_rule_where_it_wins_to_transactions(conn, rule)
-            message = gettext("Rule applied where it wins to {count} existing transactions.", count=updated_count)
+            message = gettext(
+                "Rule applied where it has priority to {count} existing transactions.", count=updated_count
+            )
         else:
             message = gettext("Unsupported apply mode.")
             if wants_json_response():
@@ -425,7 +427,7 @@ def apply_all_rules() -> ResponseReturnValue:
 
     flash(
         gettext(
-            "Applying all rules in the background. Track progress on the Jobs page. Job: {job_id}",
+            "Applying all rules in the background. Track progress on the Processing page. Job: {job_id}",
             job_id=job_id[:8],
         )
     )

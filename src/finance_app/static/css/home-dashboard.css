@@ -30,6 +30,27 @@
     padding: 1rem;
 }
 
+.metric-card-with-help {
+    padding: 0;
+    position: relative;
+}
+
+.metric-card-body-link {
+    display: block;
+    height: 100%;
+    padding: 1rem;
+}
+
+.metric-card-with-help > .help-tip {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+}
+
+.metric-card-with-help .metric-label {
+    padding-right: 1.5rem;
+}
+
 .metric-label,
 .status-label {
     color: var(--app-muted);
@@ -67,6 +88,22 @@
     display: block;
     margin-top: 0.25rem;
     overflow-wrap: anywhere;
+}
+
+.status-strip-item-with-help {
+    min-width: 0;
+    position: relative;
+}
+
+.status-strip-item-with-help > a {
+    display: block;
+    padding-right: 1.5rem;
+}
+
+.status-strip-item-with-help > .help-tip {
+    position: absolute;
+    right: 0;
+    top: 0;
 }
 
 .status-strip small {

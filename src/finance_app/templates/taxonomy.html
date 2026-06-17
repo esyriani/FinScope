@@ -1,6 +1,7 @@
 {% set page_stylesheets = ["css/page-tabs.css", "css/home-dashboard.css", "css/tables.css", "css/exports.css"] %}
 {% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
+{% from "_help.html" import help_tip with context %}
 
 {% block content %}
 {% set categories = categories | default([]) %}
@@ -8,12 +9,12 @@
 
 <div class="page-header">
     <div>
-        <h2 class="mb-1">{{ _("Taxonomy") }}</h2>
-        <p class="text-muted mb-0">{{ _("Manage transaction categories and tags used by rules, review, and LLM categorization.") }}</p>
+        <h2 class="mb-1">{{ _("Categories and tags") }}</h2>
+        <p class="text-muted mb-0">{{ _("Manage transaction categories and tags used by rules, review, and AI categorization.") }}</p>
     </div>
     <div class="home-actions">
         <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#import-taxonomy-modal">
-            <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import taxonomy") }}
+            <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import categories and tags") }}
         </button>
         <a class="btn btn-outline-secondary" href="{{ url_for('taxonomy_admin.export_taxonomy') }}">
             <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>{{ _("Export YAML") }}
@@ -27,14 +28,14 @@
             <form method="post" action="{{ url_for('taxonomy_admin.import_taxonomy') }}" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="import-taxonomy-title">{{ _("Import taxonomy") }}</h5>
+                    <h5 class="modal-title" id="import-taxonomy-title">{{ _("Import categories and tags") }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label" for="taxonomy-file">{{ _("Taxonomy YAML") }}</label>
+                        <label class="form-label" for="taxonomy-file">{{ _("Categories and tags YAML") }}</label>
                         <input id="taxonomy-file" class="form-control" type="file" name="taxonomy_file" accept=".yml,.yaml,application/x-yaml,text/yaml,text/x-yaml" required>
-                        <div class="form-text">{{ _("Use the taxonomy YAML export format with categories and tags.") }}</div>
+                        <div class="form-text">{{ _("Use the categories and tags YAML export format.") }}</div>
                     </div>
                     <p class="text-muted mb-0">{{ _("Existing user-managed categories and tags are updated by name. Built-in categories are skipped.") }}</p>
                 </div>
@@ -58,7 +59,7 @@
     {% endif %}
 {% endwith %}
 
-<div class="taxonomy-tabs page-tabs nav nav-tabs mb-4" role="tablist" aria-label="{{ _('Taxonomy') }}">
+<div class="taxonomy-tabs page-tabs nav nav-tabs mb-4" role="tablist" aria-label="{{ _('Categories and tags') }}">
     <button class="nav-link active" id="taxonomy-categories-tab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#taxonomy-categories-panel" aria-controls="taxonomy-categories-panel" aria-selected="true">
         <i class="bi bi-folder" aria-hidden="true"></i>
         <span>{{ _("Categories") }}</span>
@@ -77,7 +78,10 @@
             <div class="card-body border-bottom">
                 <div class="d-flex align-items-center justify-content-between gap-3">
                     <div>
-                        <h5 class="mb-1">{{ _("Categories") }}</h5>
+                        <h5 class="mb-1">
+                            {{ _("Categories") }}
+                            {{ help_tip("The main type of a transaction. Each transaction has one category.", "Explain categories") }}
+                        </h5>
                         <div class="text-muted small">{{ _("{count} configured", count=categories | length) }}</div>
                     </div>
                     <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-category-modal">
@@ -119,8 +123,8 @@
                                         ></span>
                                         <span
                                             data-export-part
-                                            data-export-label="{{ _('LLM instruction') }}"
-                                            data-export-header="{{ _('LLM instruction') }}"
+                                            data-export-label="{{ _('AI guidance') }}"
+                                            data-export-header="{{ _('AI guidance') }}"
                                             data-export-text="{{ category.instruction }}"
                                         ></span>
                                         {% if category.description %}
@@ -188,7 +192,10 @@
             <div class="card-body border-bottom">
                 <div class="d-flex align-items-center justify-content-between gap-3">
                     <div>
-                        <h5 class="mb-1">{{ _("Tags") }}</h5>
+                        <h5 class="mb-1">
+                            {{ _("Tags") }}
+                            {{ help_tip("Optional labels for extra context. A transaction can have several tags.", "Explain tags") }}
+                        </h5>
                         <div class="text-muted small">{{ _("{count} configured", count=tags | length) }}</div>
                     </div>
                     <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-tag-modal">
@@ -227,8 +234,8 @@
                                         ></span>
                                         <span
                                             data-export-part
-                                            data-export-label="{{ _('LLM instruction') }}"
-                                            data-export-header="{{ _('LLM instruction') }}"
+                                            data-export-label="{{ _('AI guidance') }}"
+                                            data-export-header="{{ _('AI guidance') }}"
                                             data-export-text="{{ tag.instruction }}"
                                         ></span>
                                         {% if tag.description %}
@@ -297,7 +304,7 @@
                         <textarea id="new-category-description" class="form-control" name="description" rows="3"></textarea>
                     </div>
                     <div>
-                        <label class="form-label" for="new-category-instruction">{{ _("LLM instruction") }}</label>
+                        <label class="form-label" for="new-category-instruction">{{ _("AI guidance") }}</label>
                         <textarea id="new-category-instruction" class="form-control" name="instruction" rows="5"></textarea>
                     </div>
                 </div>
@@ -333,7 +340,7 @@
                         <textarea id="new-tag-description" class="form-control" name="description" rows="3"></textarea>
                     </div>
                     <div>
-                        <label class="form-label" for="new-tag-instruction">{{ _("LLM instruction") }}</label>
+                        <label class="form-label" for="new-tag-instruction">{{ _("AI guidance") }}</label>
                         <textarea id="new-tag-instruction" class="form-control" name="instruction" rows="5"></textarea>
                     </div>
                 </div>
@@ -367,7 +374,7 @@
                         <textarea id="category-{{ category.id }}-description" class="form-control" name="description" rows="3">{{ category.description }}</textarea>
                     </div>
                     <div>
-                        <label class="form-label" for="category-{{ category.id }}-instruction">{{ _("LLM instruction") }}</label>
+                        <label class="form-label" for="category-{{ category.id }}-instruction">{{ _("AI guidance") }}</label>
                         <textarea id="category-{{ category.id }}-instruction" class="form-control" name="instruction" rows="5">{{ category.instruction }}</textarea>
                     </div>
                 </div>
@@ -402,7 +409,7 @@
                     <textarea id="view-category-{{ category.id }}-description" class="form-control" rows="3" readonly>{{ category.description }}</textarea>
                 </div>
                 <div>
-                    <label class="form-label" for="view-category-{{ category.id }}-instruction">{{ _("LLM instruction") }}</label>
+                    <label class="form-label" for="view-category-{{ category.id }}-instruction">{{ _("AI guidance") }}</label>
                     <textarea id="view-category-{{ category.id }}-instruction" class="form-control" rows="5" readonly>{{ category.instruction }}</textarea>
                 </div>
             </div>
@@ -463,7 +470,7 @@
                         <textarea id="tag-{{ tag.id }}-description" class="form-control" name="description" rows="3">{{ tag.description }}</textarea>
                     </div>
                     <div>
-                        <label class="form-label" for="tag-{{ tag.id }}-instruction">{{ _("LLM instruction") }}</label>
+                        <label class="form-label" for="tag-{{ tag.id }}-instruction">{{ _("AI guidance") }}</label>
                         <textarea id="tag-{{ tag.id }}-instruction" class="form-control" name="instruction" rows="5">{{ tag.instruction }}</textarea>
                     </div>
                 </div>

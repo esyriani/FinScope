@@ -14,6 +14,7 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_help.html" import help_tip with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_account_control, rule_category_control, rule_direction_control, rule_keyword_control, rule_scope_control, rule_tag_control with context %}
 {% from "_pagination.html" import pagination with context %}
 
@@ -73,7 +74,10 @@
 
 <div class="page-header">
     <div>
-        <h2 class="mb-1">{{ _("Category rules") }}</h2>
+        <h2 class="mb-1">
+            {{ _("Category rules") }}
+            {{ help_tip("A rule remembers how to categorize future matching transactions.", "Explain rules") }}
+        </h2>
         <p class="text-muted mb-0">{{ _("Manual rules are applied before automatic suggestions.") }}</p>
     </div>
     <div class="home-actions">
@@ -82,9 +86,9 @@
             href="{{ url_for('rules.audit_rules') }}"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Loading rule audit...') }}"
+            data-busy-message="{{ _('Loading rule health check...') }}"
         >
-            <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule audit") }}
+            <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule health check") }}
         </a>
         <form
             method="post"
@@ -92,7 +96,7 @@
             class="d-inline"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Preparing rule audit preview...') }}"
+            data-busy-message="{{ _('Preparing rule health check preview...') }}"
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="next" value="{{ request.full_path }}">
@@ -143,7 +147,7 @@
                             <label class="form-check-label" for="rules-import-override">
                                 {{ _("Override all rules") }}
                             </label>
-                            <div class="form-text text-danger">{{ _("Removes all existing rules and replaces them with the imported file. The job can be undone from Jobs.") }}</div>
+                            <div class="form-text text-danger">{{ _("Removes all existing rules and replaces them with the imported file. The queued work can be undone from Processing.") }}</div>
                         </div>
                     </div>
                     <p class="text-muted mb-0">{{ _("The import is previewed before a background job is queued.") }}</p>
@@ -295,7 +299,7 @@
                 data-rule-preview-url="/rules/preview"
                 data-busy-overlay
                 data-busy-delay-ms="0"
-                data-busy-message="{{ _('Preparing rule audit preview...') }}"
+                data-busy-message="{{ _('Preparing rule health check preview...') }}"
             >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path }}">
@@ -310,7 +314,7 @@
                     {{ rule_tag_control("new-rule", tag_options) }}
                     {{ rule_account_control("new-rule", account_options) }}
                     {{ rule_direction_control("new-rule", direction_options) }}
-                    {{ amount_rule_control("new-rule") }}
+                    {{ amount_rule_control("new-rule", show_help=True) }}
                     {{ rule_preview_panel() }}
                 </div>
                 <div class="modal-footer">
@@ -376,7 +380,7 @@
                             {% if rule["merchant_id"] %}
                                 <div class="small text-muted">{{ _("Merchant") }}: {{ rule["merchant_name"] }}</div>
                             {% else %}
-                                <div class="small text-muted">{{ _("Fuzzy keyword") }}</div>
+                                <div class="small text-muted">{{ _("Approximate keyword") }}</div>
                             {% endif %}
                             {% if rule["account_name"] %}
                                 <div class="small text-muted">{{ _("Account") }}: {{ rule["account_name"] }}</div>
@@ -453,7 +457,7 @@
                                     class="d-inline"
                                     data-busy-overlay
                                     data-busy-delay-ms="0"
-                                    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+                                        data-busy-message="{{ _('Preparing rule health check preview...') }}"
                                 >
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="next" value="{{ request.full_path }}">
@@ -506,7 +510,7 @@
                 data-rule-preview-url="/rules/preview"
                 data-busy-overlay
                 data-busy-delay-ms="0"
-                data-busy-message="{{ _('Preparing rule audit preview...') }}"
+                data-busy-message="{{ _('Preparing rule health check preview...') }}"
             >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path }}">
@@ -527,7 +531,7 @@
                     {{ rule_tag_control("rule-" ~ rule["id"], tag_options, rule["tags"]) }}
                     {{ rule_account_control("rule-" ~ rule["id"], account_options, rule["account_id"]) }}
                     {{ rule_direction_control("rule-" ~ rule["id"], direction_options, rule["direction"]) }}
-                    {{ amount_rule_control("rule-" ~ rule["id"], rule["amount_min"], rule["amount_max"]) }}
+                    {{ amount_rule_control("rule-" ~ rule["id"], rule["amount_min"], rule["amount_max"], show_help=True) }}
                     {{ rule_preview_panel() }}
                 </div>
                 <div class="modal-footer">
@@ -548,7 +552,7 @@
                 {% if rule["can_delete_without_preview"] %}data-rule-table-action{% endif %}
                 data-busy-overlay
                 data-busy-delay-ms="0"
-                {% if not rule["can_delete_without_preview"] %}data-busy-message="{{ _('Preparing rule audit preview...') }}"{% endif %}
+                {% if not rule["can_delete_without_preview"] %}data-busy-message="{{ _('Preparing rule health check preview...') }}"{% endif %}
             >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path }}">

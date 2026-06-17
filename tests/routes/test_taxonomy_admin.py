@@ -33,11 +33,15 @@ def test_taxonomy_page_exposes_yaml_import_and_export_controls(client):
     document = parse_html(response)
 
     assert response.status_code == 200
-    assert_visible_text(response, "Import taxonomy", "Export YAML", "Categories", "Tags")
+    assert_visible_text(response, "Import categories and tags", "Export YAML", "Categories", "Tags")
     assert_has_element(response, "a", attrs={"href": "/taxonomy/export.yml"}, text="Export YAML")
     assert_has_element(response, "div", attrs={"id": "import-taxonomy-modal"})
     assert_has_element(response, "input", attrs={"name": "taxonomy_file"})
-    assert_has_element(response, "div", attrs={"class": "taxonomy-tabs", "role": "tablist", "aria-label": "Taxonomy"})
+    assert_has_element(
+        response,
+        "div",
+        attrs={"class": "taxonomy-tabs", "role": "tablist", "aria-label": "Categories and tags"},
+    )
     assert_has_element(
         response,
         "button",
@@ -135,8 +139,8 @@ def test_taxonomy_tables_export_description_and_llm_instruction_separately(clien
         "span",
         attrs={
             "data-export-part": True,
-            "data-export-label": "LLM instruction",
-            "data-export-header": "LLM instruction",
+            "data-export-label": "AI guidance",
+            "data-export-header": "AI guidance",
             "data-export-text": "Use this category for export coverage.",
         },
     )
@@ -155,8 +159,8 @@ def test_taxonomy_tables_export_description_and_llm_instruction_separately(clien
         "span",
         attrs={
             "data-export-part": True,
-            "data-export-label": "LLM instruction",
-            "data-export-header": "LLM instruction",
+            "data-export-label": "AI guidance",
+            "data-export-header": "AI guidance",
             "data-export-text": "Use this tag for export coverage.",
         },
     )

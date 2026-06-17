@@ -12,6 +12,7 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_help.html" import help_tip with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
 {% from "_pagination.html" import pagination with context %}
 
@@ -46,7 +47,7 @@
     </div>
     <div class="home-actions">
         <a class="btn btn-outline-secondary" href="{{ url_for('transactions.transactions', review='needs_review', period='all') }}"><i class="bi bi-receipt" aria-hidden="true"></i>{{ _("Transactions") }}</a>
-        <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i>{{ _("Jobs") }}</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i>{{ _("Processing") }}</a>
     </div>
 </div>
 
@@ -105,7 +106,10 @@
         {% endif %}
     </div>
     <div class="metric-card">
-        <div class="metric-label">{{ _("Review amount") }}</div>
+        <div class="metric-label">
+            {{ _("Review amount") }}
+            {{ help_tip("Total value of transactions in review groups that still need a category decision.", "Explain review amount") }}
+        </div>
         <div class="metric-value">{{ (summary.review_amount or 0) | moneyfmt }}</div>
     </div>
 </div>
@@ -216,7 +220,13 @@
 <div class="modal fade" id="review-group-{{ review_group_index }}" tabindex="-1" aria-labelledby="review-group-{{ review_group_index }}-title" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <form class="review-modal-form" method="post" action="{{ url_for('review.apply_review_group') }}" data-ajax-refresh-form>
+            <form
+                class="review-modal-form"
+                method="post"
+                action="{{ url_for('review.apply_review_group') }}"
+                data-ajax-refresh-form
+                data-review-apply-form
+            >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path }}">
                 <input type="hidden" name="merchant_key" value="{{ group.merchant_key }}">
@@ -240,7 +250,7 @@
                             <dd>{{ group.total_amount | moneyfmt }}</dd>
                         </div>
                         <div>
-                            <dt>{{ _("Category source") }}</dt>
+                            <dt>{{ _("Categorized by") }}</dt>
                             <dd>
                                 {% for source in group.category_source_badges %}
                                     <span class="badge {{ source.class }}">{{ _(source.label) }}</span>
@@ -327,10 +337,10 @@
                         "create_rule",
                         "1",
                         "0",
-                        "Rule creation",
-                        "Save rule",
+                        "Remember future matches",
+                        "Remember for future matches",
                         "Use the options below for future matches",
-                        "This transaction only" if group.is_ungrouped else "This group only",
+                        "Apply once" if group.is_ungrouped else "This group only",
                         "Do not save a rule",
                         group.rule_save_default
                     ) }}

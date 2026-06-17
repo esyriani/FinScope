@@ -81,7 +81,7 @@ Go to Upload and import one ordinary checking, savings, or credit card statement
 5. Choose a CSV file.
 6. Use Upload to open the preview modal.
 7. If slash dates are ambiguous, choose `MM/DD/YYYY` or `DD/MM/YYYY`.
-8. Confirm the import and watch progress on Jobs if a background job is queued.
+8. Confirm the import and watch progress on Processing if the work is queued.
 
 ![Statements](img/statements.png)
 
@@ -114,7 +114,7 @@ Rules can be created directly from Rules or while reviewing/editing a transactio
 
 ![Create rule](img/new-rule.png)
 
-Rules created from the Rules page are keyword-fuzzy by default. Rules saved while editing a transaction can be merchant-bound when the transaction has a durable merchant identity.
+Rules created from the Rules page use approximate keyword matching by default. Rules saved while editing a transaction can be merchant-bound when the transaction has a durable merchant identity.
 
 ## Open dashboard and comparison views
 

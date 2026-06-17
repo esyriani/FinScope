@@ -182,7 +182,7 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
     assert "data-flatpickr-submit-on-change" in body
     assert "Repeating merchants detected for the selected month." in body
     assert "No recurring activity detected for this month." in body
-    assert "Confidence: High" in body
+    assert "Confidence level: High" in body
     assert '<option value="High" selected>High</option>' in body
     assert 'data-sort-column="8" data-sort-type="number"' in body
     assert "data-paginated-table" in body
@@ -206,7 +206,7 @@ def test_recurring_page_all_confidence_filter_is_explicit(client):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Confidence: All confidence" in body
+    assert "Confidence level: All confidence" in body
     assert '<option value="all" selected>All confidence</option>' in body
     assert 'name="confidence" value="all"' in body
     assert "confidence=all" in body

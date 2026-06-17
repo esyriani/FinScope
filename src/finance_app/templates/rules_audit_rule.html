@@ -42,7 +42,7 @@
     href="{{ url_for('rules.audit_rule_overlap', rule_a_id=rule_a_id, rule_b_id=rule_b_id) }}"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Loading rule audit details...') }}"
+    data-busy-message="{{ _('Loading rule health check details...') }}"
 >
     <i class="bi bi-search" aria-hidden="true"></i>{{ _("Details") }}
 </a>
@@ -75,7 +75,7 @@
             class="d-inline"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Preparing rule audit preview...') }}"
+            data-busy-message="{{ _('Preparing rule health check preview...') }}"
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="delete_rule">
@@ -91,13 +91,13 @@
             class="d-inline"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Preparing rule audit preview...') }}"
+            data-busy-message="{{ _('Preparing rule health check preview...') }}"
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="apply_where_wins">
             <input type="hidden" name="rule_id" value="{{ rule.id }}">
             <button class="btn btn-outline-success" type="submit">
-                <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Preview apply where winner") }}
+                <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Preview normal apply") }}
             </button>
         </form>
         <form
@@ -106,7 +106,7 @@
             class="d-inline"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Preparing rule audit preview...') }}"
+            data-busy-message="{{ _('Preparing rule health check preview...') }}"
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="force_apply_rule">
@@ -120,9 +120,9 @@
             href="{{ url_for('rules.audit_rules') }}"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Loading rule audit...') }}"
+            data-busy-message="{{ _('Loading rule health check...') }}"
         >
-            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule audit") }}
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule health check") }}
         </a>
         <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}">
             <i class="bi bi-tags" aria-hidden="true"></i>{{ _("Rules") }}
@@ -140,21 +140,21 @@
     {{ _("This page is read-only and does not change rule behavior.") }}
 </div>
 
-<section class="metric-grid mb-4" aria-label="{{ _('Rule audit summary') }}">
+<section class="metric-grid mb-4" aria-label="{{ _('Rule health check summary') }}">
     <div class="metric-card">
         <div class="metric-label">{{ _("Historical matches") }}</div>
         <div class="metric-value">{{ metrics.total_matches }}</div>
     </div>
     <div class="metric-card">
-        <div class="metric-label">{{ _("Wins") }}</div>
+        <div class="metric-label">{{ _("Times applied") }}</div>
         <div class="metric-value">{{ metrics.total_wins }}</div>
     </div>
     <div class="metric-card">
-        <div class="metric-label">{{ _("Losses") }}</div>
+        <div class="metric-label">{{ _("Times not applied") }}</div>
         <div class="metric-value">{{ metrics.total_losses }}</div>
     </div>
     <div class="metric-card">
-        <div class="metric-label">{{ _("Win rate") }}</div>
+        <div class="metric-label">{{ _("Applied rate") }}</div>
         <div class="metric-value">{{ metrics.win_rate }}</div>
     </div>
     <div class="metric-card">
@@ -217,7 +217,7 @@
                     <dt class="col-sm-4">{{ _("Amount constraint") }}</dt>
                     <dd class="col-sm-8">{{ rule.amount_label }}</dd>
 
-                    <dt class="col-sm-4">{{ _("Specificity") }}</dt>
+                    <dt class="col-sm-4">{{ _("Precision") }}</dt>
                     <dd class="col-sm-8">
                         <div class="row g-2 small text-muted">
                             {% for factor in rule.specificity_factors %}
@@ -279,7 +279,7 @@
                         {{ client_sort_header(0, "Other rule") }}
                         {{ client_sort_header(1, "Shared transactions", "number") }}
                         {{ client_sort_header(2, "Severity") }}
-                        {{ client_sort_header(3, "Winning rule") }}
+                        {{ client_sort_header(3, "Applied rule") }}
                         {{ client_sort_header(4, "Recommended action") }}
                         <th class="text-end">{{ _("Action") }}</th>
                     </tr>
@@ -314,7 +314,7 @@
     <div class="col-lg-6">
         <section class="card h-100">
             <div class="card-body border-bottom">
-                <h5 class="mb-1">{{ _("Rules this rule shadows") }}</h5>
+                <h5 class="mb-1">{{ _("Rules skipped by this rule") }}</h5>
             </div>
             {% if rules_shadowed_by_this %}
             <div class="card-body p-0">
@@ -349,7 +349,7 @@
                 </div>
             </div>
             {% else %}
-            <div class="empty-state compact">{{ _("This rule does not shadow other rules.") }}</div>
+            <div class="empty-state compact">{{ _("This rule does not skip other rules by priority.") }}</div>
             {% endif %}
         </section>
     </div>
@@ -357,7 +357,7 @@
     <div class="col-lg-6">
         <section class="card h-100">
             <div class="card-body border-bottom">
-                <h5 class="mb-1">{{ _("Rules shadowing this rule") }}</h5>
+                <h5 class="mb-1">{{ _("Rules taking priority over this rule") }}</h5>
             </div>
             {% if rules_shadowing_this %}
             <div class="card-body p-0">
@@ -392,7 +392,7 @@
                 </div>
             </div>
             {% else %}
-            <div class="empty-state compact">{{ _("No rules shadow this rule.") }}</div>
+            <div class="empty-state compact">{{ _("No rules take priority over this rule.") }}</div>
             {% endif %}
         </section>
     </div>

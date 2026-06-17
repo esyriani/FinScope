@@ -281,7 +281,7 @@ def fetch_home_overview(conn: Any, unknown_category: Any, start_date: Any) -> An
         start_date: Inclusive date for the current calendar year.
 
     Returns:
-        A mapping with transaction counts, YTD spending, income, unknown count,
+        A mapping with transaction counts, year-to-date spending, income, unknown count,
         and the latest active reportable transaction date.
     """
     return (
@@ -573,7 +573,7 @@ def build_pulse_kpis(ytd_spending: Any, ytd_cashflow: Any, attention_counts: Any
     """Build compact KPI cards for the command-center header."""
     return [
         {
-            "label": "YTD cash flow",
+            "label": "Year-to-date cash flow",
             "value": ytd_cashflow,
             "value_type": "money",
             "href": "/dashboard?period=ytd",
@@ -581,7 +581,7 @@ def build_pulse_kpis(ytd_spending: Any, ytd_cashflow: Any, attention_counts: Any
             "detail": "Income less spending.",
         },
         {
-            "label": "YTD spending",
+            "label": "Year-to-date spending",
             "value": ytd_spending,
             "value_type": "money",
             "href": "/transactions?period=ytd&amount_type=spending",
@@ -1113,7 +1113,7 @@ def build_operational_quick_insights(
         category = top_categories[0]
         insights.append(
             {
-                "label": "Top YTD category",
+                "label": "Top year-to-date category",
                 "value": rounded_money_float(category["total"]),
                 "value_type": "money",
                 "detail": category["category"],

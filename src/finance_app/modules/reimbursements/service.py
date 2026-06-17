@@ -44,6 +44,11 @@ class ReimbursementAllocationResult:
 
 def build_reimbursements_context() -> dict[str, Any]:
     """Build the reimbursement monitoring page context."""
+    return build_reimbursements_context_from_args({})
+
+
+def build_reimbursements_context_from_args(args: Any) -> dict[str, Any]:
+    """Build the reimbursement monitoring page context for request filters."""
     with db_core_transaction() as conn:
         reimbursement_rows = queries.fetch_reimbursement_transactions(conn)
         expense_rows = queries.fetch_reimbursable_expense_transactions(conn)
@@ -58,6 +63,7 @@ def build_reimbursements_context() -> dict[str, Any]:
         allocation_rows,
         expense_tag_map,
         tag_colors,
+        args,
     )
     context["table_page_size"] = table_page_size
     return context
@@ -129,6 +135,42 @@ def create_reimbursement_matches(
         ]
 
 
+def create_expense_reimbursement_matches(
+    expense_transaction_id: object,
+    reimbursement_matches: Sequence[tuple[object, MoneyValue]],
+    conn: Any | None = None,
+) -> list[ReimbursementAllocationResult]:
+    """Create one or more reimbursement matches for the same expense.
+
+    Args:
+        expense_transaction_id: Expense transaction id receiving reimbursement.
+        reimbursement_matches: Reimbursement transaction ids with the amount
+            matched from each credit.
+        conn: Optional active Core connection.
+
+    Returns:
+        Allocation states after all inserts.
+
+    Raises:
+        ReimbursementAllocationError: If no reimbursements were selected or any
+            match violates transaction-role or remaining-balance limits.
+    """
+    if not reimbursement_matches:
+        raise ReimbursementAllocationError("Select at least one reimbursement to match.")
+
+    with db_core_transaction(conn) as active_conn:
+        return [
+            _save_reimbursement_allocation(
+                active_conn,
+                allocation_id=None,
+                reimbursement_transaction_id=reimbursement_transaction_id,
+                expense_transaction_id=expense_transaction_id,
+                amount=amount,
+            )
+            for reimbursement_transaction_id, amount in reimbursement_matches
+        ]
+
+
 def update_reimbursement_allocation_amount(
     allocation_id: object,
     amount: MoneyValue,
@@ -179,10 +221,10 @@ def delete_reimbursement_allocation(allocation_id: object, conn: Any | None = No
 
 
 def complete_reimbursable_expense(expense_transaction_id: object, conn: Any | None = None) -> int:
-    """Close a reimbursable expense without adding fake reimbursement money.
+    """Mark a reimbursable expense complete without adding fake reimbursement money.
 
     Args:
-        expense_transaction_id: Transaction id for the expense to close.
+        expense_transaction_id: Transaction id for the expense to complete.
         conn: Optional active Core connection.
 
     Returns:
@@ -199,8 +241,8 @@ def complete_reimbursable_expense(expense_transaction_id: object, conn: Any | No
         return repository.insert_expense_completion(active_conn, normalized_expense_id)
 
 
-def reopen_reimbursable_expense(expense_transaction_id: object, conn: Any | None = None) -> bool:
-    """Reopen a completed reimbursable expense for matching."""
+def resume_reimbursable_expense(expense_transaction_id: object, conn: Any | None = None) -> bool:
+    """Return a completed reimbursable expense to reimbursement tracking."""
     normalized_expense_id = positive_int(expense_transaction_id, "expense transaction id")
     with db_core_transaction(conn) as active_conn:
         return repository.delete_expense_completion(active_conn, normalized_expense_id)
@@ -272,7 +314,7 @@ def _save_reimbursement_allocation(
     if reimbursement_allocated_before + normalized_amount > reimbursement_limit:
         raise ReimbursementAllocationError("The match amount exceeds the reimbursement amount still unmatched.")
     if expense_allocated_before + normalized_amount > expense_limit:
-        raise ReimbursementAllocationError("The match amount exceeds the expense amount still owed.")
+        raise ReimbursementAllocationError("The match amount exceeds the expense amount still to reimburse.")
 
     if allocation_id is None:
         allocation_id = repository.insert_allocation(

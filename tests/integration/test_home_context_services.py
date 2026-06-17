@@ -27,8 +27,8 @@ def test_home_context_summarizes_seeded_year_to_date_data(core_conn, monkeypatch
     assert context["financial_pulse"]["title"] == "Positive cash flow"
     assert context["financial_pulse"]["state"] == "surplus"
     assert [row["label"] for row in context["pulse_kpis"]] == [
-        "YTD cash flow",
-        "YTD spending",
+        "Year-to-date cash flow",
+        "Year-to-date spending",
         "Open attention",
     ]
     assert context["attention_counts"]["unknown_transactions"] == 3

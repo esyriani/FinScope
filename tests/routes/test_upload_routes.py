@@ -191,6 +191,18 @@ def test_upload_route_renders_statement_detail_modal(client, core_conn):
     )
 
 
+def test_upload_preview_table_is_not_exportable(client):
+    """Verify transient upload previews do not get CSV or Excel export controls."""
+    response = client.get("/upload")
+
+    assert response.status_code == 200
+    assert_has_element(
+        response,
+        "table",
+        attrs={"data-upload-preview-table": True, "data-no-export": True},
+    )
+
+
 def test_upload_route_renders_interac_import_guidance(client, core_conn):
     """Verify Interac uploads explain ordering and skipped or ignored rows."""
     account_id = core_conn.execute(text("""
@@ -282,7 +294,7 @@ def test_estimate_categorize_statement_unknowns_returns_json(client, core_conn, 
         "estimate_statement_llm_categorization",
         lambda sid: {
             "ok": True,
-            "message": "AI token estimate ready.",
+            "message": "AI usage estimate ready.",
             "estimate": {"request_count": 2, "input_tokens": 222},
         },
     )
@@ -294,7 +306,7 @@ def test_estimate_categorize_statement_unknowns_returns_json(client, core_conn, 
 
     assert response.status_code == 200
     assert response.get_json()["estimate"]["request_count"] == 2
-    assert response.get_json()["message"] == "AI token estimate ready."
+    assert response.get_json()["message"] == "AI usage estimate ready."
 
 
 def test_categorize_statement_unknowns_requires_token_estimate_confirmation(client, core_conn, monkeypatch):
@@ -364,7 +376,7 @@ def test_categorize_statement_unknowns_requires_token_estimate_confirmation(clie
 
     assert response.status_code == 200
     assert submitted == []
-    assert_visible_text(response, "Review the token estimate before running AI.")
+    assert_visible_text(response, "Review the estimated AI usage before continuing.")
 
 
 def test_categorize_statement_unknowns_runs_without_confirmation_when_setting_disabled(

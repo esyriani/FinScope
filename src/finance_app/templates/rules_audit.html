@@ -93,7 +93,7 @@
     href="{{ url_for('rules.audit_rule_overlap', rule_a_id=row.detail_url_rule_a_id, rule_b_id=row.detail_url_rule_b_id) }}"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Loading rule audit details...') }}"
+    data-busy-message="{{ _('Loading rule health check details...') }}"
 >
     <i class="bi bi-search" aria-hidden="true"></i>{{ _("Details") }}
 </a>
@@ -105,7 +105,7 @@
     href="{{ url_for('rules.audit_rule_detail', rule_id=rule.id) }}"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Loading rule audit details...') }}"
+    data-busy-message="{{ _('Loading rule health check details...') }}"
 >
     <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _(label) }}
 </a>
@@ -118,12 +118,12 @@
     class="d-inline"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+    data-busy-message="{{ _('Preparing rule health check preview...') }}"
 >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="apply_where_wins">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
-    <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _('Preview apply where winner') }}">
+    <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _('Preview normal apply') }}">
         <i class="bi bi-eye" aria-hidden="true"></i>{{ _(label) }}
     </button>
 </form>
@@ -151,7 +151,7 @@
     class="d-inline"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+    data-busy-message="{{ _('Preparing rule health check preview...') }}"
 >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="delete_rule">
@@ -190,8 +190,8 @@
 <div data-ajax-refresh-target="rule-audit">
 <div class="page-header">
     <div>
-        <h2 class="mb-1">{{ _("Rule audit") }}</h2>
-        <p class="text-muted mb-0">{{ _("Inspect overlapping rules, conflicts, shadowed rules, and unused rules.") }}</p>
+        <h2 class="mb-1">{{ _("Rule health check") }}</h2>
+        <p class="text-muted mb-0">{{ _("Inspect overlapping rules, conflicts, rules skipped by priority, and unused rules.") }}</p>
     </div>
     <div class="home-actions">
         <form
@@ -200,7 +200,7 @@
             class="d-inline"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Preparing rule audit preview...') }}"
+            data-busy-message="{{ _('Preparing rule health check preview...') }}"
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="apply_all_rules">
@@ -226,7 +226,7 @@
         {{ audit_metric_card("Overlap pairs", summary.overlapping_rule_pairs, "warning" if summary.overlapping_rule_pairs else "healthy", "Needs review" if summary.overlapping_rule_pairs else "All clear", "#rule-overlap-findings", "#rule-overlap-findings") }}
         {{ audit_metric_card("Category conflicts", summary.category_conflict_overlaps, "critical" if summary.category_conflict_overlaps else "healthy", "High risk" if summary.category_conflict_overlaps else "All clear", url_for('rules.audit_rules', overlap_filter='category_conflict', overlap_page=1, open='rule-overlap-findings')) }}
         {{ audit_metric_card("Tag differences", summary.tag_difference_overlaps, "info" if summary.tag_difference_overlaps else "healthy", "Tag-only" if summary.tag_difference_overlaps else "All clear", url_for('rules.audit_rules', overlap_filter='tag_difference', overlap_page=1, open='rule-overlap-findings')) }}
-        {{ audit_metric_card("Shadowed rules", summary.shadowed_rules, "warning" if summary.shadowed_rules else "healthy", "Maintenance" if summary.shadowed_rules else "All clear", "#shadowed-rule-findings", "#shadowed-rule-findings") }}
+        {{ audit_metric_card("Rules skipped by priority", summary.shadowed_rules, "warning" if summary.shadowed_rules else "healthy", "Maintenance" if summary.shadowed_rules else "All clear", "#shadowed-rule-findings", "#shadowed-rule-findings") }}
         {{ audit_metric_card("Unused or stale", summary.stale_rules, "warning" if summary.stale_rules else "healthy", "Cleanup" if summary.stale_rules else "All clear", "#stale-rule-findings", "#stale-rule-findings") }}
         {{ audit_metric_card("Precedence warnings", summary.specificity_warnings, "critical" if summary.specificity_warnings else "healthy", "Precedence risk" if summary.specificity_warnings else "All clear", "#specificity-warning-findings", "#specificity-warning-findings") }}
     </div>
@@ -244,7 +244,7 @@
             class="btn btn-primary"
             href="{{ recommended_next_step.href }}"
             {% if recommended_next_step.target %}data-audit-open-section="{{ recommended_next_step.target }}"{% else %}data-ajax-refresh-link{% endif %}
-            {% if not recommended_next_step.target %}data-busy-overlay data-busy-delay-ms="0" data-busy-message="{{ _('Loading rule audit...') }}"{% endif %}
+            {% if not recommended_next_step.target %}data-busy-overlay data-busy-delay-ms="0" data-busy-message="{{ _('Loading rule health check...') }}"{% endif %}
         >
             <i class="bi bi-arrow-right" aria-hidden="true"></i>{{ _("Review next") }}
         </a>
@@ -323,7 +323,7 @@
                             {{ sort_header(overlap_table, "rule_b", "Rule B") }}
                             {{ sort_header(overlap_table, "shared", "Shared transactions") }}
                             {{ sort_header(overlap_table, "severity", "Severity") }}
-                            {{ sort_header(overlap_table, "winner", "Winning rule") }}
+                            {{ sort_header(overlap_table, "winner", "Applied rule") }}
                             {{ sort_header(overlap_table, "current_applied", "Current applied") }}
                             {{ sort_header(overlap_table, "suggested", "Recommended action") }}
                             <th class="text-end">{{ _("Action") }}</th>
@@ -336,7 +336,7 @@
                             data-row-drilldown="dblclick"
                             data-busy-overlay
                             data-busy-delay-ms="0"
-                            data-busy-message="{{ _('Loading rule audit details...') }}"
+                            data-busy-message="{{ _('Loading rule health check details...') }}"
                         >
                             <td>{{ rule_summary(row.rule_a) }}</td>
                             <td>{{ rule_summary(row.rule_b) }}</td>
@@ -368,10 +368,10 @@
 <section class="card mb-4">
     {{ collapsible_header(
         "specificity-warning-findings",
-        "Specificity and precedence warnings",
-        "A broader winning rule can hide a more constrained overlapping rule.",
+        "Precision and priority warnings",
+        "A broader applied rule can hide a more constrained overlapping rule.",
         specificity_warning_table,
-        _("Specificity warning pages"),
+        _("Precision warning pages"),
         open_section == "specificity-warning-findings"
     ) }}
     <div class="collapse{% if open_section == 'specificity-warning-findings' %} show{% endif %}" id="specificity-warning-findings">
@@ -381,8 +381,8 @@
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        {{ sort_header(specificity_warning_table, "broad_rule", "Broad winning rule") }}
-                        {{ sort_header(specificity_warning_table, "specific_rule", "More specific rule") }}
+                        {{ sort_header(specificity_warning_table, "broad_rule", "Broad applied rule") }}
+                        {{ sort_header(specificity_warning_table, "specific_rule", "More precise rule") }}
                         {{ sort_header(specificity_warning_table, "shared", "Shared transactions") }}
                         {{ sort_header(specificity_warning_table, "reason", "Reason") }}
                         {{ sort_header(specificity_warning_table, "conflicts", "Category conflicts") }}
@@ -409,12 +409,12 @@
                                     href="{{ url_for('rules.audit_rule_overlap', rule_a_id=row.broad_rule.id, rule_b_id=row.specific_rule.id) }}"
                                     data-busy-overlay
                                     data-busy-delay-ms="0"
-                                    data-busy-message="{{ _('Loading rule audit details...') }}"
+                                    data-busy-message="{{ _('Loading rule health check details...') }}"
                                 >
                                     <i class="bi bi-search" aria-hidden="true"></i>{{ _("Details") }}
                                 </a>
-                                {{ rule_detail_button(row.broad_rule, "Broad winning rule") }}
-                                {{ rule_detail_button(row.specific_rule, "More specific rule") }}
+                                {{ rule_detail_button(row.broad_rule, "Broad applied rule") }}
+                                {{ rule_detail_button(row.specific_rule, "More precise rule") }}
                             </div>
                         </td>
                     </tr>
@@ -423,9 +423,9 @@
             </table>
         </div>
     </div>
-    {{ table_footer(specificity_warning_table, _("Specificity warning pages bottom")) }}
+    {{ table_footer(specificity_warning_table, _("Precision warning pages bottom")) }}
     {% else %}
-    <div class="empty-state compact">{{ _("No specificity warnings found.") }}</div>
+    <div class="empty-state compact">{{ _("No precision warnings found.") }}</div>
     {% endif %}
     </div>
 </section>
@@ -433,10 +433,10 @@
 <section class="card mb-4">
     {{ collapsible_header(
         "shadowed-rule-findings",
-        "Shadowed rules",
-        "This rule is shadowed. It matches transactions, but another rule is applied.",
+        "Rules skipped by priority",
+        "These rules match transactions, but another rule is applied first.",
         shadowed_rule_table,
-        _("Shadowed rule pages"),
+        _("Skipped rule pages"),
         open_section == "shadowed-rule-findings"
     ) }}
     <div class="collapse{% if open_section == 'shadowed-rule-findings' %} show{% endif %}" id="shadowed-rule-findings">
@@ -449,9 +449,9 @@
                         {{ sort_header(shadowed_rule_table, "rule", "Rule") }}
                         <th>{{ _("Status") }}</th>
                         {{ sort_header(shadowed_rule_table, "matches", "Historical matches") }}
-                        {{ sort_header(shadowed_rule_table, "wins", "Wins") }}
-                        {{ sort_header(shadowed_rule_table, "losses", "Losses") }}
-                        {{ sort_header(shadowed_rule_table, "shadowing_rule", "Most common shadowing rule") }}
+                        {{ sort_header(shadowed_rule_table, "wins", "Times applied") }}
+                        {{ sort_header(shadowed_rule_table, "losses", "Times not applied") }}
+                        {{ sort_header(shadowed_rule_table, "shadowing_rule", "Most common higher-priority rule") }}
                         {{ sort_header(shadowed_rule_table, "conflicts", "Conflicting losses") }}
                         {{ sort_header(shadowed_rule_table, "suggested", "Recommended action") }}
                         <th class="text-end">{{ _("Action") }}</th>
@@ -461,7 +461,7 @@
                     {% for row in shadowed_rule_table.rows %}
                     <tr>
                         <td>{{ rule_summary(row.rule) }}</td>
-                        <td><span class="badge text-bg-warning">{{ _("Shadowed") }}</span></td>
+                        <td><span class="badge text-bg-warning">{{ _("Skipped by priority") }}</span></td>
                         <td>{{ row.total_matches }}</td>
                         <td>{{ row.total_wins }}</td>
                         <td><span class="badge text-bg-warning">{{ row.total_losses }}</span></td>
@@ -489,9 +489,9 @@
             </table>
         </div>
     </div>
-    {{ table_footer(shadowed_rule_table, _("Shadowed rule pages bottom")) }}
+    {{ table_footer(shadowed_rule_table, _("Skipped rule pages bottom")) }}
     {% else %}
-    <div class="empty-state compact">{{ _("No shadowed rules found.") }}</div>
+    <div class="empty-state compact">{{ _("No rules skipped by priority found.") }}</div>
     {% endif %}
     </div>
 </section>

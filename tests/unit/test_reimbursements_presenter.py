@@ -9,11 +9,11 @@ from finance_app.modules.reimbursements.presenter import (
 )
 
 
-def reimbursement_row(index: int) -> dict[str, object]:
+def reimbursement_row(index: int, *, tx_date: date | None = None) -> dict[str, object]:
     """Return one raw reimbursement credit row."""
     return {
         "id": index,
-        "tx_date": date(2026, 5, min(index, 28)),
+        "tx_date": tx_date or date(2026, 5, min(index, 28)),
         "description": f"Reimbursement {index}",
         "amount": Decimal("-1000.00"),
         "category": "Reimbursement",
@@ -22,11 +22,11 @@ def reimbursement_row(index: int) -> dict[str, object]:
     }
 
 
-def expense_row(index: int) -> dict[str, object]:
+def expense_row(index: int, *, tx_date: date | None = None) -> dict[str, object]:
     """Return one raw reimbursable expense row."""
     return {
         "id": 100 + index,
-        "tx_date": date(2026, 4, min(index, 28)),
+        "tx_date": tx_date or date(2026, 4, min(index, 28)),
         "description": f"Expense {index}",
         "amount": Decimal("100.00"),
         "category": "Travel",
@@ -49,6 +49,41 @@ def test_action_needed_view_model_limits_default_working_set():
     assert len(action_needed["expenses"]) == len(expenses)
     assert len(first_reimbursement["match_candidates"]) == MATCH_CANDIDATE_LIMIT
     assert first_reimbursement["hidden_match_candidate_count"] == len(expenses) - MATCH_CANDIDATE_LIMIT
+
+
+def test_reimbursement_match_candidates_must_precede_reimbursement_date():
+    """Verify reimbursement dialogs only suggest expenses dated before the credit."""
+    reimbursement = reimbursement_row(1, tx_date=date(2026, 5, 10))
+    prior_expense = expense_row(1, tx_date=date(2026, 5, 9))
+    same_day_expense = expense_row(2, tx_date=date(2026, 5, 10))
+    later_expense = expense_row(3, tx_date=date(2026, 5, 11))
+
+    view_model = build_reimbursements_view_model(
+        [reimbursement],
+        [later_expense, same_day_expense, prior_expense],
+        [],
+    )
+
+    candidates = view_model["reimbursement_match_items"][0]["match_candidates"]
+    assert [row["id"] for row in candidates] == [prior_expense["id"]]
+
+
+def test_expense_match_candidates_must_follow_expense_date():
+    """Verify expense dialogs only suggest reimbursements dated after the expense."""
+    expense = expense_row(1, tx_date=date(2026, 5, 10))
+    prior_reimbursement = reimbursement_row(1, tx_date=date(2026, 5, 9))
+    same_day_reimbursement = reimbursement_row(2, tx_date=date(2026, 5, 10))
+    next_reimbursement = reimbursement_row(3, tx_date=date(2026, 5, 11))
+    later_reimbursement = reimbursement_row(4, tx_date=date(2026, 5, 12))
+
+    view_model = build_reimbursements_view_model(
+        [later_reimbursement, next_reimbursement, same_day_reimbursement, prior_reimbursement],
+        [expense],
+        [],
+    )
+
+    candidates = view_model["expense_detail_rows"][0]["reimbursement_candidates"]
+    assert [row["id"] for row in candidates] == [next_reimbursement["id"], later_reimbursement["id"]]
 
 
 def test_allocation_rows_include_update_maximums():

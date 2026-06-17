@@ -1,5 +1,6 @@
 {% set page_stylesheets = ["css/home-dashboard.css"] %}
 {% extends "base.html" %}
+{% from "_help.html" import help_tip with context %}
 
 {% block content %}
 <div class="page-header">
@@ -64,7 +65,10 @@
         <section class="card cockpit-panel">
             <div class="card-body">
                 <div class="section-title">
-                    <h5 class="card-title">{{ _("Needs attention") }}</h5>
+                    <h5 class="card-title">
+                        {{ _("Needs attention") }}
+                        {{ help_tip("Items that may make your reports incomplete or less reliable.", "Explain needs attention") }}
+                    </h5>
                 </div>
 
                 {% if primary_attention_items %}

@@ -21,7 +21,7 @@
     <div class="small text-muted">{{ _("Tags") }}: {{ rule.tag_label }}</div>
 {% endif %}
 <div class="mt-3">
-    <div class="small text-muted mb-1">{{ _("Specificity") }}</div>
+    <div class="small text-muted mb-1">{{ _("Precision") }}</div>
     <span class="badge {{ rule.specificity_comparison_badge_class }}">{{ _(rule.specificity_comparison_label) }}</span>
 </div>
 <div class="row g-2 mt-2 small text-muted">
@@ -36,7 +36,7 @@
 {% macro match_summary(match) %}
 <div>{{ match.category }}</div>
 <div class="small text-muted">{{ _("Tags") }}: {{ match.tag_label }}</div>
-<div class="small text-muted">{{ _("Confidence") }}: {{ "%.3f"|format(match.confidence) }}</div>
+<div class="small text-muted">{{ _("Confidence level") }}: {{ "%.3f"|format(match.confidence) }}</div>
 <div class="small text-muted">{{ _("Match score") }}: {{ "%.3f"|format(match.match_score) }}</div>
 {% endmacro %}
 
@@ -58,7 +58,7 @@
     href="{{ url_for('rules.audit_rule_detail', rule_id=rule.id) }}"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Loading rule audit details...') }}"
+    data-busy-message="{{ _('Loading rule health check details...') }}"
 >
     <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule detail") }}
 </a>
@@ -71,12 +71,12 @@
     class="d-inline"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+    data-busy-message="{{ _('Preparing rule health check preview...') }}"
 >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="apply_where_wins">
     <input type="hidden" name="rule_id" value="{{ rule.id }}">
-    <button class="btn btn-sm btn-outline-success" type="submit" title="{{ _('Preview apply where winner') }}">
+    <button class="btn btn-sm btn-outline-success" type="submit" title="{{ _('Preview normal apply') }}">
         <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Preview apply") }}
     </button>
 </form>
@@ -89,7 +89,7 @@
     class="d-inline"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+    data-busy-message="{{ _('Preparing rule health check preview...') }}"
 >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="delete_rule">
@@ -107,7 +107,7 @@
     class="d-inline"
     data-busy-overlay
     data-busy-delay-ms="0"
-    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+    data-busy-message="{{ _('Preparing rule health check preview...') }}"
 >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="delete_rule">
@@ -129,9 +129,9 @@
             href="{{ url_for('rules.audit_rules') }}"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Loading rule audit...') }}"
+            data-busy-message="{{ _('Loading rule health check...') }}"
         >
-            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule audit") }}
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule health check") }}
         </a>
         <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}">
             <i class="bi bi-tags" aria-hidden="true"></i>{{ _("Rules") }}
@@ -157,7 +157,7 @@
         </div>
     </div>
     <div class="metric-card">
-        <div class="metric-label">{{ _("Winning rule") }}</div>
+        <div class="metric-label">{{ _("Applied rule") }}</div>
         <div class="metric-detail">{{ overlap.winning_rule_label }}</div>
     </div>
     <div class="metric-card">
@@ -172,14 +172,14 @@
     <div class="card-body">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
             <div>
-                <h5 class="mb-1">{{ _("Why this rule wins") }}</h5>
+                <h5 class="mb-1">{{ _("Why this rule is applied") }}</h5>
                 <p class="text-muted mb-0">{{ win_explanation.sentence }}</p>
             </div>
-            <span class="badge text-bg-success">{{ _("Final winner") }}: {{ win_explanation.winner_label }}</span>
+            <span class="badge text-bg-success">{{ _("Applied rule") }}: {{ win_explanation.winner_label }}</span>
         </div>
         <div class="row g-3">
             <div class="col-md-4">
-                <div class="small text-muted">{{ _("Confidence") }}</div>
+                <div class="small text-muted">{{ _("Confidence level") }}</div>
                 <div class="fw-semibold">{{ win_explanation.winner_label }}: {{ "%.3f"|format(win_explanation.winner_confidence) }}</div>
                 <div class="small text-muted">{{ win_explanation.loser_label }}: {{ "%.3f"|format(win_explanation.loser_confidence) }}</div>
             </div>
@@ -189,7 +189,7 @@
                 <div class="small text-muted">{{ win_explanation.loser_label }}: {{ "%.3f"|format(win_explanation.loser_match_score) }}</div>
             </div>
             <div class="col-md-4">
-                <div class="small text-muted">{{ _("Specificity") }}</div>
+                <div class="small text-muted">{{ _("Precision") }}</div>
                 <div class="fw-semibold">{{ win_explanation.winner_label }}: {{ _(win_explanation.winner_specificity) }}</div>
                 <div class="small text-muted">{{ win_explanation.loser_label }}: {{ _(win_explanation.loser_specificity) }}</div>
             </div>
@@ -203,7 +203,7 @@
         <section class="card h-100">
             <div class="card-body">
                 <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
-                    <h5 class="mb-0">{{ _("Winning rule") }}</h5>
+                    <h5 class="mb-0">{{ _("Applied rule") }}</h5>
                     <div class="d-flex flex-wrap justify-content-end gap-2">
                         {{ rule_detail_button(winning_rule) }}
                         {{ preview_apply_button(winning_rule) }}
@@ -218,7 +218,7 @@
         <section class="card h-100">
             <div class="card-body">
                 <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
-                    <h5 class="mb-0">{{ _("Losing rule") }}</h5>
+                    <h5 class="mb-0">{{ _("Rule not applied") }}</h5>
                     <div class="d-flex flex-wrap justify-content-end gap-2">
                         {{ rule_detail_button(losing_rule) }}
                         {{ preview_apply_button(losing_rule) }}
@@ -236,7 +236,7 @@
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
             <div>
                 <h5 class="mb-1">{{ _("Shared transactions") }}</h5>
-                <p class="text-muted mb-0">{{ _("The winning rule is selected by confidence, then match score, then specificity.") }}</p>
+                <p class="text-muted mb-0">{{ _("The applied rule is selected by confidence level, then match score, then precision.") }}</p>
             </div>
             <div class="d-flex flex-wrap align-items-center justify-content-end gap-3">
                 {% if transaction_table.total_count %}
@@ -260,8 +260,8 @@
                         {{ sort_header(transaction_table, "description", "Description") }}
                         {{ sort_header(transaction_table, "amount", "Amount", "text-end") }}
                         {{ sort_header(transaction_table, "current_category", "Current category") }}
-                        {{ sort_header(transaction_table, "rule_a", "Winning rule result") }}
-                        {{ sort_header(transaction_table, "rule_b", "Losing rule result") }}
+                        {{ sort_header(transaction_table, "rule_a", "Applied rule result") }}
+                        {{ sort_header(transaction_table, "rule_b", "Rule not applied result") }}
                     </tr>
                 </thead>
                 <tbody>

@@ -7,12 +7,13 @@ from finance_app.core.i18n import gettext
 from finance_app.modules.auth.permissions import PERMISSION_EDIT_TRANSACTIONS, permission_required
 from finance_app.modules.reimbursements.service import (
     ReimbursementAllocationError,
-    build_reimbursements_context,
+    build_reimbursements_context_from_args,
     complete_reimbursable_expense,
+    create_expense_reimbursement_matches,
     create_reimbursement_allocation,
     create_reimbursement_matches,
     delete_reimbursement_allocation,
-    reopen_reimbursable_expense,
+    resume_reimbursable_expense,
     set_expense_reimbursable_tag,
     update_reimbursement_allocation_amount,
 )
@@ -24,7 +25,7 @@ reimbursements_bp = Blueprint("reimbursements", __name__)
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
 def reimbursements() -> ResponseReturnValue:
     """Render the reimbursement monitoring and allocation page."""
-    return render_template("reimbursements.html", **build_reimbursements_context())
+    return render_template("reimbursements.html", **build_reimbursements_context_from_args(request.args))
 
 
 @reimbursements_bp.route("/reimbursements/allocations", methods=["POST"])
@@ -36,6 +37,11 @@ def add_allocation() -> ResponseReturnValue:
             results = create_reimbursement_matches(
                 request.form.get("reimbursement_transaction_id"),
                 selected_expense_matches(),
+            )
+        elif request.form.get("match_mode") == "expense_multiple":
+            results = create_expense_reimbursement_matches(
+                request.form.get("expense_transaction_id"),
+                selected_reimbursement_matches(),
             )
         else:
             results = [
@@ -82,24 +88,24 @@ def delete_allocation(allocation_id: int) -> ResponseReturnValue:
 @reimbursements_bp.route("/reimbursements/expenses/<int:expense_transaction_id>/complete", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
 def complete_expense(expense_transaction_id: int) -> ResponseReturnValue:
-    """Close an expense for reimbursement tracking."""
+    """Mark an expense complete for reimbursement tracking."""
     try:
         complete_reimbursable_expense(expense_transaction_id)
     except ReimbursementAllocationError as exc:
         flash(gettext(str(exc)))
     else:
-        flash(gettext("Expense closed."))
+        flash(gettext("Expense marked complete."))
     return redirect(reimbursements_url())
 
 
-@reimbursements_bp.route("/reimbursements/expenses/<int:expense_transaction_id>/reopen", methods=["POST"])
+@reimbursements_bp.route("/reimbursements/expenses/<int:expense_transaction_id>/resume", methods=["POST"])
 @permission_required(PERMISSION_EDIT_TRANSACTIONS)
-def reopen_expense(expense_transaction_id: int) -> ResponseReturnValue:
-    """Reopen an expense for reimbursement matching."""
-    if reopen_reimbursable_expense(expense_transaction_id):
-        flash(gettext("Expense reopened for reimbursement matching."))
+def resume_expense(expense_transaction_id: int) -> ResponseReturnValue:
+    """Return an expense to reimbursement tracking."""
+    if resume_reimbursable_expense(expense_transaction_id):
+        flash(gettext("Expense returned to reimbursement tracking."))
     else:
-        flash(gettext("Expense was already open for reimbursement matching."))
+        flash(gettext("Expense was already in reimbursement tracking."))
     return redirect(reimbursements_url())
 
 
@@ -132,4 +138,14 @@ def selected_expense_matches() -> list[tuple[str, str]]:
         clean_expense_id = str(expense_id).strip()
         if clean_expense_id:
             matches.append((clean_expense_id, request.form.get(f"amount_{clean_expense_id}", "")))
+    return matches
+
+
+def selected_reimbursement_matches() -> list[tuple[str, str]]:
+    """Return selected reimbursement ids paired with their submitted match amounts."""
+    matches = []
+    for reimbursement_id in request.form.getlist("reimbursement_transaction_ids"):
+        clean_reimbursement_id = str(reimbursement_id).strip()
+        if clean_reimbursement_id:
+            matches.append((clean_reimbursement_id, request.form.get(f"amount_{clean_reimbursement_id}", "")))
     return matches

@@ -417,7 +417,7 @@ def test_batch_recategorization_requires_token_estimate_confirmation(client, mon
 
     assert response.status_code == 200
     assert captured == []
-    assert_visible_text(response, "Review the token estimate before running AI.")
+    assert_visible_text(response, "Review the estimated AI usage before continuing.")
 
 
 def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(client, core_conn, monkeypatch):
@@ -464,7 +464,7 @@ def test_estimate_batch_transaction_ai_route_returns_json(client, monkeypatch):
         captured["transaction_ids"] = list(transaction_ids)
         return {
             "ok": True,
-            "message": "AI token estimate ready.",
+            "message": "AI usage estimate ready.",
             "estimate": {"request_count": 2, "input_tokens": 123, "total_tokens": 456},
         }
 
@@ -485,7 +485,7 @@ def test_estimate_batch_transaction_ai_route_returns_json(client, monkeypatch):
     assert response.status_code == 200
     assert captured["transaction_ids"] == ["11", "22"]
     assert response.get_json()["estimate"]["input_tokens"] == 123
-    assert response.get_json()["message"] == "AI token estimate ready."
+    assert response.get_json()["message"] == "AI usage estimate ready."
 
 
 def test_batch_transactions_route_requires_selection(client):
@@ -570,8 +570,8 @@ def test_suggest_transaction_category_route_shows_result_modal(client, core_conn
         "TVA SPORTS DIRECT",
         "Entertainment",
         "TVA Sports is a streaming sports service.",
-        "Apply to transaction",
-        "Apply and create rule",
+        "Apply once",
+        "Apply and remember",
     )
 
 
@@ -600,7 +600,7 @@ def test_suggest_transaction_category_requires_token_estimate_confirmation(clien
 
     assert response.status_code == 200
     assert captured == []
-    assert_visible_text(response, "Review the token estimate before running AI.")
+    assert_visible_text(response, "Review the estimated AI usage before continuing.")
 
 
 def test_estimate_transaction_category_suggestion_route_returns_json(client, monkeypatch):
@@ -612,7 +612,7 @@ def test_estimate_transaction_category_suggestion_route_returns_json(client, mon
         assert transaction_id == 123
         return {
             "ok": True,
-            "message": "AI token estimate ready.",
+            "message": "AI usage estimate ready.",
             "estimate": {"request_count": 1, "input_tokens": 77, "total_tokens": 333},
         }
 
@@ -629,7 +629,7 @@ def test_estimate_transaction_category_suggestion_route_returns_json(client, mon
 
     assert response.status_code == 200
     assert response.get_json()["estimate"]["request_count"] == 1
-    assert response.get_json()["message"] == "AI token estimate ready."
+    assert response.get_json()["message"] == "AI usage estimate ready."
 
 
 def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client, core_conn, monkeypatch):

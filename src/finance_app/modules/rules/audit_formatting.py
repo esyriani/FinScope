@@ -76,7 +76,7 @@ SUGGESTED_ACTION_BADGE_CLASSES = {
 IMPACT_GROUP_LABELS = {
     "category_change": "Category would change",
     "tags_change": "Tags would change",
-    "winning_rule_change": "Winning rule would change",
+    "winning_rule_change": "Applied rule would change",
     "no_material_change": "No material change",
 }
 IMPACT_GROUP_BADGE_CLASSES = {
@@ -172,13 +172,13 @@ def present_rule_with_specificity_comparison(rule: Any, other_rule: Any) -> Any:
     presented = present_rule(rule)
     other_specificity = compute_rule_specificity_score(other_rule)
     if presented["specificity"] > other_specificity:
-        presented["specificity_comparison_label"] = "More specific"
+        presented["specificity_comparison_label"] = "More precise"
         presented["specificity_comparison_badge_class"] = "text-bg-success"
     elif presented["specificity"] < other_specificity:
-        presented["specificity_comparison_label"] = "Less specific"
+        presented["specificity_comparison_label"] = "Less precise"
         presented["specificity_comparison_badge_class"] = "text-bg-secondary"
     else:
-        presented["specificity_comparison_label"] = "Same specificity"
+        presented["specificity_comparison_label"] = "Same precision"
         presented["specificity_comparison_badge_class"] = "text-bg-info"
     return presented
 
@@ -211,7 +211,7 @@ def present_specificity_warning(warning: Any) -> Any:
         "suggested_action": warning.suggested_action,
         "suggested_action_label": action_label,
         "suggested_action_badge_class": suggested_action_badge_class(action_label),
-        "suggested_action_reason": "A broader rule wins even though another matching rule is more specific.",
+        "suggested_action_reason": "A broader rule is applied even though another matching rule is more precise.",
     }
 
 
@@ -335,13 +335,13 @@ def overlap_action_reason(overlap: Any) -> Any:
 def shadowed_action_reason(finding: Any, shadowing_rule: Any) -> Any:
     """Return a short reason explaining a shadowed-rule recommendation."""
     reason = gettext(
-        "This rule matched {matches} historical transactions and won {wins}.",
+        "This rule matched {matches} historical transactions and was applied to {wins}.",
         matches=finding.total_matches,
         wins=finding.total_wins,
     )
     if shadowing_rule:
         reason = gettext(
-            "{reason} It is most often shadowed by {rule}.",
+            "{reason} It is most often skipped for {rule}.",
             reason=reason,
             rule=rule_label(shadowing_rule),
         )
@@ -386,7 +386,7 @@ def recommended_next_step(summary: Any, shadowed_rows: Any) -> Any:
         return {
             "title": "Recommended next step",
             "headline": "Review category conflicts.",
-            "detail": "These overlaps assign different categories, so only the winning rule is applied.",
+            "detail": "These overlaps assign different categories, so only the applied rule is used.",
             "href": url_for(
                 "rules.audit_rules",
                 overlap_filter=OVERLAP_CATEGORY_CONFLICT,
@@ -398,8 +398,8 @@ def recommended_next_step(summary: Any, shadowed_rows: Any) -> Any:
     if any(row.get("conflicting_loss_count", 0) for row in shadowed_rows):
         return {
             "title": "Recommended next step",
-            "headline": "Review shadowed rules with conflicts.",
-            "detail": "These rules match transactions but lose to rules that assign different categories.",
+            "headline": "Review rules skipped by priority with conflicts.",
+            "detail": "These rules match transactions but are skipped for rules that assign different categories.",
             "href": "#shadowed-rule-findings",
             "target": "#shadowed-rule-findings",
         }
@@ -443,34 +443,34 @@ def win_explanation_sentence(winning_rule: Any, reason: Any) -> Any:
     label = rule_label(winning_rule)
     return {
         "Higher confidence": gettext(
-            "{label} wins because it has higher confidence.",
+            "{label} is applied because it has higher confidence.",
             label=label,
         ),
         "Higher match score": gettext(
-            "{label} wins because it has a higher match score.",
+            "{label} is applied because it has a higher match score.",
             label=label,
         ),
         "Higher specificity": gettext(
-            "{label} wins because it is more specific.",
+            "{label} is applied because it is more precise.",
             label=label,
         ),
         "Stable precedence": gettext(
-            "{label} wins by the stable deterministic tie-breaker.",
+            "{label} is applied by the stable deterministic tie-breaker.",
             label=label,
         ),
     }.get(
         reason,
-        gettext("{label} wins under the current precedence model.", label=label),
+        gettext("{label} is applied under the current priority model.", label=label),
     )
 
 
 def specificity_comparison_label(left: Any, right: Any) -> Any:
     """Return a readable specificity comparison between two specificity tuples."""
     if left > right:
-        return "More specific"
+        return "More precise"
     if left < right:
-        return "Less specific"
-    return "Same specificity"
+        return "Less precise"
+    return "Same precision"
 
 
 def build_rule_assessment(
@@ -503,22 +503,22 @@ def build_rule_assessment(
             "badge_class": "text-bg-info",
             "paragraphs": [
                 "Tag difference only. Both rules assign the same category.",
-                "The winning rule is the only rule that assigns tags.",
+                "The applied rule is the only rule that assigns tags.",
             ],
             "recommended_action_label": "Inspect tag difference",
             "recommended_action_detail": "Check whether the extra tag is intended or mark the overlap as harmless.",
         }
     if shadowed:
         return {
-            "badge_label": "Shadowed",
+            "badge_label": "Skipped by priority",
             "badge_class": "text-bg-warning",
             "paragraphs": [
                 gettext(
-                    "This rule matched {matches} historical transactions and won {wins}.",
+                    "This rule matched {matches} historical transactions and was applied to {wins}.",
                     matches=total_matches,
                     wins=total_wins,
                 ),
-                "It is shadowed because another matching rule wins under the current scoring model.",
+                "It is skipped because another matching rule is applied under the current scoring model.",
             ],
             "recommended_action_label": suggested_action_label(shadowed.suggested_action),
             "recommended_action_detail": "Inspect the overlap, then remove or narrow the rule if it is redundant.",
@@ -543,7 +543,7 @@ def build_rule_assessment(
             "badge_class": "text-bg-secondary",
             "paragraphs": [
                 gettext(
-                    "This rule matched {matches} historical transactions and lost {losses} times.",
+                    "This rule matched {matches} historical transactions and was not applied {losses} times.",
                     matches=total_matches,
                     losses=total_losses,
                 ),

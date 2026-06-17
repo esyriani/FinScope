@@ -39,7 +39,7 @@
         type="text"
         name="keyword"
         value="{{ value }}"
-        placeholder="{{ _('Cleaned merchant or keyword') }}"
+        placeholder="{{ _('Simplified merchant name or keyword') }}"
     >
 </div>
 {% endmacro %}
@@ -75,7 +75,7 @@
         <label class="rule-choice" for="{{ prefix }}-scope-fuzzy">
             <span class="rule-choice-icon"><i class="bi bi-search" aria-hidden="true"></i></span>
             <span class="rule-choice-text">
-                <span class="rule-choice-title">{{ _("Fuzzy keyword") }}</span>
+                <span class="rule-choice-title">{{ _("Approximate keyword") }}</span>
                 <span class="rule-choice-detail">{{ _("Match any normalized description containing this keyword.") }}</span>
             </span>
         </label>
@@ -168,13 +168,20 @@
 </fieldset>
 {% endmacro %}
 
-{% macro amount_rule_control(prefix, amount_min=None, amount_max=None, exact_value=None) %}
+{% from "_help.html" import help_tip with context %}
+
+{% macro amount_rule_control(prefix, amount_min=None, amount_max=None, exact_value=None, show_help=False) %}
 {% set has_amount = amount_min is not none or amount_max is not none %}
 {% set is_exact = amount_min is not none and amount_max is not none and amount_min == amount_max %}
 {% set is_range = has_amount and not is_exact %}
 {% set exact_amount_value = exact_value if exact_value is not none else amount_min if is_exact else "" %}
 <fieldset class="amount-rule-control" data-rule-amount-control>
-    <legend class="form-label">{{ _("Amount match") }}</legend>
+    <legend class="form-label">
+        {{ _("Amount match") }}
+        {% if show_help %}
+            {{ help_tip("Limits a rule to transactions with a specific amount or amount range.", "Explain amount match") }}
+        {% endif %}
+    </legend>
     <input type="hidden" name="amount_min" value="{{ '' if amount_min is none else amount_min }}" data-rule-amount-min>
     <input type="hidden" name="amount_max" value="{{ '' if amount_max is none else amount_max }}" data-rule-amount-max>
 

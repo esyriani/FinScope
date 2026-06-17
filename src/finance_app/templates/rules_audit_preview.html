@@ -22,7 +22,7 @@
             href="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Loading rule audit details...') }}"
+            data-busy-message="{{ _('Loading rule health check details...') }}"
         >
             <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rule detail") }}
         </a>
@@ -32,9 +32,9 @@
             href="{{ url_for('rules.audit_rules') }}"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Loading rule audit...') }}"
+            data-busy-message="{{ _('Loading rule health check...') }}"
         >
-            <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule audit") }}
+            <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule health check") }}
         </a>
     </div>
 </div>
@@ -55,7 +55,7 @@
 </div>
 {% elif not preview.has_category_or_tag_changes %}
 <div class="alert alert-info" role="status">
-    {{ _("Historical categories and tags would stay the same. Review any winning-rule changes before confirming.") }}
+    {{ _("Historical categories and tags would stay the same. Review any applied-rule changes before confirming.") }}
 </div>
 {% endif %}
 
@@ -90,9 +90,9 @@
         <div>
             <h5 class="mb-1">{{ _("Confirm apply") }}</h5>
             {% if preview.action == "apply_where_wins" %}
-                <p class="text-muted mb-0">{{ _("This applies the rule only where it wins normal rule precedence.") }}</p>
+            <p class="text-muted mb-0">{{ _("This applies the rule only where normal rule priority selects it.") }}</p>
             {% else %}
-                <p class="text-muted mb-0">{{ _("This force applies the rule to all matching transactions, including transactions where another rule would normally win.") }}</p>
+            <p class="text-muted mb-0">{{ _("This force applies the rule to all matching transactions, including transactions where another rule would normally be applied.") }}</p>
             {% endif %}
         </div>
         <form
@@ -144,7 +144,7 @@
     <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div>
             <h5 class="mb-1">{{ _("Confirm apply all") }}</h5>
-            <p class="text-muted mb-0">{{ _("This queues all current winning rules for application using normal rule precedence.") }}</p>
+            <p class="text-muted mb-0">{{ _("This queues all currently applied rules using normal rule priority.") }}</p>
         </div>
         <form
             method="post"
@@ -272,7 +272,7 @@
         <div class="metric-value">{{ preview.summary.total_affected_transactions }}</div>
     </div>
     <div class="metric-card">
-        <div class="metric-label">{{ _("Winning rule changes") }}</div>
+        <div class="metric-label">{{ _("Applied rule changes") }}</div>
         <div class="metric-value">{{ preview.summary.winning_rule_changes }}</div>
     </div>
     <div class="metric-card">
@@ -319,8 +319,8 @@
                         <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Account") }}</span></button></th>
                         <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Description") }}</span></button></th>
                         <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="number"><span>{{ _("Amount") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Current winner") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Proposed winner") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Current applied rule") }}</span></button></th>
+                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Proposed applied rule") }}</span></button></th>
                         <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="6" data-sort-type="text"><span>{{ _("Current category") }}</span></button></th>
                         <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="7" data-sort-type="text"><span>{{ _("Proposed category") }}</span></button></th>
                         <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="8" data-sort-type="text"><span>{{ _("Tags") }}</span></button></th>

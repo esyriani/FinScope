@@ -1,6 +1,7 @@
 {% set page_stylesheets = ["css/home-dashboard.css", "css/tables.css", "css/page-tabs.css", "css/rule-forms.css", "css/reimbursements.css"] %}
 {% set page_scripts = ["js/tables.js", "js/reimbursements.js"] %}
 {% extends "base.html" %}
+{% from "_help.html" import help_tip with context %}
 
 {% macro amount_fact(label, value, tone="neutral") %}
     <div class="reimbursement-amount-fact reimbursement-amount-{{ tone }}">
@@ -33,6 +34,40 @@
     </div>
 {% endmacro %}
 
+{% macro table_search(input_id, name, value, placeholder) %}
+    <form class="reimbursement-table-search" method="get" action="{{ url_for('reimbursements.reimbursements') }}" data-ajax-refresh-form>
+        {% for field, query in search.items() %}
+            {% if field != name and query %}
+                <input type="hidden" name="{{ field }}" value="{{ query }}">
+            {% endif %}
+        {% endfor %}
+        <label class="visually-hidden" for="{{ input_id }}">{{ _(placeholder) }}</label>
+        <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+            <input
+                id="{{ input_id }}"
+                class="form-control"
+                type="search"
+                name="{{ name }}"
+                value="{{ value }}"
+                placeholder="{{ _(placeholder) }}"
+                aria-label="{{ _(placeholder) }}"
+            >
+            <button class="btn btn-outline-secondary" type="submit">{{ _("Search") }}</button>
+        </div>
+    </form>
+{% endmacro %}
+
+{% macro table_card_header(title, count_label, input_id, name, value, placeholder) %}
+    <div class="card-header reimbursement-table-header">
+        <div class="reimbursement-table-heading">
+            <h5 class="card-title">{{ _(title) }}</h5>
+            <span class="text-muted small">{{ count_label }}</span>
+        </div>
+        {{ table_search(input_id, name, value, placeholder) }}
+    </div>
+{% endmacro %}
+
 {% macro expense_tag_pills(row) %}
     {% if row.tag_pills %}
         <span class="tag-pill-list">
@@ -47,6 +82,7 @@
 
 {% block content %}
 {% set table_page_size = table_page_size | default(50) %}
+{% set search = search | default({}) %}
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Reimbursements") }}</h2>
@@ -68,7 +104,7 @@
 <section class="mb-4 reimbursement-summary" aria-label="{{ _('Reimbursement summary') }}">
     <div class="metric-grid">
         <div class="metric-card reimbursement-summary-card reimbursement-summary-received">
-            <div class="metric-label">{{ _("Reimbursements received") }}</div>
+            <div class="metric-label">{{ _("Received reimbursements") }}</div>
             <div class="metric-value">{{ summary.reimbursement_count }}</div>
             <div class="metric-detail">{{ summary.total_reimbursed|moneyfmt }}</div>
         </div>
@@ -107,19 +143,25 @@
                         <strong>{{ summary.pending_reimbursement_credits|moneyfmt }}</strong>
                     </div>
                     <div class="pulse-fact">
-                        <span>{{ _("Still owed") }}</span>
+                        <span>
+                            {{ _("Still to reimburse") }}
+                            {{ help_tip("Expense amount still waiting to be matched with received reimbursement money.", "Explain still to reimburse") }}
+                        </span>
                         <strong>{{ summary.pending_reimbursable_expenses|moneyfmt }}</strong>
                     </div>
                 </div>
                 {% if action_needed.first_reimbursement_id %}
-                    <button
-                        class="btn btn-primary command-primary-action"
-                        type="button"
-                        data-bs-toggle="modal"
-                        data-bs-target="#match-reimbursement-{{ action_needed.first_reimbursement_id }}-modal"
-                    >
-                        <i class="bi bi-link-45deg" aria-hidden="true"></i>{{ _("Match reimbursement") }}
-                    </button>
+                    <div class="d-inline-flex align-items-center gap-1">
+                        <button
+                            class="btn btn-primary command-primary-action"
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#match-reimbursement-{{ action_needed.first_reimbursement_id }}-modal"
+                        >
+                            <i class="bi bi-link-45deg" aria-hidden="true"></i>{{ _("Match reimbursement") }}
+                        </button>
+                        {{ help_tip("Link money you received back to the expenses it repays.", "Explain match reimbursement") }}
+                    </div>
                 {% elif summary.pending_expense_count %}
                     <button class="btn btn-outline-secondary command-primary-action" type="button" disabled>
                         <i class="bi bi-cash-coin" aria-hidden="true"></i>{{ _("No reimbursement money to match") }}
@@ -139,7 +181,7 @@
         <i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ _("Action needed") }}
     </button>
     <button class="nav-link" id="reimbursements-received-tab" data-bs-toggle="tab" data-bs-target="#reimbursements-received-panel" type="button" role="tab" aria-controls="reimbursements-received-panel" aria-selected="false">
-        <i class="bi bi-cash-coin" aria-hidden="true"></i>{{ _("Reimbursements received") }}
+        <i class="bi bi-cash-coin" aria-hidden="true"></i>{{ _("Received reimbursements") }}
     </button>
     <button class="nav-link" id="reimbursements-expenses-tab" data-bs-toggle="tab" data-bs-target="#reimbursements-expenses-panel" type="button" role="tab" aria-controls="reimbursements-expenses-panel" aria-selected="false">
         <i class="bi bi-receipt" aria-hidden="true"></i>{{ _("Reimbursable expenses") }}
@@ -153,10 +195,7 @@
     <section id="reimbursements-action-panel" class="tab-pane fade show active" role="tabpanel" aria-labelledby="reimbursements-action-tab" tabindex="0">
         {% if action_needed.has_items %}
             <section class="card mb-4">
-                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <h3 class="card-title">{{ _("Active reimbursements") }}</h3>
-                    <span class="text-muted small">{{ _("{count} credits", count=action_needed.total_reimbursement_count) }}</span>
-                </div>
+                {{ table_card_header("Active reimbursements", _("{count} credits", count=action_needed.total_reimbursement_count), "action-reimbursements-search", "action_reimbursements_q", search.action_reimbursements_q, "Search active reimbursements") }}
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table
@@ -170,7 +209,7 @@
                                 <tr>
                                     {{ sort_header(0, "Date") }}
                                     {{ sort_header(1, "Description") }}
-                                    {{ sort_header(2, "Received", "number", "text-end") }}
+                                    {{ sort_header(2, "Received amount", "number", "text-end") }}
                                     {{ sort_header(3, "Matched", "number", "text-end") }}
                                     {{ sort_header(4, "Unmatched", "number", "text-end") }}
                                     {{ sort_header(5, "Progress", "number") }}
@@ -211,10 +250,7 @@
             </section>
 
             <section class="card mb-4">
-                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <h3 class="card-title">{{ _("Active expenses") }}</h3>
-                    <span class="text-muted small">{{ _("{count} expenses", count=action_needed.total_expense_count) }}</span>
-                </div>
+                {{ table_card_header("Active expenses", _("{count} expenses", count=action_needed.total_expense_count), "action-expenses-search", "action_expenses_q", search.action_expenses_q, "Search active expenses") }}
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table
@@ -231,7 +267,7 @@
                                     {{ sort_header(2, "Description") }}
                                     {{ sort_header(3, "Paid", "number", "text-end") }}
                                     {{ sort_header(4, "Reimbursed", "number", "text-end") }}
-                                    {{ sort_header(5, "Still owed", "number", "text-end") }}
+                                    {{ sort_header(5, "Still to reimburse", "number", "text-end") }}
                                     {{ sort_header(6, "Progress", "number") }}
                                     {{ sort_header(7, "Status") }}
                                     <th class="text-end">{{ _("Actions") }}</th>
@@ -252,14 +288,14 @@
                                             <form method="post" action="{{ url_for('reimbursements.complete_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button class="btn btn-sm btn-outline-secondary" type="submit">
-                                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Close") }}
+                                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Mark complete") }}
                                                 </button>
                                             </form>
                                         </td>
                                     </tr>
                                 {% else %}
                                     <tr data-sort-ignore>
-                                        <td colspan="9" class="text-center text-muted py-4">{{ _("No active reimbursable expenses need closing.") }}</td>
+                                        <td colspan="9" class="text-center text-muted py-4">{{ _("No active reimbursable expenses need completion.") }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -270,13 +306,13 @@
         {% else %}
             <div class="reimbursement-empty-state">
                 <h3>{{ _("No matching needed") }}</h3>
-                <p>{{ _("All received reimbursement money is matched, and no reimbursable expenses are still owed.") }}</p>
+                <p>{{ _("All received reimbursement money is matched, and no reimbursable expenses remain to reimburse.") }}</p>
             </div>
         {% endif %}
     </section>
 
     <div class="reimbursement-match-modals">
-        {% for item in action_needed.reimbursements %}
+        {% for item in reimbursement_match_items %}
                     <div class="modal fade reimbursement-match-modal" id="match-reimbursement-{{ item.id }}-modal" tabindex="-1" aria-labelledby="match-reimbursement-{{ item.id }}-modal-label" aria-hidden="true">
                         <div class="modal-dialog modal-xl modal-dialog-scrollable">
                             <div class="modal-content">
@@ -286,6 +322,7 @@
                                         action="{{ url_for('reimbursements.add_allocation') }}"
                                         data-reimbursement-match-form
                                         data-ajax-refresh-form
+                                        data-match-remaining="{{ item.remaining }}"
                                         data-reimbursement-remaining="{{ item.remaining }}"
                                     >
                                         <div class="modal-header">
@@ -301,7 +338,7 @@
                                             <input type="hidden" name="reimbursement_transaction_id" value="{{ item.id }}">
 
                                             <div class="reimbursement-amount-grid reimbursement-modal-amounts">
-                                                {{ amount_fact("Received", item.amount, "received") }}
+                                                {{ amount_fact("Received amount", item.amount, "received") }}
                                                 {{ amount_fact("Already matched", item.allocated, "matched") }}
                                                 {{ amount_fact("Unmatched", item.remaining, "unmatched") }}
                                             </div>
@@ -337,7 +374,7 @@
                                                                 <strong class="amount-reimbursed">{{ candidate.allocated|moneyfmt }}</strong>
                                                             </div>
                                                             <div>
-                                                                <span>{{ _("Still owed") }}</span>
+                                                                <span>{{ _("Still to reimburse") }}</span>
                                                                 <strong class="amount-owed">{{ candidate.pending_remaining|moneyfmt }}</strong>
                                                             </div>
                                                             <div class="reimbursement-match-amount">
@@ -401,7 +438,7 @@
                                     </div>
                                     <div class="modal-footer">
                                         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
-                                            <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Close") }}
+                                            <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}
                                         </button>
                                     </div>
                                 {% endif %}
@@ -412,9 +449,9 @@
     </div>
 
     <div class="reimbursement-expense-modals">
-        {% for row in reimbursable_expenses %}
+        {% for row in expense_detail_rows %}
             <div class="modal fade reimbursement-expense-modal" id="reimbursement-expense-{{ row.id }}-modal" tabindex="-1" aria-labelledby="reimbursement-expense-{{ row.id }}-modal-label" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-fit-content">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-fit-content">
                     <div class="modal-content">
                         <div class="modal-header">
                             <div>
@@ -462,8 +499,101 @@
                             <div class="reimbursement-amount-grid reimbursement-modal-amounts">
                                 {{ amount_fact("Paid", row.amount, "paid") }}
                                 {{ amount_fact("Reimbursed", row.allocated, "matched") }}
-                                {{ amount_fact("Still owed", row.pending_remaining, "owed") }}
+                                {{ amount_fact("Still to reimburse", row.pending_remaining, "owed") }}
                             </div>
+
+                            <section class="reimbursement-expense-candidates" aria-labelledby="reimbursement-expense-{{ row.id }}-candidates-title">
+                                <div class="reimbursement-panel-title reimbursement-modal-candidates-title">
+                                    <h5 id="reimbursement-expense-{{ row.id }}-candidates-title">{{ _("Candidate reimbursements") }}</h5>
+                                    <span>{{ _("{count} credits", count=row.reimbursement_candidate_count) }}</span>
+                                </div>
+                                {% if row.reimbursement_candidates %}
+                                    <form
+                                        method="post"
+                                        action="{{ url_for('reimbursements.add_allocation') }}"
+                                        data-reimbursement-match-form
+                                        data-ajax-refresh-form
+                                        data-match-remaining="{{ row.pending_remaining }}"
+                                    >
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="match_mode" value="expense_multiple">
+                                        <input type="hidden" name="expense_transaction_id" value="{{ row.id }}">
+                                        <div class="reimbursement-candidate-list">
+                                            {% for candidate in row.reimbursement_candidates %}
+                                                <div class="reimbursement-candidate" data-match-candidate>
+                                                    <div class="form-check reimbursement-candidate-choice">
+                                                        <input
+                                                            class="form-check-input"
+                                                            type="checkbox"
+                                                            name="reimbursement_transaction_ids"
+                                                            value="{{ candidate.id }}"
+                                                            id="expense-{{ row.id }}-reimbursement-{{ candidate.id }}"
+                                                            data-match-checkbox
+                                                        >
+                                                        <label class="form-check-label" for="expense-{{ row.id }}-reimbursement-{{ candidate.id }}">
+                                                            <span class="reimbursement-candidate-title">{{ candidate.date|datefmt }} - {{ _("Reimbursement") }}</span>
+                                                            <span class="reimbursement-candidate-description">{{ candidate.description }}</span>
+                                                        </label>
+                                                    </div>
+                                                    <div class="reimbursement-candidate-money">
+                                                        <div>
+                                                            <span>{{ _("Received amount") }}</span>
+                                                            <strong class="amount-received">{{ candidate.amount|moneyfmt }}</strong>
+                                                        </div>
+                                                        <div>
+                                                            <span>{{ _("Already matched") }}</span>
+                                                            <strong class="amount-matched">{{ candidate.allocated|moneyfmt }}</strong>
+                                                        </div>
+                                                        <div>
+                                                            <span>{{ _("Unmatched") }}</span>
+                                                            <strong class="amount-unmatched">{{ candidate.remaining|moneyfmt }}</strong>
+                                                        </div>
+                                                        <div class="reimbursement-match-amount">
+                                                            <label class="form-label" for="expense-{{ row.id }}-reimbursement-{{ candidate.id }}-amount">{{ _("Match amount") }}</label>
+                                                            <input
+                                                                id="expense-{{ row.id }}-reimbursement-{{ candidate.id }}-amount"
+                                                                class="form-control form-control-sm text-end"
+                                                                type="number"
+                                                                name="amount_{{ candidate.id }}"
+                                                                min="0.01"
+                                                                max="{{ candidate.max_amount }}"
+                                                                step="0.01"
+                                                                value="{{ candidate.default_amount }}"
+                                                                data-match-amount
+                                                            >
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                        {% if row.hidden_reimbursement_candidate_count %}
+                                            <div class="reimbursement-list-note">
+                                                {{ _("Showing {shown} of {total} candidate reimbursements. Use the Received reimbursements tab to review all.", shown=row.reimbursement_candidates|length, total=row.reimbursement_candidate_count) }}
+                                            </div>
+                                        {% endif %}
+                                        <div class="reimbursement-match-review">
+                                            <div class="reimbursement-review-matched">
+                                                <span>{{ _("Selected to match") }}</span>
+                                                <strong data-match-total>{{ 0|moneyfmt }}</strong>
+                                            </div>
+                                            <div class="reimbursement-review-unmatched">
+                                                <span>{{ _("Remaining after this match") }}</span>
+                                                <strong data-match-remaining>{{ row.pending_remaining|moneyfmt }}</strong>
+                                            </div>
+                                            <div class="reimbursement-match-error" data-match-error hidden>
+                                                {{ _("Selected amount exceeds expense amount still to reimburse.") }}
+                                            </div>
+                                            <button class="btn btn-primary" type="submit" data-match-submit>
+                                                <i class="bi bi-check2" aria-hidden="true"></i>{{ _("Save selected matches") }}
+                                            </button>
+                                        </div>
+                                    </form>
+                                {% else %}
+                                    <div class="reimbursement-empty-state">
+                                        {{ _("No reimbursements are available for this expense yet.") }}
+                                    </div>
+                                {% endif %}
+                            </section>
 
                             <section class="reimbursement-expense-matches" aria-labelledby="reimbursement-expense-{{ row.id }}-matches-title">
                                 <div class="reimbursement-panel-title reimbursement-modal-candidates-title">
@@ -518,17 +648,17 @@
                                 {% endif %}
                             </form>
                             {% if row.is_complete %}
-                                <form method="post" action="{{ url_for('reimbursements.reopen_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
+                                <form method="post" action="{{ url_for('reimbursements.resume_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button class="btn btn-primary" type="submit">
-                                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Reopen") }}
+                                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Resume tracking") }}
                                     </button>
                                 </form>
                             {% else %}
                                 <form method="post" action="{{ url_for('reimbursements.complete_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button class="btn btn-primary" type="submit">
-                                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Close") }}
+                                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Mark complete") }}
                                     </button>
                                 </form>
                             {% endif %}
@@ -541,10 +671,7 @@
 
     <section id="reimbursements-received-panel" class="tab-pane fade" role="tabpanel" aria-labelledby="reimbursements-received-tab" tabindex="0">
         <section class="card mb-4">
-            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <h3 class="card-title">{{ _("Reimbursements received") }}</h3>
-                <span class="text-muted small">{{ _("{count} received", count=reimbursements|length) }}</span>
-            </div>
+                {{ table_card_header("Received reimbursements", _("{count} received", count=reimbursements|length), "received-reimbursements-search", "received_q", search.received_q, "Search received reimbursements") }}
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table
@@ -558,7 +685,7 @@
                             <tr>
                                 {{ sort_header(0, "Date") }}
                                 {{ sort_header(1, "Description") }}
-                                {{ sort_header(2, "Received", "number", "text-end") }}
+                                {{ sort_header(2, "Received amount", "number", "text-end") }}
                                 {{ sort_header(3, "Matched", "number", "text-end") }}
                                 {{ sort_header(4, "Unmatched", "number", "text-end") }}
                                 {{ sort_header(5, "Status") }}
@@ -567,7 +694,7 @@
                         </thead>
                         <tbody>
                             {% for row in reimbursements %}
-                                <tr{% if row.remaining > 0 %} data-row-edit-target="#match-reimbursement-{{ row.id }}-modal"{% endif %}>
+                                <tr id="received-reimbursement-{{ row.id }}"{% if row.remaining > 0 %} data-row-edit-target="#match-reimbursement-{{ row.id }}-modal"{% endif %}>
                                     <td data-sort-value="{{ row.date }}">{{ row.date|datefmt }}</td>
                                     <td>{{ row.description }}</td>
                                     <td class="text-end amount-received" data-sort-value="{{ row.amount }}">{{ row.amount|moneyfmt }}</td>
@@ -603,10 +730,7 @@
 
     <section id="reimbursements-expenses-panel" class="tab-pane fade" role="tabpanel" aria-labelledby="reimbursements-expenses-tab" tabindex="0">
         <section class="card mb-4">
-            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <h3 class="card-title">{{ _("Reimbursable expenses") }}</h3>
-                <span class="text-muted small">{{ _("{count} expenses", count=reimbursable_expenses|length) }}</span>
-            </div>
+            {{ table_card_header("Reimbursable expenses", _("{count} expenses", count=reimbursable_expenses|length), "reimbursable-expenses-search", "expenses_q", search.expenses_q, "Search reimbursable expenses") }}
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table
@@ -624,14 +748,14 @@
                                 {{ sort_header(3, "Tags") }}
                                 {{ sort_header(4, "Paid", "number", "text-end") }}
                                 {{ sort_header(5, "Reimbursed", "number", "text-end") }}
-                                {{ sort_header(6, "Still owed", "number", "text-end") }}
+                                {{ sort_header(6, "Still to reimburse", "number", "text-end") }}
                                 {{ sort_header(7, "Status") }}
                                 <th class="text-end">{{ _("Actions") }}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in reimbursable_expenses %}
-                                <tr data-row-edit-target="#reimbursement-expense-{{ row.id }}-modal">
+                                <tr id="reimbursable-expense-{{ row.id }}" data-row-edit-target="#reimbursement-expense-{{ row.id }}-modal">
                                     <td data-sort-value="{{ row.date }}">{{ row.date|datefmt }}</td>
                                     <td>{{ row.category }}</td>
                                     <td>{{ row.description }}</td>
@@ -642,24 +766,24 @@
                                     <td data-sort-value="{{ row.status_label }}"><span class="badge {{ row.status_class }}">{{ _(row.status_label) }}</span></td>
                                     <td class="text-end" data-row-action>
                                         {% if row.is_complete %}
-                                            <form method="post" action="{{ url_for('reimbursements.reopen_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
+                                            <form method="post" action="{{ url_for('reimbursements.resume_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button class="btn btn-sm btn-outline-secondary" type="submit">
-                                                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Reopen") }}
+                                                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Resume tracking") }}
                                                 </button>
                                             </form>
                                         {% elif row.pending_remaining > 0 %}
                                             <form method="post" action="{{ url_for('reimbursements.complete_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button class="btn btn-sm btn-outline-secondary" type="submit">
-                                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Close") }}
+                                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Mark complete") }}
                                                 </button>
                                             </form>
                                         {% else %}
                                             <form method="post" action="{{ url_for('reimbursements.complete_expense', expense_transaction_id=row.id) }}" data-ajax-refresh-form>
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button class="btn btn-sm btn-outline-secondary" type="submit">
-                                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Close") }}
+                                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Mark complete") }}
                                                 </button>
                                             </form>
                                         {% endif %}
@@ -679,10 +803,7 @@
 
     <section id="reimbursements-history-panel" class="tab-pane fade" role="tabpanel" aria-labelledby="reimbursements-history-tab" tabindex="0">
         <section class="card mb-4">
-            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <h3 class="card-title">{{ _("Match history") }}</h3>
-                <span class="text-muted small">{{ _("{count} matches", count=allocations|length) }}</span>
-            </div>
+            {{ table_card_header("Match history", _("{count} matches", count=allocations|length), "match-history-search", "history_q", search.history_q, "Search match history") }}
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table
@@ -702,7 +823,7 @@
                         </thead>
                         <tbody>
                             {% for allocation in allocations %}
-                                <tr>
+                                <tr id="reimbursement-match-{{ allocation.id }}">
                                     <td data-sort-value="{{ allocation.reimbursement_date }} {{ allocation.reimbursement_description }}">
                                         <div>{{ allocation.reimbursement_date|datefmt }}</div>
                                         <div class="small text-muted">{{ allocation.reimbursement_description }}</div>
@@ -734,7 +855,7 @@
                                                     required
                                                 >
                                                 <button class="btn btn-sm btn-outline-secondary" type="submit">
-                                                    <i class="bi bi-check2" aria-hidden="true"></i>{{ _("Update match") }}
+                                                    <i class="bi bi-check2" aria-hidden="true"></i>{{ _("Update") }}
                                                 </button>
                                             </form>
                                             <form method="post" action="{{ url_for('reimbursements.delete_allocation', allocation_id=allocation.id) }}" data-ajax-refresh-form>

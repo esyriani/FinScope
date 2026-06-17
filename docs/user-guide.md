@@ -10,13 +10,13 @@ The upload form collects an account name, statement import type, account reporti
 
 Uploaded statements show import status, added/skipped/ignored counts, unknown counts, AI candidate counts, stored text preview, Retry, Reprocess, and Run AI actions. Retry reruns a failed or incomplete import from stored statement text. Reprocess removes transactions imported from that statement and imports them again from stored statement text.
 
-Interac e-Transfer history is enrichment-only. Import matching checking statements first, then import Interac history for the same account so FinScope can update existing generic transfer rows.
+Interac e-Transfer history is enrichment-only. Import matching checking statements first, then import Interac history for the same account so FinScope can update existing transfer rows with clearer details.
 
 ## Transactions
 
-Transactions is the searchable ledger view. It supports period, category, tag, status, ignored-state, and categorization-method filters.
+Transactions is the searchable transaction history. It supports period, category, tag, status, ignored-state, and how-categorized filters.
 
-Editors and owners can approve rows, ignore or restore rows, edit categories and tags, save rules from transaction edits, run the optional single-transaction AI suggestion action when enabled, and use batch actions for selected rows.
+Editors and owners can approve rows, ignore or restore rows, edit categories and tags, remember future matches from transaction edits, run the optional single-transaction AI suggestion action when enabled, and use batch actions for selected rows.
 
 Ignored rows stay in the database but are excluded from normal active-transaction views and rule matching unless a feature explicitly includes ignored rows.
 
@@ -26,11 +26,7 @@ Reimbursements tracks incoming credits that repay expenses paid upfront.
 
 Keep reimbursable expenses in their natural category and tag them `Reimbursable` plus any context tags. Categorize the incoming credit as `Reimbursement`, then create allocations that link the credit to the covered expenses. Allocated amounts reduce the original expense category in Dashboard and Comparison, while the reimbursement credit itself is not counted as ordinary income.
 
-When an expense is only partially eligible for reimbursement, allocate the
-amount actually paid back, then close the expense. This removes the
-remaining balance from reimbursement follow-up without inventing a credit or
-changing the original expense category. Reopen the expense if more money later
-needs to be matched.
+When an expense is only partially eligible for reimbursement, match the amount actually paid back, then mark the expense complete. This removes the remaining balance from reimbursement follow-up without inventing a credit or changing the original expense category. Use Resume tracking if more money later needs to be matched.
 
 ## Rules
 
@@ -38,23 +34,23 @@ Rules assign categories and optional tags to matching transactions.
 
 Rules can be created, edited, deleted, imported, exported, approved, preview-applied individually, or preview-applied as a full rule set. Rule changes are preview-first when existing transactions may be affected.
 
-Rules created directly from Rules are keyword-fuzzy by default. Rules saved while editing a transaction can be merchant-bound when the transaction has a durable merchant identity. Rules may also be scoped by account, transaction direction, and amount bounds.
+Rules created directly from Rules are approximate-keyword rules by default. Rules saved while editing a transaction can be merchant-bound when the transaction has a durable merchant identity. Rules may also be scoped by account, transaction direction, and amount bounds.
 
-Rule audit reports overlapping rules, category conflicts, tag differences, shadowed rules, stale or unused rules, and specificity warnings. See [Taxonomy and categorization](taxonomy.md) for matching precedence and [Background jobs](background-jobs.md) for queued rule-job behavior.
+Rule health check reports overlapping rules, category conflicts, tag differences, rules skipped by priority, stale or unused rules, and precision warnings. See [Categories, tags, and categorization](taxonomy.md) for matching priority and [Processing activity](background-jobs.md) for queued rule processing behavior.
 
 ## Review
 
 Review groups active unknown or review-required transactions by merchant-like text so related rows can be categorized together.
 
-The page shows group counts, transaction counts, largest group, review amount, examples, and Review group actions. In the review modal, users can assign a category, assign tags, save a reusable rule, or use Show all transactions to apply the change only to selected rows in the group.
+The page shows group counts, transaction counts, largest group, review amount, examples, and Review group actions. In the review modal, users can assign a category, assign tags, choose Remember for future matches, or use Show all transactions to apply the change only to selected rows in the group.
 
-Review operations may run as background jobs. Check Jobs when a review action is queued.
+Review operations may run in the background. Check Processing when a review action is queued.
 
 ## Home
 
 Home is the operational landing page after login.
 
-It shows a financial pulse, needs-attention items, recent activity, quick insights, and shortcuts. Use it after imports or long-running jobs to see what needs cleanup next.
+It shows a financial pulse, needs-attention items, recent activity, quick insights, and shortcuts. Use it after imports or long-running processing activity to see what needs cleanup next.
 
 ## Dashboard
 
@@ -96,13 +92,13 @@ Detection is inferred from historical transactions before the selected month. Tr
 
 Users with recurring-edit permission can confirm a pattern, ignore a pattern, or edit frequency, expected date, typical amount, tolerances, and active state from the detail modal.
 
-## Jobs
+## Processing
 
-Jobs tracks longer-running workflows while the app remains usable.
+Processing tracks longer-running workflows while the app remains usable.
 
-Common jobs include statement import, AI categorization, applying rules, review operations, and rule import. The page shows status, timestamps, results, errors, AI progress logs, cancellation where supported, and undo where the completed job still has undo metadata.
+Common processing activity includes statement import, AI categorization, applying rules, review operations, and rule import. The page shows status, timestamps, results, errors, AI progress logs, cancellation where supported, and undo where the completed item still has undo metadata.
 
-AI categorization uses a separate queue from the main import/rule/review queue. Jobs also provides Run AI on unknowns and Clear queued AI controls.
+AI categorization uses a separate queue from the main import/rule/review queue. Processing also provides Run AI on unknowns and Clear queued AI controls.
 
 ## Settings
 
@@ -112,27 +108,27 @@ All authenticated users can edit General settings for their own account, includi
 
 See [Settings reference](settings.md) for every configurable setting and [Authentication and authorization](authentication.md) for role-specific settings permissions.
 
-## Taxonomy
+## Categories and tags
 
-Admin > Taxonomy manages categories and tags in the active database.
+Admin > Categories and tags manages categories and tags in the active database.
 
-Categories are exclusive primary classifications. Tags are optional secondary labels that can overlap. The page supports creating, editing, deleting unused values, and importing or exporting taxonomy YAML.
+Categories are exclusive primary classifications. Tags are optional secondary labels that can overlap. The page supports creating, editing, deleting unused values, and importing or exporting categories and tags YAML.
 
-The seed file [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml) is used only when initializing a new database. After initialization, use the Taxonomy page for runtime changes. See [Taxonomy and categorization](taxonomy.md) for the full model.
+The seed file [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml) is used only when initializing a new database. After initialization, use the Categories and tags page for runtime changes. See [Categories, tags, and categorization](taxonomy.md) for the full model.
 
 ## AI categorization
 
-AI categorization is optional and requires `OPENAI_API_KEY` or `api_keys.openai_api_key`.
+AI categorization is optional and requires an OpenAI API key.
 
-By default, FinScope asks for token-estimate confirmation before queued AI categorization. Owners can turn that confirmation step off from Settings > Categorization; when it is off, statement imports automatically queue AI categorization for remaining unknown rows. Manual AI reruns remain available from Jobs and Uploaded statements. The single-transaction Suggest category action can also be shown or hidden from Settings when configured.
+By default, FinScope shows an AI usage estimate before sending an AI request. Owners can turn that confirmation step off from Settings > Categorization; when it is off, statement imports automatically queue AI categorization for remaining unknown rows. Manual AI runs remain available from Processing and Uploaded statements. The single-transaction Suggest category action can also be shown or hidden from Settings.
 
-LLM prompts are privacy-minimized. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples to external providers.
+FinScope minimizes what it sends to the AI provider. It does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples.
 
 ## Privacy and security
 
 FinScope handles financial data. Treat runtime databases, uploaded statement text, backups, logs, credentials, and API keys as sensitive.
 
-- One deployment maps to one shared finance database.
+- One FinScope installation maps to one shared finance database.
 - One owner manages editor and viewer users.
 - Passwords are stored with Werkzeug `scrypt` hashes.
 - CSRF protection is enabled for mutating routes.
@@ -151,7 +147,7 @@ Operational recommendations:
 ## Known limitations
 
 - FinScope supports multiple authenticated users for one shared finance dataset, not multi-tenant hosting.
-- Background job state is process-local and in memory.
+- Processing activity state is process-local and in memory.
 - No bank synchronization is built in.
 - No built-in encryption at rest is implemented.
 - SQLite is intended for local use, not high-concurrency workloads.

@@ -2,10 +2,10 @@
 
 from typing import Any
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 
-from finance_app.background.runner import submit_background_job
+from finance_app.background.runner import get_background_job, submit_background_job
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
@@ -142,12 +142,32 @@ def apply_review_group() -> ResponseReturnValue:
     review_target = "transaction" if transaction_id else "transactions" if selected_transaction_ids else "group"
     flash(
         gettext(
-            "Review {target} queued in the background. Track progress on the Jobs page. Job: {job_id}",
+            "Review {target} queued in the background. Track progress on the Processing page. Job: {job_id}",
             target=gettext(review_target),
             job_id=job_id[:8],
         )
     )
+    if is_fetch_request():
+        return jsonify(
+            {
+                "ok": True,
+                "refresh_url": next_url,
+                "job_status_url": url_for("review.review_job_status", job_id=job_id),
+            }
+        )
+
     return redirect(next_url)
+
+
+@review_bp.route("/review/jobs/<job_id>.json")
+@permission_required(PERMISSION_EDIT_TRANSACTIONS)
+def review_job_status(job_id: str) -> ResponseReturnValue:
+    """Return the minimal background job status needed by the review page."""
+    job = get_background_job(job_id)
+    if job is None:
+        return jsonify({"ok": False, "message": gettext("Job not found.")}), 404
+
+    return jsonify({"ok": True, "status": job["status"]})
 
 
 def parse_review_transaction_ids(values: list[str]) -> list[int]:
@@ -179,3 +199,8 @@ def review_redirect_target() -> str:
         return target
 
     return url_for("review.review")
+
+
+def is_fetch_request() -> bool:
+    """Return whether the current request came from the shared AJAX form handler."""
+    return request.headers.get("X-Requested-With") == "fetch"

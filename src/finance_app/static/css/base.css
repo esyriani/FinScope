@@ -729,6 +729,40 @@ h2 {
     margin-right: 0;
 }
 
+.help-tip {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--bs-secondary-color);
+    display: inline-flex;
+    height: 1.15rem;
+    justify-content: center;
+    line-height: 1;
+    margin-left: 0.25rem;
+    padding: 0;
+    vertical-align: text-bottom;
+    width: 1.15rem;
+}
+
+.help-tip:hover,
+.help-tip:focus {
+    color: var(--bs-info);
+}
+
+.help-tip i {
+    font-size: 0.95rem;
+}
+
+.form-label-with-help {
+    align-items: center;
+    display: flex;
+    margin-bottom: 0.5rem;
+}
+
+.form-label-with-help .form-label {
+    margin-bottom: 0;
+}
+
 .filter-actions {
     align-items: end;
     display: flex;

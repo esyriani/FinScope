@@ -59,12 +59,12 @@ def import_taxonomy() -> ResponseReturnValue:
 
     filename = Path(uploaded_file.filename or "").name
     if not filename.lower().endswith((".yml", ".yaml")):
-        flash(gettext("Taxonomy import currently supports YAML files."))
+        flash(gettext("Categories and tags import currently supports YAML files."))
         return redirect(url_for("taxonomy_admin.taxonomy"))
 
     raw_text = uploaded_file.read().decode("utf-8-sig", errors="replace")
     if not raw_text.strip():
-        flash(gettext("The selected taxonomy file is empty."))
+        flash(gettext("The selected categories and tags file is empty."))
         return redirect(url_for("taxonomy_admin.taxonomy"))
 
     try:

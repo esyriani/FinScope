@@ -1,6 +1,6 @@
 """Presentation shaping for reimbursement monitoring views."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
@@ -8,6 +8,13 @@ from finance_app.core.money import money_to_decimal
 from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 
 MATCH_CANDIDATE_LIMIT = 5
+SEARCH_FIELDS = (
+    "action_reimbursements_q",
+    "action_expenses_q",
+    "received_q",
+    "expenses_q",
+    "history_q",
+)
 
 
 def build_reimbursements_view_model(
@@ -16,8 +23,10 @@ def build_reimbursements_view_model(
     allocation_rows: Sequence[dict[str, Any]],
     expense_tag_map: Mapping[Any, Sequence[str]] | None = None,
     tag_colors: Mapping[str, str] | None = None,
+    search_queries: Mapping[str, object] | None = None,
 ) -> dict[str, Any]:
     """Build a template-friendly reimbursement monitoring model."""
+    search = normalize_search_queries(search_queries)
     reimbursements = [build_reimbursement_row(row) for row in reimbursement_rows]
     allocations = [build_allocation_row(row) for row in allocation_rows]
     allocations = with_allocation_update_limits(allocations)
@@ -32,14 +41,31 @@ def build_reimbursements_view_model(
     expenses = with_expense_matches(expenses, allocations)
     reimbursement_options = [row for row in reimbursements if row["remaining"] > 0]
     expense_options = active_reimbursable_expenses(expenses)
+    reimbursement_match_items = build_reimbursement_match_items(reimbursement_options, expense_options, allocations)
+    expenses = with_expense_reimbursement_candidates(expenses, reimbursement_options, allocations)
+    expense_options = active_reimbursable_expenses(expenses)
+    action_reimbursements = search_rows(
+        reimbursement_match_items,
+        search["action_reimbursements_q"],
+        reimbursement_search_text,
+    )
+    action_expenses = search_rows(expense_options, search["action_expenses_q"], expense_search_text)
     return {
         "summary": build_summary(reimbursements, expenses, allocations),
-        "reimbursements": reimbursements,
-        "reimbursable_expenses": expenses,
-        "allocations": allocations,
+        "reimbursements": search_rows(reimbursements, search["received_q"], reimbursement_search_text),
+        "reimbursable_expenses": search_rows(expenses, search["expenses_q"], expense_search_text),
+        "allocations": search_rows(allocations, search["history_q"], allocation_search_text),
         "reimbursement_options": reimbursement_options,
         "expense_options": expense_options,
-        "action_needed": build_action_needed(reimbursement_options, expense_options, allocations),
+        "reimbursement_match_items": reimbursement_match_items,
+        "expense_detail_rows": expenses,
+        "search": search,
+        "action_needed": build_action_needed(
+            action_reimbursements,
+            action_expenses,
+            has_items=bool(reimbursement_options or expense_options),
+            first_reimbursement_id=reimbursement_options[0]["id"] if reimbursement_options else None,
+        ),
     }
 
 
@@ -173,6 +199,22 @@ def with_expense_matches(
     return matched_rows
 
 
+def with_expense_reimbursement_candidates(
+    expenses: Sequence[dict[str, Any]],
+    reimbursements: Sequence[dict[str, Any]],
+    allocations: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Attach date-aware reimbursement candidates to each expense detail row."""
+    matched_pairs = {(row["reimbursement_transaction_id"], row["expense_transaction_id"]) for row in allocations}
+    return [
+        {
+            **row,
+            **build_expense_match_candidate_summary(row, reimbursements, matched_pairs),
+        }
+        for row in expenses
+    ]
+
+
 def build_summary(
     reimbursements: Sequence[dict[str, Any]],
     expenses: Sequence[dict[str, Any]],
@@ -199,32 +241,42 @@ def build_summary(
     }
 
 
-def build_action_needed(
+def build_reimbursement_match_items(
     reimbursements: Sequence[dict[str, Any]],
     expenses: Sequence[dict[str, Any]],
     allocations: Sequence[dict[str, Any]],
-) -> dict[str, Any]:
-    """Return unresolved items and contextual match candidates."""
+) -> list[dict[str, Any]]:
+    """Return reimbursement rows with their eligible expense candidates."""
     matched_pairs = {(row["reimbursement_transaction_id"], row["expense_transaction_id"]) for row in allocations}
-    reimbursement_items = [
+    return [
         {
             **row,
             **build_match_candidate_summary(row, expenses, matched_pairs),
         }
         for row in reimbursements
     ]
+
+
+def build_action_needed(
+    reimbursements: Sequence[dict[str, Any]],
+    expenses: Sequence[dict[str, Any]],
+    *,
+    has_items: bool,
+    first_reimbursement_id: int | None,
+) -> dict[str, Any]:
+    """Return unresolved items and contextual match candidates."""
     return {
-        "reimbursements": reimbursement_items,
+        "reimbursements": list(reimbursements),
         "expenses": list(expenses),
-        "first_reimbursement_id": reimbursement_items[0]["id"] if reimbursement_items else None,
-        "has_items": bool(reimbursements or expenses),
+        "first_reimbursement_id": first_reimbursement_id,
+        "has_items": has_items,
         "total_reimbursement_count": len(reimbursements),
         "total_expense_count": len(expenses),
     }
 
 
 def active_reimbursable_expenses(expenses: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return tagged, open expense rows that still need reimbursement action."""
+    """Return tagged, active expense rows that still need reimbursement action."""
     return [
         row
         for row in expenses
@@ -241,7 +293,12 @@ def build_match_candidate_summary(
     reimbursement_remaining = positive_remaining(reimbursement)
     candidates: list[dict[str, Any]] = []
     candidate_count = 0
-    for expense in expenses:
+    eligible_expenses = sorted(
+        (expense for expense in expenses if date_key(expense.get("date")) < date_key(reimbursement.get("date"))),
+        key=lambda row: (date_key(row.get("date")), int(row["id"])),
+        reverse=True,
+    )
+    for expense in eligible_expenses:
         expense_remaining = positive_pending_remaining(expense)
         if expense_remaining <= 0:
             continue
@@ -265,6 +322,137 @@ def build_match_candidate_summary(
         "match_candidate_count": candidate_count,
         "hidden_match_candidate_count": max(0, candidate_count - len(candidates)),
     }
+
+
+def build_expense_match_candidate_summary(
+    expense: dict[str, Any],
+    reimbursements: Sequence[dict[str, Any]],
+    matched_pairs: set[tuple[int, int]],
+) -> dict[str, Any]:
+    """Return a limited set of candidate reimbursements for one expense."""
+    expense_remaining = positive_pending_remaining(expense)
+    candidates: list[dict[str, Any]] = []
+    candidate_count = 0
+    eligible_reimbursements = sorted(
+        (
+            reimbursement
+            for reimbursement in reimbursements
+            if date_key(reimbursement.get("date")) > date_key(expense.get("date"))
+        ),
+        key=lambda row: (date_key(row.get("date")), int(row["id"])),
+    )
+    for reimbursement in eligible_reimbursements:
+        reimbursement_remaining = positive_remaining(reimbursement)
+        if reimbursement_remaining <= 0:
+            continue
+        if (reimbursement["id"], expense["id"]) in matched_pairs:
+            continue
+
+        candidate_count += 1
+        if len(candidates) >= MATCH_CANDIDATE_LIMIT:
+            continue
+
+        max_amount = min(expense_remaining, reimbursement_remaining)
+        candidates.append(
+            {
+                **reimbursement,
+                "default_amount": max_amount,
+                "max_amount": max_amount,
+            }
+        )
+    return {
+        "reimbursement_candidates": candidates,
+        "reimbursement_candidate_count": candidate_count,
+        "hidden_reimbursement_candidate_count": max(0, candidate_count - len(candidates)),
+    }
+
+
+def normalize_search_queries(search_queries: Mapping[str, object] | None) -> dict[str, str]:
+    """Return trimmed reimbursement table search values keyed by query param."""
+    search_queries = search_queries or {}
+    return {key: str(search_queries.get(key, "") or "").strip() for key in SEARCH_FIELDS}
+
+
+def search_rows(
+    rows: Sequence[dict[str, Any]],
+    query: object,
+    text_builder: Callable[[dict[str, Any]], str],
+) -> list[dict[str, Any]]:
+    """Return rows whose searchable table text contains every query term."""
+    terms = [term.casefold() for term in str(query or "").split() if term.strip()]
+    if not terms:
+        return list(rows)
+    return [row for row in rows if all(term in text_builder(row).casefold() for term in terms)]
+
+
+def reimbursement_search_text(row: dict[str, Any]) -> str:
+    """Return searchable text for reimbursement table rows."""
+    return searchable_text(
+        row.get("date"),
+        row.get("description"),
+        row.get("amount"),
+        row.get("allocated"),
+        row.get("remaining"),
+        row.get("matched_percent"),
+        row.get("status_label"),
+    )
+
+
+def expense_search_text(row: dict[str, Any]) -> str:
+    """Return searchable text for reimbursable expense table rows."""
+    return searchable_text(
+        row.get("date"),
+        row.get("category"),
+        row.get("description"),
+        row.get("account_name"),
+        row.get("amount"),
+        row.get("allocated"),
+        row.get("remaining"),
+        row.get("pending_remaining"),
+        row.get("reimbursed_percent"),
+        row.get("status_label"),
+        row.get("tags"),
+    )
+
+
+def allocation_search_text(row: dict[str, Any]) -> str:
+    """Return searchable text for reimbursement history table rows."""
+    return searchable_text(
+        row.get("reimbursement_date"),
+        row.get("reimbursement_description"),
+        row.get("reimbursement_amount"),
+        row.get("expense_date"),
+        row.get("expense_description"),
+        row.get("expense_amount"),
+        row.get("expense_category"),
+        row.get("amount"),
+    )
+
+
+def searchable_text(*values: Any) -> str:
+    """Flatten display values into case-insensitive table-search text."""
+    parts: list[str] = []
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, Decimal):
+            parts.extend((str(value), f"{value:.2f}"))
+        elif isinstance(value, Mapping):
+            parts.append(searchable_text(*value.values()))
+        elif isinstance(value, Sequence):
+            parts.append(searchable_text(*value))
+        else:
+            parts.append(str(value))
+    return " ".join(parts)
+
+
+def date_key(value: Any) -> str:
+    """Return an ISO-like date key that can compare date objects and strings."""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value or "")
 
 
 def positive_remaining(row: dict[str, Any]) -> Decimal:

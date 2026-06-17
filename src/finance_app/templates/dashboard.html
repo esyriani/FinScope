@@ -25,6 +25,7 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_help.html" import help_tip with context %}
 
 {% block content %}
 {% set category_options = category_options | default([]) %}
@@ -256,7 +257,10 @@
 <section class="quality-panel quality-{{ data_quality.level }} mb-4">
     <div class="quality-panel-head">
         <div>
-            <div class="metric-label">{{ _("Categorization completeness") }}</div>
+            <div class="metric-label">
+                {{ _("Categorization completeness") }}
+                {{ help_tip("Share of transactions in this view that have a category. Review unknown transactions before relying on charts.", "Explain categorization completeness") }}
+            </div>
             <a class="quality-score text-reset text-decoration-none d-inline-block" href="{{ data_quality.categorized_url }}">{{ _("{percent}% categorized", percent=data_quality.quality_score) }}</a>
         </div>
         <a class="quality-message text-reset text-decoration-none" href="{{ data_quality.needs_review_url }}">{{ data_quality.message }}</a>
@@ -325,21 +329,27 @@
         <div class="metric-detail">{{ cash_flow_summary.income_detail }}</div>
     </a>
 
-    <a class="metric-card text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
-        <div class="metric-label">{{ _("Net cash flow") }}</div>
-        <div class="metric-value {% if net_cashflow >= 0 %}text-success{% else %}text-danger{% endif %}">
-            {{ net_cashflow | moneyfmt }}
-        </div>
-        <div class="metric-detail">{{ cash_flow_summary.net_detail }}</div>
-    </a>
+    <div class="metric-card metric-card-with-help">
+        <a class="metric-card-body-link text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
+            <div class="metric-label">{{ _("Net cash flow") }}</div>
+            <div class="metric-value {% if net_cashflow >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {{ net_cashflow | moneyfmt }}
+            </div>
+            <div class="metric-detail">{{ cash_flow_summary.net_detail }}</div>
+        </a>
+        {{ help_tip("Income and credits minus spending for the selected period. Transfers and payments are excluded.", "Explain net cash flow") }}
+    </div>
 
-    <a class="metric-card text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
-        <div class="metric-label">{{ _("Savings rate") }}</div>
-        <div class="metric-value {% if cash_flow_summary.savings_rate is not none and cash_flow_summary.savings_rate >= 0 %}text-success{% elif cash_flow_summary.savings_rate is not none %}text-danger{% endif %}">
-            {{ cash_flow_summary.savings_rate_label }}
-        </div>
-        <div class="metric-detail">{{ cash_flow_summary.savings_detail }}</div>
-    </a>
+    <div class="metric-card metric-card-with-help">
+        <a class="metric-card-body-link text-reset text-decoration-none" href="{{ dashboard_links.transactions }}">
+            <div class="metric-label">{{ _("Savings rate") }}</div>
+            <div class="metric-value {% if cash_flow_summary.savings_rate is not none and cash_flow_summary.savings_rate >= 0 %}text-success{% elif cash_flow_summary.savings_rate is not none %}text-danger{% endif %}">
+                {{ cash_flow_summary.savings_rate_label }}
+            </div>
+            <div class="metric-detail">{{ cash_flow_summary.savings_detail }}</div>
+        </a>
+        {{ help_tip("Net cash flow divided by income and credits. Positive means income was higher than spending.", "Explain savings rate") }}
+    </div>
 </div>
 
 {% if transaction_count > 0 %}
@@ -350,15 +360,21 @@
         <small>{{ _("{count} transactions", count=dashboard_insights.transaction_count) }}</small>
     </a>
     <div>
-        <span class="status-label">{{ _("Untagged") }}</span>
+        <span class="status-label">
+            {{ _("Untagged") }}
+            {{ help_tip("Transactions with no tags. Tags are optional labels such as work, tax, travel, or reimbursable.", "Explain untagged transactions") }}
+        </span>
         <strong>{{ dashboard_insights.untagged_spending_count }} / {{ dashboard_insights.untagged_spending_rate }}%</strong>
         <small>{{ _("{amount} without tags", amount=dashboard_insights.untagged_spending_total | moneyfmt) }}</small>
     </div>
-    <a class="text-reset text-decoration-none" href="{{ dashboard_links.verified }}">
-        <span class="status-label">{{ _("Verified") }}</span>
-        <strong>{{ dashboard_insights.verified_count }} / {{ dashboard_insights.verified_rate }}%</strong>
-        <small>{{ _("User-approved") }}</small>
-    </a>
+    <div class="status-strip-item-with-help">
+        <a class="text-reset text-decoration-none" href="{{ dashboard_links.verified }}">
+            <span class="status-label">{{ _("Verified") }}</span>
+            <strong>{{ dashboard_insights.verified_count }} / {{ dashboard_insights.verified_rate }}%</strong>
+            <small>{{ _("User-approved") }}</small>
+        </a>
+        {{ help_tip("Transactions approved by you or categorized with high confidence.", "Explain verified transactions") }}
+    </div>
     <a class="text-reset text-decoration-none" href="{{ dashboard_insights.top_source_url or dashboard_links.transactions }}">
         <span class="status-label">{{ _("Top source") }}</span>
         <strong>{{ _(dashboard_insights.top_source.label) }}</strong>

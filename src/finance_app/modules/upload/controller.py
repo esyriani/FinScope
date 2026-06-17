@@ -161,7 +161,7 @@ def handle_statement_upload() -> ResponseReturnValue:
 
     flash(
         gettext(
-            "Statement queued for background import and categorization. Track progress on the Jobs page. Job: {job_id}",
+            "Statement queued for background import and categorization. Track progress on the Processing page. Job: {job_id}",
             job_id=job_id[:8],
         )
     )
@@ -277,9 +277,9 @@ def categorize_statement_unknowns(statement_id: int) -> ResponseReturnValue:
     flash(
         gettext(
             (
-                "AI categorization queued for {count} unknown transaction. Track progress on the Jobs page. Job: {job_id}"
+                "AI categorization queued for {count} unknown transaction. Track progress on the Processing page. Job: {job_id}"
                 if unknown_count == 1
-                else "AI categorization queued for {count} unknown transactions. Track progress on the Jobs page. Job: {job_id}"
+                else "AI categorization queued for {count} unknown transactions. Track progress on the Processing page. Job: {job_id}"
             ),
             count=unknown_count,
             job_id=job_id[:8],
@@ -362,7 +362,7 @@ def queue_existing_statement_import(statement_id: int, reprocess: bool = False) 
     )
     flash(
         gettext(
-            "{action} queued. Track progress on the Jobs page. Job: {job_id}",
+            "{action} queued. Track progress on the Processing page. Job: {job_id}",
             action=gettext("Reprocess" if reprocess else "Retry"),
             job_id=job_id[:8],
         )

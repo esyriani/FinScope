@@ -782,7 +782,7 @@ def ai_token_estimate_result(scope: str, transaction_count: int, estimate: Mappi
         "scope": scope,
         "transaction_count": transaction_count,
         "message": (
-            "No LLM request would be sent for this action." if request_count == 0 else "AI token estimate ready."
+            "No AI request would be sent for this action." if request_count == 0 else "AI usage estimate ready."
         ),
         "estimate": dict(estimate),
     }

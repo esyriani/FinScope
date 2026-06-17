@@ -29,12 +29,14 @@ def expense_transaction(
     amount="1000.00",
     transaction_kind=TRANSACTION_KIND_EXPENSE,
     description="Conference expense",
+    tx_date="2026-05-01",
     tags=("Conference", "Reimbursable"),
 ):
     """Create a positive reimbursable expense transaction."""
     return data_factory.transactions.create(
         description=description,
         amount=Decimal(amount),
+        tx_date=tx_date,
         category="Travel",
         transaction_kind=transaction_kind,
         needs_review=0,
@@ -48,11 +50,13 @@ def reimbursement_transaction(
     amount="-900.00",
     category=REIMBURSEMENT_CATEGORY,
     description="Employer reimbursement",
+    tx_date="2026-05-15",
 ):
     """Create an incoming reimbursement credit transaction."""
     return data_factory.transactions.create(
         description=description,
         amount=Decimal(amount),
+        tx_date=tx_date,
         category=category,
         transaction_kind=TRANSACTION_KIND_INCOME,
         needs_review=0,
@@ -131,6 +135,13 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_c
             "data-page-size": "1",
         },
     )
+    assert_has_element(response, "input", attrs={"type": "search", "name": "action_reimbursements_q"})
+    assert_has_element(response, "input", attrs={"type": "search", "name": "action_expenses_q"})
+    assert_has_element(response, "input", attrs={"type": "search", "name": "received_q"})
+    assert_has_element(response, "input", attrs={"type": "search", "name": "expenses_q"})
+    assert_has_element(response, "input", attrs={"type": "search", "name": "history_q"})
+    assert_has_element(response, "h5", attrs={"class": "card-title"}, text="Match history")
+    assert_no_element(response, "h3", attrs={"class": "card-title"}, text="Match history")
     assert_has_element(
         response,
         "tr",
@@ -172,6 +183,7 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_c
         "Expense details",
         "Match reimbursement",
         "Candidate expenses",
+        "Candidate reimbursements",
         "Matched reimbursements",
         "No reimbursements are matched to this expense.",
         "Remove reimbursable tag",
@@ -183,12 +195,12 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_c
     assert_not_visible_text(response, "Create allocation", "Open credits", "Pending expenses")
 
 
-def test_reimbursements_action_expenses_include_only_tagged_open_pending_rows(
+def test_reimbursements_action_expenses_include_only_tagged_active_pending_rows(
     csrf_client,
     core_conn,
     data_factory,
 ):
-    """Verify the active expense queue excludes untagged and closed reimbursement history."""
+    """Verify the active expense queue excludes untagged and completed reimbursement history."""
     tagged_expense_id = expense_transaction(data_factory, amount="1000.00", description="Tagged work hotel")
     untagged_expense_id = expense_transaction(
         data_factory,
@@ -196,23 +208,99 @@ def test_reimbursements_action_expenses_include_only_tagged_open_pending_rows(
         description="Matched but untagged hotel",
         tags=("Conference",),
     )
-    closed_expense_id = expense_transaction(data_factory, amount="1000.00", description="Closed work hotel")
+    completed_expense_id = expense_transaction(data_factory, amount="1000.00", description="Completed work hotel")
     reimbursement_id = reimbursement_transaction(data_factory, amount="-100.00")
     create_reimbursement_allocation(reimbursement_id, untagged_expense_id, Decimal("100.00"), conn=core_conn)
-    csrf_client.post(f"/reimbursements/expenses/{closed_expense_id}/complete")
+    csrf_client.post(f"/reimbursements/expenses/{completed_expense_id}/complete")
 
     response = csrf_client.get("/reimbursements")
 
     assert response.status_code == 200
     assert_has_element(response, "tr", attrs={"id": f"action-expense-{tagged_expense_id}"})
     assert_no_element(response, "tr", attrs={"id": f"action-expense-{untagged_expense_id}"})
-    assert_no_element(response, "tr", attrs={"id": f"action-expense-{closed_expense_id}"})
+    assert_no_element(response, "tr", attrs={"id": f"action-expense-{completed_expense_id}"})
     assert_has_element(
         response,
         "tr",
         attrs={"data-row-edit-target": f"#reimbursement-expense-{untagged_expense_id}-modal"},
     )
-    assert_visible_text(response, "Tagged work hotel", "Matched but untagged hotel", "Closed work hotel")
+    assert_visible_text(response, "Tagged work hotel", "Matched but untagged hotel", "Completed work hotel")
+
+
+def test_reimbursement_match_dialog_only_lists_prior_expense_candidates(csrf_client, data_factory):
+    """Verify reimbursement match candidates are dated before the reimbursement."""
+    prior_expense_id = expense_transaction(data_factory, description="Prior hotel", tx_date="2026-05-09")
+    same_day_expense_id = expense_transaction(data_factory, description="Same day meal", tx_date="2026-05-10")
+    later_expense_id = expense_transaction(data_factory, description="Later flight", tx_date="2026-05-11")
+    reimbursement_id = reimbursement_transaction(data_factory, tx_date="2026-05-10")
+
+    response = csrf_client.get("/reimbursements")
+
+    assert response.status_code == 200
+    assert_has_element(
+        response,
+        "input",
+        attrs={"id": f"match-{reimbursement_id}-expense-{prior_expense_id}"},
+    )
+    assert_no_element(
+        response,
+        "input",
+        attrs={"id": f"match-{reimbursement_id}-expense-{same_day_expense_id}"},
+    )
+    assert_no_element(
+        response,
+        "input",
+        attrs={"id": f"match-{reimbursement_id}-expense-{later_expense_id}"},
+    )
+
+
+def test_expense_detail_dialog_only_lists_later_reimbursement_candidates(csrf_client, data_factory):
+    """Verify expense detail candidates are dated after the expense."""
+    expense_id = expense_transaction(data_factory, description="Work hotel", tx_date="2026-05-10")
+    prior_reimbursement_id = reimbursement_transaction(
+        data_factory,
+        description="Prior reimbursement",
+        tx_date="2026-05-09",
+    )
+    same_day_reimbursement_id = reimbursement_transaction(
+        data_factory,
+        description="Same day reimbursement",
+        tx_date="2026-05-10",
+    )
+    later_reimbursement_id = reimbursement_transaction(
+        data_factory,
+        description="Later reimbursement",
+        tx_date="2026-05-11",
+    )
+
+    response = csrf_client.get("/reimbursements")
+
+    assert response.status_code == 200
+    assert_has_element(
+        response,
+        "input",
+        attrs={"id": f"expense-{expense_id}-reimbursement-{later_reimbursement_id}"},
+    )
+    assert_has_element(
+        response,
+        "div",
+        attrs={"id": f"reimbursement-expense-{expense_id}-modal", "class": "reimbursement-expense-modal"},
+    )
+    assert_has_element(
+        response,
+        "div",
+        attrs={"class": "modal-xl"},
+    )
+    assert_no_element(
+        response,
+        "input",
+        attrs={"id": f"expense-{expense_id}-reimbursement-{prior_reimbursement_id}"},
+    )
+    assert_no_element(
+        response,
+        "input",
+        attrs={"id": f"expense-{expense_id}-reimbursement-{same_day_reimbursement_id}"},
+    )
 
 
 def test_reimbursements_allocation_post_persists_link(csrf_client, core_conn, data_factory):
@@ -265,6 +353,33 @@ def test_reimbursements_multiple_match_post_persists_links(csrf_client, core_con
     assert_visible_text(response, "2 reimbursement matches saved.", "Fully matched")
 
 
+def test_reimbursements_expense_multiple_match_post_persists_links(csrf_client, core_conn, data_factory):
+    """Verify one expense can be matched to several selected reimbursements."""
+    expense_id = expense_transaction(data_factory, amount="900.00")
+    first_reimbursement_id = reimbursement_transaction(data_factory, amount="-500.00", tx_date="2026-05-16")
+    second_reimbursement_id = reimbursement_transaction(data_factory, amount="-400.00", tx_date="2026-05-17")
+
+    response = csrf_client.post(
+        "/reimbursements/allocations",
+        data={
+            "match_mode": "expense_multiple",
+            "expense_transaction_id": expense_id,
+            "reimbursement_transaction_ids": [str(first_reimbursement_id), str(second_reimbursement_id)],
+            f"amount_{first_reimbursement_id}": "500.00",
+            f"amount_{second_reimbursement_id}": "400.00",
+        },
+        follow_redirects=True,
+    )
+
+    rows = allocation_rows(core_conn)
+    assert response.status_code == 200
+    assert len(rows) == 2
+    assert {row["reimbursement_transaction_id"] for row in rows} == {first_reimbursement_id, second_reimbursement_id}
+    assert {row["expense_transaction_id"] for row in rows} == {expense_id}
+    assert sum((row["amount"] for row in rows), Decimal("0.00")) == Decimal("900.00")
+    assert_visible_text(response, "2 reimbursement matches saved.", "Fully reimbursed")
+
+
 def test_reimbursements_expense_modal_lists_multiple_matches(csrf_client, core_conn, data_factory):
     """Verify expense detail modals show every reimbursement matched to an expense."""
     expense_id = expense_transaction(data_factory, amount="1000.00", description="Conference flight")
@@ -298,6 +413,72 @@ def test_reimbursements_expense_modal_lists_multiple_matches(csrf_client, core_c
         "300.00",
         "200.00",
     )
+
+
+def test_reimbursements_table_search_filters_each_tab_table(csrf_client, core_conn, data_factory):
+    """Verify reimbursement table searches filter server-rendered rows over AJAX forms."""
+    hotel_expense_id = expense_transaction(
+        data_factory,
+        amount="300.00",
+        description="Work hotel",
+        tx_date="2026-05-01",
+    )
+    flight_expense_id = expense_transaction(
+        data_factory,
+        amount="300.00",
+        description="Work flight",
+        tx_date="2026-05-02",
+    )
+    hotel_reimbursement_id = reimbursement_transaction(
+        data_factory,
+        amount="-200.00",
+        description="Hotel reimbursement",
+        tx_date="2026-05-15",
+    )
+    flight_reimbursement_id = reimbursement_transaction(
+        data_factory,
+        amount="-200.00",
+        description="Flight reimbursement",
+        tx_date="2026-05-16",
+    )
+    hotel_allocation = create_reimbursement_allocation(
+        hotel_reimbursement_id,
+        hotel_expense_id,
+        Decimal("100.00"),
+        conn=core_conn,
+    )
+    flight_allocation = create_reimbursement_allocation(
+        flight_reimbursement_id,
+        flight_expense_id,
+        Decimal("100.00"),
+        conn=core_conn,
+    )
+
+    response = csrf_client.get(
+        "/reimbursements?"
+        "action_reimbursements_q=flight&"
+        "action_expenses_q=hotel&"
+        "received_q=hotel&"
+        "expenses_q=flight&"
+        "history_q=hotel"
+    )
+
+    assert response.status_code == 200
+    assert_has_element(
+        response,
+        "form",
+        attrs={"class": "reimbursement-table-search", "method": "get", "data-ajax-refresh-form": True},
+    )
+    assert_has_element(response, "tr", attrs={"id": f"match-reimbursement-{flight_reimbursement_id}"})
+    assert_no_element(response, "tr", attrs={"id": f"match-reimbursement-{hotel_reimbursement_id}"})
+    assert_has_element(response, "tr", attrs={"id": f"action-expense-{hotel_expense_id}"})
+    assert_no_element(response, "tr", attrs={"id": f"action-expense-{flight_expense_id}"})
+    assert_has_element(response, "tr", attrs={"id": f"received-reimbursement-{hotel_reimbursement_id}"})
+    assert_no_element(response, "tr", attrs={"id": f"received-reimbursement-{flight_reimbursement_id}"})
+    assert_has_element(response, "tr", attrs={"id": f"reimbursable-expense-{flight_expense_id}"})
+    assert_no_element(response, "tr", attrs={"id": f"reimbursable-expense-{hotel_expense_id}"})
+    assert_has_element(response, "tr", attrs={"id": f"reimbursement-match-{hotel_allocation.id}"})
+    assert_no_element(response, "tr", attrs={"id": f"reimbursement-match-{flight_allocation.id}"})
 
 
 def test_reimbursements_expense_reimbursable_tag_route_toggles_active_queue(
@@ -391,8 +572,8 @@ def test_reimbursements_update_and_delete_allocation_routes(csrf_client, core_co
     assert_visible_text(delete_response, "Reimbursement match removed.")
 
 
-def test_reimbursements_expense_completion_routes_close_and_reopen_expense(csrf_client, core_conn, data_factory):
-    """Verify policy-limited reimbursable expenses can be closed and reopened."""
+def test_reimbursements_expense_completion_routes_complete_and_resume_expense(csrf_client, core_conn, data_factory):
+    """Verify policy-limited reimbursable expenses can be completed and resumed."""
     expense_id = expense_transaction(data_factory, amount="1000.00")
     reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
     create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("900.00"), conn=core_conn)
@@ -403,15 +584,15 @@ def test_reimbursements_expense_completion_routes_close_and_reopen_expense(csrf_
     )
     completed_rows = completion_rows(core_conn)
 
-    reopen_response = csrf_client.post(
-        f"/reimbursements/expenses/{expense_id}/reopen",
+    resume_response = csrf_client.post(
+        f"/reimbursements/expenses/{expense_id}/resume",
         follow_redirects=True,
     )
 
     assert complete_response.status_code == 200
     assert len(completed_rows) == 1
     assert completed_rows[0]["expense_transaction_id"] == expense_id
-    assert_visible_text(complete_response, "Expense closed.", "Complete", "Reopen")
+    assert_visible_text(complete_response, "Expense marked complete.", "Complete", "Resume tracking")
     assert_no_element(
         complete_response,
         "form",
@@ -422,16 +603,16 @@ def test_reimbursements_expense_completion_routes_close_and_reopen_expense(csrf_
         complete_response,
         "form",
         attrs={
-            "action": f"/reimbursements/expenses/{expense_id}/reopen",
+            "action": f"/reimbursements/expenses/{expense_id}/resume",
             "data-ajax-refresh-form": True,
         },
     )
-    assert reopen_response.status_code == 200
+    assert resume_response.status_code == 200
     assert completion_rows(core_conn) == []
-    assert_visible_text(reopen_response, "Expense reopened for reimbursement matching.", "Partially reimbursed")
-    assert_has_element(reopen_response, "tr", attrs={"id": f"action-expense-{expense_id}"})
+    assert_visible_text(resume_response, "Expense returned to reimbursement tracking.", "Partially reimbursed")
+    assert_has_element(resume_response, "tr", attrs={"id": f"action-expense-{expense_id}"})
     assert_has_element(
-        reopen_response,
+        resume_response,
         "form",
         attrs={
             "action": f"/reimbursements/expenses/{expense_id}/complete",

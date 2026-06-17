@@ -6,7 +6,7 @@ from finance_app.modules.categories.llm_token_presenter import localize_token_es
 def test_localize_token_estimate_result_translates_messages_and_warnings():
     """Verify token-estimate JSON has all browser-facing text translated."""
     translations = {
-        "AI token estimate ready.": "estimate ready translated",
+        "AI usage estimate ready.": "estimate ready translated",
         "tiktoken encoding is unavailable; using an approximate estimate.": "aggregate warning translated",
         "tiktoken is not installed; using an approximate estimate.": "batch warning translated",
     }
@@ -14,7 +14,7 @@ def test_localize_token_estimate_result_translates_messages_and_warnings():
     result = localize_token_estimate_result(
         {
             "ok": True,
-            "message": "AI token estimate ready.",
+            "message": "AI usage estimate ready.",
             "estimate": {
                 "warning": "tiktoken encoding is unavailable; using an approximate estimate.",
                 "batches": [

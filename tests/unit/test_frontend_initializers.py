@@ -378,3 +378,13 @@ def test_base_navigation_uses_endpoint_links_and_active_state():
         "auth.users",
     ]:
         assert f"url_for('{endpoint}')" in base_template
+
+
+def test_base_navigation_places_account_after_settings_before_users():
+    """Verify account navigation stays in the admin sequence."""
+    base_template = (TEMPLATES / "base.html").read_text(encoding="utf-8")
+    settings_index = base_template.index("url_for('settings_page.settings_page')")
+    account_index = base_template.index("url_for('auth.account')")
+    users_index = base_template.index("url_for('auth.users')")
+
+    assert settings_index < account_index < users_index

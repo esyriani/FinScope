@@ -24,7 +24,7 @@ HTML = """
     <script>window.label = "script only";</script>
   </head>
   <body>
-    <a class="btn btn-primary" href="/rules/audit">Rule audit</a>
+    <a class="btn btn-primary" href="/rules/audit">Rule health check</a>
     <form action="/rules/audit/preview" method="post">
       <input name="action" value="apply_all_rules">
       <input name="confirm_preview" value="1" checked>
@@ -52,7 +52,7 @@ ASSET_HTML = """
 
 def test_visible_text_helpers_ignore_script_and_style_content():
     """Verify visible text assertions are based on parsed document text."""
-    assert_visible_text(HTML, "Rule audit", "Preview apply all")
+    assert_visible_text(HTML, "Rule health check", "Preview apply all")
     assert_not_visible_text(HTML, "script only", "not visible")
 
 
@@ -60,8 +60,8 @@ def test_element_helpers_match_semantic_attributes_and_text():
     """Verify semantic helpers can find parsed links, forms, inputs, and options."""
     document = parse_html(HTML)
 
-    assert document.has_element("a", attrs={"class": "btn-primary"}, text="Rule audit")
-    assert_link(HTML, "/rules/audit", text="Rule audit")
+    assert document.has_element("a", attrs={"class": "btn-primary"}, text="Rule health check")
+    assert_link(HTML, "/rules/audit", text="Rule health check")
     assert_form(HTML, "/rules/audit/preview", method="post", text="Preview apply all")
     assert_input(HTML, name="action", value="apply_all_rules")
     assert_input(HTML, name="confirm_preview", value="1", checked=True)

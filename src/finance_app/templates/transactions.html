@@ -14,6 +14,7 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_help.html" import help_tip with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
 {% from "_pagination.html" import pagination with context %}
 
@@ -71,7 +72,7 @@
     {% endif %}
 {% endfor %}
 {% set transaction_filter_summary %}
-{{ _("Search") }}: {{ search if search else _("All") }} - {{ _("Period") }}: {{ transaction_period_label.value }} - {{ _("Account") }}: {{ transaction_account_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ transaction_review_label.value }} - {{ _("Ignored") }}: {{ transaction_ignored_label.value }} - {{ _("Categorization method") }}: {{ transaction_source_label.value }}
+{{ _("Search") }}: {{ search if search else _("All") }} - {{ _("Period") }}: {{ transaction_period_label.value }} - {{ _("Account") }}: {{ transaction_account_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ transaction_review_label.value }} - {{ _("Ignored") }}: {{ transaction_ignored_label.value }} - {{ _("How categorized") }}: {{ transaction_source_label.value }}
 {% endset %}
 
 {% macro transaction_pagination(label) %}
@@ -233,7 +234,10 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label" for="review">{{ _("Status") }}</label>
+                <div class="form-label-with-help">
+                    <label class="form-label" for="review">{{ _("Status") }}</label>
+                    {{ help_tip("Shows whether a transaction is ready, needs review, or is waiting for approval.", "Explain transaction status") }}
+                </div>
                 <select id="review" class="form-select" name="review">
                     {% for review_value, review_text in review_filter_options %}
                         <option value="{{ review_value }}" {% if selected_review == review_value %}selected{% endif %}>{{ _(review_text) }}</option>
@@ -251,7 +255,10 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label" for="category_source">{{ _("Categorization method") }}</label>
+                <div class="form-label-with-help">
+                    <label class="form-label" for="category_source">{{ _("How categorized") }}</label>
+                    {{ help_tip("How the category was chosen: by you, by a rule, by similar past transactions, by AI, or not yet known.", "Explain how categorized") }}
+                </div>
                 <select id="category_source" class="form-select" name="category_source">
                     {% for source_value, source_text in category_source_filter_options %}
                         <option value="{{ source_value }}" {% if selected_category_source == source_value %}selected{% endif %}>{{ _(source_text) }}</option>
@@ -581,7 +588,7 @@
                             <dd>{{ transaction_status_badge(tx) }}</dd>
                         </div>
                         <div>
-                            <dt>{{ _("Category source") }}</dt>
+                            <dt>{{ _("Categorized by") }}</dt>
                             <dd>
                                 {% if tx["category_source"] == "rule" and tx["category_rule_id"] %}
                                     <a
@@ -611,9 +618,9 @@
                         "save",
                         "transaction_only",
                         "Apply category",
-                        "Save rule",
+                        "Remember for future matches",
                         "Update matching transactions later",
-                        "This transaction only",
+                        "Apply once",
                         "Do not save a rule",
                         "transaction_only"
                     ) }}
@@ -743,13 +750,13 @@
                     {% endif %}
                     {% if ai.llm_confidence is not none %}
                     <div>
-                        <dt>{{ _("LLM confidence") }}</dt>
+                        <dt>{{ _("AI-only confidence") }}</dt>
                         <dd>{{ "%.0f%%"|format(ai.llm_confidence * 100) }}</dd>
                     </div>
                     {% endif %}
                     {% if ai.final_confidence is not none %}
                     <div>
-                        <dt>{{ _("Final confidence") }}</dt>
+                        <dt>{{ _("Overall confidence") }}</dt>
                         <dd>{{ "%.0f%%"|format(ai.final_confidence * 100) }}</dd>
                     </div>
                     {% endif %}
@@ -827,7 +834,7 @@
 
                 {% if ai.can_apply %}
                 <section class="mt-4">
-                    <h6>{{ _("Rule creation") }}</h6>
+                    <h6>{{ _("Remember future matches") }}</h6>
                     {{ rule_keyword_control("ai-suggestion", ai.rule_keyword) }}
                     {{ amount_rule_control("ai-suggestion", exact_value=ai.rule_exact_amount) }}
                 </section>
@@ -840,10 +847,10 @@
                     </button>
                     {% if ai.can_apply %}
                     <button type="submit" class="btn btn-outline-primary" name="suggestion_action" value="apply">
-                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Apply to transaction") }}
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Apply once") }}
                     </button>
                     <button type="submit" class="btn btn-primary" name="suggestion_action" value="apply_and_create_rule">
-                        <i class="bi bi-tags" aria-hidden="true"></i>{{ _("Apply and create rule") }}
+                        <i class="bi bi-tags" aria-hidden="true"></i>{{ _("Apply and remember") }}
                     </button>
                     {% endif %}
                 </div>

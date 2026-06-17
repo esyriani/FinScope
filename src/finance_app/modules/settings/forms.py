@@ -46,7 +46,7 @@ def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str,
         "rule_audit_transaction_limit": parse_positive_int(
             form.get("rule_audit_transaction_limit"),
             app_settings.default_rule_audit_transaction_limit,
-            label="Rule audit transaction limit",
+            label="Rule health check transaction limit",
         ),
         "theme_mode": normalize_theme_mode(form.get("theme_mode", THEME_MODE_DARK)),
         "ui_language": normalize_language(form.get("ui_language", app_settings.default_ui_language)),
@@ -58,11 +58,11 @@ def parse_global_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, 
     return {
         "llm_confidence_threshold": parse_probability(
             form.get("llm_confidence_threshold"),
-            "LLM confidence threshold",
+            "AI acceptance threshold",
         ),
         "llm_review_threshold": parse_probability(
             form.get("llm_review_threshold"),
-            "LLM review threshold",
+            "AI review threshold",
         ),
         "verify_threshold": parse_probability(
             form.get("verify_threshold"),

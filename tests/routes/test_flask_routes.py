@@ -44,8 +44,8 @@ def test_navigation_pages_render_distinct_browser_titles(client):
         "/transactions": "FinScope - Transactions",
         "/review": "FinScope - Review",
         "/rules": "FinScope - Rules",
-        "/taxonomy": "FinScope - Taxonomy",
-        "/jobs": "FinScope - Jobs",
+        "/taxonomy": "FinScope - Categories and tags",
+        "/jobs": "FinScope - Processing",
         "/settings": "FinScope - Settings",
         "/admin/users": "FinScope - Users",
     }
@@ -118,7 +118,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     modal_summary = body.split('id="categorize-transaction-', 1)[1].split("</dl>", 1)[0]
 
     assert response.status_code == 200
-    assert_visible_text(response, "Categorization method", "All methods", "Pending approval", "Route Visa")
+    assert_visible_text(response, "How categorized", "All methods", "Pending approval", "Route Visa")
     assert_has_element(response, "select", attrs={"id": "transaction-account", "name": "account_id"})
     assert_has_element(response, "option", attrs={"value": str(account_id), "selected": True}, text="Route Visa")
     assert_not_visible_text(response, "Ready to approve", "Unverified")
@@ -155,7 +155,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     assert f'href="{expected_rule_url}"' in body
     assert 'target="_blank"' in body
     assert 'rel="noopener noreferrer"' in body
-    assert f'href="{expected_rule_url}"' in body.split("Category source", 1)[1]
+    assert f'href="{expected_rule_url}"' in body.split("Categorized by", 1)[1]
     assert_markup(
         response,
         "data-category-description-select",
@@ -182,7 +182,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
             "title": ("Marks transactions that may be useful for tax preparation, accounting, " "or year-end review.")
         },
     )
-    assert body.index("This transaction only") < body.index("Save rule")
+    assert body.index("Apply once") < body.index("Remember for future matches")
 
 
 def test_transactions_route_escapes_imported_merchant_keys(client, core_conn):
@@ -511,7 +511,7 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     assert calendar_response.status_code == 200
     assert recurring_response.status_code == 200
 
-    assert_visible_text(home_response, "Ce qui demande une attention", "À traiter", "Aperçus rapides")
+    assert_visible_text(home_response, "Ce qui nécessite votre attention", "À traiter", "Aperçus rapides")
     assert_not_visible_text(
         home_response, "Centre de commande financier", "Financial command center", "Needs attention"
     )
@@ -577,7 +577,7 @@ def test_review_route_renders_category_source_for_review_rows(client, core_conn)
     response = client.get("/review")
 
     assert response.status_code == 200
-    assert_visible_text(response, "Category source", "AI", "72%")
+    assert_visible_text(response, "Categorized by", "AI", "72%")
 
 
 def test_comparison_route_renders_visual_key_insights(client, core_conn, monkeypatch):

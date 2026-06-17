@@ -282,7 +282,7 @@ def specificity_warning_search_text(row: Mapping[str, Any]) -> str:
 def shadowed_rule_search_text(row: Mapping[str, Any]) -> str:
     """Return searchable text for one shadowed-rule row."""
     parts = [
-        "Shadowed",
+        "Skipped by priority",
         rule_search_text(row.get("rule") or {}),
         rule_search_text(row.get("most_common_shadowing_rule") or {}),
         row.get("suggested_action"),

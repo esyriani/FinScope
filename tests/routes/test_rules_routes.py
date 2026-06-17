@@ -107,10 +107,10 @@ def test_rules_route_links_to_rule_audit(client):
     response = client.get("/rules")
 
     assert response.status_code == 200
-    assert_link(response, "/rules/audit", text="Rule audit")
+    assert_link(response, "/rules/audit", text="Rule health check")
     assert_form(response, "/rules/audit/preview")
-    assert_has_element(response, "a", attrs={"data-busy-message": "Loading rule audit..."})
-    assert_has_element(response, "form", attrs={"data-busy-message": "Preparing rule audit preview..."})
+    assert_has_element(response, "a", attrs={"data-busy-message": "Loading rule health check..."})
+    assert_has_element(response, "form", attrs={"data-busy-message": "Preparing rule health check preview..."})
     assert_input(response, name="action", value="apply_all_rules")
     assert_input(response, name="action", value="create_rule")
     assert_visible_text(response, "Preview apply all", "Preview import", "Preview create")
@@ -164,7 +164,7 @@ def test_rules_route_renders_scope_selector_for_merchant_bound_rule(client, core
     response = client.get("/rules")
 
     assert response.status_code == 200
-    assert_visible_text(response, "Match scope", "Merchant only", "Fuzzy keyword", "COSTCO RENEWAL")
+    assert_visible_text(response, "Match scope", "Merchant only", "Approximate keyword", "COSTCO RENEWAL")
 
 
 def test_rules_modals_render_category_and_tag_description_tooltips(client):

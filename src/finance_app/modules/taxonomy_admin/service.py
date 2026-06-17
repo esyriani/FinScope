@@ -112,7 +112,7 @@ def import_taxonomy_yaml_text(raw_text: str, conn: Any = None) -> dict[str, int]
     """
     parsed = parse_taxonomy_yaml(raw_text)
     if not parsed["categories"] and not parsed["tags"]:
-        raise ValueError("No taxonomy entries were found.")
+        raise ValueError("No categories or tags were found.")
 
     if conn is None:
         with db_core_transaction() as conn:

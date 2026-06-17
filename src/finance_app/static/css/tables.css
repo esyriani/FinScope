@@ -290,6 +290,46 @@
     cursor: pointer;
 }
 
+.jobs-table {
+    table-layout: fixed;
+}
+
+.table-responsive > .jobs-table {
+    min-width: 72rem;
+}
+
+.jobs-table td,
+.jobs-table th {
+    overflow-wrap: anywhere;
+}
+
+.jobs-table-job-cell > .d-flex,
+.jobs-table-job-label {
+    min-width: 0;
+}
+
+.jobs-table .jobs-table-col-job {
+    width: 23%;
+}
+
+.jobs-table .jobs-table-col-status {
+    width: 8%;
+}
+
+.jobs-table .jobs-table-col-created,
+.jobs-table .jobs-table-col-started,
+.jobs-table .jobs-table-col-finished {
+    width: 9%;
+}
+
+.jobs-table .jobs-table-col-result {
+    width: 34%;
+}
+
+.jobs-table .jobs-table-col-actions {
+    width: 8%;
+}
+
 .transactions-table > :not(caption) > * > * {
     padding-bottom: 0.45rem;
     padding-top: 0.45rem;

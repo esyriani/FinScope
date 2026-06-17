@@ -2,6 +2,7 @@
 {% set page_scripts = ["js/upload.js", "js/tables.js", "js/ai-token-estimate.js", "js/exports.js"] %}
 {% extends "base.html" %}
 {% from "_pagination.html" import pagination with context %}
+{% from "_help.html" import help_tip with context %}
 
 {% block content %}
 {% set page = page | default(1) %}
@@ -23,7 +24,7 @@
         <h2 class="mb-1">{{ _("Upload statements") }}</h2>
         <p class="text-muted mb-0">{{ _("Upload CSV statements. The original file is not stored.") }}</p>
     </div>
-    <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i>{{ _("Jobs") }}</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i>{{ _("Processing") }}</a>
 </div>
 
 <div data-ajax-refresh-target="upload-actions">
@@ -67,7 +68,10 @@
             </div>
 
             <div class="col-lg-4 col-md-6">
-                <label for="statement_type" class="form-label">{{ _("Statement import type") }}</label>
+                <div class="form-label-with-help">
+                    <label for="statement_type" class="form-label">{{ _("Statement import type") }}</label>
+                    {{ help_tip("Choose the kind of file you are importing so FinScope reads dates, amounts, and signs correctly.", "Explain statement type") }}
+                </div>
                 <select id="statement_type" class="form-select" name="statement_type_id" data-statement-type-select>
                     {% for statement_type in statement_types %}
                         <option
@@ -84,7 +88,10 @@
             </div>
 
             <div class="col-lg-4 col-md-6">
-                <label for="account_type" class="form-label">{{ _("Account reporting role") }}</label>
+                <div class="form-label-with-help">
+                    <label for="account_type" class="form-label">{{ _("Account reporting role") }}</label>
+                    {{ help_tip("Choose how this account counts in reports. Use Credit card for card statements so payments are not counted as spending twice.", "Explain account reporting role") }}
+                </div>
                 <select id="account_type" class="form-select" name="account_type" data-account-type-select>
                     {% for account_type, label in account_types.items() %}
                         <option value="{{ account_type }}">{{ _(label) }}</option>
@@ -209,7 +216,7 @@
                 </div>
 
                 <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
+                    <table class="table table-sm align-middle mb-0" data-upload-preview-table data-no-export>
                         <thead>
                             <tr>
                                 <th>{{ _("Raw date") }}</th>
@@ -432,7 +439,7 @@
                             <div class="small text-muted">{{ _("Statement type") }}</div>
                             <div class="fw-semibold">{{ statement["statement_type_name"] or _("Unknown") }}</div>
                             {% if statement["parser_type"] %}
-                                <div class="small text-muted">{{ _("Parser") }}: {{ _(statement_parser_types.get(statement["parser_type"], statement["parser_type"])) }}</div>
+                                <div class="small text-muted">{{ _("Statement format") }}: {{ _(statement_parser_types.get(statement["parser_type"], statement["parser_type"])) }}</div>
                             {% endif %}
                             {% if statement["import_mode"] %}
                                 <div class="small text-muted">{{ _("Import mode") }}: {{ _(statement_import_modes.get(statement["import_mode"], statement["import_mode"])) }}</div>
@@ -469,11 +476,17 @@
                             <div class="fs-5 fw-semibold">{{ statement["transaction_count"] }}</div>
                         </div>
                         <div class="col-sm-6 col-lg-3">
-                            <div class="small text-muted">{{ _("Skipped rows") }}</div>
+                            <div class="small text-muted">
+                                {{ _("Skipped rows") }}
+                                {{ help_tip("Rows FinScope did not add because they looked like duplicates or could not be matched safely.", "Explain skipped rows") }}
+                            </div>
                             <div class="fs-5 fw-semibold">{{ statement["skipped_count"] }}</div>
                         </div>
                         <div class="col-sm-6 col-lg-3">
-                            <div class="small text-muted">{{ _("Ignored rows") }}</div>
+                            <div class="small text-muted">
+                                {{ _("Ignored rows") }}
+                                {{ help_tip("Rows FinScope recognized but does not treat as transactions, such as cancelled or non-transaction rows.", "Explain ignored rows") }}
+                            </div>
                             <div class="fs-5 fw-semibold">{{ statement["ignored_count"] }}</div>
                         </div>
                         <div class="col-sm-6 col-lg-3">

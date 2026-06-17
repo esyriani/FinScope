@@ -103,7 +103,7 @@ function aiTokenEstimateContextStatus(estimate) {
     if (ratio > 0.6) {
         return {
             alertClass: "alert-warning",
-            label: translateAiTokenEstimate("High token usage"),
+            label: translateAiTokenEstimate("High AI usage"),
             message: translateAiTokenEstimate("It fits within the selected model's context limit."),
             usedTokens,
             limitTokens,
@@ -113,7 +113,7 @@ function aiTokenEstimateContextStatus(estimate) {
     if (ratio > 0.25) {
         return {
             alertClass: "alert-info",
-            label: translateAiTokenEstimate("Moderate token usage"),
+            label: translateAiTokenEstimate("Moderate AI usage"),
             message: translateAiTokenEstimate("It fits within the selected model's context limit."),
             usedTokens,
             limitTokens,
@@ -122,7 +122,7 @@ function aiTokenEstimateContextStatus(estimate) {
     }
     return {
         alertClass: "alert-success",
-        label: translateAiTokenEstimate("Low token usage"),
+        label: translateAiTokenEstimate("Low AI usage"),
         message: translateAiTokenEstimate("It fits within the selected model's context limit."),
         usedTokens,
         limitTokens,
@@ -149,7 +149,7 @@ function ensureAiTokenEstimateModal() {
     const dialog = aiTokenEstimateElement("div", "modal-dialog modal-lg modal-dialog-fit-content");
     const content = aiTokenEstimateElement("div", "modal-content");
     const header = aiTokenEstimateElement("div", "modal-header");
-    const title = aiTokenEstimateElement("h5", "modal-title", translateAiTokenEstimate("AI token estimate"));
+    const title = aiTokenEstimateElement("h5", "modal-title", translateAiTokenEstimate("Review AI usage"));
     title.id = "ai-token-estimate-modal-title";
     const closeButton = aiTokenEstimateElement("button", "btn-close");
     closeButton.type = "button";
@@ -168,7 +168,7 @@ function ensureAiTokenEstimateModal() {
     loading.dataset.aiTokenEstimateLoading = "";
     const spinner = aiTokenEstimateElement("span", "spinner-border spinner-border-sm");
     spinner.setAttribute("aria-hidden", "true");
-    const loadingText = aiTokenEstimateElement("span", "", translateAiTokenEstimate("Loading token estimate..."));
+    const loadingText = aiTokenEstimateElement("span", "", translateAiTokenEstimate("Loading AI usage estimate..."));
     loading.append(spinner, loadingText);
 
     const error = aiTokenEstimateElement("div", "alert alert-danger d-none");
@@ -196,11 +196,7 @@ function ensureAiTokenEstimateModal() {
     );
     cancelButton.type = "button";
     cancelButton.setAttribute("data-bs-dismiss", "modal");
-    const confirmButton = aiTokenEstimateElement(
-        "button",
-        "btn btn-primary",
-        translateAiTokenEstimate("Run AI command")
-    );
+    const confirmButton = aiTokenEstimateElement("button", "btn btn-primary", translateAiTokenEstimate("Run AI"));
     confirmButton.type = "button";
     confirmButton.dataset.aiTokenEstimateConfirm = "";
     confirmButton.disabled = true;
@@ -224,7 +220,7 @@ function ensureAiTokenEstimateModal() {
 
 function setAiTokenEstimateLoading(modal) {
     modal.querySelector("[data-ai-token-estimate-message]").textContent = translateAiTokenEstimate(
-        "Review the estimate before running the AI command."
+        "Review the estimated AI usage before continuing."
     );
     modal.querySelector("[data-ai-token-estimate-context]").textContent = "";
     modal.querySelector("[data-ai-token-estimate-context]").classList.add("d-none");
@@ -257,8 +253,7 @@ function renderAiTokenEstimate(modal, data) {
     const message = modal.querySelector("[data-ai-token-estimate-message]");
     const contextMessage = modal.querySelector("[data-ai-token-estimate-context]");
     if (requestCount === 0 || totalTokens === 0) {
-        message.textContent =
-            data?.message || translateAiTokenEstimate("No LLM request would be sent for this action.");
+        message.textContent = data?.message || translateAiTokenEstimate("No AI request would be sent for this action.");
         contextMessage.textContent = "";
         contextMessage.classList.add("d-none");
     } else {
@@ -313,7 +308,7 @@ function renderAiTokenEstimate(modal, data) {
     );
     appendAiTokenEstimateRow(
         metrics,
-        translateAiTokenEstimate("LLM requests"),
+        translateAiTokenEstimate("AI requests"),
         formatAiTokenNumber(estimate.request_count),
         {
             helper:

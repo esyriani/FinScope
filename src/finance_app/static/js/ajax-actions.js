@@ -179,6 +179,11 @@ async function handleAjaxRefreshResponse(response, form, selector) {
         const refreshUrl = data.refresh_url || data.redirect_url || response.url || window.location.href;
         await hideAjaxRefreshModal(form);
         await ajaxRefreshFromUrl(refreshUrl, selector);
+        document.dispatchEvent(
+            new CustomEvent("finance:ajax-action-complete", {
+                detail: { form, selector, data, refreshUrl },
+            })
+        );
         return;
     }
 
