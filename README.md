@@ -34,16 +34,6 @@ It is built with Flask, SQLAlchemy Core, SQLite or MySQL, Bootstrap, ECharts, Ji
 - Use owner-managed access for owner, editor, and viewer workflows.
 - Switch between English and French, with dark and light interface modes.
 
-## Screenshots
-
-| Dashboard | Transactions |
-| --- | --- |
-| ![Dashboard page](docs/img/dashboard.png) | ![Transactions page](docs/img/transactions.png) |
-
-| Calendar | Categories and tags |
-| --- | --- |
-| ![Calendar page](docs/img/calendar.png) | ![Categories and tags page](docs/img/taxonomy.png) |
-
 ## Quick start
 
 Minimal local setup on Windows PowerShell:
