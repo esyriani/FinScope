@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
@@ -126,32 +127,24 @@ def audit_rule_preview() -> ResponseReturnValue:
         abort(400)
     if context is None:
         abort(404)
+    context["preview_next_url"] = optional_rules_redirect_target()
     return render_template("rules_audit_preview.html", **context)
 
 
 @rules_bp.route("/rules/create", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
 def add_rule() -> ResponseReturnValue:
-    """Create a manual rule after an impact preview confirmation.
-
-    Requires a manage-rules session and CSRF-protected POST with
-    ``confirm_preview=1``. Unconfirmed requests are redirected without saving
-    so new rules follow the same preview workflow as rule edits.
-    """
+    """Create a manual rule from a CSRF-protected POST and return to Rules."""
     next_url = rules_redirect_target()
-    if request.form.get("confirm_preview") != "1":
-        flash(gettext("Preview creation before saving a rule."))
-        return redirect(next_url)
-
     try:
         with db_core_transaction() as conn:
-            keyword = create_rule_from_form(conn, request.form)
+            rule_id, keyword = create_rule_from_form(conn, request.form)
     except ValueError as exc:
         flash(gettext(str(exc)))
         return redirect(next_url)
 
     flash(gettext("Rule saved for: {keyword}", keyword=keyword))
-    return redirect(next_url)
+    return redirect(rules_url_with_saved_rule(next_url, rule_id, "created"))
 
 
 @rules_bp.route("/rules/preview", methods=["POST"])
@@ -280,17 +273,8 @@ def import_rules() -> ResponseReturnValue:
 @rules_bp.route("/rules/<int:rule_id>/update", methods=["POST"])
 @permission_required(PERMISSION_MANAGE_RULES)
 def update_rule(rule_id: int) -> ResponseReturnValue:
-    """Update a rule after an impact preview confirmation.
-
-    Requires a CSRF-protected POST with ``confirm_preview=1`` and rule form
-    fields produced by the preview page. Unconfirmed requests are redirected
-    without mutating the rule so edits follow the read-only preview workflow.
-    """
+    """Update a rule from a CSRF-protected POST and return to Rules."""
     next_url = rules_redirect_target()
-    if request.form.get("confirm_preview") != "1":
-        flash(gettext("Preview changes before updating a rule."))
-        return redirect(next_url)
-
     try:
         with db_core_transaction() as conn:
             update_rule_from_form(conn, rule_id, request.form)
@@ -299,7 +283,7 @@ def update_rule(rule_id: int) -> ResponseReturnValue:
         return redirect(next_url)
 
     flash(gettext("Rule updated."))
-    return redirect(next_url)
+    return redirect(rules_url_with_saved_rule(next_url, rule_id, "updated"))
 
 
 @rules_bp.route("/rules/<int:rule_id>/approve", methods=["POST"])
@@ -491,9 +475,32 @@ def rule_audit_transaction_limit(conn: Any) -> int:
 
 
 def rules_redirect_target() -> str:
-    """Render the rules redirect target page."""
+    """Return a safe rules redirect target from submitted form data."""
     target = request.form.get("next", "").strip()
     if target.startswith("/rules"):
         return target
 
     return url_for("rules.rules")
+
+
+def optional_rules_redirect_target() -> str:
+    """Return a submitted rules URL when present, otherwise an empty string."""
+    target = request.form.get("next", "").strip()
+    return target if target.startswith("/rules") else ""
+
+
+def rules_url_with_saved_rule(target: str, rule_id: int, action: str) -> str:
+    """Return target URL with a short-lived saved-rule follow-up marker."""
+    parts = urlsplit(target)
+    query_params = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key not in {"saved_rule_id", "saved_rule_action"}
+    ]
+    query_params.extend(
+        [
+            ("saved_rule_id", str(rule_id)),
+            ("saved_rule_action", action),
+        ]
+    )
+    return urlunsplit(("", "", parts.path or url_for("rules.rules"), urlencode(query_params, doseq=True), ""))

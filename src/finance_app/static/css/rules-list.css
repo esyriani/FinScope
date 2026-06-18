@@ -17,6 +17,37 @@
     gap: 0.45rem;
 }
 
+.rule-followup {
+    border-radius: 8px;
+}
+
+.rule-followup-body {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.rule-followup-actions {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+@media (max-width: 767.98px) {
+    .rule-followup-body {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .rule-followup-actions {
+        justify-content: flex-start;
+    }
+}
+
 .amount-rule-control {
     background: var(--app-surface-soft);
     border: 1px solid var(--app-border);

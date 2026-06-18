@@ -32,8 +32,8 @@ from finance_app.modules.categories.taxonomy import (
 from finance_app.modules.rules.forms import parse_amount_bounds, parse_rule_account_id, parse_rule_direction
 
 
-def create_rule_from_form(conn: Any, form: Any) -> str:
-    """Create rule from form."""
+def create_rule_from_form(conn: Any, form: Any) -> tuple[int, str]:
+    """Create a manual rule from form data and return its id and keyword."""
     tag_options = get_tag_options(conn)
     keyword = normalize_merchant_description(form.get("keyword", ""))
     category = normalize_category(form.get("category", ""), get_category_options(conn))
@@ -48,7 +48,7 @@ def create_rule_from_form(conn: Any, form: Any) -> str:
     if not keyword or not category:
         raise ValueError("Keyword and category are required.")
 
-    save_category_rule(
+    rule_id = save_category_rule(
         conn,
         keyword,
         category,
@@ -60,7 +60,9 @@ def create_rule_from_form(conn: Any, form: Any) -> str:
         account_id=account_id,
         direction=direction,
     )
-    return keyword
+    if rule_id is None:
+        raise ValueError("Rule could not be saved.")
+    return int(rule_id), keyword
 
 
 def preview_rule_from_form(conn: Any, form: Any) -> dict[str, Any]:

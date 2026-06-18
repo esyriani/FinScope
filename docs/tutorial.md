@@ -120,7 +120,7 @@ Use optional scopes to make rules safer:
 - Amount bounds when a merchant has multiple predictable payment types.
 - Tags when the same rule should attach secondary context.
 
-Rules are preview-first. Creating, editing, deleting, approving automatic rules, importing rules, applying one rule, and applying all rules should show impact before mutation.
+Creating or editing a rule saves the future matching behavior first and leaves historical transactions untouched. Use the rule preview in the editor when you want to inspect active matches before saving. Deleting applied rules, importing rules, applying one rule to existing transactions, and applying all rules should show impact before the historical mutation.
 
 ![rules](img/rules.png)
 

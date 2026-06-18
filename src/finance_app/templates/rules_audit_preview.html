@@ -75,7 +75,7 @@
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
-            <input type="hidden" name="next" value="{{ url_for('rules.audit_rules') }}">
+            <input type="hidden" name="next" value="{{ preview_next_url or url_for('rules.audit_rules') }}">
             <button class="btn btn-outline-danger" type="submit">
                 <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Delete rule") }}
             </button>
@@ -105,7 +105,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
             <input type="hidden" name="mode" value="{{ preview.action }}">
-            <input type="hidden" name="next" value="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">
+            <input type="hidden" name="next" value="{{ preview_next_url or url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">
             <button class="btn btn-primary" type="submit">
                 <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Apply rule") }}
             </button>
@@ -130,7 +130,7 @@
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
-            <input type="hidden" name="next" value="{{ url_for('rules.rules') }}">
+            <input type="hidden" name="next" value="{{ preview_next_url or url_for('rules.rules') }}">
             <button class="btn btn-primary" type="submit">
                 <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}
             </button>
@@ -155,7 +155,7 @@
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
-            <input type="hidden" name="next" value="{{ url_for('rules.audit_rules') }}">
+            <input type="hidden" name="next" value="{{ preview_next_url or url_for('rules.audit_rules') }}">
             <button class="btn btn-primary" type="submit">
                 <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Apply all rules") }}
             </button>
@@ -196,7 +196,7 @@
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
-            <input type="hidden" name="next" value="{{ url_for('rules.rules') }}">
+            <input type="hidden" name="next" value="{{ preview_next_url or url_for('rules.rules') }}">
             <input type="hidden" name="keyword" value="{{ preview.proposed_rule.keyword }}">
             <input type="hidden" name="merchant_id" value="{{ preview.proposed_rule.merchant_id or '' }}">
             <input type="hidden" name="account_id" value="{{ preview.proposed_rule.account_id or '' }}">
@@ -247,7 +247,7 @@
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_preview" value="1">
-            <input type="hidden" name="next" value="{{ url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">
+            <input type="hidden" name="next" value="{{ preview_next_url or url_for('rules.audit_rule_detail', rule_id=preview.rule.id) }}">
             <input type="hidden" name="keyword" value="{{ preview.proposed_rule.keyword }}">
             <input type="hidden" name="merchant_id" value="{{ preview.proposed_rule.merchant_id or '' }}">
             <input type="hidden" name="account_id" value="{{ preview.proposed_rule.account_id or '' }}">

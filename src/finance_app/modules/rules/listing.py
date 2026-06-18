@@ -57,6 +57,7 @@ RULE_SOURCE_FILTER_OPTIONS = (
     (CATEGORY_RULE_SOURCE_MANUAL, "Manual"),
     (CATEGORY_RULE_SOURCE_AUTOMATIC, "Automatic"),
 )
+POST_SAVE_RULE_ACTIONS = {"created", "updated"}
 
 
 def build_rules_context(args: Any) -> dict[str, Any]:
@@ -76,6 +77,8 @@ def build_rules_context(args: Any) -> dict[str, Any]:
     sort = args.get("sort", "source").strip()
     direction = parse_sort_direction(args.get("direction"), default="asc")
     page = parse_page(args.get("page"))
+    saved_rule_id = parse_optional_int(args.get("saved_rule_id"))
+    saved_rule_action = args.get("saved_rule_action", "").strip()
 
     with db_core_transaction() as conn:
         page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
@@ -101,6 +104,18 @@ def build_rules_context(args: Any) -> dict[str, Any]:
         rows = rule_rows(conn, filters, sort_expression, direction, page_size, offset)
         decorate_rule_rows(conn, rows)
         tag_options = get_tag_option_rows(conn)
+        post_save_rule = post_save_rule_followup(conn, saved_rule_id, saved_rule_action)
+
+    current_rules_url = rules_list_url(
+        search,
+        selected_categories,
+        selected_source,
+        approval,
+        selected_tags,
+        sort,
+        direction,
+        page,
+    )
 
     return {
         "rules": rows,
@@ -147,6 +162,8 @@ def build_rules_context(args: Any) -> dict[str, Any]:
         "total_pages": total_pages,
         "page_start": offset + 1 if total_count else 0,
         "page_end": min(offset + page_size, total_count),
+        "current_rules_url": current_rules_url,
+        "post_save_rule": post_save_rule,
     }
 
 
@@ -336,6 +353,47 @@ def decorate_rule_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
         row["approval_badge_class"] = "text-bg-success" if row["ai_approved"] else "text-bg-warning"
         row["transaction_reference_count"] = transaction_reference_counts.get(row["id"], 0)
         row["can_delete_without_preview"] = row["transaction_reference_count"] == 0
+
+
+def post_save_rule_followup(conn: Any, rule_id: int | None, action: str) -> dict[str, Any] | None:
+    """Return the rule summary used by the post-save follow-up panel."""
+    if rule_id is None:
+        return None
+
+    row = (
+        conn.execute(
+            rules_select_base(
+                category_rules_table.c.id,
+                category_rules_table.c.keyword,
+                category_rules_table.c.category,
+                category_rules_table.c.source,
+                category_rules_table.c.ai_approved,
+            ).where(category_rules_table.c.id == rule_id)
+        )
+        .mappings()
+        .fetchone()
+    )
+    if row is None:
+        return None
+
+    followup = dict(row)
+    followup["action"] = action if action in POST_SAVE_RULE_ACTIONS else "updated"
+    followup["source_label"] = rule_source_label(followup["source"])
+    followup["source_badge_class"] = rule_source_badge_class(followup["source"])
+    followup["approval_label"] = "Approved" if followup["ai_approved"] else "Suggested"
+    followup["approval_badge_class"] = "text-bg-success" if followup["ai_approved"] else "text-bg-warning"
+    return followup
+
+
+def parse_optional_int(value: object) -> int | None:
+    """Return a positive integer from a request value when available."""
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(str(value))
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def rules_list_url(

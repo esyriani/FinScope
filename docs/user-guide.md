@@ -32,7 +32,7 @@ When an expense is only partially eligible for reimbursement, match the amount a
 
 Rules assign categories and optional tags to matching transactions.
 
-Rules can be created, edited, deleted, imported, exported, approved, preview-applied individually, or preview-applied as a full rule set. Rule changes are preview-first when existing transactions may be affected.
+Rules can be created, edited, deleted, imported, exported, approved, preview-applied individually, or preview-applied as a full rule set. Creating or editing a rule saves the future matching behavior directly; applying that rule to existing transactions, deleting applied rules, importing rules, and applying a full rule set remain preview-first when existing transactions may be affected.
 
 Rules created directly from Rules are approximate-keyword rules by default. Rules saved while editing a transaction can be merchant-bound when the transaction has a durable merchant identity. Rules may also be scoped by account, transaction direction, and amount bounds.
 
