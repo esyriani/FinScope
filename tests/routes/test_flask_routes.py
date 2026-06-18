@@ -478,7 +478,7 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     english_recurring_response = client.get("/recurring")
 
     assert_visible_text(english_home_response, "Needs attention", "Quick insights")
-    assert_visible_text(english_dashboard_response, "Dashboard", "Merchant analytics")
+    assert_visible_text(english_dashboard_response, "Dashboard", "Top 10 merchant analytics")
     assert_visible_text(
         english_comparison_response,
         "Year trends",
@@ -489,7 +489,7 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     )
     assert_visible_text(english_calendar_response, "Calendar", "Posted outflows")
     assert_visible_text(english_recurring_response, "Recurring activity", "Frequency")
-    assert_not_visible_text(english_dashboard_response, "Tableau de bord", "Analyse des marchands")
+    assert_not_visible_text(english_dashboard_response, "Tableau de bord", "Analyse des 10 principaux marchands")
 
     core_conn.execute(text("""
         UPDATE user_settings
@@ -521,7 +521,7 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
         "Tableau de bord",
         "Vue actuelle : Depuis le début de l'année.",
         "Dépenses par catégorie",
-        "Analyse des marchands",
+        "Analyse des 10 principaux marchands",
     )
     assert_has_element(
         dashboard_response,
@@ -533,7 +533,7 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
         None,
         attrs={"data-select-preset-summary-label": "Catégories d’analyse"},
     )
-    assert_not_visible_text(dashboard_response, "year to date", "Merchant analytics")
+    assert_not_visible_text(dashboard_response, "year to date", "Top 10 merchant analytics")
 
     assert_visible_text(
         comparison_response,

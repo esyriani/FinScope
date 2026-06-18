@@ -37,7 +37,7 @@
                         <input id="taxonomy-file" class="form-control" type="file" name="taxonomy_file" accept=".yml,.yaml,application/x-yaml,text/yaml,text/x-yaml" required>
                         <div class="form-text">{{ _("Use the categories and tags YAML export format.") }}</div>
                     </div>
-                    <p class="text-muted mb-0">{{ _("Existing user-managed categories and tags are updated by name. Built-in categories are skipped.") }}</p>
+                    <p class="text-muted mb-0">{{ _("Existing user-managed categories and tags are updated by name. Built-in categories and tags are skipped.") }}</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
@@ -220,11 +220,14 @@
                                 {% for tag in tags %}
                                 <tr
                                     data-sort-group="{% if tag.is_builtin %}1{% else %}0{% endif %}"
-                                    data-row-edit-target="#edit-tag-{{ tag.id }}"
+                                    data-row-edit-target="{% if tag.is_builtin %}#view-tag-{{ tag.id }}{% else %}#edit-tag-{{ tag.id }}{% endif %}"
                                 >
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
                                             <span class="tag-pill" style="--tag-color: {{ tag.color }};" data-export-part>{{ tag.name }}</span>
+                                            {% if tag.is_builtin %}
+                                                <span class="badge text-bg-secondary">{{ _("Built-in") }}</span>
+                                            {% endif %}
                                         </div>
                                         <span
                                             data-export-part
@@ -246,29 +249,43 @@
                                     <td class="text-muted small" data-sort-value="{{ tag.rule_count }}">{{ tag.rule_count }}</td>
                                     <td class="text-end">
                                         <div class="action-cluster justify-content-end" data-row-action>
-                                            <button
-                                                class="btn btn-sm btn-outline-primary btn-icon-only"
-                                                type="button"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#edit-tag-{{ tag.id }}"
-                                                aria-label="{{ _('Edit tag {name}', name=tag.name) }}"
-                                                title="{{ _('Edit') }}"
-                                                data-bs-tooltip
-                                            >
-                                                <i class="bi bi-pencil-square" aria-hidden="true"></i>
-                                            </button>
-                                            {% if tag.transaction_count == 0 and tag.rule_count == 0 %}
+                                            {% if tag.is_builtin %}
                                                 <button
-                                                    class="btn btn-sm btn-outline-danger btn-icon-only"
+                                                    class="btn btn-sm btn-outline-secondary btn-icon-only"
                                                     type="button"
                                                     data-bs-toggle="modal"
-                                                    data-bs-target="#delete-tag-{{ tag.id }}"
-                                                    aria-label="{{ _('Delete tag {name}', name=tag.name) }}"
-                                                    title="{{ _('Delete') }}"
+                                                    data-bs-target="#view-tag-{{ tag.id }}"
+                                                    aria-label="{{ _('View tag {name}', name=tag.name) }}"
+                                                    title="{{ _('View') }}"
                                                     data-bs-tooltip
                                                 >
-                                                    <i class="bi bi-trash" aria-hidden="true"></i>
+                                                    <i class="bi bi-eye" aria-hidden="true"></i>
                                                 </button>
+                                            {% else %}
+                                                <button
+                                                    class="btn btn-sm btn-outline-primary btn-icon-only"
+                                                    type="button"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#edit-tag-{{ tag.id }}"
+                                                    aria-label="{{ _('Edit tag {name}', name=tag.name) }}"
+                                                    title="{{ _('Edit') }}"
+                                                    data-bs-tooltip
+                                                >
+                                                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                                </button>
+                                                {% if tag.transaction_count == 0 and tag.rule_count == 0 %}
+                                                    <button
+                                                        class="btn btn-sm btn-outline-danger btn-icon-only"
+                                                        type="button"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#delete-tag-{{ tag.id }}"
+                                                        aria-label="{{ _('Delete tag {name}', name=tag.name) }}"
+                                                        title="{{ _('Delete') }}"
+                                                        data-bs-tooltip
+                                                    >
+                                                        <i class="bi bi-trash" aria-hidden="true"></i>
+                                                    </button>
+                                                {% endif %}
                                             {% endif %}
                                         </div>
                                     </td>
@@ -445,7 +462,44 @@
 </div>
 {% endfor %}
 
-{% for tag in tags %}
+{% for tag in tags if tag.is_builtin %}
+<div class="modal fade" id="view-tag-{{ tag.id }}" tabindex="-1" aria-labelledby="view-tag-{{ tag.id }}-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="view-tag-{{ tag.id }}-title">{{ _("Built-in tag") }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-secondary" role="status">
+                    {{ _("This tag is managed by FinScope and cannot be edited or deleted.") }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="view-tag-{{ tag.id }}-name">{{ _("Name") }}</label>
+                    <input id="view-tag-{{ tag.id }}-name" class="form-control" type="text" value="{{ tag.name }}" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="view-tag-{{ tag.id }}-color">{{ _("Color") }}</label>
+                    <input id="view-tag-{{ tag.id }}-color" class="form-control form-control-color" type="color" value="{{ tag.color }}" disabled>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="view-tag-{{ tag.id }}-description">{{ _("Description") }}</label>
+                    <textarea id="view-tag-{{ tag.id }}-description" class="form-control" rows="3" readonly>{{ tag.description }}</textarea>
+                </div>
+                <div>
+                    <label class="form-label" for="view-tag-{{ tag.id }}-instruction">{{ _("AI guidance") }}</label>
+                    <textarea id="view-tag-{{ tag.id }}-instruction" class="form-control" rows="5" readonly>{{ tag.instruction }}</textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Close") }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% for tag in tags if not tag.is_builtin %}
 <div class="modal fade" id="edit-tag-{{ tag.id }}" tabindex="-1" aria-labelledby="edit-tag-{{ tag.id }}-title" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -483,6 +537,7 @@
     </div>
 </div>
 
+{% if tag.transaction_count == 0 and tag.rule_count == 0 %}
 <div class="modal fade" id="delete-tag-{{ tag.id }}" tabindex="-1" aria-labelledby="delete-tag-{{ tag.id }}-title" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -504,6 +559,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endfor %}
 </div>
 {% endblock %}

@@ -33,7 +33,7 @@ A good category remains meaningful over years of historical data. A good tag add
 
 Before running FinScope for the first time, users may customize [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml).
 
-This file defines the initial user-managed categories and tags inserted into the database during initialization. FinScope-managed built-in categories are defined in code, not in this file.
+This file defines the initial user-managed categories and tags inserted into the database during initialization. FinScope-managed built-in categories and tags are defined in code, not in this file.
 
 After the application has been initialized, category and tag changes can only be performed through the FinScope UI rather than by editing the file directly. Directly modifying [taxonomy.yml](../src/finance_app/taxonomy.yml) after the database already contains categories and tags does not automatically synchronize existing runtime data.
 
@@ -85,7 +85,53 @@ It helps the model distinguish similar categories, understand categorization bou
 
 Instructions may contain merchant examples, inclusion guidance,exclusion guidance, semantic hints.
 
+## Built-in taxonomy semantics
+
+Some categories and tags are built into FinScope because they carry application
+behavior beyond ordinary labeling. Built-ins are seeded from the application
+registry with stable keys, then shown in the Categories and tags page as
+read-only system rows. Their names, descriptions, guidance, and internal
+semantics are managed by FinScope rather than by [taxonomy.yml](../src/finance_app/taxonomy.yml).
+
+The starter [taxonomy.yml](../src/finance_app/taxonomy.yml) remains the editable
+seed for ordinary user-managed categories and tags. It can reference built-in
+items in guidance, but it is not the source of truth for protected semantics.
+
+The application UI marks these rows as built-in so users know they cannot be
+edited or deleted. The operational effects are documented here instead of being
+shown as short badges in the table.
+
+| Built-in item | What the stable key affects |
+| --- | --- |
+| `Income` category | Provides the protected ordinary-income category used by categorization rules and AI guidance. Rule matching treats this key as ordinary income for income-specific direction checks. Income analytics still use the transaction cash-flow role, not this category alone. |
+| `Rental` category | Reserves a stable category for rental-property cash flow. It does not currently change report totals by itself; normal inclusion still follows transaction kind. The key is protected so future rental reporting, tax review, and exports can depend on it. |
+| `UNKNOWN` category | Represents unresolved classification. Imports, deterministic categorization, historical matching, and AI fallback use this value when no confident category exists. Review and AI rerun flows treat null or `UNKNOWN` categories as unresolved work. |
+| `Transfers` category | Provides the protected label used when transaction-kind detection identifies balance movement, credit card payments, cash withdrawals, deposits, or adjustments. Spending and income reports exclude transfer/payment transaction kinds; the category keeps the user-facing taxonomy aligned with that non-reportable cash-flow role. |
+| `Reimbursement` category | Identifies incoming reimbursement credits. Reporting excludes these credits from ordinary income, and allocation-aware spending calculations use reimbursement allocations to offset the covered expense rows. The Reimbursements page uses the key to find eligible credits. |
+| `Reimbursable` tag | Identifies expenses expected to be repaid. The Reimbursements page uses this key, allocation rows, and completion markers to show pending expenses and settled items. |
+| `Tax` tag | Reserves a stable tag for tax preparation, accounting, and year-end review. It does not currently change totals by itself; the key is protected for future tax review and export workflows. |
+
 ## Special built-in categories
+
+### Income
+
+The built-in `Income` category is the default category for ordinary incoming
+money such as payroll, benefits, pensions, or investment income credits.
+Income totals are still calculated from the transaction cash-flow role rather
+than from the category name alone, so rental income, transfers, reimbursements,
+and refunds can keep their more precise semantics.
+
+`Income` is protected because it anchors rule guidance and ordinary-income
+categorization. It cannot be renamed, edited, or deleted from the UI.
+
+### Rental
+
+The built-in `Rental` category is reserved for income-generating rental-property
+cash flow. It is currently a workflow-ready system category: FinScope protects
+the identity now so future rental-property reporting, tax review, and exports
+can depend on a stable semantic key.
+
+`Rental` cannot be renamed, edited, or deleted from the UI.
 
 ### Unknown
 
@@ -113,6 +159,26 @@ mark the expense complete on the Reimbursements page. Marking it complete remove
 the active reimbursement queue but does not create an artificial reimbursement
 or change the underlying category treatment.
 
+## Special built-in tags
+
+### Reimbursable
+
+The built-in `Reimbursable` tag marks expenses that are expected to be repaid
+by work, insurance, a tenant, another person, or another organization. The
+Reimbursements page uses this tag, reimbursement allocations, and completion
+markers to track which expenses are still pending.
+
+`Reimbursable` is protected and cannot be renamed, edited, or deleted from the
+UI. Reimbursement credits themselves normally use the `Reimbursement` category
+instead of this tag; the allocation link records what was repaid.
+
+### Tax
+
+The built-in `Tax` tag marks transactions that may be useful for tax
+preparation, accounting, or year-end review. It is protected as a
+workflow-ready tag so future tax review and export features can depend on a
+stable semantic key.
+
 ## Categories and tags administration
 
 The Categories and tags page allows authorized users to:
@@ -122,7 +188,7 @@ The Categories and tags page allows authorized users to:
 * delete unused entries.
 
 Deletion is blocked when a category or tag is still referenced by transactions or rules.
-Built-in categories cannot be modified or deleted.
+Built-in categories and tags cannot be modified or deleted.
 
 ## Categorization flow
 
@@ -135,7 +201,7 @@ The process follows this general order:
 3. Apply high-confidence deterministic matches.
 4. Retrieve similar historical transactions.
 5. Apply historical evidence when confidence is sufficient.
-6. Keep unresolved transactions in `Unknown`.
+6. Keep unresolved transactions in `UNKNOWN`.
 7. Optionally invoke AI categorization for unresolved transactions.
 8. Preserve review requirements for uncertain results.
 

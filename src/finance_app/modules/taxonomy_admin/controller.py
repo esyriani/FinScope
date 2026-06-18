@@ -49,8 +49,8 @@ def import_taxonomy() -> ResponseReturnValue:
 
     Requires a manage-taxonomy session and a CSRF-protected multipart POST with
     a ``taxonomy_file`` upload. The import updates or creates user-managed
-    category and tag metadata, skips built-in categories, flashes the result,
-    and redirects back to the taxonomy admin page.
+    category and tag metadata, skips built-in taxonomy rows, flashes the
+    result, and redirects back to the taxonomy admin page.
     """
     uploaded_file = request.files.get("taxonomy_file")
     if uploaded_file is None or uploaded_file.filename == "":
@@ -82,6 +82,11 @@ def import_taxonomy() -> ResponseReturnValue:
         message += " " + gettext(
             "Skipped {count} built-in categories.",
             count=result["skipped_builtin_categories"],
+        )
+    if result["skipped_builtin_tags"]:
+        message += " " + gettext(
+            "Skipped {count} built-in tags.",
+            count=result["skipped_builtin_tags"],
         )
     flash(message)
     return redirect(url_for("taxonomy_admin.taxonomy"))

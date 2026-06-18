@@ -11,14 +11,15 @@ from sqlalchemy import and_, case, func, or_, select
 
 from finance_app.core.constants import (
     NON_REPORTABLE_TRANSACTION_KINDS,
-    REIMBURSEMENT_CATEGORY,
     TRANSACTION_KIND_EXPENSE,
     TRANSACTION_KIND_INCOME,
     TRANSACTION_KIND_REFUND,
     TRANSACTION_KIND_TRANSFER,
 )
+from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.categories.builtins import BUILTIN_CATEGORY_REIMBURSEMENT
 
 
 def reportable_transaction_clause() -> Any:
@@ -32,8 +33,21 @@ def reportable_transaction_clause() -> Any:
 def reimbursement_credit_clause() -> Any:
     """Return reimbursement credits that should offset expenses through allocations."""
     return and_(
-        func.coalesce(transactions_table.c.category, "") == REIMBURSEMENT_CATEGORY,
+        transaction_has_builtin_category_clause(BUILTIN_CATEGORY_REIMBURSEMENT),
         transactions_table.c.amount < 0,
+    )
+
+
+def transaction_has_builtin_category_clause(builtin_key: str) -> Any:
+    """Return a SQL predicate for transactions assigned a built-in category."""
+    category_ids = select(categories_table.c.id).where(categories_table.c.builtin_key == builtin_key)
+    category_names = select(categories_table.c.name).where(categories_table.c.builtin_key == builtin_key)
+    return or_(
+        and_(
+            transactions_table.c.category_id.is_not(None),
+            transactions_table.c.category_id.in_(category_ids),
+        ),
+        func.coalesce(transactions_table.c.category, "").in_(category_names),
     )
 
 
@@ -51,7 +65,7 @@ def spending_impact_clause() -> Any:
         and_(
             transactions_table.c.transaction_kind == TRANSACTION_KIND_REFUND,
             transactions_table.c.amount < 0,
-            func.coalesce(transactions_table.c.category, "") != REIMBURSEMENT_CATEGORY,
+            ~transaction_has_builtin_category_clause(BUILTIN_CATEGORY_REIMBURSEMENT),
         ),
     )
 
@@ -79,7 +93,7 @@ def spending_impact_amount_expression() -> Any:
             and_(
                 transactions_table.c.transaction_kind == TRANSACTION_KIND_REFUND,
                 transactions_table.c.amount < 0,
-                func.coalesce(transactions_table.c.category, "") != REIMBURSEMENT_CATEGORY,
+                ~transaction_has_builtin_category_clause(BUILTIN_CATEGORY_REIMBURSEMENT),
             ),
             transactions_table.c.amount,
         ),

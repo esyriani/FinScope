@@ -81,6 +81,7 @@ class DashboardQueryData:
     tag_options: list[dict[str, Any]]
     account_options: list[dict[str, Any]]
     selected_merchant_label: str
+    merchant_table_limit: int
     merchant_suggestion_limit: int
     quick_view_counts: dict[str, Any]
     data_quality: dict[str, Any]
@@ -230,6 +231,7 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
         tag_options=tag_options,
         account_options=account_options,
         selected_merchant_label=selected_merchant_label,
+        merchant_table_limit=merchant_table_limit,
         merchant_suggestion_limit=merchant_suggestion_limit,
         quick_view_counts=quick_view_counts,
         data_quality=data_quality,
@@ -451,6 +453,7 @@ def dashboard_filter_context(dashboard_request: DashboardRequest, query_data: Da
         "selected_account_id": dashboard_request.selected_account_id,
         "selected_merchant_id": dashboard_request.selected_merchant_id,
         "selected_merchant_label": query_data.selected_merchant_label,
+        "merchant_table_limit": query_data.merchant_table_limit,
         "merchant_suggestion_limit": query_data.merchant_suggestion_limit,
         "merchant_query": dashboard_request.merchant_query,
         "merchant_search": dashboard_request.merchant_search,

@@ -206,9 +206,21 @@ def delete_expense_completion(conn: Any, expense_transaction_id: int) -> bool:
     return cursor.rowcount > 0
 
 
-def set_transaction_tag_state(conn: Any, transaction_id: int, tag_name: str, enabled: bool) -> bool:
+def set_transaction_tag_state(
+    conn: Any,
+    transaction_id: int,
+    tag_name: str,
+    enabled: bool,
+    *,
+    builtin_key: str | None = None,
+) -> bool:
     """Add or remove one transaction tag while preserving other tag rows."""
-    tag_id = conn.execute(select(tags_table.c.id).where(tags_table.c.name == tag_name)).scalar_one_or_none()
+    tag_id_select = select(tags_table.c.id).where(
+        tags_table.c.builtin_key == builtin_key if builtin_key else tags_table.c.name == tag_name
+    )
+    tag_id = conn.execute(tag_id_select).scalar_one_or_none()
+    if tag_id is None and builtin_key:
+        tag_id = conn.execute(select(tags_table.c.id).where(tags_table.c.name == tag_name)).scalar_one_or_none()
     if tag_id is None:
         return False
 

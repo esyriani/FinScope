@@ -284,6 +284,59 @@ def test_tag_create_update_and_delete_routes(client, core_conn):
     assert remaining == 0
 
 
+def test_tag_routes_protect_builtin_tags(client, core_conn):
+    """Verify built-in tags cannot be created over, edited, or deleted."""
+    token = set_csrf_token(client)
+    reimbursable = core_conn.execute(text("""
+        SELECT id, name, builtin_key, description, instruction, color
+        FROM tags
+        WHERE builtin_key = 'reimbursable'
+        """)).fetchone()
+
+    create_response = client.post(
+        "/taxonomy/tags/create",
+        data={
+            CSRF_FIELD_NAME: token,
+            "name": "Reimbursable",
+            "description": "Override",
+            "instruction": "Override",
+            "color": "#000000",
+        },
+        follow_redirects=True,
+    )
+    update_response = client.post(
+        "/taxonomy/tags/update",
+        data={
+            CSRF_FIELD_NAME: token,
+            "tag_id": reimbursable._mapping["id"],
+            "name": "Repayable",
+            "description": "Override",
+            "instruction": "Override",
+            "color": "#000000",
+        },
+        follow_redirects=True,
+    )
+    delete_response = client.post(
+        "/taxonomy/tags/delete",
+        data={CSRF_FIELD_NAME: token, "tag_id": reimbursable._mapping["id"]},
+        follow_redirects=True,
+    )
+
+    current = core_conn.execute(
+        text("""
+        SELECT id, name, builtin_key, description, instruction, color
+        FROM tags
+        WHERE id = :p0
+        """),
+        {"p0": reimbursable._mapping["id"]},
+    ).fetchone()
+    assert create_response.status_code == 200
+    assert_visible_text(create_response, "Built-in tags are managed by FinScope.")
+    assert_visible_text(update_response, "Built-in tags cannot be modified.")
+    assert_visible_text(delete_response, "Built-in tags cannot be deleted.")
+    assert tuple(current) == tuple(reimbursable)
+
+
 def test_tag_update_route_rejects_name_conflict(client, core_conn):
     """Verify tag updates cannot collide with another tag name."""
     first_id = insert_tag(core_conn, "Audit")

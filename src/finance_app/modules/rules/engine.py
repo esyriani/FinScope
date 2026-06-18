@@ -19,6 +19,7 @@ from finance_app.core.filters import format_money
 from finance_app.core.money import money_to_float
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.categories.builtins import is_income_category_name
 from finance_app.modules.categories.decision import DECISION_SOURCE_RULE
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.service import (
@@ -183,7 +184,7 @@ def rule_preview_matches_transaction(
             return False
 
     amount = money_to_float(transaction["amount"])
-    if rule["category"] == "Income" and (amount is None or amount >= 0):
+    if is_income_category_name(rule["category"]) and (amount is None or amount >= 0):
         return False
 
     return rule_amount_matches(rule, amount)
@@ -192,7 +193,7 @@ def rule_preview_matches_transaction(
 def rule_matches_transaction(rule: Mapping[str, Any], transaction: Mapping[str, Any], conn: Any = None) -> bool:
     """Build matches transaction."""
     amount = money_to_float(transaction["amount"])
-    if rule["category"] == "Income" and (amount is None or amount >= 0):
+    if is_income_category_name(rule["category"]) and (amount is None or amount >= 0):
         return False
     if not rule_account_matches_transaction(rule, transaction):
         return False
@@ -507,7 +508,7 @@ def rule_sql_candidate_condition(
         candidates = merchant_description_candidates(conn, keyword)
         conditions.append(description_matches_any_candidate(transactions_table.c.description, candidates))
 
-    if rule["category"] == "Income":
+    if is_income_category_name(rule["category"]):
         conditions.append(transactions_table.c.amount < 0)
 
     rule_account_id = rule["account_id"] if "account_id" in rule.keys() else rule.get("account_id")

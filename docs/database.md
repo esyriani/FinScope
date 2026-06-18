@@ -145,7 +145,7 @@ Maps cleaned statement variants to canonical merchants.
 Stores transaction category definitions.
 
 - `name`: Unique category name.
-- `builtin_key`: Stable FinScope-managed key for protected built-in categories such as `UNKNOWN`, `Reimbursement`, and `Transfers`; null for user-managed categories.
+- `builtin_key`: Stable FinScope-managed key for protected built-in categories such as `Income`, `Rental`, `UNKNOWN`, `Reimbursement`, and `Transfers`; null for user-managed categories.
 - `description`: Optional explanatory text for users.
 - `instruction`: Optional LLM instruction used during automated categorization.
 - `created_at`: Creation timestamp.
@@ -225,6 +225,7 @@ Unique constraints prevent duplicate rules for the same merchant or keyword, acc
 Stores reusable labels that can be attached to transactions or category rules.
 
 - `name`: Unique tag name.
+- `builtin_key`: Stable FinScope-managed key for protected built-in tags such as `Reimbursable` and `Tax`; null for user-managed tags.
 - `description`: Optional user-facing explanation.
 - `instruction`: Optional LLM guidance for applying the tag.
 - `color`: Display color used by the UI.
@@ -266,7 +267,8 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 
 - Merchant identity is modeled separately from imported transaction descriptions. `transactions.description` stores the display text, `transactions.merchant_id` links rows to `merchants`, and `merchant_aliases` maps cleaned statement variants to the stable merchant row.
 - Category names are still cached in `transactions.category` and `category_rules.category`, while `category_id` is the stable key for renames. Application write paths keep the text cache and foreign key synchronized.
-- Tags use many-to-many join tables so both transactions and category rules can share the same tag definitions.
+- Built-in category and tag behavior is keyed by `builtin_key`. Reporting and workflow predicates should resolve built-in semantics through those keys, with cached category or tag names used only as compatibility fallbacks for denormalized rows.
+- Tags use many-to-many join tables so both transactions and category rules can share the same tag definitions. Built-in tags use stable keys so workflows such as reimbursements and future tax review can depend on semantics rather than editable display labels.
 - Reimbursement allocations are explicit links rather than category rewrites. This keeps reimbursable spending visible in its natural category while allowing reports and monitoring pages to compute reimbursed and pending amounts from the allocation table. Reimbursement expense completions close policy-limited or otherwise settled expenses for monitoring only; they do not add reimbursement money or alter analytics offsets.
 - Statement checksums reject exact duplicate files, while transaction fingerprints prevent duplicate ledger rows.
 - Interac e-Transfer history uploads are enrichment sources. They match existing checking-account transactions by account, direction, amount, and nearby posting date, then update the matched transaction with the actual counterparty merchant. They do not insert duplicate Interac ledger rows.

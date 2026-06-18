@@ -42,18 +42,26 @@ def test_taxonomy_categories_tags_and_builtins_are_persisted(core_conn):
     }
     tags = get_tag_options(core_conn)
     tag_rows = {row["name"]: row for row in get_tag_option_rows(core_conn)}
+    persisted_tag_rows = {
+        row["name"]: row for row in core_conn.execute(select(tags_table.c.name, tags_table.c.builtin_key)).mappings()
+    }
 
     assert "Income" in categories
+    assert "Rental" in categories
     assert "UNKNOWN" in categories
     assert "Reimbursement" in categories
     assert "Transfers" in categories
+    assert categories["Income"]["builtin_key"] == "income"
+    assert categories["Rental"]["builtin_key"] == "rental"
     assert categories["UNKNOWN"]["builtin_key"] == "unknown"
     assert categories["Reimbursement"]["builtin_key"] == "reimbursement"
     assert categories["Transfers"]["builtin_key"] == "transfers"
-    assert categories["Income"]["builtin_key"] is None
     assert "salary" in categories["Income"]["instruction"].casefold()
     assert "Reimbursable" in tags
+    assert "Tax" in tags
     assert "Government" in tags
+    assert persisted_tag_rows["Reimbursable"]["builtin_key"] == "reimbursable"
+    assert persisted_tag_rows["Tax"]["builtin_key"] == "tax"
     assert tag_rows["Reimbursable"]["color"].startswith("#")
     assert tag_rows["Government"]["color"].startswith("#")
 
@@ -95,12 +103,20 @@ def test_taxonomy_options_sort_user_values_before_builtins(core_conn):
     taxonomy_categories = fetch_category_rows(core_conn)
     taxonomy_tags = fetch_tag_rows(core_conn)
 
-    assert category_options[-3:] == ["Reimbursement", "Transfers", "UNKNOWN"]
-    assert [row["name"] for row in taxonomy_categories][-3:] == ["Reimbursement", "Transfers", "UNKNOWN"]
-    assert tag_options[:2] == ["Audit", "Zulu tag"]
-    assert [row["name"] for row in tag_option_rows[:2]] == ["Audit", "Zulu tag"]
-    assert [row["name"] for row in taxonomy_tags[:2]] == ["Audit", "Zulu tag"]
-    assert all(row["is_builtin"] for row in taxonomy_tags[2:])
+    assert category_options[-5:] == ["Income", "Reimbursement", "Rental", "Transfers", "UNKNOWN"]
+    assert [row["name"] for row in taxonomy_categories][-5:] == [
+        "Income",
+        "Reimbursement",
+        "Rental",
+        "Transfers",
+        "UNKNOWN",
+    ]
+    assert tag_options[0] == "Audit"
+    assert tag_options[-2:] == ["Reimbursable", "Tax"]
+    assert [row["name"] for row in tag_option_rows[-2:]] == ["Reimbursable", "Tax"]
+    assert [row["name"] for row in taxonomy_tags[-2:]] == ["Reimbursable", "Tax"]
+    assert not any(row["is_builtin"] for row in taxonomy_tags[:-2])
+    assert all(row["is_builtin"] for row in taxonomy_tags[-2:])
 
 
 def test_normalize_category_requires_supplied_options():

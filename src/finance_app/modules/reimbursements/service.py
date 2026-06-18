@@ -11,13 +11,15 @@ from decimal import Decimal
 from typing import Any
 
 from finance_app.core.config import settings
-from finance_app.core.constants import (
-    REIMBURSEMENT_CATEGORY,
-    TRANSACTION_KIND_EXPENSE,
-)
+from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
 from finance_app.core.money import MoneyValue, money_to_decimal, quantize_money
 from finance_app.database.engine import db_core_transaction
-from finance_app.modules.categories.builtins import BUILTIN_CATEGORY_REIMBURSEMENT
+from finance_app.modules.categories.builtins import (
+    BUILTIN_CATEGORY_REIMBURSEMENT,
+    BUILTIN_TAG_REIMBURSABLE,
+    builtin_tag_by_key,
+    is_category_name_for_builtin_key,
+)
 from finance_app.modules.categories.taxonomy import get_tag_color_map, get_transaction_tags_by_id, upsert_tag_metadata
 from finance_app.modules.reimbursements import presenter, queries, repository
 from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
@@ -258,12 +260,13 @@ def set_expense_reimbursable_tag(
     with db_core_transaction(conn) as active_conn:
         expense = require_transaction(active_conn, normalized_expense_id, "Expense transaction")
         validate_expense_transaction(expense)
-        upsert_tag_metadata(active_conn, REIMBURSABLE_TAG)
+        ensure_reimbursable_tag(active_conn)
         return repository.set_transaction_tag_state(
             active_conn,
             normalized_expense_id,
             REIMBURSABLE_TAG,
             enabled,
+            builtin_key=BUILTIN_TAG_REIMBURSABLE,
         )
 
 
@@ -371,9 +374,25 @@ def validate_expense_transaction(transaction: dict[str, Any]) -> None:
 
 def is_reimbursement_category(transaction: dict[str, Any]) -> bool:
     """Return whether a transaction is categorized as a reimbursement credit."""
-    return (
-        transaction.get("category_builtin_key") == BUILTIN_CATEGORY_REIMBURSEMENT
-        or str(transaction.get("category") or "").strip().casefold() == REIMBURSEMENT_CATEGORY.casefold()
+    return transaction.get(
+        "category_builtin_key"
+    ) == BUILTIN_CATEGORY_REIMBURSEMENT or is_category_name_for_builtin_key(
+        transaction.get("category"), BUILTIN_CATEGORY_REIMBURSEMENT
+    )
+
+
+def ensure_reimbursable_tag(conn: Any) -> None:
+    """Ensure the built-in reimbursable tag row exists before assignment."""
+    tag = builtin_tag_by_key(BUILTIN_TAG_REIMBURSABLE)
+    if tag is None:
+        return
+    upsert_tag_metadata(
+        conn,
+        tag.name,
+        tag.description,
+        tag.instruction,
+        tag.color,
+        builtin_key=tag.key,
     )
 
 

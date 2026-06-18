@@ -15,6 +15,7 @@ from finance_app.core.constants import (
 )
 from finance_app.core.money import MoneyValue, money_to_float, quantize_money
 from finance_app.core.text import strip_accents
+from finance_app.modules.categories.builtins import is_income_category_name
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
 
@@ -125,7 +126,7 @@ def score_category_rule_matches(
     amount_value = money_to_float(amount) if amount is not None else None
     matches: list[ScoredRuleMatch] = []
     for rule in rules:
-        if rule["category"] == "Income" and (amount_value is None or amount_value >= 0):
+        if is_income_category_name(rule["category"]) and (amount_value is None or amount_value >= 0):
             continue
         if not rule_direction_matches(rule, amount, transaction_kind=transaction_kind):
             continue
@@ -327,7 +328,7 @@ def rule_confidence(
     confidence += amount_specificity_adjustment(rule, amount)
 
     amount_value = money_to_float(amount) if amount is not None else None
-    if rule["category"] == "Income" and amount_value is not None and amount_value < 0:
+    if is_income_category_name(rule["category"]) and amount_value is not None and amount_value < 0:
         confidence += 0.06
 
     return max(0.0, min(1.0, round(confidence, 4)))

@@ -1,7 +1,5 @@
 @media (max-width: 1100px) {
     .metric-grid,
-    .dashboard-breakdown-grid,
-    .dashboard-grid,
     .quality-metric-grid,
     .status-strip,
     .quick-links,
@@ -63,6 +61,25 @@
 
     .rule-audit-filter-actions {
         justify-content: flex-end;
+    }
+}
+
+@media (max-width: 1100px) {
+    .dashboard-breakdown-grid,
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@container dashboard-page (max-width: 90rem) {
+    .dashboard-breakdown-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@container dashboard-page (max-width: 72rem) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
     }
 }
 

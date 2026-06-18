@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 
-from finance_app.core.constants import REIMBURSEMENT_CATEGORY, TRANSACTION_KIND_EXPENSE
+from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
 from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
@@ -12,7 +12,11 @@ from finance_app.database.tables import reimbursement_expense_completions as exp
 from finance_app.database.tables import tags as tags_table
 from finance_app.database.tables import transaction_tags as transaction_tags_table
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.builtins import BUILTIN_CATEGORY_REIMBURSEMENT
+from finance_app.modules.categories.builtins import (
+    BUILTIN_CATEGORY_REIMBURSEMENT,
+    BUILTIN_TAG_REIMBURSABLE,
+    builtin_category_name_for_key,
+)
 from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 
 
@@ -20,7 +24,7 @@ def reimbursement_category_clause(transaction_table: Any, category_table: Any) -
     """Return a predicate for rows categorized as reimbursement credits."""
     return or_(
         category_table.c.builtin_key == BUILTIN_CATEGORY_REIMBURSEMENT,
-        transaction_table.c.category == REIMBURSEMENT_CATEGORY,
+        transaction_table.c.category == builtin_category_name_for_key(BUILTIN_CATEGORY_REIMBURSEMENT),
     )
 
 
@@ -97,7 +101,10 @@ def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
         )
         .where(
             transaction_tags_table.c.transaction_id == transactions_table.c.id,
-            tags_table.c.name == REIMBURSABLE_TAG,
+            or_(
+                tags_table.c.builtin_key == BUILTIN_TAG_REIMBURSABLE,
+                tags_table.c.name == REIMBURSABLE_TAG,
+            ),
         )
         .correlate(transactions_table)
         .exists()

@@ -50,6 +50,9 @@ from finance_app.database.tables import (
     statement_types as statement_types_table,
 )
 from finance_app.database.tables import (
+    tags as tags_table,
+)
+from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.database.tables import (
@@ -236,6 +239,7 @@ def test_core_schema_creates_category_tag_tables(schema_conn):
     tables = set(inspect(schema_conn).get_table_names())
 
     assert {"tags", "transaction_tags", "category_rule_tags"}.issubset(tables)
+    assert "builtin_key" in column_names(schema_conn, "tags")
     assert "merchants" in tables
     assert "merchant_aliases" not in tables
 
@@ -521,14 +525,15 @@ def test_recurring_patterns_enforce_merchant_type_uniqueness(schema_conn):
 
 def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
     """Verify category rename preserves stable IDs and updates cached labels."""
-    income_id = category_id(schema_conn, "Income")
+    schema_conn.execute(insert(categories_table).values(name="Custom income"))
+    income_id = category_id(schema_conn, "Custom income")
     schema_conn.execute(
         insert(transactions_table).values(
             tx_date="2026-01-01",
             description="PAYROLL",
             amount=-100,
             category_id=income_id,
-            category="Income",
+            category="Custom income",
             fingerprint="tx-income",
         )
     )
@@ -536,11 +541,11 @@ def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
         insert(category_rules_table).values(
             keyword="PAYROLL",
             category_id=income_id,
-            category="Income",
+            category="Custom income",
         )
     )
 
-    assert rename_category(schema_conn, "Income", "Earnings") == "Earnings"
+    assert rename_category(schema_conn, "Custom income", "Earnings") == "Earnings"
 
     category = (
         schema_conn.execute(
@@ -574,6 +579,8 @@ def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
 
 def test_builtin_categories_are_seeded_and_protected(schema_conn):
     """Verify built-in categories use stable keys and cannot be renamed."""
+    income_id = category_id(schema_conn, "Income")
+    rental_id = category_id(schema_conn, "Rental")
     unknown_id = category_id(schema_conn, "UNKNOWN")
     reimbursement_id = category_id(schema_conn, "Reimbursement")
     transfers_id = category_id(schema_conn, "Transfers")
@@ -585,13 +592,30 @@ def test_builtin_categories_are_seeded_and_protected(schema_conn):
                 categories_table.c.id,
                 categories_table.c.name,
                 categories_table.c.builtin_key,
-            ).where(categories_table.c.id.in_((unknown_id, reimbursement_id, transfers_id)))
+            ).where(categories_table.c.id.in_((income_id, rental_id, unknown_id, reimbursement_id, transfers_id)))
         ).mappings()
     }
+    assert rows["Income"]["builtin_key"] == "income"
+    assert rows["Rental"]["builtin_key"] == "rental"
     assert rows["UNKNOWN"]["builtin_key"] == "unknown"
     assert rows["Reimbursement"]["builtin_key"] == "reimbursement"
     assert rows["Transfers"]["builtin_key"] == "transfers"
+    assert rename_category(schema_conn, "Income", "Earnings") is None
+    assert rename_category(schema_conn, "Rental", "Rental property") is None
     assert rename_category(schema_conn, "UNKNOWN", "UNCATEGORIZED") is None
     assert rename_category(schema_conn, "Reimbursement", "Repayments") is None
     assert rename_category(schema_conn, "Transfers", "Balance movement") is None
     assert get_unknown_category(schema_conn) == "UNKNOWN"
+
+
+def test_builtin_tags_are_seeded_with_stable_keys(schema_conn):
+    """Verify built-in tags use stable keys."""
+    rows = {
+        row["name"]: row["builtin_key"]
+        for row in schema_conn.execute(
+            select(tags_table.c.name, tags_table.c.builtin_key).where(tags_table.c.builtin_key.is_not(None))
+        ).mappings()
+    }
+
+    assert rows["Reimbursable"] == "reimbursable"
+    assert rows["Tax"] == "tax"

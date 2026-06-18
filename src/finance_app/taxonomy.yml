@@ -1,15 +1,7 @@
 categories:
-  - name: Income
-    description: Ordinary money received by the household, excluding rental-property cash flow, refunds, reimbursements, and account transfers.
-    instruction: Use for clear household income such as salary, payroll deposits, benefits, pensions, investment income, and other income credits. Do not use for rental-property transactions, refunds, reimbursements, internal transfers, account adjustments, cash withdrawals, or credit card payments. Use "Rental" for rental-property income or expenses. Use "Reimbursement" for credits that repay expenses the user paid upfront. Use "Transfers" for balance movements and account transfers.
-
   - name: Housing
     description: Costs related to the household's primary residence, excluding utilities and income-generating rental properties.
     instruction: Use for primary-residence rent, mortgage-related payments, condo fees, property taxes, repairs, maintenance, furniture, appliances, home services, and other household residence costs. Use "Utilities" for electricity, heating, water, internet, phone, and similar recurring services for personal or household use. Use "Rental" for income-generating rental properties.
-
-  - name: Rental
-    description: Income and expenses related to income-generating rental properties.
-    instruction: Use whenever the transaction is clearly related to an income-generating rental property, even if the transaction would otherwise look like Income, Housing, Utilities, Administrative, or Transfers. Use for rental income, rental-property repairs, property taxes, utilities, insurance, maintenance, condo fees, tenant-related expenses, and other rental-property cash flows. Add the "Tax" tag when the transaction may be useful for tax preparation or accounting.
 
   - name: Utilities
     description: Recurring household or personal services, including electricity, heating, water, internet, phone, and similar service bills.
@@ -52,14 +44,6 @@ categories:
     instruction: Use for bank fees, service fees, interest charges, credit card fees, loan payments, tax payments, accounting, legal services, government fees, permits, licenses, and other administrative charges. Do not use for account transfers, credit card payments, returned-purchase refunds, or reimbursements that are only movements of money. Use "Reimbursement" for credits that repay expenses the user paid upfront, and "Transfers" for account movements. Use "Rental" instead when the administrative expense is clearly tied to an income-generating rental property.
 
 tags:
-  - name: Reimbursable
-    description: Marks expenses expected to be repaid by work, insurance, a tenant, another person, or another organization.
-    instruction: Use only when the transaction description, user rule, or context clearly indicates that the expense is expected to be repaid. This tag can apply across categories, such as Food, Travel, Work, Health, Education, Transportation, Housing, or Rental.
-
-  - name: Tax
-    description: Marks transactions that may be useful for tax preparation, accounting, or year-end review.
-    instruction: Use only when the transaction is likely to be needed for tax preparation or accounting, such as rental-property records, childcare, medical expenses, professional expenses, tax payments, accounting, legal fees, government documents, or official fees. Do not apply only because a transaction includes sales tax.
-
   - name: Children
     description: Marks transactions related to children or child-related household needs.
     instruction: Use for daycare, school, camps, children's activities, children's clothing, children's health, toys, child benefits, and other child-specific transactions. Do not use for general family expenses unless the transaction is specifically child-related.

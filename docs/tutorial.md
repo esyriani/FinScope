@@ -29,7 +29,7 @@ The first goal is not a perfect dashboard. The first goal is reliable transactio
 
 FinScope comes with starting categories and tags. Most users can keep them and adjust categories later from Admin > Categories and tags.
 
-Advanced users who already know their preferred category and tag list can edit `src/finance_app/taxonomy.yml` before creating the first database. This seed file is used only during initial database setup. After FinScope has created the database, use Admin > Categories and tags for changes.
+Advanced users who already know their preferred ordinary category and tag list can edit `src/finance_app/taxonomy.yml` before creating the first database. This seed file is used only during initial database setup and does not define FinScope's built-in system categories or tags. After FinScope has created the database, use Admin > Categories and tags for changes.
 
 Good categories and tags habits:
 
@@ -192,7 +192,7 @@ Dashboard is the current analysis view. It includes categorization completeness,
 
 Unknown categories reduce report usefulness. Use the categorization completeness panel and Review link when Dashboard warns about data quality.
 
-Transfers are visible in Transactions but are excluded from spending and income totals to avoid double-counting internal money movement. Credit card payment rows and matching funding-account payment rows are treated as payments/transfers. Reimbursement credits use the `Reimbursement` category and explicit allocations; allocated amounts reduce the original expense category instead of appearing as ordinary income.
+Transfers are visible in Transactions but are excluded from spending and income totals to avoid double-counting internal money movement. Credit card payment rows and matching funding-account payment rows are treated as payments/transfers. Reimbursement credits use the built-in `Reimbursement` category and explicit allocations; allocated amounts reduce the original expense category instead of appearing as ordinary income.
 
 Use account and merchant filters when you want an analysis slice you can return to later, such as one credit card and one merchant across several months. Analytics pages keep those filters in the URL so refresh, back/forward navigation, and copied links preserve the view.
 
@@ -205,7 +205,7 @@ Comparison has two major views:
 - Period changes compare the selected current period with the matching prior period and highlight category and merchant changes.
 - Year trends compare monthly spending, income and credits, or net cash flow patterns across selected years and summarize category totals by year.
 
-Large Unknown category shares can make category comparisons unreliable, so review unknowns before drawing conclusions. Period comparisons are most useful when both periods have similar import completeness.
+Large `UNKNOWN` category shares can make category comparisons unreliable, so review unknowns before drawing conclusions. Period comparisons are most useful when both periods have similar import completeness.
 
 ![Comparison period](img/comparison-period.png)
 ![Comparison year](img/comparison-year.png)

@@ -117,7 +117,7 @@ EXPECTED_TABLE_COLUMNS = {
         "created_at",
         "updated_at",
     ],
-    "tags": ["id", "name", "description", "instruction", "color", "created_at"],
+    "tags": ["id", "name", "builtin_key", "description", "instruction", "color", "created_at"],
     "transaction_tags": ["transaction_id", "tag_id", "source", "rule_id", "assigned_at"],
     "reimbursement_allocations": [
         "id",
@@ -189,6 +189,9 @@ EXPECTED_UNIQUE_CONSTRAINTS = {
     },
     "categories": {
         "uq_categories_builtin_key": ["builtin_key"],
+    },
+    "tags": {
+        "uq_tags_builtin_key": ["builtin_key"],
     },
     "category_rules": {
         "uq_category_rules_keyword_amount": [

@@ -706,6 +706,11 @@
     padding: 0.34rem 0.65rem;
 }
 
+#dashboard-page {
+    container-name: dashboard-page;
+    container-type: inline-size;
+}
+
 .dashboard-grid {
     display: grid;
     gap: 1rem;

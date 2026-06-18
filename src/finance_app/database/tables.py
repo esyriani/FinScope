@@ -400,11 +400,13 @@ tags = Table(
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String(255), nullable=False),
+    Column("builtin_key", String(64)),
     Column("description", Text),
     Column("instruction", Text),
     Column("color", String(64)),
     Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
     UniqueConstraint("name", name="uq_tags_name"),
+    UniqueConstraint("builtin_key", name="uq_tags_builtin_key"),
     non_empty_constraint("name", "tags_name_non_empty"),
     **AUTOINCREMENT_TABLE_OPTIONS,
 )

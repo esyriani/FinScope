@@ -112,9 +112,11 @@ See [Settings reference](settings.md) for every configurable setting and [Authen
 
 Admin > Categories and tags manages categories and tags in the active database.
 
-Categories are exclusive primary classifications. Tags are optional secondary labels that can overlap. The page supports creating, editing, deleting unused values, and importing or exporting categories and tags YAML.
+Categories are exclusive primary classifications. Tags are optional secondary labels that can overlap. The page supports creating, editing, deleting unused user-managed values, and importing or exporting categories and tags YAML.
 
-The seed file [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml) is used only when initializing a new database. After initialization, use the Categories and tags page for runtime changes. See [Categories, tags, and categorization](taxonomy.md) for the full model.
+Some categories and tags are system-managed because they affect workflows or reports. `Income`, `Rental`, `UNKNOWN`, `Transfers`, `Reimbursement`, `Reimbursable`, and `Tax` are visible in the taxonomy page with built-in badges and cannot be renamed or deleted.
+
+The seed file [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml) is used only when initializing ordinary user-managed taxonomy rows in a new database. After initialization, use the Categories and tags page for runtime changes. See [Categories, tags, and categorization](taxonomy.md) for the full model.
 
 ## AI categorization
 

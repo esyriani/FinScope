@@ -25,13 +25,15 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
-from finance_app.modules.categories.builtins import is_builtin_category_name
+from finance_app.modules.categories.builtins import (
+    is_builtin_category_name,
+    is_builtin_tag_name,
+)
 from finance_app.modules.categories.repository import rename_category
 from finance_app.modules.categories.taxonomy import (
     builtin_tag_order_expression,
     clean_color,
     clean_label,
-    is_builtin_tag_name,
     tag_color_for_name,
     upsert_category_metadata,
     upsert_tag_metadata,
@@ -62,8 +64,8 @@ def export_taxonomy_yaml(conn: Any = None) -> str:
             function opens its own transaction.
 
     Returns:
-        YAML text containing category names, descriptions, LLM instructions,
-        built-in category keys, and tag colors.
+        YAML text containing category and tag names, descriptions, LLM
+        instructions, tag colors, and built-in keys.
     """
     if conn is None:
         with db_core_transaction() as conn:
@@ -88,6 +90,7 @@ def export_taxonomy_yaml(conn: Any = None) -> str:
                 f"    description: {yaml_scalar(tag['description'])}",
                 f"    instruction: {yaml_scalar(tag['instruction'])}",
                 f"    color: {yaml_scalar(tag['color'])}",
+                f"    builtin_key: {yaml_scalar(tag['builtin_key'])}",
             ]
         )
 
@@ -104,8 +107,8 @@ def import_taxonomy_yaml_text(raw_text: str, conn: Any = None) -> dict[str, int]
 
     Returns:
         A mapping with imported category count, imported tag count, and skipped
-        built-in category count. Built-in categories are intentionally skipped
-        because their definitions are managed by the application seed.
+        built-in counts. Built-ins are intentionally skipped because their
+        definitions are managed by the application registry.
 
     Raises:
         ValueError: If the YAML text is malformed or has no importable entries.
@@ -121,6 +124,7 @@ def import_taxonomy_yaml_text(raw_text: str, conn: Any = None) -> dict[str, int]
     imported_categories = 0
     imported_tags = 0
     skipped_builtin_categories = 0
+    skipped_builtin_tags = 0
 
     for category in parsed["categories"]:
         if category["builtin_key"] or is_builtin_category_name(category["name"]):
@@ -135,6 +139,9 @@ def import_taxonomy_yaml_text(raw_text: str, conn: Any = None) -> dict[str, int]
         imported_categories += 1
 
     for tag in parsed["tags"]:
+        if tag["builtin_key"] or is_builtin_tag_name(tag["name"]):
+            skipped_builtin_tags += 1
+            continue
         upsert_tag_metadata(
             conn,
             tag["name"],
@@ -144,13 +151,14 @@ def import_taxonomy_yaml_text(raw_text: str, conn: Any = None) -> dict[str, int]
         )
         imported_tags += 1
 
-    if not imported_categories and not imported_tags and skipped_builtin_categories:
-        raise ValueError("Only built-in categories were found. Nothing was imported.")
+    if not imported_categories and not imported_tags and (skipped_builtin_categories or skipped_builtin_tags):
+        raise ValueError("Only built-in categories or tags were found. Nothing was imported.")
 
     return {
         "categories": imported_categories,
         "tags": imported_tags,
         "skipped_builtin_categories": skipped_builtin_categories,
+        "skipped_builtin_tags": skipped_builtin_tags,
     }
 
 
@@ -257,6 +265,7 @@ def clean_imported_tag(item: Mapping[str, Any]) -> dict[str, str]:
         "description": str(item.get("description") or "").strip(),
         "instruction": str(item.get("instruction") or "").strip(),
         "color": clean_color(item.get("color")) or tag_color_for_name(name),
+        "builtin_key": clean_label(item.get("builtin_key")).casefold(),
     }
 
 
@@ -300,6 +309,7 @@ def fetch_tag_export_rows(conn: Any) -> list[dict[str, Any]]:
                 func.coalesce(tags_table.c.description, "").label("description"),
                 func.coalesce(tags_table.c.instruction, "").label("instruction"),
                 tags_table.c.color,
+                func.coalesce(tags_table.c.builtin_key, "").label("builtin_key"),
             ).order_by(
                 builtin_tag_order_expression(),
                 func.lower(tags_table.c.name),
@@ -368,6 +378,9 @@ def update_category_from_form(form: Any) -> str:
 def create_tag_from_form(form: Any) -> Any:
     """Create tag from form."""
     values = parse_tag_form(form)
+    if is_builtin_tag_name(values["name"]):
+        raise ValueError("Built-in tags are managed by FinScope.")
+
     with db_core_transaction() as conn:
         tag = upsert_tag_metadata(
             conn,
@@ -388,8 +401,11 @@ def update_tag_from_form(form: Any) -> str:
     tag_name = str(values["name"])
 
     with db_core_transaction() as conn:
-        if fetch_tag_by_id(conn, tag_id) is None:
+        current = fetch_tag_by_id(conn, tag_id)
+        if current is None:
             raise ValueError("Tag was not found.")
+        if current["builtin_key"]:
+            raise ValueError("Built-in tags cannot be modified.")
 
         existing = conn.execute(
             select(tags_table.c.id).where(
@@ -420,6 +436,8 @@ def delete_tag_from_form(form: Any) -> str:
         tag = fetch_tag_by_id(conn, tag_id)
         if tag is None:
             raise ValueError("Tag was not found.")
+        if tag["builtin_key"]:
+            raise ValueError("Built-in tags cannot be deleted.")
 
         usage = fetch_tag_usage(conn, tag_id)
         if usage["transaction_count"] or usage["rule_count"]:
@@ -522,6 +540,7 @@ def fetch_tag_rows(conn: Any) -> list[dict[str, Any]]:
             select(
                 tags_table.c.id,
                 tags_table.c.name,
+                tags_table.c.builtin_key,
                 func.coalesce(tags_table.c.description, "").label("description"),
                 func.coalesce(tags_table.c.instruction, "").label("instruction"),
                 tags_table.c.color,
@@ -541,7 +560,7 @@ def fetch_tag_rows(conn: Any) -> list[dict[str, Any]]:
         {
             **dict(row),
             "color": clean_color(row["color"]) or tag_color_for_name(row["name"]),
-            "is_builtin": is_builtin_tag_name(row["name"]),
+            "is_builtin": bool(row["builtin_key"]),
         }
         for row in rows
     ]
@@ -571,6 +590,7 @@ def fetch_tag_by_id(conn: Any, tag_id: int) -> Any:
             select(
                 tags_table.c.id,
                 tags_table.c.name,
+                tags_table.c.builtin_key,
                 tags_table.c.description,
                 tags_table.c.instruction,
                 tags_table.c.color,
