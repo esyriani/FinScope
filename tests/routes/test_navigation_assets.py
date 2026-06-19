@@ -74,6 +74,8 @@ def test_base_template_keeps_feature_assets_page_scoped(client):
         "js/rules.js",
         "js/review.js",
         "js/dashboard.js",
+        "js/reports.js",
+        "js/reports-charts.js",
         "js/tables.js",
         "js/dates.js",
         "js/calendar.js",
@@ -99,16 +101,15 @@ def test_dashboard_route_loads_dashboard_assets(client):
     for pattern in (
         r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}",
         r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}",
-        r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}",
         r"/static/js/dashboard\.js\?v=[0-9a-f]{12}",
-        r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}",
-        r"/static/js/dashboard-charts\.js\?v=[0-9a-f]{12}",
+        r"/static/js/tag-multiselect\.js\?v=[0-9a-f]{12}",
+        r"/static/js/merchant-autocomplete\.js\?v=[0-9a-f]{12}",
+        r"/static/js/tables\.js\?v=[0-9a-f]{12}",
     ):
         assert_asset_reference(response, pattern)
-    assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
-        response,
-        r"/static/js/dashboard-charts\.js",
-    )
+    assert_no_asset_reference(response, "vendor/echarts")
+    assert_no_asset_reference(response, "js/chart-utils.js")
+    assert_no_asset_reference(response, "js/dashboard-charts.js")
 
 
 def test_reports_route_loads_reports_assets(client):
@@ -117,7 +118,17 @@ def test_reports_route_loads_reports_assets(client):
 
     assert response.status_code == 200
     assert_asset_reference(response, r"/static/css/reports\.css\?v=[0-9a-f]{12}")
-    assert_no_asset_reference(response, "js/reports.js")
+    assert_asset_reference(response, r"/static/css/tables\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/reports\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/reports-charts\.js\?v=[0-9a-f]{12}")
+    assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
+        response,
+        r"/static/js/reports-charts\.js",
+    )
 
 
 def test_reports_navigation_groups_comparison_under_reports(client):

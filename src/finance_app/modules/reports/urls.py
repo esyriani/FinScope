@@ -1,6 +1,6 @@
 """URL builders for the Reports feature."""
 
-from typing import Protocol
+from typing import Any, Protocol
 from urllib.parse import urlencode
 
 from flask import url_for
@@ -33,7 +33,18 @@ def build_reports_url(endpoint: str = "reports.overview", **params: object) -> s
     return url_for(endpoint) + (f"?{query}" if query else "")
 
 
-def reports_url(args: QueryStringArgs, endpoint: str = "reports.overview", **overrides: object) -> str:
+def build_app_url(endpoint: str, **params: object) -> str:
+    """Build an application URL with blank query values removed."""
+    query = urlencode(_clean_query(params), doseq=True)
+    return url_for(endpoint) + (f"?{query}" if query else "")
+
+
+def reports_url(
+    args: QueryStringArgs,
+    endpoint: str = "reports.overview",
+    route_values: dict[str, Any] | None = None,
+    **overrides: object,
+) -> str:
     """Build a Reports URL that preserves current query parameters."""
     query = args.to_dict(flat=False)
     for key, value in overrides.items():
@@ -45,4 +56,5 @@ def reports_url(args: QueryStringArgs, endpoint: str = "reports.overview", **ove
             query[key] = [str(value)]
 
     encoded_query = urlencode(_clean_query(query), doseq=True)
-    return url_for(endpoint) + (f"?{encoded_query}" if encoded_query else "")
+    route_params: dict[str, Any] = route_values or {}
+    return url_for(endpoint, **route_params) + (f"?{encoded_query}" if encoded_query else "")

@@ -1,8 +1,7 @@
 """Filter parsing helpers for the dashboard feature."""
 
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
 
 from sqlalchemy import func
 
@@ -14,7 +13,7 @@ from finance_app.core.periods import (
     normalize_date_period,
     parse_iso_date,
 )
-from finance_app.core.query import CoreFilters, QueryArgs, parse_sort_direction, query_value, query_values
+from finance_app.core.query import CoreFilters, QueryArgs, query_value, query_values
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.accounts.filters import parse_account_id
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
@@ -25,16 +24,6 @@ from finance_app.modules.merchants.filters import (
 )
 
 from .constants import (
-    DASHBOARD_BREAKDOWN_CATEGORY,
-    DASHBOARD_BREAKDOWN_OPTIONS,
-    DASHBOARD_BREAKDOWN_TAG,
-    DASHBOARD_CATEGORY_SORT_CATEGORY,
-    DASHBOARD_CATEGORY_SORT_SPENDING,
-    DASHBOARD_CATEGORY_SORTS,
-    DASHBOARD_MERCHANT_SORT_CATEGORY,
-    DASHBOARD_MERCHANT_SORT_MERCHANT,
-    DASHBOARD_MERCHANT_SORT_SPENDING,
-    DASHBOARD_MERCHANT_SORTS,
     QUICK_VIEW_ALL,
     QUICK_VIEW_CATEGORIZED,
     QUICK_VIEW_CUSTOM,
@@ -48,21 +37,13 @@ from .constants import (
 class DashboardRequest:
     """Represent parsed dashboard query parameters.
 
-    Attributes mirror the dashboard form controls and table sort options. The
-    original args object is retained for URL builders that preserve unrelated
-    query parameters while toggling one control.
+    Attributes mirror the dashboard filter controls and shared drill-down
+    parameters used by summary links.
     """
 
     args: QueryArgs
     period: DatePeriod
     filter_mode: str
-    breakdown_mode: str
-    show_untagged: bool
-    show_income: bool
-    merchant_sort: str
-    merchant_direction: str
-    category_table_sort: str
-    category_table_direction: str
     selected_categories: list[str]
     selected_tags: list[str]
     selected_account_id: int | None
@@ -81,10 +62,6 @@ def parse_dashboard_request(args: QueryArgs) -> DashboardRequest:
     if filter_mode not in FILTER_MODES:
         filter_mode = FILTER_MODE_INCLUDE
 
-    breakdown_mode = parse_dashboard_breakdown(query_value(args, "breakdown"))
-    show_untagged = breakdown_mode == DASHBOARD_BREAKDOWN_TAG and parse_dashboard_flag(
-        query_value(args, "show_untagged")
-    )
     selected_categories = [category.strip() for category in query_values(args, "categories") if category.strip()]
     selected_tags = [tag.strip() for tag in query_values(args, "tags") if tag.strip()]
     date_from = parse_iso_date(query_value(args, "date_from")) if period == PERIOD_CUSTOM else ""
@@ -92,34 +69,11 @@ def parse_dashboard_request(args: QueryArgs) -> DashboardRequest:
     if date_from and date_to and date_from > date_to:
         date_from, date_to = date_to, date_from
 
-    merchant_sort = parse_dashboard_table_sort(
-        query_value(args, "merchant_sort"),
-        DASHBOARD_MERCHANT_SORTS,
-        DASHBOARD_MERCHANT_SORT_SPENDING,
-    )
-    category_table_sort = parse_dashboard_table_sort(
-        query_value(args, "category_sort"),
-        DASHBOARD_CATEGORY_SORTS,
-        DASHBOARD_CATEGORY_SORT_SPENDING,
-    )
-    merchant_query = parse_merchant_query(query_value(args, "merchant_query") or query_value(args, "merchant_search"))
+    merchant_query = parse_merchant_query(query_value(args, "merchant_query"))
     return DashboardRequest(
         args=args,
         period=period,
         filter_mode=filter_mode,
-        breakdown_mode=breakdown_mode,
-        show_untagged=show_untagged,
-        show_income=parse_dashboard_flag(query_value(args, "show_income")),
-        merchant_sort=merchant_sort,
-        merchant_direction=parse_sort_direction(
-            query_value(args, "merchant_direction"),
-            default=dashboard_table_default_direction(merchant_sort),
-        ),
-        category_table_sort=category_table_sort,
-        category_table_direction=parse_sort_direction(
-            query_value(args, "category_direction"),
-            default=dashboard_table_default_direction(category_table_sort),
-        ),
         selected_categories=selected_categories,
         selected_tags=selected_tags,
         selected_account_id=parse_account_id(query_value(args, "account_id")),
@@ -130,33 +84,6 @@ def parse_dashboard_request(args: QueryArgs) -> DashboardRequest:
         date_from=date_from,
         date_to=date_to,
     )
-
-
-def parse_dashboard_table_sort(value: object, allowed_sorts: Collection[str], default: str) -> str:
-    """Parse dashboard table sort."""
-    sort = str(value or default).strip()
-    return sort if sort in allowed_sorts else default
-
-
-def dashboard_table_default_direction(sort: str) -> str:
-    """Render table default direction."""
-    text_sorts = {
-        DASHBOARD_MERCHANT_SORT_MERCHANT,
-        DASHBOARD_MERCHANT_SORT_CATEGORY,
-        DASHBOARD_CATEGORY_SORT_CATEGORY,
-    }
-    return "asc" if sort in text_sorts else "desc"
-
-
-def parse_dashboard_breakdown(value: object) -> str:
-    """Parse the dashboard breakdown mode."""
-    breakdown = str(value or "").strip()
-    return breakdown if breakdown in DASHBOARD_BREAKDOWN_OPTIONS else DASHBOARD_BREAKDOWN_CATEGORY
-
-
-def parse_dashboard_flag(value: object) -> bool:
-    """Parse an optional dashboard boolean query flag."""
-    return str(value or "").strip().casefold() in {"1", "true", "yes", "on"}
 
 
 def parse_quick_view(
@@ -172,11 +99,6 @@ def parse_quick_view(
     if quick_view in QUICK_VIEW_OPTIONS:
         return quick_view
     return QUICK_VIEW_CATEGORIZED
-
-
-def parse_merchant_search(value: object) -> str:
-    """Return a normalized merchant search term for dashboard filters."""
-    return parse_merchant_query(value)
 
 
 def apply_dashboard_dimension_filters(
@@ -215,8 +137,3 @@ def apply_quick_view_core_filter(
     elif quick_view == QUICK_VIEW_CATEGORIZED:
         filters.add(category_value != unknown_category)
         filters.add(transactions_table.c.needs_review == 0)
-
-
-def merchant_search_condition(value: object) -> Any | None:
-    """Return the legacy dashboard merchant search condition."""
-    return merchant_filter_condition(None, value)

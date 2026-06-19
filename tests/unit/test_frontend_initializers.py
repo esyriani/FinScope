@@ -292,7 +292,7 @@ def test_dashboard_wide_cards_span_medium_width_grid():
         medium_breakpoint,
     )
 
-    assert '<section class="card dashboard-wide">' in dashboard_template
+    assert '<section class="card dashboard-wide dashboard-report-hub mb-4">' in dashboard_template
     assert (
         "grid-column: 1 / -1;"
         in home_dashboard_css.split(".dashboard-wide", 1)[1].split(

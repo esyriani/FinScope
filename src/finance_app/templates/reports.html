@@ -1,7 +1,351 @@
-{% set page_stylesheets = ["css/reports.css"] %}
+{% set page_vendor_stylesheets = [
+    "vendor/flatpickr/4.6.13/flatpickr.min.css",
+    "vendor/flatpickr/4.6.13/plugins/monthSelect/style.css"
+] %}
+{% set page_vendor_scripts = [
+    "vendor/flatpickr/4.6.13/flatpickr.min.js",
+    "vendor/flatpickr/4.6.13/plugins/monthSelect/index.js",
+    "vendor/echarts/5.6.0/echarts.min.js"
+] %}
+{% set page_stylesheets = ["css/reports.css", "css/tables.css"] %}
+{% set page_scripts = [
+    "js/dates.js",
+    "js/merchant-autocomplete.js",
+    "js/reports.js",
+    "js/chart-utils.js",
+    "js/reports-charts.js"
+] %}
 {% extends "base.html" %}
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
+
+{% macro reports_filter_form(clear_url) -%}
+<form method="get" class="row g-3 align-items-end">
+    <div class="col-md-3">
+        <label class="form-label" for="reports-period">{{ _("Period") }}</label>
+        <select id="reports-period" class="form-select" name="period">
+            {% for period_value, period_text in period_options %}
+                <option value="{{ period_value }}" {% if selected_period == period_value %}selected{% endif %}>{{ _(period_text) }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="col-md-2 {% if selected_period != period_custom %}d-none{% endif %}" data-reports-custom-range>
+        <label class="form-label" for="reports-date-from">{{ _("From") }}</label>
+        <input
+            id="reports-date-from"
+            class="form-control"
+            type="text"
+            name="date_from"
+            value="{{ selected_date_from }}"
+            placeholder="dd-Mon-YYYY"
+            data-flatpickr-date
+        >
+    </div>
+
+    <div class="col-md-2 {% if selected_period != period_custom %}d-none{% endif %}" data-reports-custom-range>
+        <label class="form-label" for="reports-date-to">{{ _("To") }}</label>
+        <input
+            id="reports-date-to"
+            class="form-control"
+            type="text"
+            name="date_to"
+            value="{{ selected_date_to }}"
+            placeholder="dd-Mon-YYYY"
+            data-flatpickr-date
+        >
+    </div>
+
+    <div class="col-md-2">
+        <label class="form-label" for="reports-measure">{{ _("Measure") }}</label>
+        <select id="reports-measure" class="form-select" name="measure">
+            {% for option in measure_options %}
+                <option value="{{ option.value }}" {% if selected_measure == option.value %}selected{% endif %}>{{ _(option.label) }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label" for="reports-basis">{{ _("Basis") }}</label>
+        <select id="reports-basis" class="form-select" name="basis">
+            {% for option in basis_options %}
+                <option value="{{ option.value }}" {% if selected_basis == option.value %}selected{% endif %}>{{ _(option.label) }}</option>
+            {% endfor %}
+        </select>
+        <div class="form-text">{{ _(basis_options | selectattr("value", "equalto", selected_basis) | map(attribute="description") | first | default("")) }}</div>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label" for="reports-account">{{ _("Account") }}</label>
+        <select id="reports-account" class="form-select" name="account_id">
+            <option value="">{{ _("All accounts") }}</option>
+            {% for account in account_options %}
+                <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="col-md-4 merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
+        <label class="form-label" for="reports-merchant-search">{{ _("Merchant") }}</label>
+        <input
+            type="hidden"
+            name="merchant_id"
+            value="{{ selected_merchant_id or '' }}"
+            data-merchant-autocomplete-id
+        >
+        <input
+            id="reports-merchant-search"
+            class="form-control"
+            type="search"
+            name="merchant_query"
+            value="{{ reports_merchant_filter_label }}"
+            placeholder="{{ _('Search merchant') }}"
+            autocomplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="reports-merchant-suggestions"
+            data-selected-merchant-label="{{ selected_merchant_label }}"
+            data-merchant-autocomplete-input
+        >
+        <div id="reports-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
+    </div>
+
+    <div class="col-md-5 ms-md-auto filter-actions">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
+        <a class="btn btn-outline-secondary" href="{{ clear_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+    </div>
+</form>
+{%- endmacro %}
+
+{% macro reports_table(title, rows, label_heading) -%}
+<section class="reports-panel" data-table-export-scope>
+    <div class="reports-panel-title">
+        <h3>{{ _(title) }}</h3>
+    </div>
+    {% if rows %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 reports-table">
+            <thead>
+                <tr>
+                    <th>{{ _(label_heading) }}</th>
+                    <th class="text-end">{{ _("Spending") }}</th>
+                    <th class="text-end">{{ _("Income and credits") }}</th>
+                    <th class="text-end">{{ _("Net cash flow") }}</th>
+                    <th class="text-end">{{ _("Transactions") }}</th>
+                    <th class="text-end">{{ _("Share") }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>
+                        {% if row.url %}
+                            <a href="{{ row.url }}">{{ row.label }}</a>
+                        {% else %}
+                            {{ row.label }}
+                        {% endif %}
+                    </td>
+                    <td class="text-end">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}">{{ row.net | moneyfmt }}</td>
+                    <td class="text-end">{{ row.transaction_count }}</td>
+                    <td class="text-end">
+                        <span>{{ row.share }}%</span>
+                        <span class="reports-bar-track" aria-hidden="true"><span style="width: {{ row.bar_width }}%;"></span></span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No rows available for this report.") }}</div>
+    {% endif %}
+</section>
+{%- endmacro %}
+
+{% macro taxonomy_index_table(title, rows, label_heading) -%}
+<section class="reports-panel" data-table-export-scope>
+    <div class="reports-panel-title">
+        <h3>{{ _(title) }}</h3>
+    </div>
+    {% if rows %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 reports-table reports-taxonomy-table">
+            <thead>
+                <tr>
+                    <th>{{ _(label_heading) }}</th>
+                    <th>{{ _("Type") }}</th>
+                    <th class="text-end">{{ _("Spending") }}</th>
+                    <th class="text-end">{{ _("Income and credits") }}</th>
+                    <th class="text-end">{{ _("Net cash flow") }}</th>
+                    <th class="text-end">{{ _("Transactions") }}</th>
+                    <th class="text-end">{{ _("Share") }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>
+                        <div class="reports-taxonomy-label">
+                            {% if row.color %}
+                                <span class="reports-tag-swatch" style="--tag-color: {{ row.color }};" aria-hidden="true"></span>
+                            {% endif %}
+                            {% if row.url %}
+                                <a href="{{ row.url }}">{{ row.label }}</a>
+                            {% else %}
+                                {{ row.label }}
+                            {% endif %}
+                        </div>
+                        {% if row.description %}
+                            <div class="text-muted small">{{ row.description }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ _(row.type_label) }}</td>
+                    <td class="text-end">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}">{{ row.net | moneyfmt }}</td>
+                    <td class="text-end">{{ row.transaction_count }}</td>
+                    <td class="text-end">
+                        <span>{{ row.share }}%</span>
+                        <span class="reports-bar-track" aria-hidden="true"><span style="width: {{ row.bar_width }}%;"></span></span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No rows available for this report.") }}</div>
+    {% endif %}
+</section>
+{%- endmacro %}
+
+{% macro reports_kpi_grid(transaction_url) -%}
+<section class="reports-kpi-grid" aria-label="{{ _('Report summary') }}">
+    <a class="reports-kpi text-reset text-decoration-none" href="{{ transaction_url }}">
+        <span>{{ _("Spending") }}</span>
+        <strong>{{ total_spending | moneyfmt }}</strong>
+        <small>{{ cash_flow_summary.spending_detail }}</small>
+    </a>
+    <a class="reports-kpi text-reset text-decoration-none" href="{{ transaction_url }}">
+        <span>{{ _("Income and credits") }}</span>
+        <strong>{{ total_income | moneyfmt }}</strong>
+        <small>{{ cash_flow_summary.income_detail }}</small>
+    </a>
+    <a class="reports-kpi text-reset text-decoration-none" href="{{ transaction_url }}">
+        <span>{{ _("Net cash flow") }}</span>
+        <strong class="{% if net_cashflow >= 0 %}text-success{% else %}text-danger{% endif %}">{{ net_cashflow | moneyfmt }}</strong>
+        <small>{{ cash_flow_summary.net_detail }}</small>
+    </a>
+    <a class="reports-kpi text-reset text-decoration-none" href="{{ transaction_url }}">
+        <span>{{ _("Transactions") }}</span>
+        <strong>{{ transaction_count }}</strong>
+        <small>{{ _("Report rows in this view") }}</small>
+    </a>
+</section>
+{%- endmacro %}
+
+{% macro reports_income_kpi_grid(transaction_url) -%}
+<section class="reports-kpi-grid" aria-label="{{ _('Income and credits summary') }}">
+    <a class="reports-kpi text-reset text-decoration-none" href="{{ transaction_url }}">
+        <span>{{ _("Income and credits") }}</span>
+        <strong>{{ total_income | moneyfmt }}</strong>
+        <small>{{ cash_flow_summary.income_detail }}</small>
+    </a>
+    <a class="reports-kpi text-reset text-decoration-none" href="{{ transaction_url }}">
+        <span>{{ _("Net cash flow") }}</span>
+        <strong class="{% if net_cashflow >= 0 %}text-success{% else %}text-danger{% endif %}">{{ net_cashflow | moneyfmt }}</strong>
+        <small>{{ cash_flow_summary.net_detail }}</small>
+    </a>
+    <a class="reports-kpi text-reset text-decoration-none" href="{{ transaction_url }}">
+        <span>{{ _("Transactions") }}</span>
+        <strong>{{ transaction_count }}</strong>
+        <small>{{ _("Report rows in this view") }}</small>
+    </a>
+    <a class="reports-kpi text-reset text-decoration-none" href="{{ transaction_url }}">
+        <span>{{ _("Average credit") }}</span>
+        <strong>{{ average_income_credit | moneyfmt }}</strong>
+        <small>{{ _("Per income or credit row") }}</small>
+    </a>
+</section>
+{%- endmacro %}
+
+{% macro reports_quality_panel() -%}
+<section class="reports-quality reports-quality-{{ data_quality.level }}">
+    <div>
+        <div class="reports-muted-label">{{ _("Data reliability") }}</div>
+        <strong>{{ _("{percent}% categorized", percent=data_quality.quality_score) }}</strong>
+        <p>{{ data_quality.message }}</p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('review.review') }}"><i class="bi bi-check2-square" aria-hidden="true"></i>{{ data_quality.review_label }}</a>
+</section>
+{%- endmacro %}
+
+{% macro evidence_table(rows) -%}
+<section class="reports-panel" data-table-export-scope>
+    <div class="reports-panel-title">
+        <h3>{{ _("Evidence preview") }}</h3>
+    </div>
+    {% if rows %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 reports-table">
+            <thead>
+                <tr>
+                    <th>{{ _("Date") }}</th>
+                    <th>{{ _("Description") }}</th>
+                    <th>{{ _("Account") }}</th>
+                    <th>{{ _("Merchant") }}</th>
+                    <th>{{ _("Category") }}</th>
+                    <th class="text-end">{{ _("Amount") }}</th>
+                    <th class="text-end">{{ _("Spending") }}</th>
+                    <th class="text-end">{{ _("Income and credits") }}</th>
+                    <th class="text-end">{{ _("Net cash flow") }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.date | datefmt }}</td>
+                    <td>{{ row.description }}</td>
+                    <td>{{ row.account_name or _("No account") }}</td>
+                    <td>{{ row.merchant_label }}</td>
+                    <td>{{ row.category }}</td>
+                    <td class="text-end">{{ row.amount | moneyfmt }}</td>
+                    <td class="text-end">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}">{{ row.net | moneyfmt }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No evidence rows available for this report.") }}</div>
+    {% endif %}
+</section>
+{%- endmacro %}
 
 {% block content %}
+{% set report_request = report_request | default(none) %}
+{% set account_options = account_options | default([]) %}
+{% set selected_account_id = selected_account_id | default(none) %}
+{% set selected_merchant_id = selected_merchant_id | default(none) %}
+{% set merchant_query = merchant_query | default("") %}
+{% set selected_merchant_label = selected_merchant_label | default(merchant_query) %}
+{% set merchant_suggestion_limit = merchant_suggestion_limit | default(5) %}
+{% set reports_clear_url = reports_clear_url | default(url_for('reports.overview')) %}
+{% set reports_merchant_filter_label = selected_merchant_label if selected_merchant_id else merchant_query %}
+{% set reports_account_label = namespace(value=_("All accounts")) %}
+{% for account in account_options %}
+    {% if selected_account_id == account.id %}
+        {% set reports_account_label.value = account.name %}
+    {% endif %}
+{% endfor %}
+{% set reports_filter_summary %}
+{{ _("Period") }}: {{ period_label | default("") }}{% if selected_period == period_custom and (selected_date_from or selected_date_to) %} ({{ selected_date_from or _("Any") }} {{ _("to") }} {{ selected_date_to or _("Any") }}){% endif %} - {{ _("Measure") }}: {{ _(measure_options | selectattr("value", "equalto", selected_measure) | map(attribute="label") | first | default("Spending")) }} - {{ _("Basis") }}: {{ _(basis_options | selectattr("value", "equalto", selected_basis) | map(attribute="label") | first | default("Reportable cash flow")) }} - {{ _("Account") }}: {{ reports_account_label.value }} - {{ _("Merchant") }}: {{ reports_merchant_filter_label if reports_merchant_filter_label else _("All") }}
+{% endset %}
+
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Reports") }}</h2>
@@ -22,6 +366,321 @@
     {% endfor %}
 </nav>
 
+{% if active_report_section.key == "overview" %}
+<div data-reports-page data-reports-overview>
+{% call collapsible_filter_panel("reports-overview-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+<div class="reports-actions">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ reports_export_csv_url }}"><i class="bi bi-download" aria-hidden="true"></i>{{ _("Export CSV") }}</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ reports_export_xlsx_url }}"><i class="bi bi-download" aria-hidden="true"></i>{{ _("Export Excel") }}</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+</div>
+
+{% if transaction_count > 0 %}
+{{ reports_kpi_grid(transaction_url) }}
+{{ reports_quality_panel() }}
+
+<div class="reports-chart-grid">
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Monthly statement") }}</h3>
+        </div>
+        <div id="reportsMonthlyChart" class="reports-chart" data-chart-export></div>
+    </section>
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Category breakdown") }}</h3>
+        </div>
+        <div id="reportsCategoryChart" class="reports-chart" data-chart-export></div>
+    </section>
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Tag breakdown") }}</h3>
+        </div>
+        <div id="reportsTagChart" class="reports-chart" data-chart-export></div>
+    </section>
+</div>
+
+<div class="reports-table-grid">
+    {{ reports_table("Monthly statement", monthly_rows, "Month") }}
+    {{ reports_table("Category breakdown", category_rows, "Category") }}
+    {{ reports_table("Tag breakdown", tag_rows, "Tag") }}
+    {{ reports_table("Account breakdown", account_rows, "Account") }}
+    {{ reports_table("Merchant breakdown", merchant_rows, "Merchant") }}
+</div>
+
+<script id="reports-overview-chart-data" type="application/json">
+{{ chart_data | tojson }}
+</script>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>
+{% elif active_report_section.key == "taxonomy" and taxonomy_target is defined %}
+<div data-reports-page data-reports-taxonomy-detail>
+{% call collapsible_filter_panel("reports-taxonomy-detail-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+<section class="reports-target-header">
+    <div>
+        <div class="reports-shell-kicker">{{ _(taxonomy_target.report_label) }}</div>
+        <h3>{{ taxonomy_target.name }}</h3>
+        {% if taxonomy_target.description %}
+            <p>{{ taxonomy_target.description }}</p>
+        {% endif %}
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
+</section>
+
+{% if taxonomy_notes %}
+<div class="reports-note-stack">
+    {% for note in taxonomy_notes %}
+    <div class="reports-note reports-note-{{ note.level }}">
+        {{ _(note.message) }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="reports-actions">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ reports_export_csv_url }}"><i class="bi bi-download" aria-hidden="true"></i>{{ _("Export CSV") }}</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ reports_export_xlsx_url }}"><i class="bi bi-download" aria-hidden="true"></i>{{ _("Export Excel") }}</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+</div>
+
+<div class="reports-detail-layout">
+    <div>
+        {% if transaction_count > 0 %}
+        {{ reports_kpi_grid(transaction_url) }}
+        {{ reports_quality_panel() }}
+
+        <div class="reports-chart-grid reports-chart-grid-two">
+            <section class="reports-panel" data-chart-export-scope>
+                <div class="reports-panel-title">
+                    <h3>{{ _("Monthly statement") }}</h3>
+                </div>
+                <div id="reportsMonthlyChart" class="reports-chart" data-chart-export></div>
+            </section>
+            <section class="reports-panel" data-chart-export-scope>
+                <div class="reports-panel-title">
+                    <h3>{{ _(taxonomy_target.composition_title) }}</h3>
+                </div>
+                <div id="reportsCompositionChart" class="reports-chart" data-chart-export></div>
+            </section>
+        </div>
+
+        <div class="reports-table-grid">
+            {{ reports_table("Monthly statement", monthly_rows, "Month") }}
+            {{ reports_table(taxonomy_target.composition_title, taxonomy_composition_rows, taxonomy_target.composition_label_heading) }}
+            {{ reports_table("Account breakdown", account_rows, "Account") }}
+            {{ reports_table("Counterparties", merchant_rows, "Merchant") }}
+            {{ evidence_table(taxonomy_evidence_rows) }}
+        </div>
+
+        <script id="reports-overview-chart-data" type="application/json">
+        {{ chart_data | tojson }}
+        </script>
+        {% else %}
+        <div class="empty-state">
+            {{ _("No transaction data is available for this report.") }}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if taxonomy_panel %}
+    <aside class="reports-panel reports-semantic-panel">
+        <div class="reports-panel-title">
+            <h3>{{ _(taxonomy_panel.title) }}</h3>
+        </div>
+        <p>{{ _(taxonomy_panel.description) }}</p>
+        <dl class="reports-metric-list">
+            {% for metric in taxonomy_panel.metrics %}
+            <div>
+                <dt>{{ _(metric.label) }}</dt>
+                <dd>
+                    {% if metric.is_money %}
+                        {{ metric.value | moneyfmt }}
+                    {% else %}
+                        {{ metric.value }}
+                    {% endif %}
+                </dd>
+            </div>
+            {% endfor %}
+        </dl>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ taxonomy_panel.action_url }}"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>{{ _(taxonomy_panel.action_label) }}</a>
+    </aside>
+    {% endif %}
+</div>
+</div>
+{% elif active_report_section.key == "taxonomy" %}
+<div data-reports-page data-reports-taxonomy>
+{% call collapsible_filter_panel("reports-taxonomy-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+{% if transaction_count > 0 %}
+{{ reports_kpi_grid(transaction_url) }}
+{{ reports_quality_panel() }}
+
+<div class="reports-table-grid">
+    {{ taxonomy_index_table("Category reports", taxonomy_category_rows, "Category") }}
+    {{ taxonomy_index_table("Tag reports", taxonomy_tag_rows, "Tag") }}
+</div>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>
+{% elif active_report_section.key in ["accounts", "merchants"] and entity_target is defined %}
+<div data-reports-page data-reports-entity-detail>
+{% call collapsible_filter_panel("reports-entity-detail-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+<section class="reports-target-header">
+    <div>
+        <div class="reports-shell-kicker">{{ _(entity_target.report_label) }}</div>
+        <h3>{{ entity_target.name }}</h3>
+        {% if entity_target.description %}
+            <p>{{ _(entity_target.description) }}</p>
+        {% endif %}
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
+</section>
+
+<div class="reports-actions">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ reports_export_csv_url }}"><i class="bi bi-download" aria-hidden="true"></i>{{ _("Export CSV") }}</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ reports_export_xlsx_url }}"><i class="bi bi-download" aria-hidden="true"></i>{{ _("Export Excel") }}</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+</div>
+
+{% if transaction_count > 0 %}
+{{ reports_kpi_grid(transaction_url) }}
+{{ reports_quality_panel() }}
+
+<div class="reports-chart-grid">
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Monthly statement") }}</h3>
+        </div>
+        <div id="reportsMonthlyChart" class="reports-chart" data-chart-export></div>
+    </section>
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Category breakdown") }}</h3>
+        </div>
+        <div id="reportsCategoryChart" class="reports-chart" data-chart-export></div>
+    </section>
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Tag breakdown") }}</h3>
+        </div>
+        <div id="reportsTagChart" class="reports-chart" data-chart-export></div>
+    </section>
+</div>
+
+<div class="reports-table-grid">
+    {{ reports_table("Monthly statement", monthly_rows, "Month") }}
+    {{ reports_table("Category breakdown", category_rows, "Category") }}
+    {{ reports_table("Tag breakdown", tag_rows, "Tag") }}
+    {% if entity_target.kind == "account" %}
+        {{ reports_table("Counterparties", merchant_rows, "Merchant") }}
+    {% else %}
+        {{ reports_table("Account breakdown", account_rows, "Account") }}
+    {% endif %}
+    {{ evidence_table(entity_evidence_rows) }}
+</div>
+
+<script id="reports-overview-chart-data" type="application/json">
+{{ chart_data | tojson }}
+</script>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>
+{% elif active_report_section.key in ["accounts", "merchants"] %}
+<div data-reports-page data-reports-entity>
+{% call collapsible_filter_panel("reports-entity-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+{% if transaction_count > 0 %}
+{{ reports_kpi_grid(transaction_url) }}
+{{ reports_quality_panel() }}
+
+<div class="reports-table-grid">
+    {{ taxonomy_index_table(entity_index_title, entity_rows, entity_index_label_heading) }}
+</div>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>
+{% elif active_report_section.key == "income" %}
+<div data-reports-page data-reports-income>
+{% call collapsible_filter_panel("reports-income-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+<div class="reports-actions">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ reports_export_csv_url }}"><i class="bi bi-download" aria-hidden="true"></i>{{ _("Export CSV") }}</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ reports_export_xlsx_url }}"><i class="bi bi-download" aria-hidden="true"></i>{{ _("Export Excel") }}</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+</div>
+
+{% if transaction_count > 0 %}
+{{ reports_income_kpi_grid(transaction_url) }}
+{{ reports_quality_panel() }}
+
+<div class="reports-chart-grid">
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Monthly statement") }}</h3>
+        </div>
+        <div id="reportsMonthlyChart" class="reports-chart" data-chart-export></div>
+    </section>
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Income and credit sources") }}</h3>
+        </div>
+        <div id="reportsCategoryChart" class="reports-chart" data-chart-export></div>
+    </section>
+    <section class="reports-panel" data-chart-export-scope>
+        <div class="reports-panel-title">
+            <h3>{{ _("Tag breakdown") }}</h3>
+        </div>
+        <div id="reportsTagChart" class="reports-chart" data-chart-export></div>
+    </section>
+</div>
+
+<div class="reports-table-grid">
+    {{ reports_table("Monthly statement", monthly_rows, "Month") }}
+    {{ reports_table("Income and credit sources", category_rows, "Category") }}
+    {{ reports_table("Tag breakdown", tag_rows, "Tag") }}
+    {{ reports_table("Account breakdown", account_rows, "Account") }}
+    {{ reports_table("Counterparties", merchant_rows, "Merchant") }}
+    {{ evidence_table(income_evidence_rows) }}
+</div>
+
+<script id="reports-overview-chart-data" type="application/json">
+{{ chart_data | tojson }}
+</script>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>
+{% else %}
 <section class="reports-shell" aria-labelledby="reports-section-heading">
     <div class="reports-shell-panel">
         <div class="reports-shell-kicker">{{ _("Current section") }}</div>
@@ -35,4 +694,5 @@
         <p>{{ _("Filters, exports, and report data will be added through the Reports service layer.") }}</p>
     </div>
 </section>
+{% endif %}
 {% endblock %}

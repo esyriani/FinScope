@@ -4,6 +4,7 @@ from tests.support.database import insert_merchant, insert_transaction, set_owne
 from tests.support.html import (
     assert_has_element,
     assert_markup,
+    assert_not_markup,
     assert_not_visible_text,
     assert_visible_text,
     parse_html,
@@ -149,7 +150,7 @@ def test_dashboard_route_preserves_selected_merchant_filter(client, core_conn):
 
 
 def test_dashboard_route_filters_spaced_merchant_query(client, core_conn):
-    """Verify dashboard analytics apply multi-word typed merchant filters."""
+    """Verify dashboard summary applies multi-word typed merchant filters."""
     insert_transaction(
         core_conn,
         "UDEM - PAIE payroll",
@@ -174,12 +175,13 @@ def test_dashboard_route_filters_spaced_merchant_query(client, core_conn):
     response = client.get("/dashboard?period=all&merchant_query=UDEM+PAIE")
 
     assert response.status_code == 200
-    assert_visible_text(response, "Merchant: UDEM PAIE", "UDEM PAIE PAYROLL")
-    assert_not_visible_text(response, "UDEM BOOKSTORE")
+    assert_visible_text(response, "Merchant: UDEM PAIE", "15.00", "Reports")
+    assert_markup(response, "/reports/merchants?period=all&amp;merchant_query=UDEM+PAIE")
+    assert_not_visible_text(response, "99.00")
 
 
-def test_dashboard_merchant_analytics_exports_structured_cell_parts(client, core_conn):
-    """Verify merchant analytics exports split visible details into separate fields."""
+def test_dashboard_reports_section_replaces_merchant_analytics_table(client, core_conn):
+    """Verify dashboard links to Reports instead of rendering merchant analytics rows."""
     merchant_id = insert_merchant(core_conn, "METRO GROCERY")
     insert_transaction(
         core_conn,
@@ -196,33 +198,10 @@ def test_dashboard_merchant_analytics_exports_structured_cell_parts(client, core
     response = client.get("/dashboard?period=all")
 
     assert response.status_code == 200
-    assert_has_element(response, "strong", attrs={"data-export-part": True}, text="METRO GROCERY")
-    assert_has_element(
-        response,
-        "div",
-        attrs={
-            "data-export-part": True,
-            "data-export-label": "Description",
-            "data-export-header": "Description",
-        },
-        text="Card purchase 1234 METRO",
-    )
-    assert_has_element(
-        response,
-        "span",
-        attrs={
-            "class": "spending-cell-amount",
-            "data-export-part": True,
-            "data-export-type": "money",
-            "data-export-value": "42.0",
-        },
-    )
-    assert_has_element(
-        response,
-        "div",
-        attrs={"data-export-part": True, "data-export-label": "Details"},
-        text="No comparison",
-    )
+    assert_visible_text(response, "Reports", "Merchants")
+    assert_markup(response, 'href="/reports/merchants?period=all"')
+    assert_not_visible_text(response, "Top 10 merchant analytics", "Card purchase 1234 METRO")
+    assert_not_markup(response, "data-export-part")
 
 
 def test_comparison_route_preserves_merchant_filter_in_both_tabs(client, core_conn):

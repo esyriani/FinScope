@@ -2,9 +2,13 @@
 
 from datetime import date as real_date
 from datetime import timedelta
+from decimal import Decimal
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 
+from finance_app.core.constants import ACCOUNT_TYPE_CREDIT_CARD, TRANSACTION_KIND_EXPENSE, TRANSACTION_KIND_INCOME
+from finance_app.database.tables import merchants as merchants_table
+from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 
 
@@ -143,6 +147,95 @@ def seed_reporting_data(conn):
           AND user_id = (SELECT id FROM users WHERE username = 'owner')
         """))
     conn.commit()
+
+
+def seed_entity_report_data(data_factory, conn):
+    """Seed linked account and merchant rows for Reports entity tests."""
+    checking_id = data_factory.accounts.create(name="Personal Checking")
+    card_id = data_factory.accounts.create(
+        name="Travel Card",
+        account_type=ACCOUNT_TYPE_CREDIT_CARD,
+    )
+    metro_tx_id = data_factory.transactions.create(
+        description="Metro Grocery",
+        amount=Decimal("100.00"),
+        tx_date="2026-01-05",
+        category="Food",
+        account_id=checking_id,
+        merchant_from_description=True,
+        needs_review=0,
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+        tags=["Tax"],
+    )
+    cafe_tx_id = data_factory.transactions.create(
+        description="Cafe Bistro",
+        amount=Decimal("40.00"),
+        tx_date="2026-01-06",
+        category="Food",
+        account_id=checking_id,
+        merchant_from_description=True,
+        needs_review=0,
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+        tags=["Shared"],
+    )
+    payroll_tx_id = data_factory.transactions.create(
+        description="Payroll",
+        amount=Decimal("-1000.00"),
+        tx_date="2026-01-07",
+        category="Income",
+        account_id=checking_id,
+        merchant_from_description=True,
+        needs_review=0,
+        transaction_kind=TRANSACTION_KIND_INCOME,
+    )
+    hotel_tx_id = data_factory.transactions.create(
+        description="Hotel Stay",
+        amount=Decimal("200.00"),
+        tx_date="2026-01-08",
+        category="Travel",
+        account_id=card_id,
+        merchant_from_description=True,
+        needs_review=0,
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+    )
+    metro_merchant = merchant_target_for_transaction(conn, metro_tx_id)
+    cafe_merchant = merchant_target_for_transaction(conn, cafe_tx_id)
+    payroll_merchant = merchant_target_for_transaction(conn, payroll_tx_id)
+    hotel_merchant = merchant_target_for_transaction(conn, hotel_tx_id)
+    return {
+        "checking_id": checking_id,
+        "card_id": card_id,
+        "metro_merchant_id": metro_merchant["id"],
+        "metro_merchant_name": metro_merchant["name"],
+        "cafe_merchant_id": cafe_merchant["id"],
+        "cafe_merchant_name": cafe_merchant["name"],
+        "payroll_merchant_id": payroll_merchant["id"],
+        "payroll_merchant_name": payroll_merchant["name"],
+        "hotel_merchant_id": hotel_merchant["id"],
+        "hotel_merchant_name": hotel_merchant["name"],
+    }
+
+
+def merchant_target_for_transaction(conn, transaction_id):
+    """Return merchant id and key for a seeded transaction."""
+    row = (
+        conn.execute(
+            select(
+                transactions_table.c.merchant_id,
+                merchants_table.c.merchant_key,
+            )
+            .select_from(
+                transactions_table.join(
+                    merchants_table,
+                    merchants_table.c.id == transactions_table.c.merchant_id,
+                )
+            )
+            .where(transactions_table.c.id == transaction_id)
+        )
+        .mappings()
+        .one()
+    )
+    return {"id": int(row["merchant_id"]), "name": str(row["merchant_key"])}
 
 
 def category_totals(context):

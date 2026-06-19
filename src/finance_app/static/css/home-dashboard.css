@@ -727,6 +727,58 @@
     grid-column: 1 / -1;
 }
 
+.dashboard-report-grid {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.dashboard-report-card {
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    display: grid;
+    gap: 0.35rem;
+    min-height: 126px;
+    min-width: 0;
+    padding: 0.85rem;
+}
+
+.dashboard-report-card:hover {
+    border-color: rgba(var(--app-accent-rgb), 0.45);
+}
+
+.dashboard-report-card strong,
+.dashboard-report-card small,
+.dashboard-report-card span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-report-card strong {
+    color: var(--app-heading);
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.dashboard-report-card small {
+    color: var(--app-muted);
+    font-weight: 600;
+}
+
+.dashboard-report-icon {
+    align-items: center;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    color: var(--app-accent-strong);
+    display: inline-flex;
+    height: 2rem;
+    justify-content: center;
+    width: 2rem;
+}
+
 .dashboard-breakdown-bar {
     align-items: center;
     display: flex;

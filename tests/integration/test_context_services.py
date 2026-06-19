@@ -1,11 +1,7 @@
 """Service-level context tests for dashboard pages."""
 
-from sqlalchemy import text
 from tests.support.context_services import (
-    category_totals,
-    merchant_totals,
     quick_view_count,
-    seed_dashboard_period_delta_data,
     seed_dashboard_review_queue_data,
     seed_dashboard_spending_only,
     seed_dashboard_unknown_only,
@@ -15,7 +11,6 @@ from tests.support.context_services import (
 from tests.support.database import insert_account, insert_merchant, insert_transaction
 from werkzeug.datastructures import MultiDict
 
-from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.dashboard.service import build_dashboard_context
 
 
@@ -27,10 +22,6 @@ def test_dashboard_context_totals_filters_custom_dates_and_sorting(app, core_con
             ("period", "custom"),
             ("date_from", "2026-01-01"),
             ("date_to", "2026-02-28"),
-            ("category_sort", "category"),
-            ("category_direction", "asc"),
-            ("merchant_sort", "spending"),
-            ("merchant_direction", "desc"),
         ]
     )
 
@@ -65,14 +56,13 @@ def test_dashboard_context_totals_filters_custom_dates_and_sorting(app, core_con
     assert insights["top_source"]["label"] == "Rule"
     assert insights["top_source"]["count"] == 3
     assert insights["top_source"]["rate"] == 75.0
-    assert category_totals(context) == {
-        "Food": 140.00,
-        "Utilities": 120.00,
-    }
-    assert list(merchant_totals(context).items()) == [
-        ("HYDRO QUEBEC", 120.00),
-        ("METRO GROCERY", 100.00),
-    ]
+    assert context["dashboard_report_links"]["overview"].startswith(
+        "/reports?period=custom&date_from=2026-01-01&date_to=2026-02-28"
+    )
+    assert context["dashboard_report_links"]["income"].startswith(
+        "/reports/income?period=custom&date_from=2026-01-01&date_to=2026-02-28"
+    )
+    assert "measure=income" in context["dashboard_report_links"]["income"]
 
 
 def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
@@ -132,25 +122,23 @@ def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
     assert food_context["selected_categories"] == ["Food"]
     assert food_context["total_spending"] == 140.00
     assert food_context["transaction_count"] == 2
-    assert category_totals(food_context) == {"Food": 140.00}
-    assert list(merchant_totals(food_context).items()) == [
-        ("METRO GROCERY", 100.00),
-        ("CAFE BISTRO", 40.00),
-    ]
+    assert food_context["dashboard_report_links"]["taxonomy"].startswith(
+        "/reports/taxonomy?period=custom&date_from=2026-01-01&date_to=2026-02-28"
+    )
 
     assert tax_context["quick_view"] == "categorized"
     assert tax_context["selected_tags"] == ["Tax"]
     assert tax_context["total_spending"] == 100.00
     assert tax_context["transaction_count"] == 1
-    assert category_totals(tax_context) == {"Food": 100.00}
-    assert list(merchant_totals(tax_context).items()) == [("METRO GROCERY", 100.00)]
+    assert tax_context["dashboard_report_links"]["taxonomy"].startswith(
+        "/reports/taxonomy?period=custom&date_from=2026-01-01&date_to=2026-02-28"
+    )
 
     assert metro_context["merchant_search"] == "metro grocery"
     assert metro_context["total_spending"] == 100.00
     assert metro_context["transaction_count"] == 1
-    assert category_totals(metro_context) == {"Food": 100.00}
-    assert list(merchant_totals(metro_context).items()) == [("METRO GROCERY", 100.00)]
     assert "search=metro+grocery" in metro_context["dashboard_links"]["transactions"]
+    assert "merchant_query=metro+grocery" in metro_context["dashboard_report_links"]["merchants"]
 
 
 def test_dashboard_context_filters_by_exact_and_partial_merchant(app, core_conn):
@@ -238,27 +226,22 @@ def test_dashboard_context_filters_by_exact_and_partial_merchant(app, core_conn)
     assert exact_context["merchant_query"] == "METRO GROCERY"
     assert exact_context["total_spending"] == 80.00
     assert exact_context["transaction_count"] == 1
-    assert category_totals(exact_context) == {"Food": 80.00}
-    assert list(merchant_totals(exact_context).items()) == [("METRO GROCERY", 80.00)]
+    assert f"merchant_id={metro_id}" in exact_context["dashboard_report_links"]["merchants"]
+    assert "merchant_query=METRO+GROCERY" in exact_context["dashboard_report_links"]["merchants"]
 
     assert partial_context["selected_merchant_id"] is None
     assert partial_context["selected_merchant_label"] == "metro grocery"
     assert partial_context["merchant_query"] == "metro grocery"
     assert partial_context["total_spending"] == 100.00
     assert partial_context["transaction_count"] == 2
-    assert category_totals(partial_context) == {"Food": 100.00}
-    assert list(merchant_totals(partial_context).items()) == [
-        ("METRO GROCERY", 80.00),
-        ("METRO GROCERY RECEIPT", 20.00),
-    ]
+    assert "merchant_query=metro+grocery" in partial_context["dashboard_report_links"]["merchants"]
 
     assert spaced_context["selected_merchant_id"] is None
     assert spaced_context["selected_merchant_label"] == "UDEM PAIE"
     assert spaced_context["merchant_query"] == "UDEM PAIE"
     assert spaced_context["total_spending"] == 15.00
     assert spaced_context["transaction_count"] == 1
-    assert category_totals(spaced_context) == {"Food": 15.00}
-    assert list(merchant_totals(spaced_context).items()) == [("UDEM PAIE PAYROLL", 15.00)]
+    assert "merchant_query=UDEM+PAIE" in spaced_context["dashboard_report_links"]["merchants"]
 
 
 def test_dashboard_context_filters_reporting_by_account(app, core_conn):
@@ -316,86 +299,9 @@ def test_dashboard_context_filters_reporting_by_account(app, core_conn):
     assert context["total_spending"] == 80.00
     assert context["total_income"] == 1000.00
     assert context["transaction_count"] == 2
-    assert category_totals(context) == {"Food": 80.00}
-    assert list(merchant_totals(context).items()) == [("METRO GROCERY", 80.00)]
     assert f"account_id={card_id}" in context["dashboard_links"]["transactions"]
-    assert f"account_id={card_id}" in context["category_rows"][0]["url"]
-    assert f"account_id={card_id}" in context["merchant_rows"][0]["url"]
-    assert f"account_id={card_id}" in context["expense_month_urls"][0]
-
-
-def test_dashboard_context_tag_breakdown_counts_each_matching_tag(app, core_conn):
-    """Verify tag breakdown uses tag-associated spending, including overlaps."""
-    seed_reporting_data(core_conn)
-    cafe_id = core_conn.execute(text("""
-        SELECT id
-        FROM transactions
-        WHERE fingerprint = 'seed-2026-food-cafe'
-        """)).fetchone()._mapping["id"]
-    set_transaction_tags(core_conn, cafe_id, ["Shared", "Tax"], source="manual")
-    core_conn.commit()
-    args = MultiDict(
-        [
-            ("period", "custom"),
-            ("date_from", "2026-01-01"),
-            ("date_to", "2026-02-28"),
-            ("quick_view", "all"),
-            ("breakdown", "tag"),
-        ]
-    )
-
-    with app.test_request_context("/dashboard"):
-        context = build_dashboard_context(args)
-        untagged_context = build_dashboard_context(
-            MultiDict(
-                [
-                    ("period", "custom"),
-                    ("date_from", "2026-01-01"),
-                    ("date_to", "2026-02-28"),
-                    ("quick_view", "all"),
-                    ("breakdown", "tag"),
-                    ("show_untagged", "1"),
-                ]
-            )
-        )
-
-    assert context["breakdown_mode"] == "tag"
-    assert context["quick_view"] == "all"
-    assert context["breakdown_is_tag"] is True
-    assert context["show_untagged"] is False
-    assert "show_untagged=1" in context["show_untagged_url"]
-    assert context["breakdown_chart_title"] == "Spending by tag"
-    assert context["breakdown_table_title"] == "Tag detail"
-    assert context["breakdown_label"] == "Tag"
-    assert context["total_spending"] == 290.00
-    assert category_totals(context) == {
-        "Government": 120.00,
-        "Shared": 40.00,
-        "Tax": 140.00,
-    }
-    assert sum(category_totals(context).values()) > context["total_spending"]
-    assert context["category_labels"] == ["Tax", "Government", "Shared"]
-    tax_row = next(row for row in context["category_rows"] if row["category"] == "Tax")
-    assert "tags=Tax" in tax_row["url"]
-    assert "amount_type=spending" in tax_row["url"]
-    assert all(row["category"] != "Untagged" for row in context["category_rows"])
-
-    assert untagged_context["show_untagged"] is True
-    assert "show_untagged" not in untagged_context["show_untagged_url"]
-    assert category_totals(untagged_context) == {
-        "Government": 120.00,
-        "Shared": 40.00,
-        "Tax": 140.00,
-        "Untagged": 30.00,
-    }
-    assert untagged_context["category_labels"] == [
-        "Tax",
-        "Government",
-        "Shared",
-        "Untagged",
-    ]
-    untagged_row = next(row for row in untagged_context["category_rows"] if row["category"] == "Untagged")
-    assert untagged_row["url"] == ""
+    assert f"account_id={card_id}" in context["dashboard_report_links"]["accounts"]
+    assert f"account_id={card_id}" in context["dashboard_report_links"]["income"]
 
 
 def test_dashboard_tag_cashflow_includes_tagged_transfer_credits(app, core_conn):
@@ -422,63 +328,8 @@ def test_dashboard_tag_cashflow_includes_tagged_transfer_credits(app, core_conn)
     assert reimbursable_context["total_income"] == 250.00
     assert reimbursable_context["net_cashflow"] == -50.00
     assert reimbursable_context["transaction_count"] == 2
-    assert reimbursable_context["income_month_totals"] == [250.00]
-    assert reimbursable_context["net_month_totals"] == [-50.00]
-    assert category_totals(reimbursable_context) == {"Travel": 300.00}
     assert "amount_type=credit" in reimbursable_context["dashboard_links"]["income"]
-
-
-def test_dashboard_breakdown_hides_income_category_by_default(app, core_conn):
-    """Verify dashboard category and tag breakdowns only show income when requested."""
-    seed_reporting_data(core_conn)
-    income_tx_id = core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date,
-            description,
-            amount,
-            category,
-            needs_review,
-            category_source,
-            ignored,
-            transaction_kind,
-            fingerprint
-        )
-        VALUES (
-            '2026-01-09',
-            'Misclassified income category expense',
-            25.00,
-            'Income',
-            0,
-            'manual',
-            0,
-            'expense',
-            'dashboard-income-category-expense'
-        )
-        """)).lastrowid
-    set_transaction_tags(core_conn, income_tx_id, ["Shared"], source="manual")
-    core_conn.commit()
-    date_args = [
-        ("period", "custom"),
-        ("date_from", "2026-01-01"),
-        ("date_to", "2026-02-28"),
-        ("quick_view", "all"),
-    ]
-
-    with app.test_request_context("/dashboard"):
-        category_context = build_dashboard_context(MultiDict(date_args))
-        income_context = build_dashboard_context(MultiDict([*date_args, ("show_income", "1")]))
-        tag_context = build_dashboard_context(MultiDict([*date_args, ("breakdown", "tag")]))
-        income_tag_context = build_dashboard_context(
-            MultiDict([*date_args, ("breakdown", "tag"), ("show_income", "1")])
-        )
-
-    assert category_context["show_income"] is False
-    assert "show_income=1" in category_context["show_income_url"]
-    assert "Income" not in category_totals(category_context)
-    assert category_totals(income_context)["Income"] == 25.00
-    assert "show_income" not in income_context["show_income_url"]
-    assert category_totals(tag_context)["Shared"] == 40.00
-    assert category_totals(income_tag_context)["Shared"] == 65.00
+    assert "measure=income" in reimbursable_context["dashboard_report_links"]["income"]
 
 
 def test_dashboard_context_handles_empty_database(app):
@@ -495,8 +346,8 @@ def test_dashboard_context_handles_empty_database(app):
     assert context["cash_flow_summary"]["savings_rate_label"] == "n/a"
     assert context["data_quality"]["level"] == "empty"
     assert context["data_quality"]["message"] == "No transactions in this view."
-    assert context["category_rows"] == []
-    assert context["merchant_rows"] == []
+    assert context["dashboard_report_links"]["overview"] == "/reports?period=ytd"
+    assert context["dashboard_report_links"]["income"] == "/reports/income?period=ytd&measure=income"
 
 
 def test_dashboard_context_handles_zero_income_savings_rate(app, core_conn):
@@ -540,8 +391,6 @@ def test_dashboard_context_handles_all_unknown_quick_view(app, core_conn):
     assert context["total_spending"] == 60.00
     assert context["transaction_count"] == 2
     assert context["uncategorized_count"] == 2
-    assert context["category_rows"] == []
-    assert context["category_labels"] == []
     assert context["data_quality"]["level"] == "danger"
     assert context["data_quality"]["review_label"] == "Review 2 transactions needing review"
     assert quick_view_count(context, "unknown") == 2
@@ -565,26 +414,3 @@ def test_dashboard_review_cta_uses_full_review_queue_count(app, core_conn):
     assert quick_view_count(context, "needs_review") == 2
     assert context["data_quality"]["review_label"] == "Review 2 transactions needing review"
     assert context["data_quality"]["review_url"] == "/review"
-
-
-def test_dashboard_context_calculates_previous_period_merchant_deltas(app, core_conn):
-    """Verify merchant rows include current versus prior rolling-period deltas."""
-    seed_dashboard_period_delta_data(core_conn)
-    args = MultiDict(
-        [
-            ("period", "month"),
-            ("merchant_sort", "merchant"),
-            ("merchant_direction", "asc"),
-        ]
-    )
-
-    with app.test_request_context("/dashboard"):
-        context = build_dashboard_context(args)
-
-    merchants = {row["merchant"]: row for row in context["merchant_rows"]}
-    assert merchants["METRO GROCERY"]["total"] == 150.00
-    assert merchants["METRO GROCERY"]["period_change"]["label"] == "+50%"
-    assert merchants["METRO GROCERY"]["period_change"]["direction"] == "up"
-    assert merchants["METRO GROCERY"]["period_change"]["sort_value"] == 50
-    assert merchants["NEW BAKERY"]["period_change"]["label"] == "n/a"
-    assert merchants["NEW BAKERY"]["period_change"]["detail"] == "No comparison"

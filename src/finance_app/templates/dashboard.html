@@ -4,24 +4,19 @@
 ] %}
 {% set page_vendor_scripts = [
     "vendor/flatpickr/4.6.13/flatpickr.min.js",
-    "vendor/flatpickr/4.6.13/plugins/monthSelect/index.js",
-    "vendor/echarts/5.6.0/echarts.min.js"
+    "vendor/flatpickr/4.6.13/plugins/monthSelect/index.js"
 ] %}
 {% set page_stylesheets = [
     "css/home-dashboard.css",
     "css/tables.css",
-    "css/tag-multiselect.css",
-    "css/exports.css"
+    "css/tag-multiselect.css"
 ] %}
 {% set page_scripts = [
     "js/dates.js",
     "js/tag-multiselect.js",
     "js/merchant-autocomplete.js",
     "js/dashboard.js",
-    "js/tables.js",
-    "js/chart-utils.js",
-    "js/dashboard-charts.js",
-    "js/exports.js"
+    "js/tables.js"
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
@@ -53,9 +48,6 @@
 {% set dashboard_filter_summary %}
 {{ _("Period") }}: {{ period_label }}{% if selected_period == period_custom and (selected_date_from or selected_date_to) %} ({{ selected_date_from or _("Any") }} {{ _("to") }} {{ selected_date_to or _("Any") }}){% endif %} - {{ _("Account") }}: {{ dashboard_account_label.value }} - {{ _("Quick view") }}: {{ dashboard_quick_view_label.value }} - {{ _("Merchant") }}: {{ dashboard_merchant_filter_label if dashboard_merchant_filter_label else _("All") }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }}
 {% endset %}
-{% macro dashboard_sort_icon(active_sort, active_direction, column) -%}
-    {% if active_sort == column %}<span class="sort-icon {{ active_direction }}" aria-hidden="true"></span>{% endif %}
-{%- endmacro %}
 
 <div id="dashboard-page" data-dashboard-drilldown-scope data-ajax-refresh-target="dashboard-page">
 <div class="page-header">
@@ -69,7 +61,6 @@
 {% call collapsible_filter_panel("dashboard-filters", dashboard_filter_summary | trim) %}
         <form method="get" class="row g-3 align-items-end">
             <input type="hidden" name="filter_mode" value="{{ filter_mode }}">
-            <input type="hidden" name="breakdown" value="{{ breakdown_mode }}">
             <div class="col-md-3">
                 <label class="form-label" for="dashboard-period">{{ _("Period") }}</label>
                 <select id="dashboard-period" class="form-select" name="period">
@@ -382,261 +373,52 @@
     </a>
 </div>
 
-<section class="dashboard-breakdown-section mb-4">
-    <div class="dashboard-breakdown-bar mb-3">
-        <div>
-            <h5 class="card-title">{{ _("Spending breakdown") }}</h5>
-            {% if breakdown_is_tag %}
-                <div class="text-muted small">{{ _("Tagged spending can count the same transaction more than once.") }}</div>
-            {% endif %}
+<section class="card dashboard-wide dashboard-report-hub mb-4">
+    <div class="card-body">
+        <div class="section-title">
+            <h5 class="card-title">{{ _("Reports") }}</h5>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ dashboard_report_links.overview }}"><i class="bi bi-pie-chart" aria-hidden="true"></i>{{ _("Open reports") }}</a>
         </div>
-        <div class="dashboard-breakdown-actions">
-            <div class="btn-group" role="group" aria-label="{{ _('Breakdown') }}">
-                {% for option in breakdown_options %}
-                    <a
-                        class="btn btn-sm {% if option.active %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                        href="{{ option.url }}"
-                        aria-pressed="{{ 'true' if option.active else 'false' }}"
-                        data-ajax-refresh-link
-                    >
-                        {{ _(option.label) }}
-                    </a>
-                {% endfor %}
-            </div>
-            {% if breakdown_is_tag %}
-                <a
-                    class="btn btn-sm {% if show_untagged %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                    href="{{ show_untagged_url }}"
-                    aria-pressed="{{ 'true' if show_untagged else 'false' }}"
-                    data-ajax-refresh-link
-                >
-                    {{ _("Hide untagged") if show_untagged else _("Show untagged") }}
-                </a>
-            {% endif %}
-            <a
-                class="btn btn-sm {% if show_income %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                href="{{ show_income_url }}"
-                aria-pressed="{{ 'true' if show_income else 'false' }}"
-                data-ajax-refresh-link
-            >
-                {{ _("Hide income") if show_income else _("Show income") }}
+        <div class="dashboard-report-grid">
+            <a class="dashboard-report-card text-reset text-decoration-none" href="{{ dashboard_report_links.overview }}">
+                <span class="dashboard-report-icon"><i class="bi bi-pie-chart" aria-hidden="true"></i></span>
+                <span class="metric-label">{{ _("Overview") }}</span>
+                <strong>{{ total_spending | moneyfmt }}</strong>
+                <small>{{ _("Spending") }}</small>
+            </a>
+            <a class="dashboard-report-card text-reset text-decoration-none" href="{{ dashboard_report_links.income }}">
+                <span class="dashboard-report-icon"><i class="bi bi-cash-coin" aria-hidden="true"></i></span>
+                <span class="metric-label">{{ _("Income and credits") }}</span>
+                <strong>{{ total_income | moneyfmt }}</strong>
+                <small>{{ _("Income and credits") }}</small>
+            </a>
+            <a class="dashboard-report-card text-reset text-decoration-none" href="{{ dashboard_report_links.taxonomy }}">
+                <span class="dashboard-report-icon"><i class="bi bi-tags" aria-hidden="true"></i></span>
+                <span class="metric-label">{{ _("Category or tag") }}</span>
+                <strong>{{ data_quality.quality_score }}%</strong>
+                <small>{{ _("Categorized") }}</small>
+            </a>
+            <a class="dashboard-report-card text-reset text-decoration-none" href="{{ dashboard_report_links.accounts }}">
+                <span class="dashboard-report-icon"><i class="bi bi-bank" aria-hidden="true"></i></span>
+                <span class="metric-label">{{ _("Accounts") }}</span>
+                <strong>{{ dashboard_account_label.value }}</strong>
+                <small>{{ _("Account breakdown") }}</small>
+            </a>
+            <a class="dashboard-report-card text-reset text-decoration-none" href="{{ dashboard_report_links.merchants }}">
+                <span class="dashboard-report-icon"><i class="bi bi-shop" aria-hidden="true"></i></span>
+                <span class="metric-label">{{ _("Merchants") }}</span>
+                <strong>{{ dashboard_merchant_filter_label if dashboard_merchant_filter_label else _("All") }}</strong>
+                <small>{{ _("Merchant breakdown") }}</small>
+            </a>
+            <a class="dashboard-report-card text-reset text-decoration-none" href="{{ dashboard_report_links.comparison }}">
+                <span class="dashboard-report-icon"><i class="bi bi-layout-split" aria-hidden="true"></i></span>
+                <span class="metric-label">{{ _("Compare") }}</span>
+                <strong>{{ _("Period changes") }}</strong>
+                <small>{{ _("Net cash flow") }}</small>
             </a>
         </div>
     </div>
-
-    <div class="dashboard-breakdown-grid">
-        <section class="card chart-card chart-card-tall">
-            <div class="card-body">
-                <div class="section-title">
-                    <h5 class="card-title">{{ _(breakdown_chart_title) }}</h5>
-                </div>
-                <div id="categoryChart" class="chart-viewport" data-chart-export></div>
-            </div>
-        </section>
-
-        <section class="card dashboard-breakdown-detail">
-            <div class="card-body p-0">
-                <div class="section-title px-4 pt-4">
-                    <h5 class="card-title">{{ _(breakdown_table_title) }}</h5>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0 category-detail-table">
-                        <colgroup>
-                            <col class="category-detail-col-category">
-                            <col class="category-detail-col-spending">
-                            <col class="category-detail-col-share">
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                <th>
-                                    <a class="sort-link" href="{{ category_sort_url('category') }}">
-                                        <span>{{ _(breakdown_label) }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'category') }}
-                                    </a>
-                                </th>
-                                <th class="text-end">
-                                    <a class="sort-link justify-content-end" href="{{ category_sort_url('spending') }}">
-                                        <span>{{ _("Spending") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'spending') }}
-                                    </a>
-                                </th>
-                                <th class="text-end">
-                                    <a class="sort-link justify-content-end" href="{{ category_sort_url('share') }}">
-                                        <span>{{ _("Share") }}</span>{{ dashboard_sort_icon(category_table_sort, category_table_direction, 'share') }}
-                                    </a>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in category_rows %}
-                            <tr {% if row["url"] %}data-row-href="{{ row['url'] }}" data-row-drilldown="dblclick"{% endif %}>
-                                <td>{{ row["category"] }}</td>
-                                <td class="text-end">
-                                    <div class="spending-cell-visual">
-                                        <span class="spending-cell-amount">{{ row["total"] | moneyfmt }}</span>
-                                        <span class="spending-bar-track" aria-hidden="true">
-                                            <span class="spending-bar-fill" style="width: {{ row['bar_width'] }}%;"></span>
-                                        </span>
-                                    </div>
-                                </td>
-                                <td class="text-end">{{ row["share"] }}%</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-    </div>
 </section>
-
-<div class="dashboard-grid">
-    <section class="card chart-card chart-card-tall">
-        <div class="card-body">
-            <div class="section-title">
-                <h5 class="card-title">{{ _("Monthly cash flow") }}</h5>
-            </div>
-            <div id="netChart" class="chart-viewport" data-chart-export></div>
-        </div>
-    </section>
-
-    <section class="card chart-card chart-card-tall">
-        <div class="card-body">
-            <div class="section-title">
-                <h5 class="card-title">{{ _("Spending vs income over time") }}</h5>
-            </div>
-            <div id="spendingIncomeChart" class="chart-viewport" data-chart-export></div>
-        </div>
-    </section>
-
-    <section class="card dashboard-wide">
-        <div class="card-body p-0">
-            <div class="section-title px-4 pt-4">
-                <h5 class="card-title">{{ _("Top {count} merchant analytics", count=merchant_table_limit) }}</h5>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0 merchant-analytics-table">
-                    <colgroup>
-                        <col class="merchant-col-merchant">
-                        <col class="merchant-col-category">
-                        <col class="merchant-col-transactions">
-                        <col class="merchant-col-spending">
-                        <col class="merchant-col-period">
-                        <col class="merchant-col-rules">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>
-                                <a class="sort-link" href="{{ merchant_sort_url('merchant') }}">
-                                    <span>{{ _("Merchant") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'merchant') }}
-                                </a>
-                            </th>
-                            <th>
-                                <a class="sort-link" href="{{ merchant_sort_url('category') }}">
-                                    <span>{{ _("Category") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'category') }}
-                                </a>
-                            </th>
-                            <th class="text-end">
-                                <a class="sort-link justify-content-end" href="{{ merchant_sort_url('transactions') }}">
-                                    <span>{{ _("Transactions") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'transactions') }}
-                                </a>
-                            </th>
-                            <th class="text-end">
-                                <a class="sort-link justify-content-end" href="{{ merchant_sort_url('spending') }}">
-                                    <span>{{ _("Spending") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'spending') }}
-                                </a>
-                            </th>
-                            <th class="text-end">
-                                <a class="sort-link justify-content-end" href="{{ merchant_sort_url('period_change') }}">
-                                    <span>{{ _("Period change") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'period_change') }}
-                                </a>
-                            </th>
-                            <th>
-                                <a class="sort-link" href="{{ merchant_sort_url('rules') }}">
-                                    <span>{{ _("Active rules") }}</span>{{ dashboard_sort_icon(merchant_sort, merchant_direction, 'rules') }}
-                                </a>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for merchant in merchant_rows %}
-                        <tr data-row-href="{{ merchant['url'] }}" data-row-drilldown="dblclick">
-                            <td>
-                                <strong data-export-part>{{ merchant["merchant"] }}</strong>
-                                {% if merchant["examples"] %}
-                                    <div
-                                        class="text-muted small"
-                                        data-export-part
-                                        data-export-label="{{ _('Description') }}"
-                                        data-export-header="{{ _('Description') }}"
-                                    >{{ merchant["examples"][0] }}</div>
-                                {% endif %}
-                            </td>
-                            <td class="merchant-category-cell">{{ merchant["category"] }}</td>
-                            <td class="text-end">{{ merchant["transaction_count"] }}</td>
-                            <td class="text-end">
-                                <div class="spending-cell-visual">
-                                    <span
-                                        class="spending-cell-amount"
-                                        data-export-part
-                                        data-export-type="money"
-                                        data-export-value="{{ merchant['total'] }}"
-                                    >{{ merchant["total"] | moneyfmt }}</span>
-                                    <span class="spending-bar-track" aria-hidden="true">
-                                        <span class="spending-bar-fill" style="width: {{ merchant['bar_width'] }}%;"></span>
-                                    </span>
-                                </div>
-                            </td>
-                            <td class="text-end">
-                                <span
-                                    class="{% if merchant['period_change']['direction'] == 'up' %}text-danger{% elif merchant['period_change']['direction'] == 'down' %}text-success{% endif %}"
-                                    data-export-part
-                                >
-                                    {{ _(merchant["period_change"]["label"]) }}
-                                </span>
-                                <div
-                                    class="text-muted small"
-                                    data-export-part
-                                    data-export-label="{{ _('Details') }}"
-                                >{{ merchant["period_change"]["detail"] }}</div>
-                            </td>
-                            <td>
-                                {% if merchant["rules"] %}
-                                    {% for rule in merchant["rules"] %}
-                                        <a class="text-reset text-decoration-none" href="{{ rule['url'] }}">{{ rule["keyword"] }} -> {{ rule["category"] }}</a>{% if not loop.last %}<span class="text-muted">, </span>{% endif %}
-                                    {% endfor %}
-                                {% else %}
-                                    <span class="text-muted">{{ _("No matching rules") }}</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-</div>
-
-<script id="dashboard-chart-data" type="application/json">
-{{ {
-    "categoryLabels": category_labels | default([]),
-    "categoryTotals": category_totals | default([]),
-    "categoryUrls": category_urls | default([]),
-    "expenseMonthLabels": expense_month_labels | default([]),
-    "expenseMonthTotals": expense_month_totals | default([]),
-    "expenseMonthUrls": expense_month_urls | default([]),
-    "incomeMonthLabels": income_month_labels | default([]),
-    "incomeMonthTotals": income_month_totals | default([]),
-    "incomeMonthUrls": income_month_urls | default([]),
-    "spendingIncomeMonthLabels": spending_income_month_labels | default([]),
-    "spendingIncomeSpendingTotals": spending_income_spending_totals | default([]),
-    "spendingIncomeIncomeTotals": spending_income_income_totals | default([]),
-    "spendingIncomeSpendingUrls": spending_income_spending_urls | default([]),
-    "spendingIncomeIncomeUrls": spending_income_income_urls | default([]),
-    "netMonthLabels": net_month_labels | default([]),
-    "netMonthTotals": net_month_totals | default([]),
-    "netMonthUrls": net_month_urls | default([]),
-} | tojson }}
-</script>
 {% else %}
 <div class="empty-state">
     {{ _("No transaction data yet. Upload a CSV statement first.") }}

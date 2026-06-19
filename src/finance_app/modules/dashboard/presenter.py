@@ -6,19 +6,14 @@ from typing import Any
 from flask import url_for
 
 from finance_app.core.i18n import gettext
-from finance_app.core.money import MoneyValue, format_money_display, money_to_float, rounded_money_float
+from finance_app.core.money import rounded_money_float
 from finance_app.core.periods import DatePeriod
-from finance_app.modules.categories.service import (
-    normalize_merchant_description,
-    rule_amount_matches,
-)
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
-from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.transactions.constants import (
     AMOUNT_TYPE_CREDIT,
     AMOUNT_TYPE_INCOME,
@@ -31,22 +26,12 @@ from finance_app.modules.transactions.constants import (
 )
 
 from .constants import (
-    DASHBOARD_BREAKDOWN_TAG,
-    DASHBOARD_CATEGORY_SORT_CATEGORY,
-    DASHBOARD_CATEGORY_SORT_SHARE,
-    DASHBOARD_CATEGORY_SORT_SPENDING,
-    DASHBOARD_MERCHANT_SORT_CATEGORY,
-    DASHBOARD_MERCHANT_SORT_MERCHANT,
-    DASHBOARD_MERCHANT_SORT_PERIOD_CHANGE,
-    DASHBOARD_MERCHANT_SORT_RULES,
-    DASHBOARD_MERCHANT_SORT_SPENDING,
-    DASHBOARD_MERCHANT_SORT_TRANSACTIONS,
     QUICK_VIEW_ALL,
     QUICK_VIEW_CATEGORIZED,
     QUICK_VIEW_NEEDS_REVIEW,
     QUICK_VIEW_UNKNOWN,
 )
-from .urls import app_url, dashboard_transactions_url
+from .urls import dashboard_transactions_url
 
 
 def build_quick_view_options(active_view: str, counts: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -470,277 +455,6 @@ def attach_data_quality_urls(
                     account_id=account_id,
                 ),
             )
-
-
-def dashboard_sort_text(value: object) -> str:
-    """Render sort text."""
-    return str(value or "").casefold()
-
-
-def dashboard_optional_number(value: object) -> tuple[bool, object]:
-    """Render optional number."""
-    return (value is not None, value if value is not None else 0)
-
-
-def sort_merchant_rows(rows: list[dict[str, Any]], sort: str, direction: str) -> None:
-    """Sort merchant rows."""
-    key_map = {
-        DASHBOARD_MERCHANT_SORT_MERCHANT: lambda row: dashboard_sort_text(row["merchant"]),
-        DASHBOARD_MERCHANT_SORT_CATEGORY: lambda row: dashboard_sort_text(row["category"]),
-        DASHBOARD_MERCHANT_SORT_TRANSACTIONS: lambda row: row["transaction_count"],
-        DASHBOARD_MERCHANT_SORT_SPENDING: lambda row: row["total"],
-        DASHBOARD_MERCHANT_SORT_PERIOD_CHANGE: lambda row: dashboard_optional_number(
-            row["period_change"].get("sort_value")
-        ),
-        DASHBOARD_MERCHANT_SORT_RULES: lambda row: len(row["rules"]),
-    }
-    rows.sort(key=key_map[sort], reverse=direction == "desc")
-
-
-def sort_category_rows(rows: list[dict[str, Any]], sort: str, direction: str) -> None:
-    """Sort category rows."""
-    key_map = {
-        DASHBOARD_CATEGORY_SORT_CATEGORY: lambda row: dashboard_sort_text(row["category"]),
-        DASHBOARD_CATEGORY_SORT_SPENDING: lambda row: row["total"],
-        DASHBOARD_CATEGORY_SORT_SHARE: lambda row: row["share"],
-    }
-    rows.sort(key=key_map[sort], reverse=direction == "desc")
-
-
-def build_merchant_aggregates(rows: Sequence[Mapping[str, Any]], conn: Any = None) -> dict[str, dict[str, Any]]:
-    """Build merchant aggregates."""
-    aggregates: dict[str, dict[str, Any]] = {}
-
-    for row in rows:
-        merchant = merchant_identity_from_row(row, conn=conn)
-        merchant_key = merchant["name"]
-        if not merchant_key:
-            continue
-
-        aggregate = aggregates.setdefault(
-            merchant_key,
-            {
-                "merchant_id": merchant["id"],
-                "merchant_key": merchant_key,
-                "cleaned_keys": set(),
-                "examples": set(),
-                "amounts": [],
-                "category_totals": {},
-                "category_counts": {},
-                "transaction_count": 0,
-                "total": 0,
-            },
-        )
-        amount = money_to_float(row["amount"])
-        category = row["category"]
-        if aggregate["merchant_id"] != merchant["id"]:
-            aggregate["merchant_id"] = None
-        aggregate["cleaned_keys"].add(merchant["cleaned_key"])
-        aggregate["examples"].add(row["description"])
-        aggregate["amounts"].append(amount)
-        aggregate["transaction_count"] += 1
-        aggregate["total"] += amount
-        aggregate["category_totals"][category] = aggregate["category_totals"].get(category, 0) + amount
-        aggregate["category_counts"][category] = aggregate["category_counts"].get(category, 0) + 1
-
-    return aggregates
-
-
-def merchant_primary_category(aggregate: Mapping[str, Any]) -> dict[str, Any]:
-    """Build primary category."""
-    categories = sorted(
-        aggregate["category_totals"],
-        key=lambda category: (
-            aggregate["category_totals"][category],
-            aggregate["category_counts"][category],
-            category,
-        ),
-        reverse=True,
-    )
-    if not categories:
-        return {"label": "n/a", "count": 0, "total": 0}
-
-    primary = categories[0]
-    extra_count = max(0, len(categories) - 1)
-    label = primary if extra_count == 0 else f"{primary} +{extra_count}"
-    return {
-        "label": label,
-        "count": aggregate["category_counts"][primary],
-        "total": aggregate["category_totals"][primary],
-    }
-
-
-def merchant_matching_rules(aggregate: Mapping[str, Any], rules: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Build matching rules."""
-    matches: list[dict[str, Any]] = []
-    merchant_key = aggregate["merchant_key"]
-    amounts = aggregate["amounts"]
-    candidates = [merchant_key]
-    candidates.extend(
-        cleaned_key
-        for cleaned_key in sorted(aggregate["cleaned_keys"])
-        if cleaned_key and cleaned_key not in candidates
-    )
-
-    for rule in rules:
-        rule_merchant_id = rule["merchant_id"] if "merchant_id" in rule.keys() else rule.get("merchant_id")
-        if rule_merchant_id is not None:
-            if aggregate.get("merchant_id") is None or int(aggregate["merchant_id"]) != int(rule_merchant_id):
-                continue
-            if not any(rule_amount_matches(rule, amount) for amount in amounts):
-                continue
-
-            matches.append(
-                {
-                    "keyword": rule["keyword"],
-                    "category": rule["category"],
-                    "source": rule["source"],
-                    "url": app_url("rules.rules", search=rule["merchant_name"] or rule["keyword"]),
-                }
-            )
-            continue
-
-        keyword = normalize_merchant_description(rule["keyword"])
-        if not keyword or not any(keyword in candidate for candidate in candidates):
-            continue
-        if not any(rule_amount_matches(rule, amount) for amount in amounts):
-            continue
-
-        matches.append(
-            {
-                "keyword": rule["keyword"],
-                "category": rule["category"],
-                "source": rule["source"],
-                "url": app_url("rules.rules", search=rule["keyword"]),
-            }
-        )
-
-    return matches[:3]
-
-
-def merchant_period_change(current_total: float, previous_total: float | None) -> dict[str, Any]:
-    """Build period change."""
-    if previous_total is None:
-        return {
-            "label": "n/a",
-            "detail": gettext("No comparison"),
-            "direction": "flat",
-            "sort_value": None,
-        }
-
-    previous_total = round(previous_total, 2)
-    if previous_total == 0:
-        return {
-            "label": "New",
-            "detail": gettext("No prior spending"),
-            "direction": "up",
-            "sort_value": 999999,
-        }
-
-    percent = round(((current_total - previous_total) / previous_total) * 100)
-    direction = "up" if percent > 0 else "down" if percent < 0 else "flat"
-    return {
-        "label": f"{percent:+d}%" if percent else "0%",
-        "detail": gettext("prior {amount}", amount=format_money_text(previous_total)),
-        "direction": direction,
-        "sort_value": percent,
-    }
-
-
-def format_money_text(value: MoneyValue | None) -> str:
-    """Format money text."""
-    return format_money_display(value, places=0)
-
-
-def build_category_rows(
-    spending_by_category: Sequence[Mapping[str, Any]],
-    total_spending: float,
-    period: DatePeriod,
-    filter_mode: str,
-    selected_categories: Sequence[str],
-    selected_tags: Sequence[str] | None = None,
-    date_from: str = "",
-    date_to: str = "",
-    quick_view: str = QUICK_VIEW_ALL,
-    merchant_search: str = "",
-    account_id: int | None = None,
-    breakdown: str = "category",
-) -> list[dict[str, Any]]:
-    """Build category or tag breakdown rows."""
-    selected_tags = selected_tags or []
-    rows: list[dict[str, Any]] = []
-
-    for row in spending_by_category:
-        row_data = dict(row)
-        total = rounded_money_float(row_data["total"])
-        is_tag_breakdown = breakdown == DASHBOARD_BREAKDOWN_TAG
-        tag_name = row_data.get("tag", "")
-        is_untagged = bool(row_data.get("untagged"))
-        label = gettext("Untagged") if is_untagged else row_data["category"]
-        if is_tag_breakdown:
-            url = (
-                ""
-                if is_untagged
-                else dashboard_transactions_url(
-                    period,
-                    filter_mode,
-                    selected_categories,
-                    True,
-                    date_from,
-                    date_to,
-                    quick_view,
-                    selected_tags=selected_tags,
-                    merchant_search=merchant_search,
-                    account_id=account_id,
-                    tags=[tag_name],
-                    amount_type=AMOUNT_TYPE_SPENDING,
-                )
-            )
-        else:
-            url = dashboard_transactions_url(
-                period,
-                filter_mode,
-                selected_categories,
-                False,
-                date_from,
-                date_to,
-                quick_view,
-                selected_tags=selected_tags,
-                merchant_search=merchant_search,
-                account_id=account_id,
-                category=row_data["category"],
-                amount_type=AMOUNT_TYPE_SPENDING,
-            )
-        rows.append(
-            {
-                "category": label,
-                "total": total,
-                "share": round((total / total_spending) * 100, 1) if total_spending else 0,
-                "url": url,
-            }
-        )
-
-    max_total = max((row["total"] for row in rows), default=0)
-    for row in rows:
-        row["bar_width"] = round((row["total"] / max_total) * 100, 1) if max_total else 0
-
-    return rows
-
-
-def build_spending_income_series(
-    monthly_expenses: Sequence[Mapping[str, Any]],
-    monthly_income: Sequence[Mapping[str, Any]],
-) -> dict[str, list[Any]]:
-    """Build spending income series."""
-    expense_by_month = {row["month"]: rounded_money_float(row["total"]) for row in monthly_expenses}
-    income_by_month = {row["month"]: rounded_money_float(row["total"]) for row in monthly_income}
-    months = sorted(set(expense_by_month) | set(income_by_month))
-
-    return {
-        "labels": months,
-        "spending_totals": [expense_by_month.get(month, 0) for month in months],
-        "income_totals": [income_by_month.get(month, 0) for month in months],
-    }
 
 
 def build_data_quality(summary: Mapping[str, Any]) -> dict[str, Any]:

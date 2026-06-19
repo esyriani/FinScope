@@ -1,5 +1,6 @@
 @media (max-width: 1100px) {
     .metric-grid,
+    .dashboard-report-grid,
     .quality-metric-grid,
     .status-strip,
     .quick-links,
@@ -75,9 +76,17 @@
     .dashboard-breakdown-grid {
         grid-template-columns: 1fr;
     }
+
+    .dashboard-report-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 @container dashboard-page (max-width: 72rem) {
+    .dashboard-report-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
@@ -204,6 +213,7 @@
     .cockpit-panel-grid,
     .pulse-facts,
     .shortcut-strip,
+    .dashboard-report-grid,
     .dashboard-breakdown-grid,
     .dashboard-grid,
     .quality-metric-grid,
