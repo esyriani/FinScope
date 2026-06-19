@@ -17,6 +17,12 @@ from finance_app.core.periods import (
 )
 from finance_app.core.query import QueryArgs, query_value
 from finance_app.modules.accounts.filters import parse_account_id
+from finance_app.modules.dashboard.constants import (
+    QUICK_VIEW_ALL,
+    QUICK_VIEW_CATEGORIZED,
+    QUICK_VIEW_NEEDS_REVIEW,
+    QUICK_VIEW_UNKNOWN,
+)
 from finance_app.modules.merchants.filters import parse_merchant_id, parse_merchant_query
 from finance_app.modules.reports.constants import (
     REPORT_BASES,
@@ -48,6 +54,7 @@ class ReportRequest:
     selected_account_id: int | None
     selected_merchant_id: int | None
     merchant_query: str
+    quick_view: str
     date_from: str
     date_to: str
 
@@ -74,6 +81,7 @@ def parse_report_request(section_key: str, args: ReportsArgs) -> ReportRequest:
         selected_account_id=parse_account_id(query_value(args, "account_id")),
         selected_merchant_id=parse_merchant_id(query_value(args, "merchant_id")),
         merchant_query=merchant_query,
+        quick_view=parse_report_quick_view(query_value(args, "quick_view")),
         date_from=date_from,
         date_to=date_to,
     )
@@ -89,3 +97,16 @@ def parse_report_basis(value: object) -> str:
     """Return a supported Reports basis."""
     basis = str(value or "").strip()
     return basis if basis in REPORT_BASES else REPORT_BASIS_CASH_FLOW
+
+
+def parse_report_quick_view(value: object) -> str:
+    """Return a supported Reports quick-view shortcut."""
+    quick_view = str(value or "").strip()
+    if quick_view in {
+        QUICK_VIEW_ALL,
+        QUICK_VIEW_CATEGORIZED,
+        QUICK_VIEW_NEEDS_REVIEW,
+        QUICK_VIEW_UNKNOWN,
+    }:
+        return quick_view
+    return QUICK_VIEW_ALL

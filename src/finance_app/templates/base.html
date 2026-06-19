@@ -1,7 +1,6 @@
 {% set hide_app_shell = auth_shell|default(false) %}
 {% set active_endpoint = request.endpoint|default('', true) %}
 {% set active_blueprint = active_endpoint.split('.')[0] %}
-{% set reports_nav_active = active_blueprint in ["reports", "comparison"] %}
 {% set endpoint_titles = {
     "home.home": "Home",
     "auth.account": "Account",
@@ -120,17 +119,7 @@
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Analytics") }}</div>
                 <a class="nav-link {% if active_blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.dashboard') }}" title="{{ _('Dashboard') }}"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>{{ _("Dashboard") }}</span></a>
-                <div class="nav-cluster {% if reports_nav_active %}active{% endif %}">
-                    <a class="nav-link {% if reports_nav_active %}active{% endif %}" href="{{ url_for('reports.overview') }}" title="{{ _('Reports') }}"><i class="bi bi-pie-chart" aria-hidden="true"></i><span>{{ _("Reports") }}</span></a>
-                    <div class="nav-sublinks" aria-label="{{ _('Reports sections') }}">
-                        <a class="nav-sub-link {% if active_endpoint == 'reports.overview' %}active{% endif %}" href="{{ url_for('reports.overview') }}" title="{{ _('Overview') }}"><span>{{ _("Overview") }}</span></a>
-                        <a class="nav-sub-link {% if active_blueprint == 'comparison' %}active{% endif %}" href="{{ url_for('comparison.comparison') }}" title="{{ _('Compare') }}"><span>{{ _("Compare") }}</span></a>
-                        <a class="nav-sub-link {% if active_endpoint == 'reports.taxonomy' %}active{% endif %}" href="{{ url_for('reports.taxonomy') }}" title="{{ _('Category or tag') }}"><span>{{ _("Category or tag") }}</span></a>
-                        <a class="nav-sub-link {% if active_endpoint == 'reports.accounts' %}active{% endif %}" href="{{ url_for('reports.accounts') }}" title="{{ _('Accounts') }}"><span>{{ _("Accounts") }}</span></a>
-                        <a class="nav-sub-link {% if active_endpoint == 'reports.merchants' %}active{% endif %}" href="{{ url_for('reports.merchants') }}" title="{{ _('Merchants') }}"><span>{{ _("Merchants") }}</span></a>
-                        <a class="nav-sub-link {% if active_endpoint == 'reports.income' %}active{% endif %}" href="{{ url_for('reports.income') }}" title="{{ _('Income and credits') }}"><span>{{ _("Income and credits") }}</span></a>
-                    </div>
-                </div>
+                <a class="nav-link {% if active_blueprint == 'reports' %}active{% endif %}" href="{{ url_for('reports.overview') }}" title="{{ _('Reports') }}"><i class="bi bi-pie-chart" aria-hidden="true"></i><span>{{ _("Reports") }}</span></a>
                 <a class="nav-link {% if active_blueprint == 'calendar_page' %}active{% endif %}" href="{{ url_for('calendar_page.calendar_view') }}" title="{{ _('Calendar') }}"><i class="bi bi-calendar3" aria-hidden="true"></i><span>{{ _("Calendar") }}</span></a>
                 <a class="nav-link {% if active_blueprint == 'recurring' %}active{% endif %}" href="{{ url_for('recurring.recurring') }}" title="{{ _('Recurring') }}"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>{{ _("Recurring") }}</span></a>
             </div>

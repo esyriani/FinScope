@@ -71,12 +71,19 @@ def test_account_detail_scopes_to_target_account(app, core_conn, data_factory):
     assert context["transaction_count"] == 3
     assert category_rows["Food"]["spending"] == 140.00
     assert category_rows["Income"]["income"] == 1000.00
+    assert category_rows["Food"]["url"].startswith("/reports/categories/")
     assert tag_rows["Tax"]["spending"] == 100.00
+    assert tag_rows["Tax"]["url"].startswith("/reports/tags/")
     assert tag_rows["Shared"]["spending"] == 40.00
     assert merchant_rows[seed["metro_merchant_name"]]["spending"] == 100.00
+    assert merchant_rows[seed["metro_merchant_name"]]["url"].startswith(
+        f"/reports/merchants/{seed['metro_merchant_id']}"
+    )
     assert merchant_rows[seed["cafe_merchant_name"]]["spending"] == 40.00
     assert evidence_descriptions == {"Metro Grocery", "Cafe Bistro", "Payroll"}
     assert f"account_id={seed['checking_id']}" in context["transaction_url"]
+    assert f"account_id={seed['checking_id']}" in context["comparison_url"]
+    assert f"account_id={seed['card_id']}" not in context["comparison_url"]
     assert f"account_id={seed['card_id']}" not in context["reports_export_csv_url"]
 
 
@@ -123,9 +130,12 @@ def test_merchant_detail_scopes_to_target_merchant(app, core_conn, data_factory)
     assert context["total_income"] == 0.00
     assert context["transaction_count"] == 1
     assert account_rows["Personal Checking"]["spending"] == 100.00
+    assert account_rows["Personal Checking"]["url"].startswith(f"/reports/accounts/{seed['checking_id']}")
     assert category_rows["Food"]["spending"] == 100.00
     assert tag_rows["Tax"]["spending"] == 100.00
     assert evidence_descriptions == {"Metro Grocery"}
     assert f"merchant_key={quote_plus(seed['metro_merchant_name'])}" in context["transaction_url"]
+    assert f"merchant_id={seed['metro_merchant_id']}" in context["comparison_url"]
+    assert f"merchant_id={seed['cafe_merchant_id']}" not in context["comparison_url"]
     assert f"merchant_id={seed['cafe_merchant_id']}" not in context["reports_export_csv_url"]
     assert "merchant_query=" not in context["reports_export_csv_url"]

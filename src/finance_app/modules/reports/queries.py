@@ -38,6 +38,11 @@ from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
+from finance_app.modules.dashboard.constants import (
+    QUICK_VIEW_CATEGORIZED,
+    QUICK_VIEW_NEEDS_REVIEW,
+    QUICK_VIEW_UNKNOWN,
+)
 from finance_app.modules.merchants.filters import merchant_filter_condition
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW, REPORT_BASIS_LEDGER
@@ -126,6 +131,18 @@ def income_credit_target_condition(basis: str) -> Any:
 def report_scope_clause(basis: str) -> Any:
     """Return the row scope predicate for a Reports basis."""
     return reportable_transaction_clause() if basis == REPORT_BASIS_CASH_FLOW else true()
+
+
+def report_quick_view_conditions(quick_view: str, unknown_category: str) -> list[Any]:
+    """Return SQL predicates for a Reports quick-view shortcut."""
+    category = category_label_expression(unknown_category)
+    if quick_view == QUICK_VIEW_NEEDS_REVIEW:
+        return [transactions_table.c.needs_review == 1]
+    if quick_view == QUICK_VIEW_UNKNOWN:
+        return [category == unknown_category]
+    if quick_view == QUICK_VIEW_CATEGORIZED:
+        return [category != unknown_category, transactions_table.c.needs_review == 0]
+    return []
 
 
 def spending_amount_expression(basis: str) -> Any:
@@ -241,6 +258,48 @@ def fetch_report_summary(
     )
 
 
+def fetch_report_quick_view_counts(
+    conn: Any,
+    filters: Sequence[Any],
+    unknown_category: str,
+    basis: str,
+) -> dict[str, Any]:
+    """Fetch quick-view counters for the current Reports scope."""
+    category = category_label_expression(unknown_category)
+    row = (
+        conn.execute(
+            select(
+                func.count().label("all_count"),
+                func.coalesce(
+                    func.sum(case((transactions_table.c.needs_review == 1, 1), else_=0)),
+                    0,
+                ).label("needs_review_count"),
+                func.coalesce(func.sum(case((category == unknown_category, 1), else_=0)), 0).label("unknown_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                (category != unknown_category) & (transactions_table.c.needs_review == 0),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("categorized_count"),
+            ).where(report_scope_clause(basis), *filters)
+        )
+        .mappings()
+        .fetchone()
+    )
+    return {
+        "all_count": row["all_count"] or 0,
+        "needs_review_count": row["needs_review_count"] or 0,
+        "unknown_count": row["unknown_count"] or 0,
+        "categorized_count": row["categorized_count"] or 0,
+    }
+
+
 def fetch_monthly_overview(conn: Any, filters: Sequence[Any], basis: str) -> list[dict[str, Any]]:
     """Fetch monthly spending, credits, and net cash flow rows."""
     year = date_year(transactions_table.c.tx_date)
@@ -281,9 +340,15 @@ def fetch_category_breakdown(
     category = func.coalesce(transactions_table.c.category, unknown_category)
     return (
         conn.execute(
-            select(category.label("label"), *aggregate_columns(basis))
+            select(categories_table.c.id.label("category_id"), category.label("label"), *aggregate_columns(basis))
+            .select_from(
+                transactions_table.outerjoin(
+                    categories_table,
+                    category_lookup_join_condition(unknown_category),
+                )
+            )
             .where(report_scope_clause(basis), *filters)
-            .group_by(category)
+            .group_by(categories_table.c.id, category)
             .order_by(func.sum(spending_amount_expression(basis)).desc(), category)
         )
         .mappings()
@@ -295,7 +360,7 @@ def fetch_tag_breakdown(conn: Any, filters: Sequence[Any], basis: str) -> list[d
     """Fetch tag-level report totals, including an explicit untagged row."""
     tagged_rows = (
         conn.execute(
-            select(tags_table.c.name.label("label"), *aggregate_columns(basis))
+            select(tags_table.c.id.label("tag_id"), tags_table.c.name.label("label"), *aggregate_columns(basis))
             .select_from(
                 transactions_table.join(
                     transaction_tags_table,
@@ -303,7 +368,7 @@ def fetch_tag_breakdown(conn: Any, filters: Sequence[Any], basis: str) -> list[d
                 ).join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
             )
             .where(report_scope_clause(basis), *filters)
-            .group_by(tags_table.c.name)
+            .group_by(tags_table.c.id, tags_table.c.name)
             .order_by(func.sum(spending_amount_expression(basis)).desc(), tags_table.c.name)
         )
         .mappings()

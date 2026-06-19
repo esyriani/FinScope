@@ -20,7 +20,6 @@ class ReportSection:
 
 
 REPORT_OVERVIEW = "overview"
-REPORT_COMPARE = "compare"
 REPORT_TAXONOMY = "taxonomy"
 REPORT_ACCOUNTS = "accounts"
 REPORT_MERCHANTS = "merchants"
@@ -34,13 +33,6 @@ REPORT_SECTIONS: tuple[ReportSection, ...] = (
         description="High-level spending, income, and net cash flow analysis.",
         endpoint="reports.overview",
         icon="pie-chart",
-    ),
-    ReportSection(
-        key=REPORT_COMPARE,
-        label="Compare",
-        description="Period changes and year trends.",
-        endpoint="comparison.comparison",
-        icon="layout-split",
     ),
     ReportSection(
         key=REPORT_TAXONOMY,

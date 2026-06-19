@@ -11,6 +11,7 @@ from typing import Any
 from flask import url_for
 
 from finance_app.core.money import rounded_money_float
+from finance_app.modules.comparison.urls import build_comparison_url
 from finance_app.modules.dashboard.presenter import build_cash_flow_summary, build_data_quality
 from finance_app.modules.reports.constants import (
     REPORT_MEASURE_INCOME,
@@ -86,7 +87,7 @@ def build_breakdown_rows(
                 "selected_value": selected_value,
                 "share": round((selected_value / total_for_share) * 100, 1) if total_for_share else 0,
                 "bar_width": 0,
-                "url": breakdown_transactions_url(row_kind, row, report_request),
+                "url": breakdown_report_url(row_kind, row, report_request),
             }
         )
 
@@ -97,28 +98,59 @@ def build_breakdown_rows(
     return prepared
 
 
-def breakdown_transactions_url(row_kind: str, row: Mapping[str, Any], report_request: ReportRequest) -> str:
-    """Return a transactions handoff URL for a Reports breakdown row."""
-    params = base_transaction_params(report_request)
-    if report_request.measure == REPORT_MEASURE_SPENDING:
-        params["amount_type"] = AMOUNT_TYPE_SPENDING
-    elif report_request.measure == REPORT_MEASURE_INCOME:
-        params["amount_type"] = AMOUNT_TYPE_CREDIT
-
+def breakdown_report_url(row_kind: str, row: Mapping[str, Any], report_request: ReportRequest) -> str:
+    """Return a Reports drilldown URL for a breakdown row."""
     if row_kind == "category":
-        params["filter_mode"] = "include"
-        params["categories"] = [row["label"]]
-    elif row_kind == "tag" and not row.get("untagged"):
-        params["filter_mode"] = "include"
-        params["tags"] = [row["label"]]
-    elif row_kind == "tag":
+        target_id = row.get("category_id")
+        return (
+            reports_url(
+                report_request.args, endpoint="reports.category_report", route_values={"category_id": target_id}
+            )
+            if target_id
+            else reports_url(report_request.args, endpoint="reports.taxonomy")
+        )
+    if row_kind == "tag":
+        target_id = row.get("tag_id")
+        if row.get("untagged"):
+            return ""
+        return (
+            reports_url(report_request.args, endpoint="reports.tag_report", route_values={"tag_id": target_id})
+            if target_id
+            else reports_url(report_request.args, endpoint="reports.taxonomy")
+        )
+    if row_kind == "account":
+        target_id = row.get("account_id")
+        return (
+            reports_url(
+                report_request.args,
+                endpoint="reports.account_report",
+                route_values={"account_id": target_id},
+                account_id=None,
+            )
+            if target_id
+            else ""
+        )
+    if row_kind == "merchant":
+        target_id = row.get("merchant_id")
+        if target_id:
+            return reports_url(
+                report_request.args,
+                endpoint="reports.merchant_report",
+                route_values={"merchant_id": target_id},
+                merchant_id=None,
+                merchant_query=None,
+                merchant_search=None,
+            )
+        merchant_query = row.get("merchant_key") or row.get("label")
+        if merchant_query:
+            return reports_url(
+                report_request.args,
+                endpoint="reports.merchants",
+                merchant_id=None,
+                merchant_query=merchant_query,
+            )
         return ""
-    elif row_kind == "account":
-        params["account_id"] = row.get("account_id")
-    elif row_kind == "merchant":
-        params["merchant_key"] = row.get("merchant_key") or row.get("label")
-
-    return build_app_url("transactions.transactions", **params)
+    return ""
 
 
 def base_transaction_params(report_request: ReportRequest) -> dict[str, object]:
@@ -135,6 +167,40 @@ def base_transaction_params(report_request: ReportRequest) -> dict[str, object]:
     if report_request.merchant_query:
         params["merchant_key"] = report_request.merchant_query
     return params
+
+
+def report_comparison_url(
+    report_request: ReportRequest,
+    *,
+    categories: Sequence[str] | None = None,
+    tags: Sequence[str] | None = None,
+    account_id: int | None = None,
+    merchant_id: int | None = None,
+    merchant_query: str | None = None,
+    analysis_mode: str | None = None,
+) -> str:
+    """Return a Comparison URL pre-filtered for the current report scope."""
+    params: dict[str, object] = {
+        "comparison_view": "period",
+        "analysis_mode": analysis_mode or report_request.measure,
+        "period_categories": list(categories or []),
+        "period_tags": list(tags or []),
+    }
+    if account_id is not None:
+        params["account_id"] = account_id
+    elif report_request.selected_account_id is not None:
+        params["account_id"] = report_request.selected_account_id
+
+    if merchant_id is not None:
+        params["merchant_id"] = merchant_id
+        params["merchant_query"] = merchant_query or ""
+    elif report_request.selected_merchant_id is not None:
+        params["merchant_id"] = report_request.selected_merchant_id
+        params["merchant_query"] = report_request.merchant_query
+    elif report_request.merchant_query:
+        params["merchant_query"] = report_request.merchant_query
+
+    return build_comparison_url(**params)
 
 
 def build_monthly_rows(rows: Sequence[Mapping[str, Any]], measure: str, total_for_share: float) -> list[dict[str, Any]]:
@@ -195,7 +261,7 @@ def build_reports_overview_view(
         "merchant_rows": merchant_breakdown,
         "chart_data": build_chart_data(monthly, category_breakdown, tag_breakdown, report_request.measure),
         "transaction_url": build_app_url("transactions.transactions", **base_transaction_params(report_request)),
-        "comparison_url": url_for("comparison.comparison"),
+        "comparison_url": report_comparison_url(report_request),
     }
 
 
@@ -279,6 +345,7 @@ def build_reports_taxonomy_index_view(
             TAXONOMY_TARGET_TAG,
         ),
         "transaction_url": build_app_url("transactions.transactions", **base_transaction_params(report_request)),
+        "comparison_url": report_comparison_url(report_request),
     }
 
 
@@ -354,6 +421,7 @@ def build_reports_entity_index_view(
         "entity_index_title": "Account reports" if kind == REPORT_ENTITY_ACCOUNT else "Merchant reports",
         "entity_index_label_heading": "Account" if kind == REPORT_ENTITY_ACCOUNT else "Merchant",
         "transaction_url": build_app_url("transactions.transactions", **base_transaction_params(report_request)),
+        "comparison_url": report_comparison_url(report_request),
     }
 
 
@@ -389,7 +457,7 @@ def build_reports_entity_detail_view(
         "entity_evidence_rows": evidence,
         "chart_data": build_chart_data(monthly, categories, tags, report_request.measure),
         "transaction_url": entity_transactions_url(target, report_request),
-        "comparison_url": url_for("comparison.comparison"),
+        "comparison_url": entity_comparison_url(target, report_request),
     }
     return {
         **view,
@@ -410,6 +478,13 @@ def entity_transactions_url(target: ReportEntityTarget, report_request: ReportRe
     elif target.kind == REPORT_ENTITY_MERCHANT:
         params["merchant_key"] = target.name
     return build_app_url("transactions.transactions", **params)
+
+
+def entity_comparison_url(target: ReportEntityTarget, report_request: ReportRequest) -> str:
+    """Return a Comparison URL scoped to an account or merchant report target."""
+    if target.kind == REPORT_ENTITY_ACCOUNT:
+        return report_comparison_url(report_request, account_id=target.id)
+    return report_comparison_url(report_request, merchant_id=target.id, merchant_query=target.name)
 
 
 def build_reports_income_view(
@@ -448,7 +523,7 @@ def build_reports_income_view(
         "income_evidence_rows": evidence,
         "chart_data": build_chart_data(monthly, categories, tags, report_request.measure),
         "transaction_url": transaction_url,
-        "comparison_url": url_for("comparison.comparison"),
+        "comparison_url": report_comparison_url(report_request, analysis_mode=REPORT_MEASURE_INCOME),
     }
     return {
         **view,
@@ -500,7 +575,7 @@ def build_reports_taxonomy_detail_view(
         "taxonomy_evidence_rows": evidence,
         "chart_data": build_taxonomy_detail_chart_data(monthly, composition, target, report_request.measure),
         "transaction_url": taxonomy_transactions_url(target, report_request),
-        "comparison_url": url_for("comparison.comparison"),
+        "comparison_url": taxonomy_comparison_url(target, report_request),
     }
     return {
         **view,
@@ -522,6 +597,13 @@ def taxonomy_transactions_url(target: TaxonomyReportTarget, report_request: Repo
     elif target.kind == TAXONOMY_TARGET_TAG:
         params["tags"] = [target.name]
     return build_app_url("transactions.transactions", **params)
+
+
+def taxonomy_comparison_url(target: TaxonomyReportTarget, report_request: ReportRequest) -> str:
+    """Return a Comparison URL scoped to a category or tag report target."""
+    if target.kind == TAXONOMY_TARGET_CATEGORY:
+        return report_comparison_url(report_request, categories=[target.name])
+    return report_comparison_url(report_request, tags=[target.name])
 
 
 def build_taxonomy_target_notes(target: TaxonomyReportTarget) -> list[dict[str, str]]:

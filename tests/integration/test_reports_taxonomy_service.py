@@ -74,6 +74,7 @@ def test_category_detail_scopes_to_category_and_uses_tag_composition(app, core_c
     assert composition["Shared"]["spending"] == 40.00
     assert evidence_descriptions == {"Metro Grocery", "Cafe Bistro"}
     assert "categories=Food" in context["transaction_url"]
+    assert "period_categories=Food" in context["comparison_url"]
     assert context["taxonomy_panel"] is None
 
 
@@ -92,6 +93,7 @@ def test_tag_detail_scopes_to_tag_and_marks_non_exclusive(app, core_conn):
     assert context["transaction_count"] == 1
     assert composition["Food"]["spending"] == 100.00
     assert "tags=Tax" in context["transaction_url"]
+    assert "period_tags=Tax" in context["comparison_url"]
     assert "Tag reports are non-exclusive, so one transaction can appear in more than one tag report." in note_messages
     assert "Tax-tag exports emphasize the filtered evidence rows for year-end review." in note_messages
 

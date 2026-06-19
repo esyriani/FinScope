@@ -9,7 +9,6 @@ import pytest
 from tests.support.html import (
     assert_asset_reference,
     assert_has_element,
-    assert_markup,
     assert_no_asset_reference,
     asset_reference_index,
     asset_reference_values,
@@ -117,50 +116,67 @@ def test_reports_route_loads_reports_assets(client):
     response = client.get("/reports")
 
     assert response.status_code == 200
+    assert_asset_reference(response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/home-dashboard\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/comparison\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/css/reports\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/css/tables\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/exports\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/js/reports\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/tables\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/js/reports-charts\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/exports\.js\?v=[0-9a-f]{12}")
     assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
         response,
         r"/static/js/reports-charts\.js",
     )
+    assert asset_reference_index(response, r"/static/js/reports-charts\.js") < asset_reference_index(
+        response,
+        r"/static/js/exports\.js",
+    )
 
 
-def test_reports_navigation_groups_comparison_under_reports(client):
-    """Verify Comparison appears under the active Reports navigation parent."""
+def test_base_navigation_shows_reports_as_single_link(client):
+    """Verify Reports appears as a single top-level navigation link."""
     response = client.get("/comparison")
     body = response_html(response)
 
     assert response.status_code == 200
-    assert_has_element(response, "a", attrs={"href": "/reports", "class": "active"}, text="Reports")
-    assert_has_element(response, "a", attrs={"href": "/comparison", "class": "active"}, text="Compare")
-    assert_markup(response, 'aria-label="Reports sections"', 'href="/reports"', 'href="/comparison"')
-    assert body.index('href="/reports"') < body.index('href="/comparison"')
+    assert_has_element(response, "a", attrs={"href": "/reports"}, text="Reports")
+    assert 'class="nav-sublinks"' not in body
+    assert 'class="nav-sub-link' not in body
+    assert 'aria-label="Reports sections"' not in body
 
 
 def test_tabbed_pages_load_shared_tab_stylesheet(client):
     """Verify tabbed pages opt into shared tab styles without loading them globally."""
     comparison_response = client.get("/comparison")
+    reports_response = client.get("/reports")
     recurring_response = client.get("/recurring")
     settings_response = client.get("/settings")
     taxonomy_response = client.get("/taxonomy")
 
     assert comparison_response.status_code == 200
+    assert reports_response.status_code == 200
     assert recurring_response.status_code == 200
     assert settings_response.status_code == 200
     assert taxonomy_response.status_code == 200
     assert_asset_reference(comparison_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(reports_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(recurring_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(settings_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(taxonomy_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert asset_reference_index(comparison_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         comparison_response,
         r"/static/css/comparison\.css",
+    )
+    assert asset_reference_index(reports_response, r"/static/css/page-tabs\.css") < asset_reference_index(
+        reports_response,
+        r"/static/css/home-dashboard\.css",
     )
     assert asset_reference_index(recurring_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         recurring_response,

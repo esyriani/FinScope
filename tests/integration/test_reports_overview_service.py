@@ -39,6 +39,7 @@ def test_reports_overview_uses_reportable_cash_flow_by_default(app, core_conn):
 
     assert context["selected_basis"] == "cash_flow"
     assert context["selected_measure"] == "spending"
+    assert context["quick_view"] == "all"
     assert context["total_spending"] == 290.00
     assert context["total_income"] == 1000.00
     assert context["net_cashflow"] == 710.00
@@ -46,9 +47,39 @@ def test_reports_overview_uses_reportable_cash_flow_by_default(app, core_conn):
     assert rows_by_label(context["category_rows"])["UNKNOWN"]["spending"] == 30.00
     assert rows_by_label(context["category_rows"])["Food"]["spending"] == 140.00
     assert rows_by_label(context["category_rows"])["Income"]["income"] == 1000.00
+    assert rows_by_label(context["category_rows"])["Food"]["url"].startswith("/reports/categories/")
+    assert rows_by_label(context["tag_rows"])["Tax"]["url"].startswith("/reports/tags/")
+    assert rows_by_label(context["merchant_rows"])["METRO GROCERY"]["url"].startswith("/reports/merchants")
+    assert not rows_by_label(context["merchant_rows"])["METRO GROCERY"]["url"].startswith("/transactions")
     assert rows_by_label(context["monthly_rows"])["2026-01"]["spending"] == 140.00
     assert rows_by_label(context["monthly_rows"])["2026-02"]["spending"] == 150.00
     assert "Card payment" not in {row["label"] for row in context["merchant_rows"]}
+    assert "comparison_view=period" in context["comparison_url"]
+    assert "analysis_mode=spending" in context["comparison_url"]
+
+
+def test_reports_overview_quick_view_filters_unknown_rows(app, core_conn):
+    """Verify Reports quick view filters all aggregates and exposes scoped counts."""
+    seed_reporting_data(core_conn)
+
+    context = reports_context(
+        app,
+        [
+            ("period", "custom"),
+            ("date_from", "2026-01-01"),
+            ("date_to", "2026-02-28"),
+            ("quick_view", "unknown"),
+        ],
+    )
+
+    quick_view_options = {option["value"]: option for option in context["quick_view_options"]}
+    assert context["quick_view"] == "unknown"
+    assert quick_view_options["unknown"]["active"] is True
+    assert quick_view_options["all"]["count"] == 5
+    assert quick_view_options["categorized"]["count"] == 4
+    assert context["transaction_count"] == 1
+    assert context["total_spending"] == 30.00
+    assert set(rows_by_label(context["category_rows"])) == {"UNKNOWN"}
 
 
 def test_reports_overview_ledger_basis_includes_payments_and_transfers(app, core_conn):
@@ -98,3 +129,4 @@ def test_reports_income_section_scopes_to_income_and_credit_rows(app, core_conn)
     assert rows_by_label(context["merchant_rows"])["PAYROLL"]["income"] == 1000.00
     assert {row["description"] for row in context["income_evidence_rows"]} == {"Payroll"}
     assert "amount_type=credit" in context["transaction_url"]
+    assert "analysis_mode=income" in context["comparison_url"]

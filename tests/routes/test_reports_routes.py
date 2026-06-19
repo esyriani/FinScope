@@ -8,7 +8,13 @@ from urllib.parse import quote_plus
 
 from sqlalchemy import select, text
 from tests.support.context_services import seed_entity_report_data, seed_reporting_data
-from tests.support.html import assert_asset_reference, assert_not_visible_text, assert_visible_text, response_html
+from tests.support.html import (
+    assert_asset_reference,
+    assert_has_element,
+    assert_not_visible_text,
+    assert_visible_text,
+    response_html,
+)
 
 from finance_app.core.constants import REIMBURSEMENT_CATEGORY, TRANSACTION_KIND_EXPENSE, TRANSACTION_KIND_INCOME
 from finance_app.database.tables import categories as categories_table
@@ -27,7 +33,7 @@ def tag_id(conn, name):
 
 
 def test_reports_overview_route_renders_read_only_analysis(client, core_conn):
-    """Verify Reports overview renders filters, charts, tables, and export links."""
+    """Verify Reports overview renders shared filters, charts, tables, and actions."""
     seed_reporting_data(core_conn)
 
     response = client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-02-28")
@@ -39,8 +45,7 @@ def test_reports_overview_route_renders_read_only_analysis(client, core_conn):
         "Reports",
         "Detailed money analysis.",
         "Reportable cash flow",
-        "Export CSV",
-        "Export Excel",
+        "Quick view",
         "Monthly statement",
         "Category breakdown",
         "Tag breakdown",
@@ -48,10 +53,34 @@ def test_reports_overview_route_renders_read_only_analysis(client, core_conn):
         "Merchant breakdown",
         "UNKNOWN",
     )
-    assert_not_visible_text(response, "Edit category", "Approve selected", "Recategorize selected")
-    assert 'href="/reports/export.csv?period=custom' in body
-    assert 'href="/reports/export.xlsx?period=custom' in body
+    assert_not_visible_text(
+        response,
+        "Export CSV",
+        "Export Excel",
+        "Edit category",
+        "Approve selected",
+        "Recategorize selected",
+    )
+    assert 'class="reports-section-tabs page-tabs nav nav-tabs"' in body
+    assert "reports-chart-card reports-chart-card-wide" in body
+    assert "data-chart-export-scope" in body
+    assert "data-table-export-scope" in body
+    assert "data-table-export-toolbar" in body
+    assert "data-collapse-panel-header-toggle" in body
+    assert 'id="reports-monthly-table-panel"' in body
+    assert "reports-table-collapse" in body
+    assert "reports-table-toggle" not in body
+    assert "data-sortable-table" in body
+    assert "data-paginated-table" in body
+    assert "data-table-search" in body
+    assert 'data-row-drilldown="dblclick"' in body
+    assert 'data-row-href="/transactions' not in body
+    assert 'data-row-href="/reports/categories/' in body
+    assert 'data-row-href="/reports/tags/' in body
+    assert 'data-row-href="/reports/merchants' in body
+    assert 'href="/comparison?comparison_view=period&amp;analysis_mode=spending"' in body
     assert_asset_reference(response, r"/static/js/reports-charts\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/exports\.js\?v=[0-9a-f]{12}")
 
 
 def test_reports_overview_csv_export_uses_active_filters_and_sanitizes_formulas(client, core_conn):
@@ -89,7 +118,7 @@ def test_reports_overview_xlsx_export_returns_workbook(client, core_conn):
 
 
 def test_reports_taxonomy_route_renders_index_targets(client, core_conn):
-    """Verify taxonomy report index renders category and tag target links."""
+    """Verify taxonomy report index renders double-click category and tag targets."""
     seed_reporting_data(core_conn)
 
     response = client.get("/reports/taxonomy?period=custom&date_from=2026-01-01&date_to=2026-01-31")
@@ -97,8 +126,10 @@ def test_reports_taxonomy_route_renders_index_targets(client, core_conn):
 
     assert response.status_code == 200
     assert_visible_text(response, "Category reports", "Tag reports", "Food", "Tax")
-    assert 'href="/reports/categories/' in body
-    assert 'href="/reports/tags/' in body
+    assert 'data-row-href="/reports/categories/' in body
+    assert 'data-row-href="/reports/tags/' in body
+    assert '<a href="/reports/categories/' not in body
+    assert '<a href="/reports/tags/' not in body
     assert_not_visible_text(response, "Edit category", "Approve selected", "Recategorize selected")
 
 
@@ -115,8 +146,10 @@ def test_reports_account_and_merchant_routes_render_entity_indexes(client, core_
     assert merchants_response.status_code == 200
     assert_visible_text(accounts_response, "Account reports", "Personal Checking", "Travel Card", "Checking account")
     assert_visible_text(merchants_response, "Merchant reports", seed["metro_merchant_name"], "Merchant")
-    assert f'href="/reports/accounts/{seed["checking_id"]}' in accounts_body
-    assert f'href="/reports/merchants/{seed["metro_merchant_id"]}' in merchants_body
+    assert f'data-row-href="/reports/accounts/{seed["checking_id"]}' in accounts_body
+    assert f'data-row-href="/reports/merchants/{seed["metro_merchant_id"]}' in merchants_body
+    assert f'<a href="/reports/accounts/{seed["checking_id"]}' not in accounts_body
+    assert f'<a href="/reports/merchants/{seed["metro_merchant_id"]}' not in merchants_body
     assert_not_visible_text(accounts_response, "Edit category", "Approve selected", "Recategorize selected")
     assert_not_visible_text(merchants_response, "Edit category", "Approve selected", "Recategorize selected")
 
@@ -140,8 +173,9 @@ def test_reports_income_route_renders_income_analysis(client, core_conn):
         "Evidence preview",
         "Payroll",
     )
-    assert 'href="/reports/income/export.csv?period=custom' in body
-    assert 'href="/reports/income/export.xlsx?period=custom' in body
+    assert 'href="/comparison?comparison_view=period&amp;analysis_mode=income"' in body
+    assert 'href="/reports/income/export.csv?period=custom' not in body
+    assert 'href="/reports/income/export.xlsx?period=custom' not in body
     assert_not_visible_text(response, "Metro Grocery", "Cafe Bistro", "Edit category", "Approve selected")
 
 
@@ -178,6 +212,18 @@ def test_reports_category_and_tag_detail_routes_render_read_only_reports(client,
     )
     assert_not_visible_text(category_response, "Edit category", "Approve selected", "Recategorize selected")
     assert_not_visible_text(tag_response, "Edit category", "Approve selected", "Recategorize selected")
+    assert_has_element(
+        category_response,
+        "a",
+        attrs={"href": "/comparison?comparison_view=period&analysis_mode=spending&period_categories=Food"},
+        text="Compare",
+    )
+    assert_has_element(
+        tag_response,
+        "a",
+        attrs={"href": "/comparison?comparison_view=period&analysis_mode=spending&period_tags=Tax"},
+        text="Compare",
+    )
 
 
 def test_reports_account_and_merchant_detail_routes_render_read_only_reports(client, core_conn, data_factory):

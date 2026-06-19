@@ -86,17 +86,20 @@
     min-width: 64rem;
 }
 
-.filter-panel-heading {
+.filter-panel-heading,
+.collapse-panel-heading {
     border-radius: 6px;
     min-width: 0;
 }
 
-.filter-panel-heading[role="button"]:focus-visible {
+.filter-panel-heading[role="button"]:focus-visible,
+.collapse-panel-heading[role="button"]:focus-visible {
     box-shadow: var(--focus-shadow);
     outline: none;
 }
 
-.filter-panel-header[data-filter-panel-header-toggle] {
+.filter-panel-header[data-filter-panel-header-toggle],
+.collapse-panel-header[data-collapse-panel-header-toggle] {
     cursor: pointer;
 }
 

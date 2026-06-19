@@ -1387,10 +1387,17 @@ async function exportTableExcel(table, filenameBase, sheetName) {
 function insertTableExportToolbar(table, toolbar) {
     const toolbarTable = tableVisibleSource(table) || table;
     const card = toolbarTable.closest(".card");
-    const localTitleBar = toolbarTable.closest("[data-table-export-scope]")?.querySelector(".section-title");
+    const exportScope = toolbarTable.closest("[data-table-export-scope]");
+    const localToolbarTarget = exportScope?.querySelector("[data-table-export-toolbar]");
+    const localTitleBar = exportScope?.querySelector(".section-title");
     const titleBar = localTitleBar || card?.querySelector(".section-title");
     const cardHeader = card?.querySelector(".card-header");
     const tableResponsive = toolbarTable.closest(".table-responsive");
+
+    if (localToolbarTarget) {
+        localToolbarTarget.appendChild(toolbar);
+        return;
+    }
 
     if (titleBar) {
         titleBar.appendChild(toolbar);

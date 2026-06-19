@@ -222,7 +222,7 @@ function transactionBatchIds(table, rowCheckboxes) {
     return rowCheckboxes.map((checkbox) => String(checkbox.value));
 }
 
-const filterPanelHeaderInteractiveSelector = [
+const collapsePanelHeaderInteractiveSelector = [
     "a",
     "button",
     "input",
@@ -235,13 +235,20 @@ const filterPanelHeaderInteractiveSelector = [
 ].join(", ");
 
 function collapseTargetForToggle(toggle) {
-    const targetSelector = toggle.dataset.filterPanelTarget || toggle.getAttribute("data-bs-target") || "";
+    const targetSelector =
+        toggle.dataset.collapsePanelTarget ||
+        toggle.dataset.filterPanelTarget ||
+        toggle.getAttribute("data-bs-target") ||
+        "";
     return targetSelector ? document.querySelector(targetSelector) : null;
 }
 
+const collapsePanelHeadingSelector = "[data-filter-panel-heading-toggle], [data-collapse-panel-heading-toggle]";
+const collapsePanelHeaderSelector = "[data-filter-panel-header-toggle], [data-collapse-panel-header-toggle]";
+
 function filterPanelHeadingToggles(target) {
     if (!target?.id) return [];
-    return Array.from(document.querySelectorAll("[data-filter-panel-heading-toggle]")).filter(
+    return Array.from(document.querySelectorAll(collapsePanelHeadingSelector)).filter(
         (heading) => heading.getAttribute("aria-controls") === target.id
     );
 }
@@ -264,19 +271,31 @@ function toggleFilterPanelTarget(target) {
     setFilterPanelHeadingExpanded(target, target.classList.contains("show"));
 }
 
+function setupCollapsePanelStateSync(target) {
+    if (!target || target.dataset.collapsePanelStateReady === "true") {
+        return;
+    }
+
+    target.dataset.collapsePanelStateReady = "true";
+    setFilterPanelHeadingExpanded(target, target.classList.contains("show"));
+    target.addEventListener("shown.bs.collapse", () => setFilterPanelHeadingExpanded(target, true));
+    target.addEventListener("hidden.bs.collapse", () => setFilterPanelHeadingExpanded(target, false));
+}
+
 function setupFilterPanelHeaderToggles(root = document) {
-    root.querySelectorAll("[data-filter-panel-header-toggle]").forEach((header) => {
-        if (header.dataset.filterPanelHeaderReady === "true") {
+    root.querySelectorAll(collapsePanelHeaderSelector).forEach((header) => {
+        if (header.dataset.collapsePanelHeaderReady === "true") {
             return;
         }
 
         const target = collapseTargetForToggle(header);
         if (!target) return;
+        setupCollapsePanelStateSync(target);
 
-        header.dataset.filterPanelHeaderReady = "true";
+        header.dataset.collapsePanelHeaderReady = "true";
         header.addEventListener("click", (event) => {
-            const headingToggle = event.target.closest("[data-filter-panel-heading-toggle]");
-            const interactiveElement = event.target.closest(filterPanelHeaderInteractiveSelector);
+            const headingToggle = event.target.closest(collapsePanelHeadingSelector);
+            const interactiveElement = event.target.closest(collapsePanelHeaderInteractiveSelector);
             if (interactiveElement && !headingToggle?.contains(interactiveElement)) {
                 return;
             }
@@ -285,15 +304,16 @@ function setupFilterPanelHeaderToggles(root = document) {
         });
     });
 
-    root.querySelectorAll("[data-filter-panel-heading-toggle]").forEach((heading) => {
-        if (heading.dataset.filterPanelHeadingReady === "true") {
+    root.querySelectorAll(collapsePanelHeadingSelector).forEach((heading) => {
+        if (heading.dataset.collapsePanelHeadingReady === "true") {
             return;
         }
 
         const target = collapseTargetForToggle(heading);
         if (!target) return;
+        setupCollapsePanelStateSync(target);
 
-        heading.dataset.filterPanelHeadingReady = "true";
+        heading.dataset.collapsePanelHeadingReady = "true";
         heading.addEventListener("keydown", (event) => {
             if (event.key !== "Enter" && event.key !== " ") {
                 return;
@@ -459,6 +479,55 @@ function setupSortableTables(root = document) {
 
 setupSortableTables();
 
+function normalizeTableSearchText(value) {
+    return String(value || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLocaleLowerCase();
+}
+
+function setupTableSearch(root = document) {
+    root.querySelectorAll("[data-table-search]").forEach((input) => {
+        if (input.dataset.tableSearchReady === "true") {
+            return;
+        }
+
+        const targetSelector = input.dataset.tableSearchTarget || "";
+        const table = targetSelector
+            ? root.querySelector(targetSelector) || document.querySelector(targetSelector)
+            : input.closest(".card")?.querySelector("table");
+        const tbody = table?.tBodies[0];
+        if (!table || !tbody) {
+            return;
+        }
+
+        input.dataset.tableSearchReady = "true";
+
+        function applySearch() {
+            const query = normalizeTableSearchText(input.value);
+            Array.from(tbody.rows).forEach((row) => {
+                if (row.hasAttribute("data-sort-ignore")) {
+                    return;
+                }
+
+                const matches = !query || normalizeTableSearchText(row.textContent).includes(query);
+                if (matches) {
+                    delete row.dataset.tableFilteredOut;
+                } else {
+                    row.dataset.tableFilteredOut = "true";
+                }
+                row.hidden = !matches;
+            });
+            table.dispatchEvent(new CustomEvent("finance:table-filtered"));
+        }
+
+        input.addEventListener("input", applySearch);
+        applySearch();
+    });
+}
+
+setupTableSearch();
+
 function translateTableMessage(message, variables = {}) {
     const translator = window.financeTranslate;
     if (typeof translator === "function") {
@@ -512,8 +581,12 @@ function setupPaginatedTables(root = document) {
             return { container, status, pagination };
         }
 
-        function tableRows() {
+        function allTableRows() {
             return Array.from(tbody.rows).filter((row) => !row.hasAttribute("data-sort-ignore"));
+        }
+
+        function tableRows() {
+            return allTableRows().filter((row) => row.dataset.tableFilteredOut !== "true");
         }
 
         function totalPages(totalRows) {
@@ -589,6 +662,9 @@ function setupPaginatedTables(root = document) {
         }
 
         function render() {
+            allTableRows().forEach((row) => {
+                row.hidden = row.dataset.tableFilteredOut === "true";
+            });
             const rows = tableRows();
             const totalRows = rows.length;
             const pageCount = totalPages(totalRows);
@@ -614,6 +690,10 @@ function setupPaginatedTables(root = document) {
             state.page = 1;
             render();
         });
+        table.addEventListener("finance:table-filtered", () => {
+            state.page = 1;
+            render();
+        });
         render();
     });
 }
@@ -627,4 +707,5 @@ window.financeApp?.registerInitializer("tables.collapse-toggle-labels", setupCol
 window.financeApp?.registerInitializer("tables.audit-section-links", setupAuditSectionLinks);
 window.financeApp?.registerInitializer("tables.open-audit-section", openAuditSectionFromLocation);
 window.financeApp?.registerInitializer("tables.sortable", setupSortableTables);
+window.financeApp?.registerInitializer("tables.search", setupTableSearch);
 window.financeApp?.registerInitializer("tables.paginated", setupPaginatedTables);
