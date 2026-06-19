@@ -1,0 +1,38 @@
+{% set page_stylesheets = ["css/reports.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Reports") }}</h2>
+        <p class="text-muted mb-0">{{ _("Detailed money analysis.") }}</p>
+    </div>
+</div>
+
+<nav class="reports-section-nav nav nav-pills" aria-label="{{ _('Reports sections') }}">
+    {% for section in report_sections %}
+    <a
+        class="nav-link {% if section.key == active_report_section.key %}active{% endif %}"
+        href="{{ url_for(section.endpoint) }}"
+        {% if section.key == active_report_section.key %}aria-current="page"{% endif %}
+    >
+        <i class="bi bi-{{ section.icon }}" aria-hidden="true"></i>
+        <span>{{ _(section.label) }}</span>
+    </a>
+    {% endfor %}
+</nav>
+
+<section class="reports-shell" aria-labelledby="reports-section-heading">
+    <div class="reports-shell-panel">
+        <div class="reports-shell-kicker">{{ _("Current section") }}</div>
+        <h3 id="reports-section-heading">{{ _(active_report_section.label) }}</h3>
+        <p>{{ _(active_report_section.description) }}</p>
+    </div>
+
+    <div class="reports-shell-panel">
+        <div class="reports-shell-kicker">{{ _("Foundation") }}</div>
+        <h3>{{ _("Shared report structure") }}</h3>
+        <p>{{ _("Filters, exports, and report data will be added through the Reports service layer.") }}</p>
+    </div>
+</section>
+{% endblock %}

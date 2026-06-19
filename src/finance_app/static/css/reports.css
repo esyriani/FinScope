@@ -1,0 +1,44 @@
+.reports-section-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.reports-section-nav .nav-link {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.4rem;
+}
+
+.reports-shell {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.reports-shell-panel {
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.25rem;
+}
+
+.reports-shell-panel h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+.reports-shell-panel p {
+    color: var(--muted);
+    margin-bottom: 0;
+}
+
+.reports-shell-kicker {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+}

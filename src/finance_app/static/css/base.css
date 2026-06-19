@@ -415,6 +415,38 @@ a:focus {
     outline: none;
 }
 
+.nav-cluster {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.nav-sublinks {
+    border-left: 1px solid rgba(255, 255, 255, 0.16);
+    display: grid;
+    gap: 0.2rem;
+    margin-left: 1.2rem;
+    padding-left: 0.65rem;
+}
+
+.sidebar .nav-sub-link {
+    border-radius: 8px;
+    color: #cad6d1;
+    font-size: 0.9rem;
+    padding: 0.35rem 0.55rem;
+    text-decoration: none;
+}
+
+.sidebar .nav-sub-link:hover,
+.sidebar .nav-sub-link.active {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--sidebar-text);
+}
+
+.sidebar .nav-sub-link:focus-visible {
+    box-shadow: 0 0 0 0.2rem rgba(var(--app-accent-rgb), 0.32);
+    outline: none;
+}
+
 .sidebar-collapsed .sidebar {
     padding-inline: 1rem;
 }
@@ -426,6 +458,7 @@ a:focus {
 
 .sidebar-collapsed .brand-copy,
 .sidebar-collapsed .nav-group-label,
+.sidebar-collapsed .nav-sublinks,
 .sidebar-collapsed .sidebar .nav-link span {
     display: none;
 }

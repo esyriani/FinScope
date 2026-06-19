@@ -37,6 +37,7 @@ def test_navigation_pages_render_distinct_browser_titles(client):
         "/": "FinScope - Home",
         "/account": "FinScope - Account",
         "/dashboard": "FinScope - Dashboard",
+        "/reports": "FinScope - Reports",
         "/comparison": "FinScope - Comparison",
         "/calendar": "FinScope - Calendar",
         "/recurring": "FinScope - Recurring",

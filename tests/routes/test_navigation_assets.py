@@ -8,6 +8,8 @@ pages.
 import pytest
 from tests.support.html import (
     assert_asset_reference,
+    assert_has_element,
+    assert_markup,
     assert_no_asset_reference,
     asset_reference_index,
     asset_reference_values,
@@ -20,6 +22,11 @@ from tests.support.html import (
     [
         "/",
         "/dashboard",
+        "/reports",
+        "/reports/taxonomy",
+        "/reports/accounts",
+        "/reports/merchants",
+        "/reports/income",
         "/comparison",
         "/calendar",
         "/recurring",
@@ -74,6 +81,7 @@ def test_base_template_keeps_feature_assets_page_scoped(client):
         "js/exports.js",
         "js/tag-multiselect.js",
         "css/comparison.css",
+        "css/reports.css",
         "css/page-tabs.css",
         "css/calendar-recurring.css",
         "css/rules-list.css",
@@ -101,6 +109,27 @@ def test_dashboard_route_loads_dashboard_assets(client):
         response,
         r"/static/js/dashboard-charts\.js",
     )
+
+
+def test_reports_route_loads_reports_assets(client):
+    """Verify Reports-specific assets are declared by the Reports shell."""
+    response = client.get("/reports")
+
+    assert response.status_code == 200
+    assert_asset_reference(response, r"/static/css/reports\.css\?v=[0-9a-f]{12}")
+    assert_no_asset_reference(response, "js/reports.js")
+
+
+def test_reports_navigation_groups_comparison_under_reports(client):
+    """Verify Comparison appears under the active Reports navigation parent."""
+    response = client.get("/comparison")
+    body = response_html(response)
+
+    assert response.status_code == 200
+    assert_has_element(response, "a", attrs={"href": "/reports", "class": "active"}, text="Reports")
+    assert_has_element(response, "a", attrs={"href": "/comparison", "class": "active"}, text="Compare")
+    assert_markup(response, 'aria-label="Reports sections"', 'href="/reports"', 'href="/comparison"')
+    assert body.index('href="/reports"') < body.index('href="/comparison"')
 
 
 def test_tabbed_pages_load_shared_tab_stylesheet(client):
