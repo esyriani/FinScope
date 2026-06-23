@@ -58,6 +58,7 @@ from finance_app.modules.reports.queries import (
     fetch_taxonomy_category_rows,
     fetch_taxonomy_evidence_rows,
     fetch_taxonomy_tag_rows,
+    fetch_taxonomy_target_options,
     income_credit_target_condition,
     merchant_target_condition,
     report_quick_view_conditions,
@@ -102,6 +103,7 @@ class ReportsTaxonomyIndexQueryData:
     summary: Any
     category_rows: list[Any]
     tag_rows: list[Any]
+    target_options: list[Any]
 
 
 @dataclass(frozen=True)
@@ -121,6 +123,7 @@ class ReportsTaxonomyDetailQueryData:
     merchant_rows: list[dict[str, Any]]
     evidence_rows: list[dict[str, Any]]
     semantic_summary: Any
+    target_options: list[Any]
 
 
 @dataclass(frozen=True)
@@ -221,9 +224,12 @@ def build_reports_taxonomy_index_context(args: Any, report_request: ReportReques
         query_data.summary,
         query_data.category_rows,
         query_data.tag_rows,
+        query_data.target_options,
     )
     return {
         **taxonomy,
+        "taxonomy_explorer_filter": str(args.get("taxonomy_filter", "all") or "all"),
+        "taxonomy_explorer_search": str(args.get("taxonomy_search", "") or ""),
         **reports_filter_context(
             args,
             report_request,
@@ -249,6 +255,7 @@ def build_reports_taxonomy_detail_context(kind: str, target_id: int, args: Any) 
         query_data.merchant_rows,
         query_data.evidence_rows,
         query_data.semantic_summary,
+        query_data.target_options,
     )
     export_csv_endpoint = (
         "reports.category_export_csv" if kind == TAXONOMY_TARGET_CATEGORY else "reports.tag_export_csv"
@@ -508,6 +515,7 @@ def fetch_reports_taxonomy_index_query_data(report_request: ReportRequest) -> Re
             summary=fetch_report_summary(conn, filters, unknown_category, report_request.basis),
             category_rows=fetch_taxonomy_category_rows(conn, filters, unknown_category, report_request.basis),
             tag_rows=fetch_taxonomy_tag_rows(conn, filters, report_request.basis),
+            target_options=fetch_taxonomy_target_options(conn),
         )
 
 
@@ -561,8 +569,15 @@ def fetch_reports_taxonomy_detail_query_data(
             composition_rows=composition_rows,
             account_rows=fetch_account_breakdown(conn, target_filters, report_request.basis),
             merchant_rows=fetch_merchant_breakdown(conn, target_filters, report_request.basis),
-            evidence_rows=fetch_taxonomy_evidence_rows(conn, target_filters, unknown_category, report_request.basis),
+            evidence_rows=fetch_taxonomy_evidence_rows(
+                conn,
+                target_filters,
+                unknown_category,
+                report_request.basis,
+                limit=5,
+            ),
             semantic_summary=semantic_summary,
+            target_options=fetch_taxonomy_target_options(conn),
         )
 
 

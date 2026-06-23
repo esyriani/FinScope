@@ -459,6 +459,56 @@ def fetch_taxonomy_tag_rows(conn: Any, filters: Sequence[Any], basis: str) -> li
     )
 
 
+def fetch_taxonomy_target_options(conn: Any) -> list[Mapping[str, Any]]:
+    """Fetch all category and tag targets available for report navigation."""
+    category_rows = (
+        conn.execute(
+            select(
+                categories_table.c.id,
+                categories_table.c.name.label("label"),
+                categories_table.c.builtin_key,
+                categories_table.c.description,
+            ).order_by(categories_table.c.name)
+        )
+        .mappings()
+        .fetchall()
+    )
+    tag_rows = (
+        conn.execute(
+            select(
+                tags_table.c.id,
+                tags_table.c.name.label("label"),
+                tags_table.c.builtin_key,
+                tags_table.c.description,
+                tags_table.c.color,
+            ).order_by(tags_table.c.name)
+        )
+        .mappings()
+        .fetchall()
+    )
+    return [
+        {
+            "id": row["id"],
+            "kind": TAXONOMY_TARGET_CATEGORY,
+            "label": row["label"],
+            "builtin_key": row["builtin_key"],
+            "description": row["description"],
+            "color": "",
+        }
+        for row in category_rows
+    ] + [
+        {
+            "id": row["id"],
+            "kind": TAXONOMY_TARGET_TAG,
+            "label": row["label"],
+            "builtin_key": row["builtin_key"],
+            "description": row["description"],
+            "color": row["color"],
+        }
+        for row in tag_rows
+    ]
+
+
 def fetch_account_breakdown(conn: Any, filters: Sequence[Any], basis: str) -> list[Mapping[str, Any]]:
     """Fetch account-level report totals."""
     account_label = func.coalesce(accounts_table.c.name, "No account")

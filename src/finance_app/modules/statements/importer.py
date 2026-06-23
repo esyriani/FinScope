@@ -379,7 +379,7 @@ def build_transaction(
 
 def build_interac_transfer(
     raw_date: object,
-    counterparty: object,
+    merchant_name: object,
     raw_amount: object,
     direction: str,
     method: object | None = None,
@@ -394,7 +394,7 @@ def build_interac_transfer(
     Cancelled or otherwise incomplete rows are ignored.
     """
     tx_date = parse_date(raw_date, date_formats=date_formats)
-    description = str(counterparty or "").strip()
+    description = str(merchant_name or "").strip()
     amount = parse_money(raw_amount)
     normalized_status = str(status or "").strip().lower()
 
@@ -413,7 +413,7 @@ def build_interac_transfer(
         "category": UNKNOWN_CATEGORY,
         "needs_review": 1,
         "interac_direction": direction,
-        "interac_counterparty": description,
+        "interac_merchant": description,
         "interac_method": str(method or "").strip(),
         "interac_status": str(status or "").strip(),
     }
@@ -455,23 +455,23 @@ def parse_interac_transactions(
     if interac_direction in {INTERAC_DIRECTION_SENT, INTERAC_DIRECTION_RECEIVED}:
         direction = interac_direction
         date_col = sent_date_col or deposited_date_col or find_column(header_map, DATE_COLUMNS)
-        counterparty_col = (
+        merchant_col = (
             recipient_col or received_from_col or find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
         )
     elif sent_date_col and recipient_col:
         direction = INTERAC_DIRECTION_SENT
         date_col = sent_date_col
-        counterparty_col = recipient_col
+        merchant_col = recipient_col
     elif deposited_date_col and received_from_col:
         direction = INTERAC_DIRECTION_RECEIVED
         date_col = deposited_date_col
-        counterparty_col = received_from_col
+        merchant_col = received_from_col
     else:
         return {
             "transactions": [],
             "ignored_rows": max(0, len(rows) - 1),
         }
-    if not date_col or not counterparty_col:
+    if not date_col or not merchant_col:
         return {
             "transactions": [],
             "ignored_rows": max(0, len(rows) - 1),
@@ -491,7 +491,7 @@ def parse_interac_transactions(
     for record in records:
         tx = build_interac_transfer(
             record.get(date_col),
-            record.get(counterparty_col),
+            record.get(merchant_col),
             record.get(amount_col) if amount_col else None,
             direction,
             method=record.get(method_col) if method_col else None,

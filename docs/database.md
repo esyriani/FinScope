@@ -158,7 +158,7 @@ Stores imported ledger rows and their categorization state.
 - `account_id`: Account associated with the transaction.
 - `merchant_id`: Stable merchant identity, separate from raw description text.
 - `tx_date`: Transaction date from the source statement.
-- `description`: Transaction display description. This normally starts as the raw statement description, but enrichment imports can replace generic bank text with a clearer counterparty.
+- `description`: Transaction display description. This normally starts as the raw statement description, but enrichment imports can replace generic bank text with a clearer merchant.
 - `amount`: Signed transaction amount.
 - `category`: Cached category name retained for older query paths.
 - `category_id`: Stable category reference used for renames and relationships.
@@ -271,7 +271,7 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 - Tags use many-to-many join tables so both transactions and category rules can share the same tag definitions. Built-in tags use stable keys so workflows such as reimbursements and future tax review can depend on semantics rather than editable display labels.
 - Reimbursement allocations are explicit links rather than category rewrites. This keeps reimbursable spending visible in its natural category while allowing reports and monitoring pages to compute reimbursed and pending amounts from the allocation table. Reimbursement expense completions close policy-limited or otherwise settled expenses for monitoring only; they do not add reimbursement money or alter analytics offsets.
 - Statement checksums reject exact duplicate files, while transaction fingerprints prevent duplicate ledger rows.
-- Interac e-Transfer history uploads are enrichment sources. They match existing checking-account transactions by account, direction, amount, and nearby posting date, then update the matched transaction with the actual counterparty merchant. They do not insert duplicate Interac ledger rows.
+- Interac e-Transfer history uploads are enrichment sources. They match existing checking-account transactions by account, direction, amount, and nearby posting date, then update the matched transaction with the actual merchant. They do not insert duplicate Interac ledger rows.
 - Credit card statements are ledger sources because they contain purchase-level detail. The card purchases count as expenses; card payment rows and matching checking-account payment rows are marked as payments/transfers so spending is not double-counted.
 - Recurring pattern overrides use nullable merchant scope. `recurring_patterns.merchant_id` plus `type` stores merchant-bound overrides when a durable merchant is known. Rows with a null merchant ID remain keyword-fuzzy and are looked up by pattern key.
 

@@ -109,4 +109,4 @@ def parse_report_quick_view(value: object) -> str:
         QUICK_VIEW_UNKNOWN,
     }:
         return quick_view
-    return QUICK_VIEW_ALL
+    return QUICK_VIEW_CATEGORIZED

@@ -42,7 +42,7 @@ def rows_by_label(rows):
 
 
 def test_taxonomy_index_lists_category_and_tag_targets(app, core_conn):
-    """Verify taxonomy index rows resolve active category and tag report targets."""
+    """Verify taxonomy explorer rows resolve active category and tag report targets."""
     seed_reporting_data(core_conn)
 
     with app.test_request_context("/reports/taxonomy"):
@@ -50,11 +50,19 @@ def test_taxonomy_index_lists_category_and_tag_targets(app, core_conn):
 
     category_rows = rows_by_label(context["taxonomy_category_rows"])
     tag_rows = rows_by_label(context["taxonomy_tag_rows"])
+    explorer_rows = rows_by_label(context["taxonomy_explorer_rows"])
+    pinned_labels = {row["label"] for row in context["taxonomy_pinned_targets"]}
     assert context["active_report_section"].key == REPORT_TAXONOMY
     assert category_rows["Food"]["spending"] == 140.00
     assert category_rows["Food"]["url"].startswith("/reports/categories/")
+    assert category_rows["Food"]["transactions_url"].startswith("/transactions?")
+    assert category_rows["Food"]["comparison_url"].startswith("/comparison?")
     assert tag_rows["Tax"]["spending"] == 100.00
     assert tag_rows["Tax"]["url"].startswith("/reports/tags/")
+    assert explorer_rows["Food"]["type_label"] == "Category"
+    assert explorer_rows["Tax"]["type_label"] == "Tag"
+    assert {"Rental", "Tax", "Reimbursable", "Reimbursement"} <= pinned_labels
+    assert context["data_quality"]["quality_score"] == 100
 
 
 def test_category_detail_scopes_to_category_and_uses_tag_composition(app, core_conn):
@@ -67,15 +75,45 @@ def test_category_detail_scopes_to_category_and_uses_tag_composition(app, core_c
 
     composition = rows_by_label(context["taxonomy_composition_rows"])
     evidence_descriptions = {row["description"] for row in context["taxonomy_evidence_rows"]}
+    breadcrumb_labels = [row["label"] for row in context["taxonomy_breadcrumbs"]]
+    subnav_labels = [row["label"] for row in context["taxonomy_detail_subnav"]]
+    related_labels = {row["label"] for row in context["taxonomy_related_links"]}
     assert context["taxonomy_target"].name == "Food"
     assert context["total_spending"] == 140.00
     assert context["transaction_count"] == 2
     assert composition["Tax"]["spending"] == 100.00
     assert composition["Shared"]["spending"] == 40.00
+    assert context["taxonomy_visible_composition_rows"] == context["taxonomy_composition_rows"]
     assert evidence_descriptions == {"Metro Grocery", "Cafe Bistro"}
     assert "categories=Food" in context["transaction_url"]
     assert "period_categories=Food" in context["comparison_url"]
+    assert breadcrumb_labels == ["Reports", "Categories and tags", "Food"]
+    assert subnav_labels == ["Summary", "Monthly", "Composition", "Merchants", "Transactions"]
+    assert "Compare this category/tag" in related_labels
+    assert context["taxonomy_back_url"].startswith("/reports/taxonomy")
     assert context["taxonomy_panel"] is None
+
+
+def test_category_detail_hides_untagged_only_composition(app, core_conn, data_factory):
+    """Verify low-information tag composition is replaced by an empty state."""
+    transaction_id = data_factory.transactions.create(
+        description="Rent payment",
+        amount=Decimal("1000.00"),
+        tx_date="2026-01-09",
+        category="Housing",
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+        needs_review=0,
+    )
+    assert transaction_id
+    housing_id = category_id(core_conn, "Housing")
+
+    with app.test_request_context(f"/reports/categories/{housing_id}"):
+        context = build_reports_taxonomy_detail_context(TAXONOMY_TARGET_CATEGORY, housing_id, taxonomy_args())
+
+    assert rows_by_label(context["taxonomy_composition_rows"])["Untagged"]["spending"] == 1000.00
+    assert context["taxonomy_visible_composition_rows"] == []
+    assert context["taxonomy_has_composition_chart"] is False
+    assert context["taxonomy_composition_empty_message"] == "No tags are used in this category."
 
 
 def test_tag_detail_scopes_to_tag_and_marks_non_exclusive(app, core_conn):

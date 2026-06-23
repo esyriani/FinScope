@@ -11,6 +11,14 @@ from typing import Any
 from flask import url_for
 
 from finance_app.core.money import rounded_money_float
+from finance_app.modules.categories.builtins import (
+    BUILTIN_CATEGORY_REIMBURSEMENT,
+    BUILTIN_CATEGORY_RENTAL,
+    BUILTIN_CATEGORY_TRANSFERS,
+    BUILTIN_CATEGORY_UNKNOWN,
+    BUILTIN_TAG_REIMBURSABLE,
+    BUILTIN_TAG_TAX,
+)
 from finance_app.modules.comparison.urls import build_comparison_url
 from finance_app.modules.dashboard.presenter import build_cash_flow_summary, build_data_quality
 from finance_app.modules.reports.constants import (
@@ -34,6 +42,13 @@ from finance_app.modules.transactions.constants import (
     AMOUNT_TYPE_CREDIT,
     AMOUNT_TYPE_SPENDING,
     IGNORED_FILTER_ACTIVE,
+)
+
+PINNED_TAXONOMY_TARGETS = (
+    (TAXONOMY_TARGET_CATEGORY, BUILTIN_CATEGORY_RENTAL),
+    (TAXONOMY_TARGET_TAG, BUILTIN_TAG_TAX),
+    (TAXONOMY_TARGET_TAG, BUILTIN_TAG_REIMBURSABLE),
+    (TAXONOMY_TARGET_CATEGORY, BUILTIN_CATEGORY_REIMBURSEMENT),
 )
 
 
@@ -282,21 +297,22 @@ def build_taxonomy_index_rows(
     total_for_share: float,
     kind: str,
 ) -> list[dict[str, Any]]:
-    """Return table-ready taxonomy index rows."""
+    """Return explorer-ready taxonomy index rows."""
     prepared: list[dict[str, Any]] = []
-    endpoint = "reports.category_report" if kind == TAXONOMY_TARGET_CATEGORY else "reports.tag_report"
-    route_key = "category_id" if kind == TAXONOMY_TARGET_CATEGORY else "tag_id"
     for row in rows:
         target_id = row.get("id")
         selected_value = metric_value(row, report_request.measure)
+        label = str(row["label"] or "")
+        builtin_key = str(row.get("builtin_key") or "")
+        url = taxonomy_target_report_url(kind, target_id, report_request)
         prepared.append(
             {
                 "id": target_id,
                 "kind": kind,
                 "type_label": "Category" if kind == TAXONOMY_TARGET_CATEGORY else "Tag",
-                "label": str(row["label"] or ""),
+                "label": label,
                 "description": str(row.get("description") or ""),
-                "builtin_key": str(row.get("builtin_key") or ""),
+                "builtin_key": builtin_key,
                 "color": str(row.get("color") or ""),
                 "spending": rounded_money_float(row.get("spending")),
                 "income": rounded_money_float(row.get("income")),
@@ -305,11 +321,17 @@ def build_taxonomy_index_rows(
                 "selected_value": selected_value,
                 "share": round((selected_value / total_for_share) * 100, 1) if total_for_share else 0,
                 "bar_width": 0,
-                "url": (
-                    reports_url(report_request.args, endpoint=endpoint, route_values={route_key: target_id})
-                    if target_id
-                    else ""
-                ),
+                "url": url,
+                "transactions_url": taxonomy_row_transactions_url(kind, label, report_request),
+                "comparison_url": taxonomy_row_comparison_url(kind, label, report_request),
+                "target_key": taxonomy_target_key(kind, target_id),
+                "is_builtin": bool(builtin_key),
+                "is_pinned": is_pinned_taxonomy_target(kind, builtin_key),
+                "needs_review": kind == TAXONOMY_TARGET_CATEGORY and builtin_key == BUILTIN_CATEGORY_UNKNOWN,
+                "is_analytics_category": is_analytics_taxonomy_category(kind, builtin_key, label),
+                "has_income": rounded_money_float(row.get("income")) > 0,
+                "has_spending": rounded_money_float(row.get("spending")) > 0,
+                "search_text": taxonomy_search_text(label, kind, builtin_key, row.get("description")),
             }
         )
 
@@ -320,30 +342,213 @@ def build_taxonomy_index_rows(
     return prepared
 
 
+def taxonomy_target_key(kind: str, target_id: object) -> str:
+    """Return a stable key for a taxonomy category or tag target."""
+    return f"{kind}:{target_id}"
+
+
+def taxonomy_target_report_url(kind: str, target_id: object, report_request: ReportRequest) -> str:
+    """Return a report-detail URL for a category or tag target."""
+    if not target_id:
+        return ""
+    endpoint = "reports.category_report" if kind == TAXONOMY_TARGET_CATEGORY else "reports.tag_report"
+    route_key = "category_id" if kind == TAXONOMY_TARGET_CATEGORY else "tag_id"
+    return reports_url(report_request.args, endpoint=endpoint, route_values={route_key: target_id})
+
+
+def taxonomy_row_transactions_url(kind: str, label: str, report_request: ReportRequest) -> str:
+    """Return a transaction-list URL scoped to a taxonomy row."""
+    params = base_transaction_params(report_request)
+    params["filter_mode"] = "include"
+    if report_request.measure == REPORT_MEASURE_SPENDING:
+        params["amount_type"] = AMOUNT_TYPE_SPENDING
+    elif report_request.measure == REPORT_MEASURE_INCOME:
+        params["amount_type"] = AMOUNT_TYPE_CREDIT
+    if kind == TAXONOMY_TARGET_CATEGORY:
+        params["categories"] = [label]
+    else:
+        params["tags"] = [label]
+    return build_app_url("transactions.transactions", **params)
+
+
+def taxonomy_row_comparison_url(kind: str, label: str, report_request: ReportRequest) -> str:
+    """Return a Comparison URL scoped to a taxonomy row."""
+    if kind == TAXONOMY_TARGET_CATEGORY:
+        return report_comparison_url(report_request, categories=[label])
+    return report_comparison_url(report_request, tags=[label])
+
+
+def is_pinned_taxonomy_target(kind: str, builtin_key: str) -> bool:
+    """Return whether a taxonomy target belongs in the pinned report shortcuts."""
+    return (kind, builtin_key) in PINNED_TAXONOMY_TARGETS
+
+
+def is_analytics_taxonomy_category(kind: str, builtin_key: str, label: str) -> bool:
+    """Return whether a target belongs in ordinary category analytics."""
+    if kind != TAXONOMY_TARGET_CATEGORY:
+        return False
+    normalized_label = label.strip().casefold()
+    return builtin_key not in {BUILTIN_CATEGORY_TRANSFERS, BUILTIN_CATEGORY_UNKNOWN} and normalized_label not in {
+        "transfers",
+        "unknown",
+    }
+
+
+def taxonomy_search_text(label: str, kind: str, builtin_key: str, description: object) -> str:
+    """Return lowercase text used by browser-side taxonomy target search."""
+    return " ".join(
+        item.casefold()
+        for item in (
+            label,
+            "Category" if kind == TAXONOMY_TARGET_CATEGORY else "Tag",
+            builtin_key,
+            str(description or ""),
+        )
+        if item
+    )
+
+
+def build_taxonomy_target_options(
+    rows: Sequence[Mapping[str, Any]],
+    report_request: ReportRequest,
+) -> list[dict[str, Any]]:
+    """Return all category and tag targets available for direct navigation."""
+    prepared = []
+    pinned_rank = {target: index for index, target in enumerate(PINNED_TAXONOMY_TARGETS)}
+    for row in rows:
+        kind = str(row["kind"])
+        target_id = row.get("id")
+        builtin_key = str(row.get("builtin_key") or "")
+        label = str(row["label"] or "")
+        prepared.append(
+            {
+                "id": target_id,
+                "kind": kind,
+                "type_label": "Category" if kind == TAXONOMY_TARGET_CATEGORY else "Tag",
+                "label": label,
+                "display_label": f"{label} ({'Category' if kind == TAXONOMY_TARGET_CATEGORY else 'Tag'})",
+                "description": str(row.get("description") or ""),
+                "builtin_key": builtin_key,
+                "color": str(row.get("color") or ""),
+                "url": taxonomy_target_report_url(kind, target_id, report_request),
+                "target_key": taxonomy_target_key(kind, target_id),
+                "is_builtin": bool(builtin_key),
+                "is_pinned": is_pinned_taxonomy_target(kind, builtin_key),
+                "pinned_rank": pinned_rank.get((kind, builtin_key), len(pinned_rank)),
+                "search_text": taxonomy_search_text(label, kind, builtin_key, row.get("description")),
+            }
+        )
+
+    return sorted(
+        prepared,
+        key=lambda row: (
+            not row["is_pinned"],
+            int(row["pinned_rank"]),
+            str(row["type_label"]),
+            str(row["label"]).casefold(),
+        ),
+    )
+
+
+def build_taxonomy_pinned_targets(
+    target_options: Sequence[Mapping[str, Any]],
+    explorer_rows: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return pinned built-in report cards with current activity when available."""
+    activity_by_key = {str(row["target_key"]): row for row in explorer_rows}
+    pinned_targets = []
+    for option in target_options:
+        if not option["is_pinned"]:
+            continue
+        activity = activity_by_key.get(str(option["target_key"]), {})
+        pinned_targets.append(
+            {
+                **option,
+                "spending": activity.get("spending", 0),
+                "income": activity.get("income", 0),
+                "net": activity.get("net", 0),
+                "transaction_count": activity.get("transaction_count", 0),
+                "has_activity": bool(activity.get("transaction_count", 0)),
+            }
+        )
+    return sorted(pinned_targets, key=lambda row: int(row["pinned_rank"]))
+
+
+def build_taxonomy_filter_chips(explorer_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Return client-side filter chip metadata for the taxonomy explorer."""
+    rows = list(explorer_rows)
+    return [
+        {"value": "all", "label": "All", "count": len(rows), "active": True},
+        {
+            "value": "categories",
+            "label": "Categories",
+            "count": sum(1 for row in rows if row["kind"] == TAXONOMY_TARGET_CATEGORY),
+            "active": False,
+        },
+        {
+            "value": "tags",
+            "label": "Tags",
+            "count": sum(1 for row in rows if row["kind"] == TAXONOMY_TARGET_TAG),
+            "active": False,
+        },
+        {
+            "value": "analytics-categories",
+            "label": "Analytics categories",
+            "count": sum(1 for row in rows if row["is_analytics_category"]),
+            "active": False,
+        },
+        {
+            "value": "has-income",
+            "label": "Has income",
+            "count": sum(1 for row in rows if row["has_income"]),
+            "active": False,
+        },
+        {
+            "value": "has-spending",
+            "label": "Has spending",
+            "count": sum(1 for row in rows if row["has_spending"]),
+            "active": False,
+        },
+    ]
+
+
 def build_reports_taxonomy_index_view(
     report_request: ReportRequest,
     summary: Mapping[str, Any],
     category_rows: Sequence[Mapping[str, Any]],
     tag_rows: Sequence[Mapping[str, Any]],
+    target_options: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Build the taxonomy index view model."""
     summary_view = build_summary_view(summary)
     total_for_share = selected_total_for_share(summary_view, report_request.measure)
+    data_quality = build_data_quality(summary)
+    category_index_rows = build_taxonomy_index_rows(
+        category_rows,
+        report_request,
+        total_for_share,
+        TAXONOMY_TARGET_CATEGORY,
+    )
+    tag_index_rows = build_taxonomy_index_rows(
+        tag_rows,
+        report_request,
+        total_for_share,
+        TAXONOMY_TARGET_TAG,
+    )
+    explorer_rows = sorted(
+        [*category_index_rows, *tag_index_rows],
+        key=lambda row: (-float(row["selected_value"]), str(row["label"])),
+    )
+    target_option_rows = build_taxonomy_target_options(target_options, report_request)
     return {
         **summary_view,
-        "data_quality": build_data_quality(summary),
-        "taxonomy_category_rows": build_taxonomy_index_rows(
-            category_rows,
-            report_request,
-            total_for_share,
-            TAXONOMY_TARGET_CATEGORY,
-        ),
-        "taxonomy_tag_rows": build_taxonomy_index_rows(
-            tag_rows,
-            report_request,
-            total_for_share,
-            TAXONOMY_TARGET_TAG,
-        ),
+        "data_quality": data_quality,
+        "taxonomy_category_rows": category_index_rows,
+        "taxonomy_tag_rows": tag_index_rows,
+        "taxonomy_explorer_rows": explorer_rows,
+        "taxonomy_target_options": target_option_rows,
+        "taxonomy_pinned_targets": build_taxonomy_pinned_targets(target_option_rows, explorer_rows),
+        "taxonomy_filter_chips": build_taxonomy_filter_chips(explorer_rows),
         "transaction_url": build_app_url("transactions.transactions", **base_transaction_params(report_request)),
         "comparison_url": report_comparison_url(report_request),
     }
@@ -548,6 +753,7 @@ def build_reports_taxonomy_detail_view(
     merchant_rows: Sequence[Mapping[str, Any]],
     evidence_rows: Sequence[Mapping[str, Any]],
     semantic_summary: Mapping[str, Any] | None,
+    target_options: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Build the taxonomy target detail view model."""
     summary_view = build_summary_view(summary)
@@ -562,6 +768,9 @@ def build_reports_taxonomy_detail_view(
     accounts = build_breakdown_rows(account_rows, report_request, total_for_share, "account")
     merchants = build_breakdown_rows(merchant_rows, report_request, total_for_share, "merchant")
     evidence = build_taxonomy_evidence_rows(evidence_rows)
+    visible_composition = meaningful_taxonomy_composition_rows(composition, target)
+    transaction_url = taxonomy_transactions_url(target, report_request)
+    comparison_url = taxonomy_comparison_url(target, report_request)
     view = {
         **summary_view,
         "data_quality": build_data_quality(summary),
@@ -570,17 +779,111 @@ def build_reports_taxonomy_detail_view(
         "taxonomy_panel": build_taxonomy_panel(target, semantic_summary),
         "monthly_rows": monthly,
         "taxonomy_composition_rows": composition,
+        "taxonomy_visible_composition_rows": visible_composition,
+        "taxonomy_composition_empty_message": taxonomy_composition_empty_message(composition, target),
+        "taxonomy_has_composition_chart": bool(visible_composition),
         "account_rows": accounts,
         "merchant_rows": merchants,
         "taxonomy_evidence_rows": evidence,
-        "chart_data": build_taxonomy_detail_chart_data(monthly, composition, target, report_request.measure),
-        "transaction_url": taxonomy_transactions_url(target, report_request),
-        "comparison_url": taxonomy_comparison_url(target, report_request),
+        "chart_data": build_taxonomy_detail_chart_data(monthly, visible_composition, target, report_request.measure),
+        "transaction_url": transaction_url,
+        "comparison_url": comparison_url,
+        "taxonomy_target_options": build_taxonomy_target_options(target_options, report_request),
+        "taxonomy_breadcrumbs": build_taxonomy_breadcrumbs(target, report_request),
+        "taxonomy_back_url": reports_url(report_request.args, endpoint="reports.taxonomy"),
+        "taxonomy_detail_subnav": build_taxonomy_detail_subnav(),
+        "taxonomy_related_links": build_taxonomy_related_links(
+            transaction_url,
+            comparison_url,
+            accounts,
+            merchants,
+        ),
     }
     return {
         **view,
         "taxonomy_export_rows": build_taxonomy_export_rows(view),
     }
+
+
+def meaningful_taxonomy_composition_rows(
+    rows: Sequence[Mapping[str, Any]],
+    target: TaxonomyReportTarget,
+) -> list[Mapping[str, Any]]:
+    """Return composition rows worth charting and presenting as detail."""
+    if target.kind != TAXONOMY_TARGET_CATEGORY:
+        return list(rows)
+    return [
+        row for row in rows if not (row.get("untagged") or str(row.get("label") or "").strip().casefold() == "untagged")
+    ]
+
+
+def taxonomy_composition_empty_message(
+    rows: Sequence[Mapping[str, Any]],
+    target: TaxonomyReportTarget,
+) -> str:
+    """Return a concise message when taxonomy composition has no meaningful rows."""
+    if target.kind == TAXONOMY_TARGET_CATEGORY and rows:
+        meaningful = meaningful_taxonomy_composition_rows(rows, target)
+        if not meaningful:
+            return "No tags are used in this category."
+    return "No composition rows are available for this report."
+
+
+def build_taxonomy_breadcrumbs(
+    target: TaxonomyReportTarget,
+    report_request: ReportRequest,
+) -> list[dict[str, str]]:
+    """Return breadcrumbs for taxonomy detail pages."""
+    return [
+        {"label": "Reports", "url": reports_url(report_request.args, endpoint="reports.overview")},
+        {"label": "Categories and tags", "url": reports_url(report_request.args, endpoint="reports.taxonomy")},
+        {"label": target.name, "url": ""},
+    ]
+
+
+def build_taxonomy_detail_subnav() -> list[dict[str, str]]:
+    """Return in-page section links for taxonomy detail reports."""
+    return [
+        {"label": "Summary", "target": "taxonomy-summary"},
+        {"label": "Monthly", "target": "taxonomy-monthly"},
+        {"label": "Composition", "target": "taxonomy-composition"},
+        {"label": "Merchants", "target": "taxonomy-merchants"},
+        {"label": "Transactions", "target": "taxonomy-transactions"},
+    ]
+
+
+def build_taxonomy_related_links(
+    transaction_url: str,
+    comparison_url: str,
+    account_rows: Sequence[Mapping[str, Any]],
+    merchant_rows: Sequence[Mapping[str, Any]],
+) -> list[dict[str, str]]:
+    """Return related report links for a taxonomy detail page."""
+    links = [
+        {"label": "View transactions", "detail": "", "url": transaction_url, "icon": "list-ul"},
+        {"label": "Compare this category/tag", "detail": "", "url": comparison_url, "icon": "layout-split"},
+    ]
+    top_account = next((row for row in account_rows if row.get("url")), None)
+    top_merchant = next((row for row in merchant_rows if row.get("url")), None)
+    if top_account:
+        links.append(
+            {
+                "label": "Open related account report",
+                "detail": str(top_account["label"]),
+                "url": str(top_account["url"]),
+                "icon": "bank",
+            }
+        )
+    if top_merchant:
+        links.append(
+            {
+                "label": "Open related merchant report",
+                "detail": str(top_merchant["label"]),
+                "url": str(top_merchant["url"]),
+                "icon": "shop",
+            }
+        )
+    return links
 
 
 def taxonomy_transactions_url(target: TaxonomyReportTarget, report_request: ReportRequest) -> str:

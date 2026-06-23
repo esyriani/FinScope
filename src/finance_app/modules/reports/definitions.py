@@ -36,7 +36,7 @@ REPORT_SECTIONS: tuple[ReportSection, ...] = (
     ),
     ReportSection(
         key=REPORT_TAXONOMY,
-        label="Category or tag",
+        label="Categories and tags",
         description="Category and tag analysis.",
         endpoint="reports.taxonomy",
         icon="tags",
@@ -51,7 +51,7 @@ REPORT_SECTIONS: tuple[ReportSection, ...] = (
     ReportSection(
         key=REPORT_MERCHANTS,
         label="Merchants",
-        description="Merchant and counterparty analysis.",
+        description="Merchant analysis.",
         endpoint="reports.merchants",
         icon="shop",
     ),

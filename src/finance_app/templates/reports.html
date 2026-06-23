@@ -174,7 +174,7 @@
 </div>
 {%- endmacro %}
 
-{% macro reports_table_header(title, table_id, summary) -%}
+{% macro reports_table_header(title, table_id, summary, show_controls=true) -%}
 {% set panel_id = table_id ~ "-panel" %}
 <div
     class="card-body border-bottom reports-table-header collapse-panel-header"
@@ -194,19 +194,21 @@
             <h5 id="{{ table_id }}-heading" class="card-title mb-1">{{ _(title) }}</h5>
             <p class="text-muted mb-0 reports-table-summary">{{ summary }}</p>
         </div>
+        {% if show_controls %}
         <div class="reports-table-controls">
             {{ reports_table_search(table_id ~ "-search", table_id) }}
             <div class="reports-table-export-actions" data-table-export-toolbar></div>
         </div>
+        {% endif %}
     </div>
 </div>
 {%- endmacro %}
 
-{% macro reports_table(title, rows, label_heading, table_id) -%}
+{% macro reports_table(title, rows, label_heading, table_id, show_controls=true, exportable=true) -%}
 {% set panel_id = table_id ~ "-panel" %}
 {% set transaction_total = rows | sum(attribute="transaction_count") %}
-<section class="card reports-table-card" aria-labelledby="{{ table_id }}-heading" data-table-export-scope>
-    {{ reports_table_header(title, table_id, _("Transactions") ~ ": " ~ transaction_total) }}
+<section class="card reports-table-card" aria-labelledby="{{ table_id }}-heading" {% if exportable %}data-table-export-scope{% endif %}>
+    {{ reports_table_header(title, table_id, _("Transactions") ~ ": " ~ transaction_total, show_controls) }}
     <div class="collapse reports-table-collapse" id="{{ panel_id }}">
     {% if rows %}
     <div class="table-responsive">
@@ -288,9 +290,6 @@
                 <tr {% if row.url | default("") %}data-row-href="{{ row.url }}" data-row-drilldown="dblclick"{% endif %}>
                     <td data-sort-value="{{ row.label }}">
                         <div class="reports-taxonomy-label">
-                            {% if row.color %}
-                                <span class="reports-tag-swatch" style="--tag-color: {{ row.color }};" aria-hidden="true"></span>
-                            {% endif %}
                             <span class="fw-semibold">{{ row.label }}</span>
                         </div>
                         {% if row.description %}
@@ -371,13 +370,13 @@
 </section>
 {%- endmacro %}
 
-{% macro reports_chart_card(title, chart_id, wide=false) -%}
-<section class="card chart-card reports-chart-card{% if wide %} reports-chart-card-wide{% endif %}" data-chart-export-scope>
+{% macro reports_chart_card(title, chart_id, wide=false, exportable=true) -%}
+<section class="card chart-card reports-chart-card{% if wide %} reports-chart-card-wide{% endif %}" {% if exportable %}data-chart-export-scope{% endif %}>
     <div class="card-body">
         <div class="section-title">
             <h5 class="card-title">{{ _(title) }}</h5>
         </div>
-        <div id="{{ chart_id }}" class="chart-viewport reports-chart" data-chart-export data-export-title="{{ _(title) }}"></div>
+        <div id="{{ chart_id }}" class="chart-viewport reports-chart" {% if exportable %}data-chart-export data-export-title="{{ _(title) }}"{% endif %}></div>
     </div>
 </section>
 {%- endmacro %}
@@ -460,6 +459,302 @@
         </div>
         {{ reports_actions(comparison_url, transaction_url) }}
     </div>
+</section>
+{%- endmacro %}
+
+{% macro taxonomy_target_typeahead(options, search_value="") -%}
+<section class="card reports-taxonomy-search-card" aria-labelledby="reports-taxonomy-search-heading">
+    <div class="card-body">
+        <div class="reports-taxonomy-open merchant-autocomplete" data-taxonomy-open-control data-suggestions-limit="{{ merchant_suggestion_limit }}">
+            <label id="reports-taxonomy-search-heading" class="form-label" for="reports-taxonomy-open-input">
+                {{ _("Open a category or tag report...") }}
+            </label>
+            <input
+                id="reports-taxonomy-open-input"
+                class="form-control"
+                type="search"
+                value="{{ search_value }}"
+                placeholder="{{ _('Search categories and tags') }}"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="reports-taxonomy-open-suggestions"
+                data-taxonomy-explorer-search
+                data-taxonomy-open-input
+            >
+            <div id="reports-taxonomy-open-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-taxonomy-open-menu></div>
+            <script type="application/json" data-taxonomy-open-options>{{ options | tojson }}</script>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro taxonomy_pinned_cards(targets) -%}
+{% if targets %}
+<section class="reports-pinned-section" aria-labelledby="reports-taxonomy-pinned-heading">
+    <div class="page-block-header">
+        <h6 id="reports-taxonomy-pinned-heading" class="card-title mb-0">{{ _("Pinned reports") }}</h6>
+    </div>
+    <div class="reports-pinned-grid">
+        {% for target in targets %}
+        <a class="card reports-pinned-card text-decoration-none" href="{{ target.url }}">
+            <div class="card-body">
+                <div class="reports-pinned-meta">
+                    <span class="badge text-bg-secondary">{{ _(target.type_label) }}</span>
+                    {% if target.is_builtin %}<span class="badge text-bg-info">{{ _("Built-in") }}</span>{% endif %}
+                </div>
+                <h5 class="card-title">{{ target.label }}</h5>
+                {% if target.has_activity %}
+                    <p class="mb-0">{{ target.transaction_count }} {{ _("transactions") }} - {{ target.spending | moneyfmt }} {{ _("spending") }}</p>
+                {% else %}
+                    <p class="mb-0 text-muted">{{ _("No activity in this view.") }}</p>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{%- endmacro %}
+
+{% macro taxonomy_explorer(rows, filter_chips, current_filter="all") -%}
+<section class="card reports-taxonomy-explorer" aria-labelledby="reports-taxonomy-explorer-heading" data-taxonomy-explorer>
+    <div class="card-body border-bottom">
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-3">
+            <div>
+                <div class="reports-shell-kicker">{{ _("Categories and tags") }}</div>
+                <h5 id="reports-taxonomy-explorer-heading" class="card-title mb-0">{{ _("Report explorer") }}</h5>
+            </div>
+        </div>
+        <div class="reports-chip-row" role="group" aria-label="{{ _('Filter categories and tags') }}">
+            {% for chip in filter_chips %}
+            <button
+                type="button"
+                class="btn btn-sm {% if chip.value == current_filter %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                data-taxonomy-filter="{{ chip.value }}"
+                aria-pressed="{% if chip.value == current_filter %}true{% else %}false{% endif %}"
+            >
+                {{ _(chip.label) }}{% if chip.count is defined %}: {{ chip.count }}{% endif %}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% if rows %}
+    <div class="table-responsive">
+        <table
+            id="reports-taxonomy-explorer-table"
+            class="table table-hover align-middle mb-0 reports-table reports-taxonomy-table"
+            data-sortable-table
+            data-paginated-table
+            data-no-export
+            data-page-size="{{ reports_table_page_size | default(25) }}"
+            data-pagination-label="{{ _('Categories and tags') }}"
+        >
+            <thead>
+                <tr>
+                    {{ sort_header("Name", 0) }}
+                    {{ sort_header("Spending", 1, "number", "text-end") }}
+                    {{ sort_header("Income and credits", 2, "number", "text-end") }}
+                    {{ sort_header("Net cash flow", 3, "number", "text-end") }}
+                    {{ sort_header("Transactions", 4, "number", "text-end") }}
+                    {{ sort_header("Share", 5, "number", "text-end") }}
+                    <th class="text-end">{{ _("Actions") }}</th>
+                </tr>
+            </thead>
+            <tbody data-taxonomy-explorer-body>
+                {% for row in rows %}
+                <tr
+                    data-row-href="{{ row.url }}"
+                    data-base-row-href="{{ row.url }}"
+                    data-row-drilldown="dblclick"
+                    data-taxonomy-explorer-row
+                    data-kind="{{ row.kind }}"
+                    data-builtins="{% if row.is_builtin %}true{% else %}false{% endif %}"
+                    data-needs-review="{% if row.needs_review %}true{% else %}false{% endif %}"
+                    data-analytics-category="{% if row.is_analytics_category %}true{% else %}false{% endif %}"
+                    data-has-income="{% if row.has_income %}true{% else %}false{% endif %}"
+                    data-has-spending="{% if row.has_spending %}true{% else %}false{% endif %}"
+                    data-search-text="{{ row.search_text }}"
+                    data-sort-spending="{{ row.spending }}"
+                    data-sort-income="{{ row.income }}"
+                    data-sort-net="{{ row.net }}"
+                    data-sort-transactions="{{ row.transaction_count }}"
+                    data-sort-name="{{ row.label }}"
+                >
+                    <td data-sort-value="{{ row.label }}">
+                        <div class="reports-taxonomy-label">
+                            <a class="fw-semibold reports-taxonomy-name-link" href="{{ row.url }}" data-row-action data-taxonomy-report-link data-base-url="{{ row.url }}">{{ row.label }}</a>
+                            <span class="badge reports-taxonomy-type-badge reports-taxonomy-type-badge-{{ row.kind }}">{{ _(row.type_label) }}</span>
+                        </div>
+                    </td>
+                    <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ row.net }}">{{ row.net | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.transaction_count }}">{{ row.transaction_count }}</td>
+                    <td class="text-end" data-sort-value="{{ row.share }}">
+                        <span>{{ row.share }}%</span>
+                        <span class="reports-bar-track" aria-hidden="true"><span style="width: {{ row.bar_width }}%;"></span></span>
+                    </td>
+                    <td class="text-end">
+                        <div class="reports-row-actions">
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.url }}" title="{{ _('Open report') }}" aria-label="{{ _('Open report') }}: {{ row.label }}" data-row-action data-taxonomy-report-link data-base-url="{{ row.url }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.transactions_url }}" title="{{ _('Transactions') }}" aria-label="{{ _('Transactions') }}: {{ row.label }}" data-row-action><i class="bi bi-list-ul" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.comparison_url }}" title="{{ _('Compare') }}" aria-label="{{ _('Compare') }}: {{ row.label }}" data-row-action><i class="bi bi-layout-split" aria-hidden="true"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No rows available for this report.") }}</div>
+    {% endif %}
+</section>
+{%- endmacro %}
+
+{% macro taxonomy_breadcrumb_nav(breadcrumbs) -%}
+<nav class="reports-breadcrumbs" aria-label="{{ _('Breadcrumb') }}">
+    <ol class="breadcrumb mb-0">
+        {% for item in breadcrumbs %}
+        <li class="breadcrumb-item {% if not item.url %}active{% endif %}" {% if not item.url %}aria-current="page"{% endif %}>
+            {% if item.url %}
+                <a href="{{ item.url }}">{{ _(item.label) }}</a>
+            {% else %}
+                {{ item.label }}
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+</nav>
+{%- endmacro %}
+
+{% macro taxonomy_target_switcher(target, options) -%}
+{% set current_target_key = target.kind ~ ":" ~ target.id %}
+<div class="dropdown reports-target-switcher" data-taxonomy-target-switcher>
+    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        {{ target.name }}
+    </button>
+    <div class="dropdown-menu reports-target-switcher-menu">
+        <div class="p-2">
+            <label class="visually-hidden" for="reports-target-switcher-search">{{ _("Search categories and tags") }}</label>
+            <input
+                id="reports-target-switcher-search"
+                class="form-control form-control-sm"
+                type="search"
+                placeholder="{{ _('Search categories and tags') }}"
+                autocomplete="off"
+                data-taxonomy-target-search
+            >
+        </div>
+        <div class="reports-target-option-list">
+            {% for option in options %}
+            <a
+                class="dropdown-item reports-target-option {% if option.target_key == current_target_key %}active{% endif %}"
+                href="{{ option.url }}"
+                data-taxonomy-target-option
+                data-search-text="{{ option.search_text }}"
+            >
+                <span>{{ option.label }}</span>
+                <small>{{ _(option.type_label) }}{% if option.is_builtin %} - {{ _("Built-in") }}{% endif %}</small>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{%- endmacro %}
+
+{% macro taxonomy_detail_header(target, options, transaction_url, comparison_url, back_url) -%}
+<section class="card reports-target-card reports-taxonomy-target-card">
+    <div class="card-body reports-target-layout">
+        <div>
+            <div class="reports-shell-kicker">{{ _(target.report_label) }}</div>
+            {{ taxonomy_target_switcher(target, options) }}
+            {% if target.description %}
+                <p>{{ _(target.description) }}</p>
+            {% endif %}
+        </div>
+        <div class="reports-actions reports-target-actions">
+            <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ back_url }}"><i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Back to categories and tags") }}</a>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro render_taxonomy_detail_subnav(items) -%}
+<nav class="reports-detail-subnav" aria-label="{{ _('Report sections') }}">
+    {% for item in items %}
+    <a href="#{{ item.target }}">{{ _(item.label) }}</a>
+    {% endfor %}
+</nav>
+{%- endmacro %}
+
+{% macro taxonomy_related_reports(links) -%}
+{% if links %}
+<section class="card reports-related-card" aria-labelledby="taxonomy-related-heading">
+    <div class="card-body">
+        <div class="section-title">
+            <h5 id="taxonomy-related-heading" class="card-title">{{ _("Related reports") }}</h5>
+        </div>
+        <div class="reports-related-links">
+            {% for link in links %}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ link.url }}">
+                <i class="bi bi-{{ link.icon }}" aria-hidden="true"></i>
+                <span>{{ _(link.label) }}{% if link.detail %}: {{ link.detail }}{% endif %}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+{%- endmacro %}
+
+{% macro evidence_preview(rows, table_id, transaction_url) -%}
+<section id="taxonomy-transactions" class="card reports-evidence-card reports-evidence-preview" aria-labelledby="{{ table_id }}-heading">
+    <div class="card-body border-bottom reports-table-header">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+            <div class="reports-table-heading">
+                <h5 id="{{ table_id }}-heading" class="card-title mb-1">{{ _("Evidence preview") }}</h5>
+                <p class="text-muted mb-0 reports-table-summary">{{ _("Recent matching transactions") }}</p>
+            </div>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("Open all transactions") }}</a>
+        </div>
+    </div>
+    {% if rows %}
+    <div class="table-responsive">
+        <table id="{{ table_id }}" class="table table-hover align-middle mb-0 reports-table">
+            <thead>
+                <tr>
+                    <th>{{ _("Date") }}</th>
+                    <th>{{ _("Description") }}</th>
+                    <th>{{ _("Account") }}</th>
+                    <th>{{ _("Merchant") }}</th>
+                    <th>{{ _("Category") }}</th>
+                    <th class="text-end">{{ _("Amount") }}</th>
+                    <th class="text-end">{{ _("Net cash flow") }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.date | datefmt }}</td>
+                    <td>{{ row.description }}</td>
+                    <td>{{ row.account_name or _("No account") }}</td>
+                    <td>{{ row.merchant_label }}</td>
+                    <td>{{ row.category }}</td>
+                    <td class="text-end">{{ row.amount | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}">{{ row.net | moneyfmt }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No evidence rows available for this report.") }}</div>
+    {% endif %}
 </section>
 {%- endmacro %}
 
@@ -551,77 +846,109 @@
 </div>
 {% elif active_report_section.key == "taxonomy" and taxonomy_target is defined %}
 <div data-reports-page data-reports-taxonomy-detail>
+{{ taxonomy_breadcrumb_nav(taxonomy_breadcrumbs) }}
 {% call collapsible_filter_panel("reports-taxonomy-detail-filters", reports_filter_summary | trim) %}
     {{ reports_filter_form(reports_clear_url) }}
 {% endcall %}
 
-{{ reports_target_header(taxonomy_target.report_label, taxonomy_target.name, taxonomy_target.description, transaction_url, comparison_url) }}
+{{ taxonomy_detail_header(taxonomy_target, taxonomy_target_options, transaction_url, comparison_url, taxonomy_back_url) }}
 
-{% if taxonomy_notes %}
-<div class="reports-note-stack">
-    {% for note in taxonomy_notes %}
-    <div class="reports-note reports-note-{{ note.level }}">
-        {{ _(note.message) }}
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
+{% if transaction_count > 0 %}
+{{ render_taxonomy_detail_subnav(taxonomy_detail_subnav) }}
 
-<div class="reports-detail-layout {% if not taxonomy_panel %}reports-detail-layout-single{% endif %}">
-    <div>
-        {% if transaction_count > 0 %}
-        {{ reports_key_insights(transaction_url) }}
-        {{ reports_quality_panel() }}
-
-        <div class="reports-chart-grid">
-            {{ reports_chart_card("Monthly statement", "reportsMonthlyChart", true) }}
-            {{ reports_chart_card(taxonomy_target.composition_title, "reportsCompositionChart") }}
-        </div>
-
-        <div class="reports-table-grid">
-            {{ reports_table("Monthly statement", monthly_rows, "Month", "reports-taxonomy-monthly-table") }}
-            {{ reports_table(taxonomy_target.composition_title, taxonomy_composition_rows, taxonomy_target.composition_label_heading, "reports-taxonomy-composition-table") }}
-            {{ reports_table("Account breakdown", account_rows, "Account", "reports-taxonomy-account-table") }}
-            {{ reports_table("Counterparties", merchant_rows, "Merchant", "reports-taxonomy-merchant-table") }}
-            {{ evidence_table(taxonomy_evidence_rows, "reports-taxonomy-evidence-table") }}
-        </div>
-
-        <script id="reports-overview-chart-data" type="application/json">
-        {{ chart_data | tojson }}
-        </script>
-        {% else %}
-        <div class="empty-state">
-            {{ _("No transaction data is available for this report.") }}
-        </div>
-        {% endif %}
-    </div>
-
-    {% if taxonomy_panel %}
-    <aside class="card reports-semantic-panel">
-        <div class="card-body">
-            <div class="section-title">
-                <h5 class="card-title">{{ _(taxonomy_panel.title) }}</h5>
-            </div>
-            <p>{{ _(taxonomy_panel.description) }}</p>
-            <dl class="reports-metric-list">
-                {% for metric in taxonomy_panel.metrics %}
-                <div>
-                    <dt>{{ _(metric.label) }}</dt>
-                    <dd>
-                        {% if metric.is_money %}
-                            {{ metric.value | moneyfmt }}
-                        {% else %}
-                            {{ metric.value }}
-                        {% endif %}
-                    </dd>
+<section id="taxonomy-summary" class="reports-detail-section">
+    <div class="reports-detail-section-grid {% if not taxonomy_panel %}reports-detail-section-grid-single{% endif %}">
+        <div>
+            {{ reports_key_insights(transaction_url) }}
+            {{ reports_quality_panel() }}
+            {% if taxonomy_notes %}
+            <div class="reports-note-stack">
+                {% for note in taxonomy_notes %}
+                <div class="reports-note reports-note-{{ note.level }}">
+                    {{ _(note.message) }}
                 </div>
                 {% endfor %}
-            </dl>
-            <a class="btn btn-outline-secondary btn-sm" href="{{ taxonomy_panel.action_url }}"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>{{ _(taxonomy_panel.action_label) }}</a>
+            </div>
+            {% endif %}
         </div>
-    </aside>
+
+        {% if taxonomy_panel %}
+        <aside class="card reports-semantic-panel">
+            <div class="card-body">
+                <div class="section-title">
+                    <h5 class="card-title">{{ _(taxonomy_panel.title) }}</h5>
+                </div>
+                <p>{{ _(taxonomy_panel.description) }}</p>
+                <dl class="reports-metric-list">
+                    {% for metric in taxonomy_panel.metrics %}
+                    <div>
+                        <dt>{{ _(metric.label) }}</dt>
+                        <dd>
+                            {% if metric.is_money %}
+                                {{ metric.value | moneyfmt }}
+                            {% else %}
+                                {{ metric.value }}
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ taxonomy_panel.action_url }}"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>{{ _(taxonomy_panel.action_label) }}</a>
+            </div>
+        </aside>
+        {% endif %}
+    </div>
+</section>
+
+<section id="taxonomy-monthly" class="reports-detail-section" aria-labelledby="taxonomy-monthly-heading">
+    <div class="page-block-header">
+        <h5 id="taxonomy-monthly-heading" class="card-title mb-0">{{ _("Monthly") }}</h5>
+    </div>
+    <div class="reports-chart-grid">
+        {{ reports_chart_card("Monthly statement", "reportsMonthlyChart", true, false) }}
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Monthly statement", monthly_rows, "Month", "reports-taxonomy-monthly-table", false, false) }}
+    </div>
+</section>
+
+<section id="taxonomy-composition" class="reports-detail-section" aria-labelledby="taxonomy-composition-heading">
+    <div class="page-block-header">
+        <h5 id="taxonomy-composition-heading" class="card-title mb-0">{{ _("Composition") }}</h5>
+    </div>
+    {% if taxonomy_has_composition_chart %}
+    <div class="reports-chart-grid">
+        {{ reports_chart_card(taxonomy_target.composition_title, "reportsCompositionChart", false, false) }}
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table(taxonomy_target.composition_title, taxonomy_visible_composition_rows, taxonomy_target.composition_label_heading, "reports-taxonomy-composition-table", false, false) }}
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _(taxonomy_composition_empty_message) }}</div>
     {% endif %}
+</section>
+
+<section id="taxonomy-merchants" class="reports-detail-section" aria-labelledby="taxonomy-merchants-heading">
+    <div class="page-block-header">
+        <h5 id="taxonomy-merchants-heading" class="card-title mb-0">{{ _("Merchants") }}</h5>
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Merchants", merchant_rows, "Merchant", "reports-taxonomy-merchant-table", false, false) }}
+        {{ reports_table("Account breakdown", account_rows, "Account", "reports-taxonomy-account-table", false, false) }}
+    </div>
+</section>
+
+{{ taxonomy_related_reports(taxonomy_related_links) }}
+{{ evidence_preview(taxonomy_evidence_rows, "reports-taxonomy-evidence-table", transaction_url) }}
+
+<script id="reports-overview-chart-data" type="application/json">
+{{ chart_data | tojson }}
+</script>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
 </div>
+{% endif %}
 </div>
 {% elif active_report_section.key == "taxonomy" %}
 <div data-reports-page data-reports-taxonomy>
@@ -629,16 +956,11 @@
     {{ reports_filter_form(reports_clear_url) }}
 {% endcall %}
 
-{{ reports_actions(comparison_url) }}
-
 {% if transaction_count > 0 %}
-{{ reports_key_insights(transaction_url) }}
 {{ reports_quality_panel() }}
-
-<div class="reports-table-grid">
-    {{ taxonomy_index_table("Category reports", taxonomy_category_rows, "Category", "reports-taxonomy-categories-table") }}
-    {{ taxonomy_index_table("Tag reports", taxonomy_tag_rows, "Tag", "reports-taxonomy-tags-table") }}
-</div>
+{{ taxonomy_target_typeahead(taxonomy_target_options, taxonomy_explorer_search) }}
+{{ taxonomy_pinned_cards(taxonomy_pinned_targets) }}
+{{ taxonomy_explorer(taxonomy_explorer_rows, taxonomy_filter_chips, taxonomy_explorer_filter) }}
 {% else %}
 <div class="empty-state">
     {{ _("No transaction data is available for this report.") }}
@@ -668,7 +990,7 @@
     {{ reports_table("Category breakdown", category_rows, "Category", "reports-entity-category-table") }}
     {{ reports_table("Tag breakdown", tag_rows, "Tag", "reports-entity-tag-table") }}
     {% if entity_target.kind == "account" %}
-        {{ reports_table("Counterparties", merchant_rows, "Merchant", "reports-entity-merchant-table") }}
+        {{ reports_table("Merchants", merchant_rows, "Merchant", "reports-entity-merchant-table") }}
     {% else %}
         {{ reports_table("Account breakdown", account_rows, "Account", "reports-entity-account-table") }}
     {% endif %}
@@ -728,7 +1050,7 @@
     {{ reports_table("Income and credit sources", category_rows, "Category", "reports-income-category-table") }}
     {{ reports_table("Tag breakdown", tag_rows, "Tag", "reports-income-tag-table") }}
     {{ reports_table("Account breakdown", account_rows, "Account", "reports-income-account-table") }}
-    {{ reports_table("Counterparties", merchant_rows, "Merchant", "reports-income-merchant-table") }}
+    {{ reports_table("Merchants", merchant_rows, "Merchant", "reports-income-merchant-table") }}
     {{ evidence_table(income_evidence_rows, "reports-income-evidence-table") }}
 </div>
 

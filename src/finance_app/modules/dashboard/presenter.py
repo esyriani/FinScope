@@ -60,7 +60,7 @@ def build_quick_view_options(active_view: str, counts: Mapping[str, Any]) -> lis
             "count": counts["all_count"],
         },
     ]
-    options = [option for option in options if option["count"] > 0]
+    options = [option for option in options if option["count"] > 0 or option["value"] == active_view]
 
     for option in options:
         option["active"] = option["value"] == active_view

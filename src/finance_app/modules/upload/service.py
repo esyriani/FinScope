@@ -439,18 +439,18 @@ def interac_preview_records(
 
     if direction in {INTERAC_DIRECTION_SENT, INTERAC_DIRECTION_RECEIVED}:
         date_col = sent_date_col or deposited_date_col or find_column(header_map, DATE_COLUMNS)
-        counterparty_col = (
+        merchant_col = (
             recipient_col or received_from_col or find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
         )
     elif sent_date_col and recipient_col:
         date_col = sent_date_col
-        counterparty_col = recipient_col
+        merchant_col = recipient_col
     elif deposited_date_col and received_from_col:
         date_col = deposited_date_col
-        counterparty_col = received_from_col
+        merchant_col = received_from_col
     else:
         date_col = find_column(header_map, DATE_COLUMNS)
-        counterparty_col = find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
+        merchant_col = find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
 
     records: list[dict[str, Any]] = []
     for row in rows[1:]:
@@ -459,7 +459,7 @@ def interac_preview_records(
         records.append(
             {
                 "raw_date": record.get(date_col or ""),
-                "description": record.get(counterparty_col or ""),
+                "description": record.get(merchant_col or ""),
                 "raw_amount": record.get(amount_col) if amount_col else None,
                 "method": record.get(method_col) if method_col else None,
                 "status": record.get(status_col) if status_col else None,

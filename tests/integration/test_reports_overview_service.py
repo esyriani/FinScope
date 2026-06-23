@@ -24,8 +24,8 @@ def rows_by_label(rows):
     return {row["label"]: row for row in rows}
 
 
-def test_reports_overview_uses_reportable_cash_flow_by_default(app, core_conn):
-    """Verify Reports overview includes unknown reportable rows and excludes transfers by default."""
+def test_reports_overview_uses_categorized_reportable_cash_flow_by_default(app, core_conn):
+    """Verify Reports overview defaults to categorized reportable cash-flow rows."""
     seed_reporting_data(core_conn)
 
     context = reports_context(
@@ -39,12 +39,12 @@ def test_reports_overview_uses_reportable_cash_flow_by_default(app, core_conn):
 
     assert context["selected_basis"] == "cash_flow"
     assert context["selected_measure"] == "spending"
-    assert context["quick_view"] == "all"
-    assert context["total_spending"] == 290.00
+    assert context["quick_view"] == "categorized"
+    assert context["total_spending"] == 260.00
     assert context["total_income"] == 1000.00
-    assert context["net_cashflow"] == 710.00
-    assert context["transaction_count"] == 5
-    assert rows_by_label(context["category_rows"])["UNKNOWN"]["spending"] == 30.00
+    assert context["net_cashflow"] == 740.00
+    assert context["transaction_count"] == 4
+    assert "UNKNOWN" not in rows_by_label(context["category_rows"])
     assert rows_by_label(context["category_rows"])["Food"]["spending"] == 140.00
     assert rows_by_label(context["category_rows"])["Income"]["income"] == 1000.00
     assert rows_by_label(context["category_rows"])["Food"]["url"].startswith("/reports/categories/")
@@ -52,10 +52,32 @@ def test_reports_overview_uses_reportable_cash_flow_by_default(app, core_conn):
     assert rows_by_label(context["merchant_rows"])["METRO GROCERY"]["url"].startswith("/reports/merchants")
     assert not rows_by_label(context["merchant_rows"])["METRO GROCERY"]["url"].startswith("/transactions")
     assert rows_by_label(context["monthly_rows"])["2026-01"]["spending"] == 140.00
-    assert rows_by_label(context["monthly_rows"])["2026-02"]["spending"] == 150.00
+    assert rows_by_label(context["monthly_rows"])["2026-02"]["spending"] == 120.00
     assert "Card payment" not in {row["label"] for row in context["merchant_rows"]}
     assert "comparison_view=period" in context["comparison_url"]
     assert "analysis_mode=spending" in context["comparison_url"]
+
+
+def test_reports_overview_all_quick_view_includes_unknown_rows(app, core_conn):
+    """Verify the All quick view includes unknown reportable rows when selected."""
+    seed_reporting_data(core_conn)
+
+    context = reports_context(
+        app,
+        [
+            ("period", "custom"),
+            ("date_from", "2026-01-01"),
+            ("date_to", "2026-02-28"),
+            ("quick_view", "all"),
+        ],
+    )
+
+    assert context["quick_view"] == "all"
+    assert context["total_spending"] == 290.00
+    assert context["net_cashflow"] == 710.00
+    assert context["transaction_count"] == 5
+    assert rows_by_label(context["category_rows"])["UNKNOWN"]["spending"] == 30.00
+    assert rows_by_label(context["monthly_rows"])["2026-02"]["spending"] == 150.00
 
 
 def test_reports_overview_quick_view_filters_unknown_rows(app, core_conn):
