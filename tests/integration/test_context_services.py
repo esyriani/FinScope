@@ -1,14 +1,13 @@
 """Service-level context tests for dashboard pages."""
 
 from tests.support.context_services import (
-    quick_view_count,
     seed_dashboard_review_queue_data,
     seed_dashboard_spending_only,
     seed_dashboard_unknown_only,
     seed_reimbursable_dashboard_data,
     seed_reporting_data,
 )
-from tests.support.database import insert_account, insert_merchant, insert_transaction
+from tests.support.database import insert_account, insert_merchant, insert_transaction, set_owner_setting
 from werkzeug.datastructures import MultiDict
 
 from finance_app.modules.dashboard.service import build_dashboard_context
@@ -31,38 +30,91 @@ def test_dashboard_context_totals_filters_custom_dates_and_sorting(app, core_con
     assert context["selected_period"] == "custom"
     assert context["period_label"] == "01-Jan-2026 to 28-Feb-2026"
     assert context["quick_view"] == "categorized"
-    assert [(option["value"], option["active"]) for option in context["quick_view_options"]] == [
+    assert [(option["value"], option["active"]) for option in context["classification_scope_options"]] == [
         ("categorized", True),
-        ("needs_review", False),
-        ("unknown", False),
         ("all", False),
     ]
-    assert context["total_spending"] == 260.00
+    assert context["total_spending"] == 290.00
     assert context["total_income"] == 1000.00
-    assert context["net_cashflow"] == 740.00
-    assert context["transaction_count"] == 4
-    assert context["uncategorized_count"] == 0
+    assert context["net_cashflow"] == 710.00
+    assert context["transaction_count"] == 5
+    assert context["uncategorized_count"] == 1
     assert context["data_quality"]["transaction_count"] == 5
     assert context["data_quality"]["quality_score"] == 80
+    assert context["data_quality"]["unknown_count"] == 1
+    assert context["data_quality"]["needs_review_count"] == 1
+    assert context["data_quality"]["unknown_needs_review_count"] == 1
+    assert context["data_quality"]["unknown_review_sentence"] == "1 unknown transaction needs review."
+    assert context["data_quality"]["unknown_spending_total"] == 30.00
+    assert context["data_quality"]["untagged_spending_total"] == 30.00
+    assert [row["label"] for row in context["data_quality"]["source_rows"]] == [
+        "Rule",
+        "Manual",
+        "Similarity",
+        "AI",
+    ]
     assert context["data_quality"]["review_label"] == "Review 1 transaction needing review"
     assert context["data_quality"]["level"] == "warning"
     assert "quick_view=categorized" not in context["data_quality"]["categorized_url"]
-    insights = context["dashboard_insights"]
-    assert insights["average_transaction_amount"] == 315.00
-    assert insights["untagged_spending_count"] == 0
-    assert insights["untagged_spending_rate"] == 0.0
-    assert insights["verified_count"] == 0
-    assert insights["verified_rate"] == 0.0
-    assert insights["top_source"]["label"] == "Rule"
-    assert insights["top_source"]["count"] == 3
-    assert insights["top_source"]["rate"] == 75.0
-    assert context["dashboard_report_links"]["overview"].startswith(
-        "/reports?period=custom&date_from=2026-01-01&date_to=2026-02-28"
-    )
+    assert "dashboard_insights" not in context
+    assert context["dashboard_report_links"]["overview"].startswith("/reports?period=custom&quick_view=categorized")
+    assert "date_from=2026-01-01" in context["dashboard_report_links"]["overview"]
+    assert "date_to=2026-02-28" in context["dashboard_report_links"]["overview"]
     assert context["dashboard_report_links"]["income"].startswith(
-        "/reports/income?period=custom&date_from=2026-01-01&date_to=2026-02-28"
+        "/reports/income?period=custom&quick_view=categorized"
     )
+    assert "date_from=2026-01-01" in context["dashboard_report_links"]["income"]
+    assert "date_to=2026-02-28" in context["dashboard_report_links"]["income"]
     assert "measure=income" in context["dashboard_report_links"]["income"]
+    assert context["dashboard_chart_data"]["netMonthLabels"] == ["2026-01", "2026-02"]
+    assert [row["label"] for row in context["top_driver_previews"]["categories"]] == ["Food", "Utilities"]
+    assert "UNKNOWN" not in {row["label"] for row in context["top_driver_previews"]["categories"]}
+
+
+def test_dashboard_context_limits_top_driver_previews_from_settings(app, core_conn):
+    """Verify dashboard top-driver previews use the runtime setting."""
+    set_owner_setting(core_conn, "dashboard_top_driver_limit", "2")
+    merchant_ids = {
+        "Alpha Market": insert_merchant(core_conn, "Alpha Market"),
+        "Beta Bills": insert_merchant(core_conn, "Beta Bills"),
+        "Gamma Travel": insert_merchant(core_conn, "Gamma Travel"),
+    }
+    for index, (tx_date, merchant_name, amount, category) in enumerate(
+        [
+            ("2026-04-02", "Alpha Market", 10.00, "Food"),
+            ("2026-04-03", "Beta Bills", 20.00, "Utilities"),
+            ("2026-04-04", "Gamma Travel", 30.00, "Travel"),
+            ("2026-05-02", "Alpha Market", 100.00, "Food"),
+            ("2026-05-03", "Beta Bills", 90.00, "Utilities"),
+            ("2026-05-04", "Gamma Travel", 80.00, "Travel"),
+        ]
+    ):
+        insert_transaction(
+            core_conn,
+            merchant_name,
+            amount,
+            category,
+            tx_date=tx_date,
+            merchant_id=merchant_ids[merchant_name],
+            fingerprint=f"dashboard-driver-limit-{index}",
+            category_source="rule",
+            needs_review=0,
+        )
+
+    with app.test_request_context("/dashboard"):
+        context = build_dashboard_context(
+            MultiDict(
+                [
+                    ("period", "custom"),
+                    ("date_from", "2026-05-01"),
+                    ("date_to", "2026-05-31"),
+                ]
+            )
+        )
+
+    assert [row["label"] for row in context["top_driver_previews"]["categories"]] == ["Food", "Utilities"]
+    assert [row["label"] for row in context["top_driver_previews"]["merchants"]] == ["Alpha Market", "Beta Bills"]
+    assert len(context["top_driver_previews"]["changes"]) == 2
 
 
 def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
@@ -70,7 +122,7 @@ def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
     seed_reporting_data(core_conn)
 
     with app.test_request_context("/dashboard"):
-        unknown_context = build_dashboard_context(
+        old_unknown_context = build_dashboard_context(
             MultiDict(
                 [
                     ("period", "custom"),
@@ -80,7 +132,17 @@ def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
                 ]
             )
         )
-        food_context = build_dashboard_context(
+        categorized_context = build_dashboard_context(
+            MultiDict(
+                [
+                    ("period", "custom"),
+                    ("date_from", "2026-01-01"),
+                    ("date_to", "2026-02-28"),
+                    ("quick_view", "categorized"),
+                ]
+            )
+        )
+        ignored_category_context = build_dashboard_context(
             MultiDict(
                 [
                     ("period", "custom"),
@@ -112,27 +174,37 @@ def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
             )
         )
 
-    assert unknown_context["quick_view"] == "unknown"
-    assert unknown_context["total_spending"] == 30.00
-    assert unknown_context["transaction_count"] == 1
-    assert unknown_context["uncategorized_count"] == 1
-    assert quick_view_count(unknown_context, "unknown") == 1
+    assert old_unknown_context["quick_view"] == "categorized"
+    assert old_unknown_context["total_spending"] == 290.00
+    assert old_unknown_context["transaction_count"] == 5
+    assert old_unknown_context["uncategorized_count"] == 1
+    assert old_unknown_context["data_quality"]["unknown_count"] == 1
 
-    assert food_context["quick_view"] == "categorized"
-    assert food_context["selected_categories"] == ["Food"]
-    assert food_context["total_spending"] == 140.00
-    assert food_context["transaction_count"] == 2
-    assert food_context["dashboard_report_links"]["taxonomy"].startswith(
-        "/reports/taxonomy?period=custom&date_from=2026-01-01&date_to=2026-02-28"
+    assert categorized_context["quick_view"] == "categorized"
+    assert categorized_context["total_spending"] == 290.00
+    assert categorized_context["transaction_count"] == 5
+    assert categorized_context["uncategorized_count"] == 1
+    assert "quick_view=categorized" not in categorized_context["dashboard_links"]["transactions"]
+
+    assert "selected_categories" not in ignored_category_context
+    assert ignored_category_context["quick_view"] == "categorized"
+    assert ignored_category_context["total_spending"] == 290.00
+    assert ignored_category_context["transaction_count"] == 5
+    assert ignored_category_context["dashboard_report_links"]["taxonomy"].startswith(
+        "/reports/taxonomy?period=custom&quick_view=categorized"
     )
+    assert "date_from=2026-01-01" in ignored_category_context["dashboard_report_links"]["taxonomy"]
+    assert "date_to=2026-02-28" in ignored_category_context["dashboard_report_links"]["taxonomy"]
 
+    assert "selected_tags" not in tax_context
     assert tax_context["quick_view"] == "categorized"
-    assert tax_context["selected_tags"] == ["Tax"]
-    assert tax_context["total_spending"] == 100.00
-    assert tax_context["transaction_count"] == 1
+    assert tax_context["total_spending"] == 290.00
+    assert tax_context["transaction_count"] == 5
     assert tax_context["dashboard_report_links"]["taxonomy"].startswith(
-        "/reports/taxonomy?period=custom&date_from=2026-01-01&date_to=2026-02-28"
+        "/reports/taxonomy?period=custom&quick_view=categorized"
     )
+    assert "date_from=2026-01-01" in tax_context["dashboard_report_links"]["taxonomy"]
+    assert "date_to=2026-02-28" in tax_context["dashboard_report_links"]["taxonomy"]
 
     assert metro_context["merchant_search"] == "metro grocery"
     assert metro_context["total_spending"] == 100.00
@@ -304,8 +376,8 @@ def test_dashboard_context_filters_reporting_by_account(app, core_conn):
     assert f"account_id={card_id}" in context["dashboard_report_links"]["income"]
 
 
-def test_dashboard_tag_cashflow_includes_tagged_transfer_credits(app, core_conn):
-    """Verify tagged dashboard cash flow nets reimbursed transfer credits."""
+def test_dashboard_ignores_tag_filters_and_keeps_reportable_cashflow_scope(app, core_conn):
+    """Verify Dashboard tag query params do not reintroduce tag analysis filters."""
     seed_reimbursable_dashboard_data(core_conn)
     date_args = [
         ("period", "custom"),
@@ -323,12 +395,12 @@ def test_dashboard_tag_cashflow_includes_tagged_transfer_credits(app, core_conn)
     assert untagged_context["transaction_count"] == 1
 
     assert reimbursable_context["quick_view"] == "categorized"
-    assert reimbursable_context["selected_tags"] == ["Reimbursable"]
+    assert "selected_tags" not in reimbursable_context
     assert reimbursable_context["total_spending"] == 300.00
-    assert reimbursable_context["total_income"] == 250.00
-    assert reimbursable_context["net_cashflow"] == -50.00
-    assert reimbursable_context["transaction_count"] == 2
-    assert "amount_type=credit" in reimbursable_context["dashboard_links"]["income"]
+    assert reimbursable_context["total_income"] == 0
+    assert reimbursable_context["net_cashflow"] == -300.00
+    assert reimbursable_context["transaction_count"] == 1
+    assert "amount_type=credit" not in reimbursable_context["dashboard_links"]["income"]
     assert "measure=income" in reimbursable_context["dashboard_report_links"]["income"]
 
 
@@ -346,8 +418,10 @@ def test_dashboard_context_handles_empty_database(app):
     assert context["cash_flow_summary"]["savings_rate_label"] == "n/a"
     assert context["data_quality"]["level"] == "empty"
     assert context["data_quality"]["message"] == "No transactions in this view."
-    assert context["dashboard_report_links"]["overview"] == "/reports?period=ytd"
-    assert context["dashboard_report_links"]["income"] == "/reports/income?period=ytd&measure=income"
+    assert context["dashboard_report_links"]["overview"] == "/reports?period=ytd&quick_view=categorized"
+    assert context["dashboard_report_links"]["income"] == (
+        "/reports/income?period=ytd&quick_view=categorized&measure=income"
+    )
 
 
 def test_dashboard_context_handles_zero_income_savings_rate(app, core_conn):
@@ -372,8 +446,8 @@ def test_dashboard_context_handles_zero_income_savings_rate(app, core_conn):
     assert context["cash_flow_summary"]["savings_detail"] == "No income in this view."
 
 
-def test_dashboard_context_handles_all_unknown_quick_view(app, core_conn):
-    """Verify all-UNKNOWN views expose quality risk without category rows."""
+def test_dashboard_context_handles_all_unknown_scope(app, core_conn):
+    """Verify all-UNKNOWN views expose quality risk without analysis filters."""
     seed_dashboard_unknown_only(core_conn)
     args = MultiDict(
         [
@@ -387,13 +461,14 @@ def test_dashboard_context_handles_all_unknown_quick_view(app, core_conn):
     with app.test_request_context("/dashboard"):
         context = build_dashboard_context(args)
 
-    assert context["quick_view"] == "unknown"
+    assert context["quick_view"] == "categorized"
     assert context["total_spending"] == 60.00
     assert context["transaction_count"] == 2
     assert context["uncategorized_count"] == 2
     assert context["data_quality"]["level"] == "danger"
+    assert context["data_quality"]["unknown_count"] == 2
+    assert context["data_quality"]["unknown_review_sentence"] == "2 unknown transactions need review."
     assert context["data_quality"]["review_label"] == "Review 2 transactions needing review"
-    assert quick_view_count(context, "unknown") == 2
 
 
 def test_dashboard_review_cta_uses_full_review_queue_count(app, core_conn):
@@ -410,7 +485,12 @@ def test_dashboard_review_cta_uses_full_review_queue_count(app, core_conn):
     with app.test_request_context("/dashboard"):
         context = build_dashboard_context(args)
 
-    assert quick_view_count(context, "unknown") == 1
-    assert quick_view_count(context, "needs_review") == 2
+    assert context["data_quality"]["unknown_count"] == 1
+    assert context["data_quality"]["needs_review_count"] == 2
+    assert [(metric["label"], metric["value"]) for metric in context["data_quality"]["readiness_metrics"]] == [
+        ("Categorized", "67%"),
+        ("Unknown needing review", 1),
+        ("Untagged", 3),
+    ]
     assert context["data_quality"]["review_label"] == "Review 2 transactions needing review"
     assert context["data_quality"]["review_url"] == "/review"

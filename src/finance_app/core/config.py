@@ -39,6 +39,7 @@ class AppSettings:
     default_comparison_max_years: int
     default_comparison_insight_card_limit: int
     default_home_top_category_limit: int
+    default_dashboard_top_driver_limit: int
     default_merchant_table_limit: int
     default_merchant_suggestion_limit: int
     default_rule_preview_limit: int
@@ -146,6 +147,13 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
             env(
                 "FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT",
                 parser.get("setting_defaults", "home_top_category_limit", fallback="5"),
+            ),
+            5,
+        ),
+        default_dashboard_top_driver_limit=parse_positive_int(
+            env(
+                "FINANCE_DEFAULT_DASHBOARD_TOP_DRIVER_LIMIT",
+                parser.get("setting_defaults", "dashboard_top_driver_limit", fallback="5"),
             ),
             5,
         ),

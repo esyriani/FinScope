@@ -619,6 +619,50 @@ h2 {
     color: var(--app-text);
 }
 
+.filter-panel-heading,
+.collapse-panel-heading {
+    border-radius: 6px;
+    min-width: 0;
+}
+
+.filter-panel-heading[role="button"]:focus-visible,
+.collapse-panel-heading[role="button"]:focus-visible {
+    box-shadow: var(--focus-shadow);
+    outline: none;
+}
+
+.filter-panel-header[data-filter-panel-header-toggle],
+.collapse-panel-header[data-collapse-panel-header-toggle] {
+    cursor: pointer;
+}
+
+.filter-panel-summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-panel {
+    overflow: visible;
+}
+
+.filter-panel .card-body,
+.filter-panel .collapse.show {
+    overflow: visible;
+}
+
+.filter-block-header {
+    border-bottom: 1px solid var(--app-border);
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+}
+
+@media (max-width: 640px) {
+    .filter-panel-summary {
+        white-space: normal;
+    }
+}
+
 .alert-info {
     --bs-alert-bg: var(--app-accent-soft);
     --bs-alert-border-color: rgba(var(--app-accent-rgb), 0.32);

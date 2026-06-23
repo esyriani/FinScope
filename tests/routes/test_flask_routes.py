@@ -234,15 +234,19 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, core_conn):
     assert tag_response.status_code == 200
     assert untagged_response.status_code == 200
     assert_not_markup(response, "data-category-description-select")
-    assert_has_element(response, None, attrs={"data-select-all-label": "Select all categories"})
-    assert_has_element(response, None, attrs={"data-select-all-label": "Select all tags"})
+    assert_no_element(response, None, attrs={"data-select-all-label": "Select all categories"})
+    assert_no_element(response, None, attrs={"data-select-all-label": "Select all tags"})
     assert_visible_text(
         response,
-        "Reports",
+        "What happened?",
+        "Analysis readiness",
+        "Trend preview",
+        "Top drivers",
+        "Explore reports",
         "Overview",
         "Income and credits",
-        "Category or tag",
-        "Open reports",
+        "Categories and tags",
+        "Open report",
     )
     assert_not_visible_text(
         tag_response,
@@ -254,7 +258,9 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, core_conn):
     assert_not_visible_text(response, "Choose filters")
     assert_markup(response, 'name="merchant_query"', 'placeholder="Search merchant"', "data-merchant-autocomplete")
     assert_not_markup(response, "data-dashboard-custom-categories", "data-dashboard-custom-tags")
-    assert_not_markup(tag_response, "dashboard-chart-data", '"categoryLabels"')
+    assert_markup(response, 'href="/reports?period=all&amp;quick_view=categorized"')
+    assert_markup(response, 'id="dashboard-chart-data"')
+    assert_not_markup(tag_response, '"categoryLabels"', "data-sortable-table", "data-table-export-scope")
     assert_not_visible_text(untagged_response, "Hide untagged")
 
 
@@ -271,7 +277,7 @@ def test_category_filters_offer_analysis_category_preset(client, core_conn):
     core_conn.commit()
 
     expected_counts = {
-        "/dashboard?period=all": 1,
+        "/dashboard?period=all": 0,
         "/comparison": 2,
         "/calendar": 1,
         "/recurring": 1,
@@ -288,9 +294,10 @@ def test_category_filters_offer_analysis_category_preset(client, core_conn):
         assert body.count('data-select-preset-summary-label="Analysis categories"') == expected_count
         preset_values = re.findall(r"data-select-preset-exclude-values='([^']+)'", body)
         assert len(preset_values) == expected_count
-        assert all("System adjustment" in value for value in preset_values)
-        assert "Transfers" in body
-        assert "UNKNOWN" in body
+        if expected_count:
+            assert all("System adjustment" in value for value in preset_values)
+            assert "Transfers" in body
+            assert "UNKNOWN" in body
 
 
 def test_calendar_route_renders_bookmarkable_merchant_filter(client):
@@ -479,7 +486,16 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     english_recurring_response = client.get("/recurring")
 
     assert_visible_text(english_home_response, "Needs attention", "Quick insights")
-    assert_visible_text(english_dashboard_response, "Dashboard", "Reports", "Open reports")
+    assert_visible_text(
+        english_dashboard_response,
+        "Dashboard",
+        "Scope",
+        "Analysis readiness",
+        "Trend preview",
+        "Top drivers",
+        "Explore reports",
+        "Open report",
+    )
     assert_visible_text(
         english_comparison_response,
         "Year trends",
@@ -521,19 +537,10 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
         dashboard_response,
         "Tableau de bord",
         "Vue actuelle : Depuis le début de l'année.",
-        "Rapports",
-        "Ouvrir les rapports",
+        "Explorer les rapports",
+        "Facteurs principaux",
+        "Ouvrir le rapport",
         "Revenus et crédits",
-    )
-    assert_has_element(
-        dashboard_response,
-        None,
-        attrs={"data-select-preset-label": "Sélectionner les catégories d’analyse"},
-    )
-    assert_has_element(
-        dashboard_response,
-        None,
-        attrs={"data-select-preset-summary-label": "Catégories d’analyse"},
     )
     assert_not_visible_text(dashboard_response, "year to date", "Open reports")
 

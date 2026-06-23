@@ -83,6 +83,7 @@ def test_setting_defaults_include_runtime_settings_seed_values(monkeypatch, tmp_
     monkeypatch.setenv("FINANCE_DEFAULT_THEME_MODE", "light")
     monkeypatch.setenv("FINANCE_DEFAULT_UI_LANGUAGE", "fr-CA")
     monkeypatch.setenv("FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT", "9")
+    monkeypatch.setenv("FINANCE_DEFAULT_DASHBOARD_TOP_DRIVER_LIMIT", "8")
     monkeypatch.setenv("FINANCE_DEFAULT_MERCHANT_SUGGESTION_LIMIT", "6")
     monkeypatch.setenv("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", "0.62")
     monkeypatch.setenv("FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED", "false")
@@ -98,6 +99,7 @@ def test_setting_defaults_include_runtime_settings_seed_values(monkeypatch, tmp_
     assert settings.default_theme_mode == "light"
     assert settings.default_ui_language == "fr"
     assert settings.default_comparison_insight_card_limit == 9
+    assert settings.default_dashboard_top_driver_limit == 8
     assert settings.default_merchant_suggestion_limit == 6
     assert settings.default_llm_review_threshold == 0.62
     assert settings.default_transaction_ai_rerun_enabled is False

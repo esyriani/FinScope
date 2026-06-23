@@ -84,6 +84,10 @@ def build_settings_context() -> dict[str, Any]:
         "home_top_category_limit": current.get(
             "home_top_category_limit", str(app_settings.default_home_top_category_limit)
         ),
+        "dashboard_top_driver_limit": current.get(
+            "dashboard_top_driver_limit",
+            str(app_settings.default_dashboard_top_driver_limit),
+        ),
         "merchant_table_limit": current.get("merchant_table_limit", str(app_settings.default_merchant_table_limit)),
         "merchant_suggestion_limit": current.get(
             "merchant_suggestion_limit",

@@ -248,12 +248,6 @@ def merchant_totals(context):
     return {row["merchant"]: row["total"] for row in context["merchant_rows"]}
 
 
-def quick_view_count(context, value):
-    """Return a dashboard quick-view count by option value."""
-    option = next(row for row in context["quick_view_options"] if row["value"] == value)
-    return option.get("count")
-
-
 def seed_dashboard_spending_only(conn):
     """Seed a dashboard range with spending but no income."""
     conn.execute(text("""

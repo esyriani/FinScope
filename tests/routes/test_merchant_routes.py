@@ -175,8 +175,8 @@ def test_dashboard_route_filters_spaced_merchant_query(client, core_conn):
     response = client.get("/dashboard?period=all&merchant_query=UDEM+PAIE")
 
     assert response.status_code == 200
-    assert_visible_text(response, "Merchant: UDEM PAIE", "15.00", "Reports")
-    assert_markup(response, "/reports/merchants?period=all&amp;merchant_query=UDEM+PAIE")
+    assert_visible_text(response, "Merchant: UDEM PAIE", "15.00", "Explore reports")
+    assert_markup(response, "/reports/merchants?period=all&amp;quick_view=categorized&amp;merchant_query=UDEM+PAIE")
     assert_not_visible_text(response, "99.00")
 
 
@@ -198,8 +198,8 @@ def test_dashboard_reports_section_replaces_merchant_analytics_table(client, cor
     response = client.get("/dashboard?period=all")
 
     assert response.status_code == 200
-    assert_visible_text(response, "Reports", "Merchants")
-    assert_markup(response, 'href="/reports/merchants?period=all"')
+    assert_visible_text(response, "Explore reports", "Merchants")
+    assert_markup(response, 'href="/reports/merchants?period=all&amp;quick_view=categorized"')
     assert_not_visible_text(response, "Top 10 merchant analytics", "Card purchase 1234 METRO")
     assert_not_markup(response, "data-export-part")
 

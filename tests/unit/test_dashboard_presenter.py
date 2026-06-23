@@ -1,6 +1,6 @@
 """Tests for dashboard presenter behavior."""
 
-from finance_app.modules.dashboard.presenter import build_quick_view_options
+from finance_app.modules.dashboard.presenter import build_classification_scope_options, build_quick_view_options
 
 
 def test_build_quick_view_options_hides_zero_count_buttons():
@@ -19,4 +19,22 @@ def test_build_quick_view_options_hides_zero_count_buttons():
         ("needs_review", 2, False),
         ("unknown", 3, True),
         ("all", 5, False),
+    ]
+
+
+def test_build_classification_scope_options_keeps_dashboard_financial_scopes():
+    """Verify Dashboard classification scope excludes reliability action filters."""
+    options = build_classification_scope_options(
+        "all",
+        {
+            "categorized_count": 2,
+            "needs_review_count": 1,
+            "unknown_count": 1,
+            "all_count": 3,
+        },
+    )
+
+    assert [(option["value"], option["label"], option["count"], option["active"]) for option in options] == [
+        ("categorized", "Categorized", 2, False),
+        ("all", "All", 3, True),
     ]

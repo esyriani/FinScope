@@ -30,6 +30,11 @@ def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str,
             form.get("home_top_category_limit"),
             app_settings.default_home_top_category_limit,
         ),
+        "dashboard_top_driver_limit": parse_positive_int(
+            form.get("dashboard_top_driver_limit"),
+            app_settings.default_dashboard_top_driver_limit,
+            label="Dashboard top driver limit",
+        ),
         "merchant_table_limit": parse_positive_int(
             form.get("merchant_table_limit"),
             app_settings.default_merchant_table_limit,

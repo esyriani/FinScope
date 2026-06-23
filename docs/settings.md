@@ -18,6 +18,7 @@ Every authenticated user can edit General settings for their own account.
 | Comparison default years | Whole number, minimum `2` | Sets how many years are selected by default on the Comparison year-trends view. |
 | Comparison insight card limit | Whole number, minimum `1` | Limits the ranked insight cards shown on Comparison. |
 | Home top category limit | Whole number, minimum `1` | Limits the top spending categories shown on Home. |
+| Dashboard top driver limit | Whole number, minimum `1` | Limits the compact top-driver previews shown on Dashboard. |
 | Merchant table limit | Whole number, minimum `1` | Limits merchant rows shown in comparison summaries. |
 | Merchant suggestion limit | Whole number, minimum `1`; default `5` | Limits merchant suggestions shown in autocomplete fields. |
 | Rule preview limit | Whole number, minimum `1` | Limits matching transactions shown while previewing rule changes. |

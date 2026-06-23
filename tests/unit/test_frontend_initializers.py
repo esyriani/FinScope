@@ -271,8 +271,9 @@ def test_scrollable_modals_fit_content_height():
 def test_filter_panels_use_shared_collapsible_summary_macros():
     """Verify page filters collapse by default and reuse the shared toggle markup."""
     collapsible_template = (TEMPLATES / "_collapsible.html").read_text(encoding="utf-8")
+    base_css = read_style("base.css")
+    core_js = read_script("core.js")
     tables_js = read_script("tables.js")
-    tables_css = read_style("tables.css")
 
     assert "macro collapsible_filter_panel" in collapsible_template
     assert "macro collapsible_filter_block" in collapsible_template
@@ -284,20 +285,22 @@ def test_filter_panels_use_shared_collapsible_summary_macros():
     assert '"Show filters", "Hide filters"' in collapsible_template
     assert 'class="collapse{% if expanded %} show{% endif %}"' in collapsible_template
     assert "filter-panel-summary" in collapsible_template
-    assert "function setupFilterPanelHeaderToggles" in tables_js
-    assert "collapsePanelHeaderInteractiveSelector" in tables_js
-    assert "data-collapse-panel-header-toggle" in tables_js
-    assert "data-collapse-panel-heading-toggle" in tables_js
-    assert "function setupCollapsePanelStateSync" in tables_js
-    assert "toggleFilterPanelTarget(target)" in tables_js
+    assert "function setupCoreFilterPanelHeaderToggles" in core_js
+    assert "financeCollapsePanelHeaderInteractiveSelector" in core_js
+    assert "data-collapse-panel-header-toggle" in core_js
+    assert "data-collapse-panel-heading-toggle" in core_js
+    assert "function setupCoreCollapsePanelStateSync" in core_js
+    assert "financeToggleCollapsePanelTarget(target)" in core_js
     assert 'event.key !== "Enter" && event.key !== " "' in tables_js
+    assert 'registerInitializer("core.filter-panel-header-toggles"' in core_js
+    assert 'registerInitializer("core.collapse-toggle-labels"' in core_js
     assert 'registerInitializer("tables.filter-panel-header-toggles"' in tables_js
-    assert "setFilterPanelHeadingExpanded(target, expanded)" in tables_js
-    assert ".filter-panel-summary" in tables_css
-    assert ".filter-panel-header[data-filter-panel-header-toggle]" in tables_css
-    assert ".collapse-panel-header[data-collapse-panel-header-toggle]" in tables_css
-    assert '.filter-panel-heading[role="button"]:focus-visible' in tables_css
-    assert '.collapse-panel-heading[role="button"]:focus-visible' in tables_css
+    assert "financeSetCollapsePanelHeadingExpanded(target, expanded)" in core_js
+    assert ".filter-panel-summary" in base_css
+    assert ".filter-panel-header[data-filter-panel-header-toggle]" in base_css
+    assert ".collapse-panel-header[data-collapse-panel-header-toggle]" in base_css
+    assert '.filter-panel-heading[role="button"]:focus-visible' in base_css
+    assert '.collapse-panel-heading[role="button"]:focus-visible' in base_css
 
     panel_templates = [
         "dashboard.html",
@@ -316,39 +319,27 @@ def test_filter_panels_use_shared_collapsible_summary_macros():
         assert "collapsible_filter_panel" in template
 
 
-def test_dashboard_wide_cards_span_medium_width_grid():
-    """Verify wide dashboard panels keep spanning both columns below desktop widths."""
+def test_dashboard_explore_reports_uses_compact_action_bar():
+    """Verify Dashboard report shortcuts are a compact action bar."""
     dashboard_template = (TEMPLATES / "dashboard.html").read_text(encoding="utf-8")
     home_dashboard_css = read_style("home-dashboard.css")
     responsive_css = read_style("responsive.css")
-    medium_breakpoint = responsive_css.split("@media (max-width: 1100px)", 1)[1].split(
-        "@media",
-        1,
-    )[0]
-    medium_dashboard_wide_rule = re.search(
-        r"\.dashboard-wide\s*\{(?P<body>[^}]*)\}",
-        medium_breakpoint,
-    )
 
-    assert '<section class="card dashboard-wide dashboard-report-hub mb-4">' in dashboard_template
-    assert (
-        "grid-column: 1 / -1;"
-        in home_dashboard_css.split(".dashboard-wide", 1)[1].split(
-            "}",
-            1,
-        )[0]
-    )
-    assert not medium_dashboard_wide_rule or "grid-column: auto;" not in medium_dashboard_wide_rule.group("body")
+    assert '<section class="dashboard-action-bar mb-4">' in dashboard_template
+    assert "dashboard-report-card" not in dashboard_template
+    assert ".dashboard-action-bar" in home_dashboard_css
+    assert ".dashboard-action-bar" in responsive_css
+    assert "font-size: 1.4rem;" in home_dashboard_css.split(".readiness-chip strong", 1)[1].split("}", 1)[0]
 
 
-def test_dashboard_quick_view_buttons_are_radio_style_apply_filters():
-    """Verify quick-view controls are browser-native radios applied by the form."""
+def test_dashboard_classification_scope_buttons_are_radio_style_apply_filters():
+    """Verify classification-scope controls are browser-native radios applied by the form."""
     dashboard_template = (TEMPLATES / "dashboard.html").read_text(encoding="utf-8")
     dashboard_js = read_script("dashboard.js")
     base_css = read_style("base.css")
     home_dashboard_css = read_style("home-dashboard.css")
 
-    quick_view_section = dashboard_template.split("aria-label=\"{{ _('Quick view') }}\"", 1)[1].split(
+    quick_view_section = dashboard_template.split("aria-label=\"{{ _('Scope') }}\"", 1)[1].split(
         "{% endfor %}",
         1,
     )[0]
@@ -364,6 +355,8 @@ def test_dashboard_quick_view_buttons_are_radio_style_apply_filters():
     assert "data-dashboard-quick-view" not in dashboard_template
     assert "data-dashboard-quick-view-submit" not in dashboard_template
     assert "setupDashboardQuickView" not in dashboard_js
+    assert "dashboard-drilldown" not in dashboard_template
+    assert "dblclick" not in dashboard_js
     assert "event.submitter" not in dashboard_js
     assert ".btn-check:checked + .app-toggle-option" in base_css
     assert "box-shadow: 0 0 0 2px rgba(var(--app-accent-rgb), 0.32);" in base_css
