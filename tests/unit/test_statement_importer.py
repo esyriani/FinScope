@@ -345,7 +345,7 @@ def test_parse_csv_transactions_parses_interac_sent_history():
             "category": UNKNOWN_CATEGORY,
             "needs_review": 1,
             "interac_direction": "sent",
-            "interac_counterparty": "Kiet Menage",
+            "interac_merchant": "Kiet Menage",
             "interac_method": "Mobile",
             "interac_status": "DepositedGo to Details",
         }

@@ -61,6 +61,8 @@ VIEWER_MUTATION_ENDPOINTS = {
     "auth.change_password",
     "auth.login",
     "auth.logout",
+    "reports.pin_report",
+    "reports.save_pinned_reports",
     "settings_page.settings_page",
 }
 PUBLIC_ENDPOINTS = {

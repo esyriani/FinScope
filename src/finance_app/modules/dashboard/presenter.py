@@ -2,51 +2,38 @@
 
 from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
+from urllib.parse import urlencode
 
 from flask import url_for
 
+from finance_app.core.constants import FILTER_MODE_INCLUDE
 from finance_app.core.i18n import gettext
-from finance_app.core.money import MoneyValue, format_money_display, money_to_float, rounded_money_float
+from finance_app.core.money import format_signed_money_display, rounded_money_float
 from finance_app.core.periods import DatePeriod
-from finance_app.modules.categories.service import (
-    normalize_merchant_description,
-    rule_amount_matches,
-)
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
-    CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
-from finance_app.modules.merchants.repository import merchant_identity_from_row
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
+from finance_app.modules.comparison.urls import build_comparison_url
+from finance_app.modules.reports.urls import build_reports_url
 from finance_app.modules.transactions.constants import (
-    AMOUNT_TYPE_CREDIT,
     AMOUNT_TYPE_INCOME,
     AMOUNT_TYPE_SPENDING,
     CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED,
     CATEGORY_STATUS_CATEGORIZED,
     CATEGORY_STATUS_UNKNOWN,
     REVIEW_FILTER_NEEDS_REVIEW,
-    REVIEW_FILTER_VERIFIED,
 )
 
 from .constants import (
-    DASHBOARD_BREAKDOWN_TAG,
-    DASHBOARD_CATEGORY_SORT_CATEGORY,
-    DASHBOARD_CATEGORY_SORT_SHARE,
-    DASHBOARD_CATEGORY_SORT_SPENDING,
-    DASHBOARD_MERCHANT_SORT_CATEGORY,
-    DASHBOARD_MERCHANT_SORT_MERCHANT,
-    DASHBOARD_MERCHANT_SORT_PERIOD_CHANGE,
-    DASHBOARD_MERCHANT_SORT_RULES,
-    DASHBOARD_MERCHANT_SORT_SPENDING,
-    DASHBOARD_MERCHANT_SORT_TRANSACTIONS,
     QUICK_VIEW_ALL,
     QUICK_VIEW_CATEGORIZED,
     QUICK_VIEW_NEEDS_REVIEW,
     QUICK_VIEW_UNKNOWN,
 )
-from .urls import app_url, dashboard_transactions_url
+from .urls import dashboard_transactions_url
 
 
 def build_quick_view_options(active_view: str, counts: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -73,7 +60,7 @@ def build_quick_view_options(active_view: str, counts: Mapping[str, Any]) -> lis
             "count": counts["all_count"],
         },
     ]
-    options = [option for option in options if option["count"] > 0]
+    options = [option for option in options if option["count"] > 0 or option["value"] == active_view]
 
     for option in options:
         option["active"] = option["value"] == active_view
@@ -81,230 +68,109 @@ def build_quick_view_options(active_view: str, counts: Mapping[str, Any]) -> lis
     return options
 
 
+def build_classification_scope_options(active_view: str, counts: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Build Dashboard classification-scope filter options."""
+    options: list[dict[str, Any]] = [
+        {
+            "value": QUICK_VIEW_CATEGORIZED,
+            "label": "Categorized",
+            "count": counts["categorized_count"],
+        },
+        {
+            "value": QUICK_VIEW_ALL,
+            "label": "All",
+            "count": counts["all_count"],
+        },
+    ]
+    for option in options:
+        option["active"] = option["value"] == active_view
+    return options
+
+
 def build_dashboard_links(
     period: DatePeriod,
-    filter_mode: str,
-    selected_categories: Sequence[str],
-    selected_tags: Sequence[str] | None = None,
     date_from: str = "",
     date_to: str = "",
     quick_view: str = QUICK_VIEW_ALL,
-    include_transfer_credits: bool = False,
     merchant_search: str = "",
     account_id: int | None = None,
 ) -> dict[str, str]:
-    """Build dashboard drill-down links for the current reporting scope."""
-    selected_tags = selected_tags or []
-    credit_amount_type = AMOUNT_TYPE_CREDIT if include_transfer_credits else AMOUNT_TYPE_INCOME
+    """Build dashboard detail links for the current reporting scope."""
     return {
         "transactions": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
             quick_view,
-            selected_tags=selected_tags,
             merchant_search=merchant_search,
             account_id=account_id,
         ),
         "spending": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
             quick_view,
-            selected_tags=selected_tags,
             merchant_search=merchant_search,
             account_id=account_id,
             amount_type=AMOUNT_TYPE_SPENDING,
         ),
         "income": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
             quick_view,
-            selected_tags=selected_tags,
             merchant_search=merchant_search,
             account_id=account_id,
-            amount_type=credit_amount_type,
+            amount_type=AMOUNT_TYPE_INCOME,
         ),
         "unknown": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
             quick_view,
-            selected_tags=selected_tags,
             merchant_search=merchant_search,
             account_id=account_id,
             category_status=CATEGORY_STATUS_UNKNOWN,
         ),
         "categorized": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
             quick_view,
-            selected_tags=selected_tags,
             merchant_search=merchant_search,
             account_id=account_id,
             category_status=CATEGORY_STATUS_CATEGORIZED,
         ),
         "needs_review": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
             quick_view,
-            selected_tags=selected_tags,
             merchant_search=merchant_search,
             account_id=account_id,
             review=REVIEW_FILTER_NEEDS_REVIEW,
         ),
-        "verified": dashboard_transactions_url(
-            period,
-            filter_mode,
-            selected_categories,
-            True,
-            date_from,
-            date_to,
-            quick_view,
-            selected_tags=selected_tags,
-            merchant_search=merchant_search,
-            account_id=account_id,
-            review=REVIEW_FILTER_VERIFIED,
-        ),
         "review": url_for("review.review"),
         "upload": url_for("upload.upload"),
     }
-
-
-def build_dashboard_insights(
-    summary: Mapping[str, Any],
-    total_spending: float,
-    period: DatePeriod,
-    filter_mode: str,
-    selected_categories: Sequence[str],
-    selected_tags: Sequence[str] | None = None,
-    date_from: str = "",
-    date_to: str = "",
-    quick_view: str = QUICK_VIEW_ALL,
-    merchant_search: str = "",
-    account_id: int | None = None,
-) -> dict[str, Any]:
-    """Build finance-oriented dashboard insight tiles for the current view."""
-    selected_tags = selected_tags or []
-    transaction_count = summary["transaction_count"] or 0
-    categorized_count = summary["categorized_count"] or 0
-    verified_count = summary["manually_reviewed_count"] or 0
-    untagged_count = summary["untagged_spending_count"] or 0
-    untagged_total = rounded_money_float(summary["untagged_spending_total"])
-    top_source = top_categorization_source(summary, categorized_count)
-
-    return {
-        "average_transaction_amount": rounded_money_float(summary["average_transaction_amount"]),
-        "transaction_count": transaction_count,
-        "untagged_spending_count": untagged_count,
-        "untagged_spending_total": untagged_total,
-        "untagged_spending_rate": percentage(untagged_total, total_spending),
-        "verified_count": verified_count,
-        "verified_rate": percentage(verified_count, transaction_count),
-        "top_source": top_source,
-        "top_source_url": source_transactions_url(
-            top_source["source"],
-            period,
-            filter_mode,
-            selected_categories,
-            selected_tags,
-            date_from,
-            date_to,
-            quick_view,
-            merchant_search,
-            account_id,
-        ),
-    }
-
-
-def top_categorization_source(summary: Mapping[str, Any], categorized_count: int) -> dict[str, Any]:
-    """Return the dominant category assignment source in a summary row."""
-    candidates: list[dict[str, Any]] = [
-        {
-            "source": CATEGORY_SOURCE_RULE,
-            "label": "Rule",
-            "count": summary["rule_count"] or 0,
-        },
-        {
-            "source": CATEGORY_SOURCE_HISTORY,
-            "label": "Similarity",
-            "count": summary["history_count"] or 0,
-        },
-        {
-            "source": CATEGORY_SOURCE_AI,
-            "label": "AI",
-            "count": summary["ai_count"] or 0,
-        },
-        {
-            "source": CATEGORY_SOURCE_MANUAL,
-            "label": "Manual",
-            "count": summary["manual_source_count"] or 0,
-        },
-    ]
-    ordered = sorted(
-        enumerate(candidates),
-        key=lambda item: (item[1]["count"], -item[0]),
-        reverse=True,
-    )
-    top: dict[str, Any] = ordered[0][1] if ordered else {"source": "", "label": "n/a", "count": 0}
-    if top["count"] == 0:
-        top = {"source": "", "label": "n/a", "count": 0}
-    return {
-        **top,
-        "rate": percentage(top["count"], categorized_count),
-    }
-
-
-def source_transactions_url(
-    source: str,
-    period: DatePeriod,
-    filter_mode: str,
-    selected_categories: Sequence[str],
-    selected_tags: Sequence[str],
-    date_from: str,
-    date_to: str,
-    quick_view: str,
-    merchant_search: str = "",
-    account_id: int | None = None,
-) -> str:
-    """Return a transactions URL for a category source insight."""
-    if not source:
-        return ""
-    source_filter = CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED if source == CATEGORY_SOURCE_MANUAL else source
-    return dashboard_transactions_url(
-        period,
-        filter_mode,
-        selected_categories,
-        True,
-        date_from,
-        date_to,
-        quick_view,
-        selected_tags=selected_tags,
-        merchant_search=merchant_search,
-        account_id=account_id,
-        category_source=source_filter,
-    )
 
 
 def build_cash_flow_summary(total_income: float, total_spending: float) -> dict[str, Any]:
@@ -345,9 +211,6 @@ def build_cash_flow_summary(total_income: float, total_spending: float) -> dict[
 def attach_data_quality_urls(
     data_quality: MutableMapping[str, Any],
     period: DatePeriod,
-    filter_mode: str,
-    selected_categories: Sequence[str],
-    selected_tags: Sequence[str] | None = None,
     date_from: str = "",
     date_to: str = "",
     quick_view: str = QUICK_VIEW_ALL,
@@ -355,392 +218,161 @@ def attach_data_quality_urls(
     account_id: int | None = None,
 ) -> None:
     """Attach data quality URLs."""
-    selected_tags = selected_tags or []
+    reporting_quick_view = QUICK_VIEW_ALL
     urls = {
         "Categorized": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
-            quick_view,
-            selected_tags=selected_tags,
+            reporting_quick_view,
             merchant_search=merchant_search,
             account_id=account_id,
             category_status=CATEGORY_STATUS_CATEGORIZED,
         ),
         "Needs review": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
-            quick_view,
-            selected_tags=selected_tags,
+            reporting_quick_view,
             merchant_search=merchant_search,
             account_id=account_id,
             review=REVIEW_FILTER_NEEDS_REVIEW,
         ),
         "Unknown": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
-            quick_view,
-            selected_tags=selected_tags,
+            reporting_quick_view,
             merchant_search=merchant_search,
             account_id=account_id,
             category_status=CATEGORY_STATUS_UNKNOWN,
         ),
         "Manual reviewed": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
-            quick_view,
-            selected_tags=selected_tags,
+            reporting_quick_view,
             merchant_search=merchant_search,
             account_id=account_id,
             category_source=CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED,
         ),
         "By rule": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
-            quick_view,
-            selected_tags=selected_tags,
+            reporting_quick_view,
             merchant_search=merchant_search,
             account_id=account_id,
             category_source=CATEGORY_SOURCE_RULE,
         ),
         "By similarity": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
-            quick_view,
-            selected_tags=selected_tags,
+            reporting_quick_view,
             merchant_search=merchant_search,
             account_id=account_id,
             category_source=CATEGORY_SOURCE_HISTORY,
         ),
         "By AI": dashboard_transactions_url(
             period,
-            filter_mode,
-            selected_categories,
-            True,
+            FILTER_MODE_INCLUDE,
+            [],
+            False,
             date_from,
             date_to,
-            quick_view,
-            selected_tags=selected_tags,
+            reporting_quick_view,
             merchant_search=merchant_search,
             account_id=account_id,
             category_source=CATEGORY_SOURCE_AI,
         ),
     }
+    transactions_url = dashboard_transactions_url(
+        period,
+        FILTER_MODE_INCLUDE,
+        [],
+        False,
+        date_from,
+        date_to,
+        reporting_quick_view,
+        merchant_search=merchant_search,
+        account_id=account_id,
+    )
+    untagged_url = dashboard_transactions_url(
+        period,
+        FILTER_MODE_INCLUDE,
+        [],
+        False,
+        date_from,
+        date_to,
+        reporting_quick_view,
+        selected_tags=[UNTAGGED_TAG_FILTER],
+        merchant_search=merchant_search,
+        account_id=account_id,
+    )
 
     data_quality["categorized_url"] = urls["Categorized"]
     data_quality["needs_review_url"] = urls["Needs review"]
     data_quality["review_url"] = url_for("review.review")
-    for group in data_quality["metric_groups"]:
-        for metric in group.get("metrics", []) + group.get("compact_metrics", []):
-            metric["url"] = urls.get(
-                metric["label"],
-                dashboard_transactions_url(
-                    period,
-                    filter_mode,
-                    selected_categories,
-                    True,
-                    date_from,
-                    date_to,
-                    quick_view,
-                    selected_tags=selected_tags,
-                    merchant_search=merchant_search,
-                    account_id=account_id,
-                ),
-            )
-
-
-def dashboard_sort_text(value: object) -> str:
-    """Render sort text."""
-    return str(value or "").casefold()
-
-
-def dashboard_optional_number(value: object) -> tuple[bool, object]:
-    """Render optional number."""
-    return (value is not None, value if value is not None else 0)
-
-
-def sort_merchant_rows(rows: list[dict[str, Any]], sort: str, direction: str) -> None:
-    """Sort merchant rows."""
-    key_map = {
-        DASHBOARD_MERCHANT_SORT_MERCHANT: lambda row: dashboard_sort_text(row["merchant"]),
-        DASHBOARD_MERCHANT_SORT_CATEGORY: lambda row: dashboard_sort_text(row["category"]),
-        DASHBOARD_MERCHANT_SORT_TRANSACTIONS: lambda row: row["transaction_count"],
-        DASHBOARD_MERCHANT_SORT_SPENDING: lambda row: row["total"],
-        DASHBOARD_MERCHANT_SORT_PERIOD_CHANGE: lambda row: dashboard_optional_number(
-            row["period_change"].get("sort_value")
-        ),
-        DASHBOARD_MERCHANT_SORT_RULES: lambda row: len(row["rules"]),
+    data_quality["unknown_url"] = urls["Unknown"]
+    data_quality["transactions_url"] = transactions_url
+    data_quality["untagged_url"] = untagged_url
+    metric_urls = {
+        "Categorized": urls["Categorized"],
+        "Unknown needing review": data_quality["review_url"],
+        "Untagged": untagged_url,
     }
-    rows.sort(key=key_map[sort], reverse=direction == "desc")
+    for metric in data_quality["readiness_metrics"]:
+        metric["url"] = metric_urls.get(metric["label"], transactions_url)
 
-
-def sort_category_rows(rows: list[dict[str, Any]], sort: str, direction: str) -> None:
-    """Sort category rows."""
-    key_map = {
-        DASHBOARD_CATEGORY_SORT_CATEGORY: lambda row: dashboard_sort_text(row["category"]),
-        DASHBOARD_CATEGORY_SORT_SPENDING: lambda row: row["total"],
-        DASHBOARD_CATEGORY_SORT_SHARE: lambda row: row["share"],
-    }
-    rows.sort(key=key_map[sort], reverse=direction == "desc")
-
-
-def build_merchant_aggregates(rows: Sequence[Mapping[str, Any]], conn: Any = None) -> dict[str, dict[str, Any]]:
-    """Build merchant aggregates."""
-    aggregates: dict[str, dict[str, Any]] = {}
-
-    for row in rows:
-        merchant = merchant_identity_from_row(row, conn=conn)
-        merchant_key = merchant["name"]
-        if not merchant_key:
-            continue
-
-        aggregate = aggregates.setdefault(
-            merchant_key,
-            {
-                "merchant_id": merchant["id"],
-                "merchant_key": merchant_key,
-                "cleaned_keys": set(),
-                "examples": set(),
-                "amounts": [],
-                "category_totals": {},
-                "category_counts": {},
-                "transaction_count": 0,
-                "total": 0,
-            },
-        )
-        amount = money_to_float(row["amount"])
-        category = row["category"]
-        if aggregate["merchant_id"] != merchant["id"]:
-            aggregate["merchant_id"] = None
-        aggregate["cleaned_keys"].add(merchant["cleaned_key"])
-        aggregate["examples"].add(row["description"])
-        aggregate["amounts"].append(amount)
-        aggregate["transaction_count"] += 1
-        aggregate["total"] += amount
-        aggregate["category_totals"][category] = aggregate["category_totals"].get(category, 0) + amount
-        aggregate["category_counts"][category] = aggregate["category_counts"].get(category, 0) + 1
-
-    return aggregates
-
-
-def merchant_primary_category(aggregate: Mapping[str, Any]) -> dict[str, Any]:
-    """Build primary category."""
-    categories = sorted(
-        aggregate["category_totals"],
-        key=lambda category: (
-            aggregate["category_totals"][category],
-            aggregate["category_counts"][category],
-            category,
-        ),
-        reverse=True,
-    )
-    if not categories:
-        return {"label": "n/a", "count": 0, "total": 0}
-
-    primary = categories[0]
-    extra_count = max(0, len(categories) - 1)
-    label = primary if extra_count == 0 else f"{primary} +{extra_count}"
-    return {
-        "label": label,
-        "count": aggregate["category_counts"][primary],
-        "total": aggregate["category_totals"][primary],
-    }
-
-
-def merchant_matching_rules(aggregate: Mapping[str, Any], rules: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Build matching rules."""
-    matches: list[dict[str, Any]] = []
-    merchant_key = aggregate["merchant_key"]
-    amounts = aggregate["amounts"]
-    candidates = [merchant_key]
-    candidates.extend(
-        cleaned_key
-        for cleaned_key in sorted(aggregate["cleaned_keys"])
-        if cleaned_key and cleaned_key not in candidates
-    )
-
-    for rule in rules:
-        rule_merchant_id = rule["merchant_id"] if "merchant_id" in rule.keys() else rule.get("merchant_id")
-        if rule_merchant_id is not None:
-            if aggregate.get("merchant_id") is None or int(aggregate["merchant_id"]) != int(rule_merchant_id):
-                continue
-            if not any(rule_amount_matches(rule, amount) for amount in amounts):
-                continue
-
-            matches.append(
-                {
-                    "keyword": rule["keyword"],
-                    "category": rule["category"],
-                    "source": rule["source"],
-                    "url": app_url("rules.rules", search=rule["merchant_name"] or rule["keyword"]),
-                }
-            )
-            continue
-
-        keyword = normalize_merchant_description(rule["keyword"])
-        if not keyword or not any(keyword in candidate for candidate in candidates):
-            continue
-        if not any(rule_amount_matches(rule, amount) for amount in amounts):
-            continue
-
-        matches.append(
-            {
-                "keyword": rule["keyword"],
-                "category": rule["category"],
-                "source": rule["source"],
-                "url": app_url("rules.rules", search=rule["keyword"]),
-            }
-        )
-
-    return matches[:3]
-
-
-def merchant_period_change(current_total: float, previous_total: float | None) -> dict[str, Any]:
-    """Build period change."""
-    if previous_total is None:
-        return {
-            "label": "n/a",
-            "detail": gettext("No comparison"),
-            "direction": "flat",
-            "sort_value": None,
-        }
-
-    previous_total = round(previous_total, 2)
-    if previous_total == 0:
-        return {
-            "label": "New",
-            "detail": gettext("No prior spending"),
-            "direction": "up",
-            "sort_value": 999999,
-        }
-
-    percent = round(((current_total - previous_total) / previous_total) * 100)
-    direction = "up" if percent > 0 else "down" if percent < 0 else "flat"
-    return {
-        "label": f"{percent:+d}%" if percent else "0%",
-        "detail": gettext("prior {amount}", amount=format_money_text(previous_total)),
-        "direction": direction,
-        "sort_value": percent,
-    }
-
-
-def format_money_text(value: MoneyValue | None) -> str:
-    """Format money text."""
-    return format_money_display(value, places=0)
-
-
-def build_category_rows(
-    spending_by_category: Sequence[Mapping[str, Any]],
-    total_spending: float,
-    period: DatePeriod,
-    filter_mode: str,
-    selected_categories: Sequence[str],
-    selected_tags: Sequence[str] | None = None,
-    date_from: str = "",
-    date_to: str = "",
-    quick_view: str = QUICK_VIEW_ALL,
-    merchant_search: str = "",
-    account_id: int | None = None,
-    breakdown: str = "category",
-) -> list[dict[str, Any]]:
-    """Build category or tag breakdown rows."""
-    selected_tags = selected_tags or []
-    rows: list[dict[str, Any]] = []
-
-    for row in spending_by_category:
-        row_data = dict(row)
-        total = rounded_money_float(row_data["total"])
-        is_tag_breakdown = breakdown == DASHBOARD_BREAKDOWN_TAG
-        tag_name = row_data.get("tag", "")
-        is_untagged = bool(row_data.get("untagged"))
-        label = gettext("Untagged") if is_untagged else row_data["category"]
-        if is_tag_breakdown:
-            url = (
-                ""
-                if is_untagged
-                else dashboard_transactions_url(
-                    period,
-                    filter_mode,
-                    selected_categories,
-                    True,
-                    date_from,
-                    date_to,
-                    quick_view,
-                    selected_tags=selected_tags,
-                    merchant_search=merchant_search,
-                    account_id=account_id,
-                    tags=[tag_name],
-                    amount_type=AMOUNT_TYPE_SPENDING,
-                )
-            )
-        else:
-            url = dashboard_transactions_url(
-                period,
-                filter_mode,
-                selected_categories,
-                False,
-                date_from,
-                date_to,
-                quick_view,
-                selected_tags=selected_tags,
-                merchant_search=merchant_search,
-                account_id=account_id,
-                category=row_data["category"],
-                amount_type=AMOUNT_TYPE_SPENDING,
-            )
-        rows.append(
-            {
-                "category": label,
-                "total": total,
-                "share": round((total / total_spending) * 100, 1) if total_spending else 0,
-                "url": url,
-            }
-        )
-
-    max_total = max((row["total"] for row in rows), default=0)
-    for row in rows:
-        row["bar_width"] = round((row["total"] / max_total) * 100, 1) if max_total else 0
-
-    return rows
-
-
-def build_spending_income_series(
-    monthly_expenses: Sequence[Mapping[str, Any]],
-    monthly_income: Sequence[Mapping[str, Any]],
-) -> dict[str, list[Any]]:
-    """Build spending income series."""
-    expense_by_month = {row["month"]: rounded_money_float(row["total"]) for row in monthly_expenses}
-    income_by_month = {row["month"]: rounded_money_float(row["total"]) for row in monthly_income}
-    months = sorted(set(expense_by_month) | set(income_by_month))
-
-    return {
-        "labels": months,
-        "spending_totals": [expense_by_month.get(month, 0) for month in months],
-        "income_totals": [income_by_month.get(month, 0) for month in months],
-    }
+    data_quality["detail_rows"] = [
+        {"label": "Reportable rows", "value": data_quality["transaction_count"], "url": transactions_url},
+        {"label": "Categorized rows", "value": data_quality["categorized_count"], "url": urls["Categorized"]},
+        {"label": "Unknown rows", "value": data_quality["unknown_count"], "url": urls["Unknown"]},
+        {"label": "Needs-review rows", "value": data_quality["needs_review_count"], "url": urls["Needs review"]},
+        {"label": "Untagged rows", "value": data_quality["untagged_count"], "url": untagged_url},
+    ]
+    data_quality["impact_rows"] = [
+        {
+            "label": "Unknown spending amount",
+            "value": format_money(data_quality["unknown_spending_total"]),
+            "url": urls["Unknown"],
+        },
+        {
+            "label": "Unknown income/credit amount",
+            "value": format_money(data_quality["unknown_income_total"]),
+            "url": urls["Unknown"],
+        },
+        {
+            "label": "Untagged spending amount",
+            "value": format_money(data_quality["untagged_spending_total"]),
+            "url": untagged_url,
+        },
+    ]
+    data_quality["source_rows"] = [
+        {"label": "Rule", "value": data_quality["rule_count"], "url": urls["By rule"]},
+        {"label": "Manual", "value": data_quality["manual_source_count"], "url": urls["Manual reviewed"]},
+        {"label": "Similarity", "value": data_quality["history_count"], "url": urls["By similarity"]},
+        {"label": "AI", "value": data_quality["ai_count"], "url": urls["By AI"]},
+    ]
 
 
 def build_data_quality(summary: Mapping[str, Any]) -> dict[str, Any]:
@@ -750,18 +382,19 @@ def build_data_quality(summary: Mapping[str, Any]) -> dict[str, Any]:
     uncategorized_count = summary["uncategorized_count"] or 0
     unknown_needs_review_count = summary["unknown_needs_review_count"] or 0
     needs_review_count = summary["needs_review_count"] or 0
+    untagged_count = summary.get("untagged_count", summary.get("untagged_spending_count", 0)) or 0
+    untagged_spending_total = rounded_money_float(summary.get("untagged_spending_total", 0))
+    unknown_spending_total = rounded_money_float(summary.get("unknown_spending_total", 0))
+    unknown_income_total = rounded_money_float(summary.get("unknown_income_total", 0))
     manually_reviewed_count = summary["manually_reviewed_count"] or 0
     rule_count = summary["rule_count"] or 0
     history_count = summary["history_count"] or 0
     ai_count = summary["ai_count"] or 0
+    manual_source_count = summary["manual_source_count"] or 0
 
     categorized_rate = percentage(categorized_count, transaction_count)
     unknown_rate = percentage(uncategorized_count, transaction_count)
     needs_review_rate = percentage(needs_review_count, transaction_count)
-    manually_reviewed_rate = percentage(manually_reviewed_count, transaction_count)
-    rule_rate = percentage(rule_count, transaction_count)
-    history_rate = percentage(history_count, transaction_count)
-    ai_rate = percentage(ai_count, transaction_count)
     quality_score = round(categorized_rate)
     risk_rate = max(unknown_rate, needs_review_rate)
 
@@ -800,68 +433,6 @@ def build_data_quality(summary: Mapping[str, Any]) -> dict[str, Any]:
         level = "good"
         message = gettext("Category data is ready for analysis.")
 
-    status_note = ""
-    if needs_review_count and unknown_needs_review_count == needs_review_count:
-        status_note = gettext("Reason: all transactions needing review are currently UNKNOWN.")
-    elif needs_review_count and unknown_needs_review_count:
-        status_note = gettext(
-            "Reason: {unknown_count} of {review_count} transactions needing review are currently UNKNOWN.",
-            unknown_count=unknown_needs_review_count,
-            review_count=needs_review_count,
-        )
-
-    source_metrics: list[dict[str, Any]] = [
-        {
-            "label": "By rule",
-            "count": rule_count,
-            "rate": rule_rate,
-        },
-        {
-            "label": "Manual reviewed",
-            "count": manually_reviewed_count,
-            "rate": manually_reviewed_rate,
-        },
-        {
-            "label": "By similarity",
-            "count": history_count,
-            "rate": history_rate,
-        },
-        {
-            "label": "By AI",
-            "count": ai_count,
-            "rate": ai_rate,
-        },
-    ]
-    visible_source_metrics = [
-        metric for metric in source_metrics if metric["count"] > 0 or metric["label"] == "By rule"
-    ]
-    compact_source_metrics = [
-        metric for metric in source_metrics if metric["count"] == 0 and metric["label"] != "By rule"
-    ]
-
-    metric_groups = [
-        {
-            "label": "Categorization status",
-            "note": status_note,
-            "metrics": [
-                {
-                    "label": "Categorized",
-                    "count": categorized_count,
-                    "rate": categorized_rate,
-                },
-                {
-                    "label": "Needs review",
-                    "count": needs_review_count,
-                    "rate": needs_review_rate,
-                },
-            ],
-        },
-        {
-            "label": "Categorization source",
-            "metrics": visible_source_metrics,
-            "compact_metrics": compact_source_metrics,
-        },
-    ]
     review_count = needs_review_count + max(0, uncategorized_count - unknown_needs_review_count)
     review_label = gettext(
         (
@@ -871,15 +442,226 @@ def build_data_quality(summary: Mapping[str, Any]) -> dict[str, Any]:
         ),
         count=review_count,
     )
+    if unknown_needs_review_count == 1:
+        unknown_review_sentence = gettext("1 unknown transaction needs review.")
+    elif unknown_needs_review_count:
+        unknown_review_sentence = gettext(
+            "{count} unknown transactions need review.",
+            count=unknown_needs_review_count,
+        )
+    else:
+        unknown_review_sentence = gettext("No unknown transactions need review.")
+
+    driver_warning = ""
+    if unknown_needs_review_count or uncategorized_count:
+        driver_warning = gettext("Category and merchant drivers may be incomplete until unknown rows are reviewed.")
+
+    readiness_metrics = [
+        {
+            "label": "Categorized",
+            "value": f"{quality_score}%",
+            "detail": gettext(
+                "{count} of {total} reportable rows",
+                count=categorized_count,
+                total=transaction_count,
+            ),
+            "tone": "neutral",
+        },
+        {
+            "label": "Unknown needing review",
+            "value": unknown_needs_review_count,
+            "detail": unknown_review_sentence,
+            "tone": "warning" if unknown_needs_review_count else "neutral",
+        },
+        {
+            "label": "Untagged",
+            "value": untagged_count,
+            "detail": gettext(
+                "{amount} untagged spending",
+                amount=format_money(untagged_spending_total),
+            ),
+            "tone": "neutral",
+        },
+    ]
 
     return {
         "transaction_count": transaction_count,
+        "categorized_count": categorized_count,
+        "unknown_count": uncategorized_count,
+        "unknown_needs_review_count": unknown_needs_review_count,
+        "unknown_rate": unknown_rate,
+        "needs_review_count": needs_review_count,
+        "needs_review_rate": needs_review_rate,
+        "untagged_count": untagged_count,
+        "untagged_spending_total": untagged_spending_total,
+        "unknown_spending_total": unknown_spending_total,
+        "unknown_income_total": unknown_income_total,
+        "rule_count": rule_count,
+        "manual_source_count": manual_source_count,
+        "history_count": history_count,
+        "ai_count": ai_count,
+        "manual_reviewed_count": manually_reviewed_count,
         "quality_score": quality_score,
         "level": level,
         "message": message,
-        "metric_groups": metric_groups,
+        "readiness_metrics": readiness_metrics,
+        "unknown_review_sentence": unknown_review_sentence,
+        "driver_warning": driver_warning,
         "review_label": review_label,
     }
+
+
+def build_dashboard_chart_data(monthly_rows: Sequence[Mapping[str, Any]]) -> dict[str, list[Any]]:
+    """Build compact Dashboard trend chart JSON."""
+    return {
+        "spendingIncomeMonthLabels": [row["label"] for row in monthly_rows],
+        "spendingIncomeSpendingTotals": [rounded_money_float(row["spending"]) for row in monthly_rows],
+        "spendingIncomeIncomeTotals": [rounded_money_float(row["income"]) for row in monthly_rows],
+        "netMonthLabels": [row["label"] for row in monthly_rows],
+        "netMonthTotals": [rounded_money_float(row["net"]) for row in monthly_rows],
+    }
+
+
+def build_top_driver_previews(
+    category_rows: Sequence[Mapping[str, Any]],
+    merchant_rows: Sequence[Mapping[str, Any]],
+    change_rows: Sequence[Mapping[str, Any]],
+    total_spending: float,
+    report_params: Mapping[str, object],
+    comparison_params: Mapping[str, object],
+) -> dict[str, Any]:
+    """Build compact top-driver preview rows for the Dashboard."""
+    return {
+        "categories": build_driver_rows(category_rows, total_spending, "category", report_params),
+        "merchants": build_driver_rows(merchant_rows, total_spending, "merchant", report_params),
+        "changes": build_change_rows(change_rows, comparison_params),
+    }
+
+
+def build_driver_rows(
+    rows: Sequence[Mapping[str, Any]],
+    total_spending: float,
+    row_kind: str,
+    report_params: Mapping[str, object],
+) -> list[dict[str, Any]]:
+    """Return compact spending-driver rows with Reports destinations."""
+    prepared: list[dict[str, Any]] = []
+    max_value = max((abs(rounded_money_float(row.get("spending"))) for row in rows), default=0)
+    for row in rows:
+        spending = rounded_money_float(row.get("spending"))
+        prepared.append(
+            {
+                "label": str(row.get("label") or ""),
+                "amount": spending,
+                "transaction_count": int(row.get("transaction_count") or 0),
+                "share": percentage(spending, total_spending),
+                "bar_width": percentage(abs(spending), max_value),
+                "url": driver_report_url(row_kind, row, report_params),
+                "action_label": "View report",
+            }
+        )
+    return prepared
+
+
+def driver_report_url(row_kind: str, row: Mapping[str, Any], report_params: Mapping[str, object]) -> str:
+    """Return a Reports URL for a Dashboard preview driver row."""
+    if row_kind == "category":
+        category_id = row.get("category_id")
+        if category_id:
+            return app_detail_url(
+                "reports.category_report",
+                {"category_id": category_id},
+                report_params,
+            )
+        return build_reports_url("reports.taxonomy", **report_params)
+
+    merchant_id = row.get("merchant_id")
+    if merchant_id:
+        return app_detail_url(
+            "reports.merchant_report",
+            {"merchant_id": merchant_id},
+            without_keys(report_params, "merchant_id", "merchant_query"),
+        )
+    merchant_query = row.get("merchant_key") or row.get("label")
+    if merchant_query:
+        return build_reports_url(
+            "reports.merchants",
+            **without_keys(report_params, "merchant_id", "merchant_query"),
+            merchant_query=merchant_query,
+        )
+    return build_reports_url("reports.merchants", **report_params)
+
+
+def build_change_rows(
+    rows: Sequence[Mapping[str, Any]],
+    comparison_params: Mapping[str, object],
+) -> list[dict[str, Any]]:
+    """Return compact current-versus-previous change rows."""
+    max_value = max((abs(rounded_money_float(row.get("change"))) for row in rows), default=0)
+    prepared: list[dict[str, Any]] = []
+    for row in rows:
+        change = rounded_money_float(row.get("change"))
+        current = rounded_money_float(row.get("current"))
+        previous = rounded_money_float(row.get("previous"))
+        prepared.append(
+            {
+                "label": str(row.get("label") or ""),
+                "kind": str(row.get("kind") or ""),
+                "current": current,
+                "previous": previous,
+                "change": change,
+                "change_label": format_signed_money(change),
+                "direction": "up" if change > 0 else "down" if change < 0 else "flat",
+                "bar_width": percentage(abs(change), max_value),
+                "url": change_comparison_url(row, comparison_params),
+                "kind_label": "Category" if row.get("kind") == "category" else "Merchant",
+                "action_label": "Compare",
+            }
+        )
+    return prepared
+
+
+def change_comparison_url(row: Mapping[str, Any], comparison_params: Mapping[str, object]) -> str:
+    """Return a Comparison URL for a Dashboard change preview row."""
+    params = dict(comparison_params)
+    if row.get("kind") == "category":
+        params["period_categories"] = [row.get("label")]
+    elif row.get("kind") == "merchant":
+        params.pop("merchant_id", None)
+        params.pop("merchant_query", None)
+        if row.get("merchant_id"):
+            params["merchant_id"] = row.get("merchant_id")
+        params["merchant_query"] = row.get("merchant_key") or row.get("label")
+    return build_comparison_url(**params)
+
+
+def app_detail_url(endpoint: str, route_values: dict[str, Any], params: Mapping[str, object]) -> str:
+    """Build a route-value URL with cleaned query parameters."""
+    cleaned = {
+        key: value
+        for key, value in params.items()
+        if value not in (None, "")
+        and not (isinstance(value, (list, tuple)) and not [item for item in value if item not in (None, "")])
+    }
+    query = urlencode(cleaned, doseq=True)
+    base_url = url_for(endpoint, **route_values)
+    return f"{base_url}?{query}" if query else base_url
+
+
+def without_keys(params: Mapping[str, object], *keys: str) -> dict[str, object]:
+    """Return URL parameters without the supplied keys."""
+    excluded = set(keys)
+    return {key: value for key, value in params.items() if key not in excluded}
+
+
+def format_signed_money(value: float) -> str:
+    """Return a signed money label using the configured browser/server format style."""
+    return format_signed_money_display(value)
+
+
+def format_money(value: float) -> str:
+    """Return a money label for server-rendered dashboard details."""
+    return format_signed_money_display(value).lstrip("+")
 
 
 def percentage(count: float, total: float) -> float:

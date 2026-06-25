@@ -7,6 +7,12 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 from finance_app.core.constants import PROJECT_DIR
+from finance_app.core.setting_limits import (
+    COMPARISON_INSIGHT_CARD_LIMIT_MAX,
+    DASHBOARD_TOP_DRIVER_LIMIT_MAX,
+    HOME_TOP_CATEGORY_LIMIT_MAX,
+    PINNED_REPORT_LIMIT_MAX,
+)
 
 CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(PROJECT_DIR) / "config.ini"))
 EXAMPLE_CONFIG_PATH = Path(PROJECT_DIR) / "config.example.ini"
@@ -39,6 +45,8 @@ class AppSettings:
     default_comparison_max_years: int
     default_comparison_insight_card_limit: int
     default_home_top_category_limit: int
+    default_dashboard_top_driver_limit: int
+    default_pinned_report_limit: int
     default_merchant_table_limit: int
     default_merchant_suggestion_limit: int
     default_rule_preview_limit: int
@@ -135,19 +143,45 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
             ),
             2,
         ),
-        default_comparison_insight_card_limit=parse_positive_int(
-            env(
-                "FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT",
-                parser.get("setting_defaults", "comparison_insight_card_limit", fallback="7"),
+        default_comparison_insight_card_limit=min(
+            COMPARISON_INSIGHT_CARD_LIMIT_MAX,
+            parse_positive_int(
+                env(
+                    "FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT",
+                    parser.get("setting_defaults", "comparison_insight_card_limit", fallback="7"),
+                ),
+                7,
             ),
-            7,
         ),
-        default_home_top_category_limit=parse_positive_int(
-            env(
-                "FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT",
-                parser.get("setting_defaults", "home_top_category_limit", fallback="5"),
+        default_home_top_category_limit=min(
+            HOME_TOP_CATEGORY_LIMIT_MAX,
+            parse_positive_int(
+                env(
+                    "FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT",
+                    parser.get("setting_defaults", "home_top_category_limit", fallback="5"),
+                ),
+                5,
             ),
-            5,
+        ),
+        default_dashboard_top_driver_limit=min(
+            DASHBOARD_TOP_DRIVER_LIMIT_MAX,
+            parse_positive_int(
+                env(
+                    "FINANCE_DEFAULT_DASHBOARD_TOP_DRIVER_LIMIT",
+                    parser.get("setting_defaults", "dashboard_top_driver_limit", fallback="5"),
+                ),
+                5,
+            ),
+        ),
+        default_pinned_report_limit=min(
+            PINNED_REPORT_LIMIT_MAX,
+            parse_positive_int(
+                env(
+                    "FINANCE_DEFAULT_PINNED_REPORT_LIMIT",
+                    parser.get("setting_defaults", "pinned_report_limit", fallback="4"),
+                ),
+                4,
+            ),
         ),
         default_merchant_table_limit=parse_positive_int(
             env(

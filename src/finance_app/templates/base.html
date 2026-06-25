@@ -10,6 +10,7 @@
 } %}
 {% set blueprint_titles = {
     "dashboard": "Dashboard",
+    "reports": "Reports",
     "comparison": "Comparison",
     "calendar_page": "Calendar",
     "recurring": "Recurring",
@@ -118,7 +119,7 @@
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Analytics") }}</div>
                 <a class="nav-link {% if active_blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.dashboard') }}" title="{{ _('Dashboard') }}"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>{{ _("Dashboard") }}</span></a>
-                <a class="nav-link {% if active_blueprint == 'comparison' %}active{% endif %}" href="{{ url_for('comparison.comparison') }}" title="{{ _('Comparison') }}"><i class="bi bi-layout-split" aria-hidden="true"></i><span>{{ _("Comparison") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'reports' %}active{% endif %}" href="{{ url_for('reports.overview') }}" title="{{ _('Reports') }}"><i class="bi bi-pie-chart" aria-hidden="true"></i><span>{{ _("Reports") }}</span></a>
                 <a class="nav-link {% if active_blueprint == 'calendar_page' %}active{% endif %}" href="{{ url_for('calendar_page.calendar_view') }}" title="{{ _('Calendar') }}"><i class="bi bi-calendar3" aria-hidden="true"></i><span>{{ _("Calendar") }}</span></a>
                 <a class="nav-link {% if active_blueprint == 'recurring' %}active{% endif %}" href="{{ url_for('recurring.recurring') }}" title="{{ _('Recurring') }}"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>{{ _("Recurring") }}</span></a>
             </div>

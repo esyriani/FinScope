@@ -14,7 +14,8 @@ from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.calendar.queries import fetch_month_transactions
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.comparison.queries import fetch_period_summary
-from finance_app.modules.dashboard.queries import fetch_spending_by_category
+from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW
+from finance_app.modules.reports.queries import fetch_category_breakdown
 from finance_app.modules.review.queries import review_candidate_rows
 from finance_app.modules.rules.engine import rule_sql_candidate_condition
 from finance_app.modules.transactions.filters import (
@@ -115,14 +116,14 @@ def test_review_merchant_filter_executes_sql_candidate_predicate(core_conn):
     assert "upper(transactions.description) like" in review_sql
 
 
-def test_dashboard_category_aggregation_uses_sql_grouping(core_conn):
-    """Verify category analytics are aggregated with SQL grouping."""
+def test_reports_category_breakdown_uses_sql_grouping(core_conn):
+    """Verify category report analytics are aggregated with SQL grouping."""
     with captured_sql() as statements:
-        fetch_spending_by_category(core_conn, [transactions_table.c.ignored == 0], "UNKNOWN")
+        fetch_category_breakdown(core_conn, [transactions_table.c.ignored == 0], "UNKNOWN", REPORT_BASIS_CASH_FLOW)
 
-    dashboard_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
-    assert "sum(" in dashboard_sql
-    assert "group by" in dashboard_sql
+    reports_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
+    assert "sum(" in reports_sql
+    assert "group by" in reports_sql
 
 
 def test_comparison_period_summary_aggregates_with_sql_date_filters(core_conn):

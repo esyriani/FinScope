@@ -71,6 +71,8 @@ def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
     )
     assert_has_element(response, None, attrs={"data-busy-message": "Preparing rule health check preview..."})
     assert_has_element(response, None, attrs={"data-busy-message": "Loading rule health check details..."})
+    assert_has_element(response, None, attrs={"data-collapse-panel-header-toggle": True})
+    assert_has_element(response, None, attrs={"data-collapse-panel-heading-toggle": True})
     assert_has_element(response, None, attrs={"data-row-drilldown": "dblclick"})
     assert 'data-row-href="/rules/audit/overlap/' in body
     row_fragment = html_fragment_after(body, 'data-row-href="/rules/audit/overlap/')
@@ -178,8 +180,10 @@ def test_rules_audit_route_filters_overlap_findings(client, core_conn):
     assert "Showing 1-1 of 1 findings" in overlap_section
     assert "CAFE" in overlap_section
     assert "METRO" not in overlap_section
-    assert "Hide table" in overlap_section
-    assert "bi-chevron-up" in overlap_section
+    assert "Hide table" not in overlap_section
+    assert "Show table" not in overlap_section
+    assert 'aria-expanded="true"' in body
+    assert "data-collapse-panel-header-toggle" in overlap_section
     assert 'value="category_conflict"' in body
     assert 'class="btn-check"' in body
     assert 'type="radio"' in body

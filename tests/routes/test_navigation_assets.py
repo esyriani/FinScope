@@ -8,6 +8,7 @@ pages.
 import pytest
 from tests.support.html import (
     assert_asset_reference,
+    assert_has_element,
     assert_no_asset_reference,
     asset_reference_index,
     asset_reference_values,
@@ -20,6 +21,11 @@ from tests.support.html import (
     [
         "/",
         "/dashboard",
+        "/reports",
+        "/reports/taxonomy",
+        "/reports/accounts",
+        "/reports/merchants",
+        "/reports/income",
         "/comparison",
         "/calendar",
         "/recurring",
@@ -55,6 +61,26 @@ def test_base_template_uses_local_hashed_assets(client):
     assert_asset_reference(response, r"/static/js/core\.js\?v=[0-9a-f]{12}")
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/static/js/app-boot.js",
+        "/static/vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js",
+        "/static/vendor/echarts/5.6.0/echarts.min.js",
+        "/static/js/reports-charts.js",
+    ],
+)
+def test_static_javascript_assets_use_browser_valid_mimetype(client, path):
+    """Verify local scripts are not served as plain text on Windows hosts."""
+    response = client.get(path)
+
+    try:
+        assert response.status_code == 200
+        assert response.mimetype == "text/javascript"
+    finally:
+        response.close()
+
+
 def test_base_template_keeps_feature_assets_page_scoped(client):
     """Verify the home page does not inherit feature assets from unrelated pages."""
     response = client.get("/")
@@ -62,11 +88,16 @@ def test_base_template_keeps_feature_assets_page_scoped(client):
     assert response.status_code == 200
     for snippet in (
         "vendor/flatpickr",
+        "vendor/echarts",
         "js/upload.js",
         "js/jobs.js",
         "js/rules.js",
         "js/review.js",
         "js/dashboard.js",
+        "js/dashboard-charts.js",
+        "js/chart-utils.js",
+        "js/reports.js",
+        "js/reports-charts.js",
         "js/tables.js",
         "js/dates.js",
         "js/calendar.js",
@@ -74,6 +105,7 @@ def test_base_template_keeps_feature_assets_page_scoped(client):
         "js/exports.js",
         "js/tag-multiselect.js",
         "css/comparison.css",
+        "css/reports.css",
         "css/page-tabs.css",
         "css/calendar-recurring.css",
         "css/rules-list.css",
@@ -93,34 +125,81 @@ def test_dashboard_route_loads_dashboard_assets(client):
         r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}",
         r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}",
         r"/static/js/dashboard\.js\?v=[0-9a-f]{12}",
+        r"/static/js/merchant-autocomplete\.js\?v=[0-9a-f]{12}",
         r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}",
         r"/static/js/dashboard-charts\.js\?v=[0-9a-f]{12}",
     ):
         assert_asset_reference(response, pattern)
+    assert_no_asset_reference(response, "js/tag-multiselect.js")
+    assert_no_asset_reference(response, "js/tables.js")
+
+
+def test_reports_route_loads_reports_assets(client):
+    """Verify Reports-specific assets are declared by the Reports shell."""
+    response = client.get("/reports")
+
+    assert response.status_code == 200
+    assert_asset_reference(response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/home-dashboard\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/comparison\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/reports\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/tables\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/exports\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/reports\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/tables\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/reports-charts\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/exports\.js\?v=[0-9a-f]{12}")
     assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
         response,
-        r"/static/js/dashboard-charts\.js",
+        r"/static/js/reports-charts\.js",
     )
+    assert asset_reference_index(response, r"/static/js/reports-charts\.js") < asset_reference_index(
+        response,
+        r"/static/js/exports\.js",
+    )
+
+
+def test_base_navigation_shows_reports_as_single_link(client):
+    """Verify Reports appears as a single top-level navigation link."""
+    response = client.get("/comparison")
+    body = response_html(response)
+
+    assert response.status_code == 200
+    assert_has_element(response, "a", attrs={"href": "/reports"}, text="Reports")
+    assert 'class="nav-sublinks"' not in body
+    assert 'class="nav-sub-link' not in body
+    assert 'aria-label="Reports sections"' not in body
 
 
 def test_tabbed_pages_load_shared_tab_stylesheet(client):
     """Verify tabbed pages opt into shared tab styles without loading them globally."""
     comparison_response = client.get("/comparison")
+    reports_response = client.get("/reports")
     recurring_response = client.get("/recurring")
     settings_response = client.get("/settings")
     taxonomy_response = client.get("/taxonomy")
 
     assert comparison_response.status_code == 200
+    assert reports_response.status_code == 200
     assert recurring_response.status_code == 200
     assert settings_response.status_code == 200
     assert taxonomy_response.status_code == 200
     assert_asset_reference(comparison_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(reports_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(recurring_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(settings_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(taxonomy_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert asset_reference_index(comparison_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         comparison_response,
         r"/static/css/comparison\.css",
+    )
+    assert asset_reference_index(reports_response, r"/static/css/page-tabs\.css") < asset_reference_index(
+        reports_response,
+        r"/static/css/home-dashboard\.css",
     )
     assert asset_reference_index(recurring_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         recurring_response,

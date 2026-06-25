@@ -14,6 +14,12 @@ from finance_app.core.constants import (
     THEME_MODE_LIGHT,
 )
 from finance_app.core.i18n import SUPPORTED_LANGUAGES, normalize_language
+from finance_app.core.setting_limits import (
+    COMPARISON_INSIGHT_CARD_LIMIT_MAX,
+    DASHBOARD_TOP_DRIVER_LIMIT_MAX,
+    HOME_TOP_CATEGORY_LIMIT_MAX,
+    PINNED_REPORT_LIMIT_MAX,
+)
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.auth.permissions import PERMISSION_MANAGE_GLOBAL_SETTINGS, current_user_can
 from finance_app.modules.settings.forms import (
@@ -84,6 +90,18 @@ def build_settings_context() -> dict[str, Any]:
         "home_top_category_limit": current.get(
             "home_top_category_limit", str(app_settings.default_home_top_category_limit)
         ),
+        "dashboard_top_driver_limit": current.get(
+            "dashboard_top_driver_limit",
+            str(app_settings.default_dashboard_top_driver_limit),
+        ),
+        "pinned_report_limit": current.get(
+            "pinned_report_limit",
+            str(app_settings.default_pinned_report_limit),
+        ),
+        "comparison_insight_card_limit_max": COMPARISON_INSIGHT_CARD_LIMIT_MAX,
+        "home_top_category_limit_max": HOME_TOP_CATEGORY_LIMIT_MAX,
+        "dashboard_top_driver_limit_max": DASHBOARD_TOP_DRIVER_LIMIT_MAX,
+        "pinned_report_limit_max": PINNED_REPORT_LIMIT_MAX,
         "merchant_table_limit": current.get("merchant_table_limit", str(app_settings.default_merchant_table_limit)),
         "merchant_suggestion_limit": current.get(
             "merchant_suggestion_limit",

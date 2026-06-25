@@ -384,6 +384,8 @@ def test_transactions_context_custom_dates_are_inclusive(core_conn):
     )
 
     assert context["total_count"] == 2
+    assert context["selected_date_from"] == "2026-04-01"
+    assert context["selected_date_to"] == "2026-04-30"
     assert descriptions(context) == ["Start boundary", "End boundary"]
 
 

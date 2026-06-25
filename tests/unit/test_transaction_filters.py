@@ -49,10 +49,28 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
     assert filters["sort"] == "amount"
     assert filters["direction"] == "asc"
     assert filters["page"] == 2
-    assert filters["date_from"] == "2026-01-01"
+    assert filters["date_from"] == ""
     assert filters["date_to"] == ""
     assert filters["merchant_key"] == "AMZN MKTP"
     assert filters["account_id"] == 7
+
+
+def test_parse_transaction_filters_keeps_custom_range_dates(core_conn):
+    """Verify custom range dates are normalized only for the custom period."""
+    filters = parse_transaction_filters(
+        MultiDict(
+            [
+                ("period", "custom"),
+                ("date_from", "2026-02-28"),
+                ("date_to", "2026-01-01"),
+            ]
+        ),
+        core_conn,
+    )
+
+    assert filters["period"] == "custom"
+    assert filters["date_from"] == "2026-01-01"
+    assert filters["date_to"] == "2026-02-28"
 
 
 def test_parse_transaction_filters_defaults_invalid_values(core_conn):

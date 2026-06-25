@@ -136,6 +136,8 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "selected_category_source": filters["category_source"],
         "selected_ignored": filters["ignored"],
         "selected_period": filters["period"],
+        "selected_date_from": filters["date_from"],
+        "selected_date_to": filters["date_to"],
         "period_options": DATE_PERIOD_OPTIONS,
         "period_custom": PERIOD_CUSTOM,
         "review_filter_options": REVIEW_FILTER_OPTIONS,

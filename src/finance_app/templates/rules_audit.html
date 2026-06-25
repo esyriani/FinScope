@@ -6,7 +6,7 @@
 ] %}
 {% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
-{% from "_collapsible.html" import collapsible_filter_panel, collapse_toggle_button with context %}
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
 {% from "_pagination.html" import pagination with context %}
 
 {% block content %}
@@ -172,16 +172,27 @@
 {% endmacro %}
 
 {% macro collapsible_header(target_id, title, description, table, label, expanded=false) %}
-<div class="card-body border-bottom">
+<div
+    class="card-body border-bottom collapse-panel-header"
+    data-collapse-panel-header-toggle
+    data-collapse-panel-target="#{{ target_id }}"
+>
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-        <div>
+        <div
+            class="collapse-panel-heading"
+            role="button"
+            tabindex="0"
+            aria-expanded="{{ 'true' if expanded else 'false' }}"
+            aria-controls="{{ target_id }}"
+            data-collapse-panel-heading-toggle
+            data-collapse-panel-target="#{{ target_id }}"
+        >
             <h5 class="mb-1">{{ _(title) }}</h5>
             <p class="text-muted mb-0">{{ _(description) }}</p>
         </div>
         <div class="d-flex flex-wrap align-items-center justify-content-end gap-3">
             {{ table_status(table) }}
             {{ audit_pagination(table, label) }}
-            {{ collapse_toggle_button(target_id, "Show table", "Hide table", expanded) }}
         </div>
     </div>
 </div>

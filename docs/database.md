@@ -4,7 +4,7 @@ FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the 
 
 The database layer maintains the Core engine/connection lifecycle in [src/finance_app/database/engine.py](../src/finance_app/database/engine.py). Startup creates empty databases from Core metadata, validates existing FinScope databases against the current schema, and seeds runtime defaults through Core for SQLite and MySQL URLs. [src/finance_app/database/tables.py](../src/finance_app/database/tables.py) remains the schema source of truth for the current clean database shape.
 
-User-bound runtime settings, statement type management, account persistence, merchant persistence, category/tag taxonomy helpers, taxonomy admin CRUD, category rule repository helpers, imported-rule repository helpers, rule import/export job entry points, rule listing queries, rule create/update/approval/delete/preview/apply workflows, standalone categorization, recurring pattern writes, transaction list queries and route mutations, transaction repository helpers, transaction import deduplication, home summary queries, upload page context queries, upload queue/import/reprocess/undo workflows, dashboard/comparison/calendar reporting read models, review page/workflow queries and mutations, and jobs page settings lookups use SQLAlchemy Core connections.
+User-bound runtime settings, saved report pins, statement type management, account persistence, merchant persistence, category/tag taxonomy helpers, taxonomy admin CRUD, category rule repository helpers, imported-rule repository helpers, rule import/export job entry points, rule listing queries, rule create/update/approval/delete/preview/apply workflows, standalone categorization, recurring pattern writes, transaction list queries and route mutations, transaction repository helpers, transaction import deduplication, home summary queries, upload page context queries, upload queue/import/reprocess/undo workflows, dashboard/comparison/calendar reporting read models, review page/workflow queries and mutations, and jobs page settings lookups use SQLAlchemy Core connections.
 
 Runtime-facing persistence helpers require SQLAlchemy Core connections. SQLite uses `sqlite:///` database URLs, while MySQL uses `mysql+pymysql://` URLs. Compatible MariaDB deployments use the same MySQL URL form through PyMySQL.
 
@@ -97,6 +97,22 @@ Stores owner-managed user accounts for the single FinScope deployment.
 
 Stores runtime settings as user-bound key/value pairs. The composite key is `user_id` and `key`, values are stored as text, and the settings layer parses them into the expected numeric or text types. When no request user is available, background and service code resolves settings through the active owner account.
 
+#### `pinned_reports`
+
+Stores user-owned saved report views for the Reports overview. Each row stores
+the report type, optional target reference, saved filters, display order, and an
+optional short title. The table stores only the view definition; report totals
+and transaction counts are recalculated from current data whenever the pinned
+section is rendered.
+
+- `user_id`: Owner of the saved view. Rows are deleted when the user is deleted.
+- `report_type`: Saved report family: overview, category/tag detail, account detail, merchant detail, or income and credits.
+- `target_kind` and target foreign keys: Optional category, tag, account, or merchant target for detail reports. Overview and income reports do not use a target.
+- `period`, `date_from`, and `date_to`: Saved report period selection.
+- `measure`, `basis`, `account_filter_id`, `merchant_filter_id`, `merchant_query`, `classification_scope`, `category_filters`, and `tag_filters`: Saved filter inputs needed to reconstruct the report view. Multi-select category and tag filters are stored as canonical JSON text.
+- `fingerprint`: Exact-view fingerprint used with `user_id` to prevent duplicate pins while allowing the same target with different filters.
+- `sort_order`, `short_title`, and `created_at`: Presentation order, optional 30-character display title, and creation timestamp.
+
 #### `audit_log`
 
 Stores security-relevant account events without plaintext passwords.
@@ -158,7 +174,7 @@ Stores imported ledger rows and their categorization state.
 - `account_id`: Account associated with the transaction.
 - `merchant_id`: Stable merchant identity, separate from raw description text.
 - `tx_date`: Transaction date from the source statement.
-- `description`: Transaction display description. This normally starts as the raw statement description, but enrichment imports can replace generic bank text with a clearer counterparty.
+- `description`: Transaction display description. This normally starts as the raw statement description, but enrichment imports can replace generic bank text with a clearer merchant.
 - `amount`: Signed transaction amount.
 - `category`: Cached category name retained for older query paths.
 - `category_id`: Stable category reference used for renames and relationships.
@@ -269,9 +285,10 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 - Category names are still cached in `transactions.category` and `category_rules.category`, while `category_id` is the stable key for renames. Application write paths keep the text cache and foreign key synchronized.
 - Built-in category and tag behavior is keyed by `builtin_key`. Reporting and workflow predicates should resolve built-in semantics through those keys, with cached category or tag names used only as compatibility fallbacks for denormalized rows.
 - Tags use many-to-many join tables so both transactions and category rules can share the same tag definitions. Built-in tags use stable keys so workflows such as reimbursements and future tax review can depend on semantics rather than editable display labels.
+- Saved report pins are normalized in `pinned_reports` rather than embedded in `user_settings` so duplicate prevention, ownership, ordering, and target cleanup can be enforced through database constraints.
 - Reimbursement allocations are explicit links rather than category rewrites. This keeps reimbursable spending visible in its natural category while allowing reports and monitoring pages to compute reimbursed and pending amounts from the allocation table. Reimbursement expense completions close policy-limited or otherwise settled expenses for monitoring only; they do not add reimbursement money or alter analytics offsets.
 - Statement checksums reject exact duplicate files, while transaction fingerprints prevent duplicate ledger rows.
-- Interac e-Transfer history uploads are enrichment sources. They match existing checking-account transactions by account, direction, amount, and nearby posting date, then update the matched transaction with the actual counterparty merchant. They do not insert duplicate Interac ledger rows.
+- Interac e-Transfer history uploads are enrichment sources. They match existing checking-account transactions by account, direction, amount, and nearby posting date, then update the matched transaction with the actual merchant. They do not insert duplicate Interac ledger rows.
 - Credit card statements are ledger sources because they contain purchase-level detail. The card purchases count as expenses; card payment rows and matching checking-account payment rows are marked as payments/transfers so spending is not double-counted.
 - Recurring pattern overrides use nullable merchant scope. `recurring_patterns.merchant_id` plus `type` stores merchant-bound overrides when a durable merchant is known. Rows with a null merchant ID remain keyword-fuzzy and are looked up by pattern key.
 

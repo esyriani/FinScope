@@ -1,14 +1,13 @@
 """SQLAlchemy Core query helpers for the dashboard feature."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
+from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import case, exists, func, select
+from sqlalchemy import and_, case, exists, func, or_, select
 
-from finance_app.core.periods import DatePeriod, previous_period_date_range
-from finance_app.core.query import CoreFilters
+from finance_app.core.money import money_to_decimal
 from finance_app.core.reporting import (
-    cashflow_amount_expression,
     income_amount_expression,
     income_or_tagged_transfer_credit_clause,
     reportable_or_tagged_transfer_credit_clause,
@@ -17,395 +16,30 @@ from finance_app.core.reporting import (
     spending_impact_clause,
 )
 from finance_app.database.dates import date_month, date_month_identity, date_year, month_label
-from finance_app.database.tables import (
-    merchants as merchants_table,
-)
-from finance_app.database.tables import (
-    tags as tags_table,
-)
+from finance_app.database.tables import categories as categories_table
+from finance_app.database.tables import merchants as merchants_table
 from finance_app.database.tables import (
     transaction_tags as transaction_tags_table,
 )
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
-from finance_app.modules.accounts.filters import account_filter_condition
-from finance_app.modules.categories.service import get_category_rules
+from finance_app.modules.categories.builtins import (
+    BUILTIN_CATEGORY_TRANSFERS,
+    BUILTIN_CATEGORY_UNKNOWN,
+)
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
-from finance_app.modules.transactions.constants import AMOUNT_TYPE_SPENDING
-
-from .constants import DASHBOARD_INCOME_CATEGORY, QUICK_VIEW_ALL
-from .filters import apply_dashboard_dimension_filters, apply_quick_view_core_filter
-from .presenter import (
-    build_merchant_aggregates,
-    merchant_matching_rules,
-    merchant_period_change,
-    merchant_primary_category,
-)
-from .urls import dashboard_transactions_url
+from finance_app.modules.merchants.repository import merchant_identity_from_row
 
 
 def non_transfer_clause() -> Any:
     """Return the dashboard Core filter for reportable transaction kinds."""
     return reportable_transaction_clause()
-
-
-def fetch_spending_by_category(
-    conn: Any,
-    filters: Sequence[Any],
-    unknown_category: str,
-    include_income_category: bool = False,
-) -> list[Mapping[str, Any]]:
-    """Fetch spending by category, optionally retaining rows categorized as income."""
-    category = func.coalesce(transactions_table.c.category, unknown_category)
-    spending_amount = spending_impact_amount_expression()
-    total = func.sum(spending_amount)
-    income_filter = [] if include_income_category else [category != DASHBOARD_INCOME_CATEGORY]
-    return (
-        conn.execute(
-            select(
-                category.label("category"),
-                total.label("total"),
-            )
-            .where(
-                spending_impact_clause(),
-                non_transfer_clause(),
-                category != unknown_category,
-                *income_filter,
-                *filters,
-            )
-            .group_by(category)
-            .order_by(total.desc())
-        )
-        .mappings()
-        .fetchall()
-    )
-
-
-def fetch_spending_by_tag(
-    conn: Any,
-    filters: Sequence[Any],
-    include_income_category: bool = False,
-) -> list[dict[str, Any]]:
-    """Fetch spending totals associated with each transaction tag.
-
-    Tagged totals intentionally count the full transaction amount for every tag
-    attached to the transaction. A transaction with multiple tags can therefore
-    contribute to multiple rows.
-    """
-    category = func.coalesce(transactions_table.c.category, "")
-    spending_amount = spending_impact_amount_expression()
-    total = func.sum(spending_amount)
-    income_filter = [] if include_income_category else [category != DASHBOARD_INCOME_CATEGORY]
-    tagged_rows = (
-        conn.execute(
-            select(
-                tags_table.c.name.label("category"),
-                tags_table.c.name.label("tag"),
-                total.label("total"),
-            )
-            .select_from(
-                transactions_table.join(
-                    transaction_tags_table,
-                    transaction_tags_table.c.transaction_id == transactions_table.c.id,
-                ).join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id)
-            )
-            .where(
-                spending_impact_clause(),
-                non_transfer_clause(),
-                *income_filter,
-                *filters,
-            )
-            .group_by(tags_table.c.name)
-            .order_by(total.desc(), tags_table.c.name)
-        )
-        .mappings()
-        .fetchall()
-    )
-
-    has_tag = exists(select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id))
-    untagged = (
-        conn.execute(
-            select(total.label("total")).where(
-                spending_impact_clause(),
-                non_transfer_clause(),
-                ~has_tag,
-                *income_filter,
-                *filters,
-            )
-        )
-        .mappings()
-        .fetchone()
-    )
-    untagged_total = untagged["total"] if untagged else None
-    rows = [dict(row) for row in tagged_rows]
-    if untagged_total:
-        rows.append(
-            {
-                "category": "Untagged",
-                "tag": "",
-                "total": untagged_total,
-                "untagged": True,
-            }
-        )
-
-    rows.sort(key=lambda row: (-float(row["total"] or 0), row["category"]))
-    return rows
-
-
-def fetch_monthly_expenses(conn: Any, filters: Sequence[Any]) -> list[dict[str, Any]]:
-    """Fetch monthly expenses."""
-    year = date_year(transactions_table.c.tx_date)
-    month = date_month(transactions_table.c.tx_date)
-    total = func.sum(spending_impact_amount_expression())
-    rows = (
-        conn.execute(
-            select(
-                year.label("year"),
-                month.label("month"),
-                total.label("total"),
-            )
-            .where(
-                spending_impact_clause(),
-                non_transfer_clause(),
-                *filters,
-            )
-            .group_by(year, month)
-            .order_by(year, month)
-        )
-        .mappings()
-        .fetchall()
-    )
-    return month_total_rows(rows)
-
-
-def fetch_monthly_income(
-    conn: Any,
-    filters: Sequence[Any],
-    include_transfer_credits: bool = False,
-) -> list[dict[str, Any]]:
-    """Fetch monthly income, optionally including filtered transfer credits."""
-    year = date_year(transactions_table.c.tx_date)
-    month = date_month(transactions_table.c.tx_date)
-    total = func.sum(income_amount_expression())
-    rows = (
-        conn.execute(
-            select(
-                year.label("year"),
-                month.label("month"),
-                total.label("total"),
-            )
-            .where(
-                transactions_table.c.amount < 0,
-                income_or_tagged_transfer_credit_clause(include_transfer_credits),
-                reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
-                *filters,
-            )
-            .group_by(year, month)
-            .order_by(year, month)
-        )
-        .mappings()
-        .fetchall()
-    )
-    return month_total_rows(rows)
-
-
-def fetch_monthly_net(
-    conn: Any,
-    filters: Sequence[Any],
-    include_transfer_credits: bool = False,
-) -> list[dict[str, Any]]:
-    """Fetch monthly net, optionally including filtered transfer credits."""
-    year = date_year(transactions_table.c.tx_date)
-    month = date_month(transactions_table.c.tx_date)
-    total = func.sum(cashflow_amount_expression())
-    rows = (
-        conn.execute(
-            select(
-                year.label("year"),
-                month.label("month"),
-                total.label("total"),
-            )
-            .where(
-                reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
-                *filters,
-            )
-            .group_by(year, month)
-            .order_by(year, month)
-        )
-        .mappings()
-        .fetchall()
-    )
-    return month_total_rows(rows)
-
-
-def month_total_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Return dashboard month total rows with YYYY-MM labels."""
-    return [
-        {
-            "month": month_label(row["year"], row["month"]),
-            "total": row["total"],
-        }
-        for row in rows
-    ]
-
-
-def fetch_merchant_analytics(
-    conn: Any,
-    period: DatePeriod,
-    filters: Sequence[Any],
-    filter_mode: str,
-    selected_categories: Sequence[str],
-    selected_tags: Sequence[str],
-    unknown_category: str,
-    date_from: str = "",
-    date_to: str = "",
-    quick_view: str = QUICK_VIEW_ALL,
-    merchant_table_limit: int = 10,
-    merchant_id: int | None = None,
-    merchant_query: str = "",
-    account_id: int | None = None,
-) -> list[dict[str, Any]]:
-    """Fetch merchant analytics."""
-    current_rows = fetch_merchant_transaction_rows(conn, filters, unknown_category)
-    aggregates = build_merchant_aggregates(current_rows, conn=conn)
-    previous_totals = fetch_previous_merchant_totals(
-        conn,
-        period,
-        filter_mode,
-        selected_categories,
-        selected_tags,
-        unknown_category,
-        quick_view,
-        merchant_id,
-        merchant_query,
-        account_id,
-    )
-    rules = get_category_rules(conn)
-    merchant_rows: list[dict[str, Any]] = []
-    top_merchants = sorted(aggregates.values(), key=lambda item: item["total"], reverse=True)[:merchant_table_limit]
-    max_total = top_merchants[0]["total"] if top_merchants else 0
-
-    for aggregate in top_merchants:
-        category = merchant_primary_category(aggregate)
-        matching_rules = merchant_matching_rules(aggregate, rules)
-        previous_total = previous_totals.get(aggregate["merchant_key"])
-
-        merchant_rows.append(
-            {
-                "merchant": aggregate["merchant_key"],
-                "examples": sorted(aggregate["examples"])[:3],
-                "transaction_count": aggregate["transaction_count"],
-                "total": round(aggregate["total"], 2),
-                "bar_width": round((aggregate["total"] / max_total) * 100, 1) if max_total else 0,
-                "category": category["label"],
-                "category_count": category["count"],
-                "category_total": round(category["total"], 2),
-                "rules": matching_rules,
-                "period_change": merchant_period_change(aggregate["total"], previous_total),
-                "url": dashboard_transactions_url(
-                    period,
-                    filter_mode,
-                    selected_categories,
-                    True,
-                    date_from,
-                    date_to,
-                    quick_view,
-                    selected_tags=selected_tags,
-                    merchant_search=merchant_query,
-                    account_id=account_id,
-                    merchant_key=aggregate["merchant_key"],
-                    amount_type=AMOUNT_TYPE_SPENDING,
-                ),
-            }
-        )
-
-    return merchant_rows
-
-
-def fetch_merchant_transaction_rows(conn: Any, filters: Sequence[Any], unknown_category: str) -> Any:
-    """Fetch merchant transaction rows."""
-    return (
-        conn.execute(
-            select(
-                transactions_table.c.description,
-                transactions_table.c.merchant_id,
-                merchants_table.c.merchant_key.label("merchant_name"),
-                merchants_table.c.merchant_key.label("merchant_key"),
-                spending_impact_amount_expression().label("amount"),
-                func.coalesce(transactions_table.c.category, unknown_category).label("category"),
-            )
-            .select_from(
-                transactions_table.outerjoin(
-                    merchants_table,
-                    merchants_table.c.id == transactions_table.c.merchant_id,
-                )
-            )
-            .where(
-                spending_impact_clause(),
-                non_transfer_clause(),
-                *filters,
-            )
-        )
-        .mappings()
-        .fetchall()
-    )
-
-
-def fetch_previous_merchant_totals(
-    conn: Any,
-    period: DatePeriod,
-    filter_mode: str,
-    selected_categories: Sequence[str],
-    selected_tags: Sequence[str],
-    unknown_category: str,
-    quick_view: str = QUICK_VIEW_ALL,
-    merchant_id: int | None = None,
-    merchant_query: str = "",
-    account_id: int | None = None,
-) -> dict[str, Any]:
-    """Fetch previous merchant totals."""
-    previous_start, previous_end = previous_period_date_range(period)
-    if previous_start is None or previous_end is None:
-        return {}
-
-    filters = CoreFilters()
-    filters.add(transactions_table.c.ignored == 0)
-    filters.add(account_filter_condition(account_id))
-    filters.add(transactions_table.c.tx_date >= previous_start)
-    filters.add(transactions_table.c.tx_date < previous_end)
-    apply_dashboard_dimension_filters(
-        filters,
-        selected_categories,
-        selected_tags,
-        filter_mode,
-        unknown_category,
-        merchant_id,
-        merchant_query,
-    )
-    apply_quick_view_core_filter(
-        filters,
-        quick_view,
-        selected_categories,
-        selected_tags,
-        filter_mode,
-        unknown_category,
-    )
-    aggregates = build_merchant_aggregates(
-        fetch_merchant_transaction_rows(
-            conn,
-            filters.criteria(),
-            unknown_category,
-        ),
-        conn=conn,
-    )
-
-    return {merchant_key: aggregate["total"] for merchant_key, aggregate in aggregates.items()}
 
 
 def fetch_summary(
@@ -418,8 +52,18 @@ def fetch_summary(
     category = func.coalesce(transactions_table.c.category, unknown_category)
     has_tag = exists(select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id))
     categorized = category != unknown_category
-    untagged_spending = spending_impact_clause() & non_transfer_clause() & ~has_tag
+    unknown = category == unknown_category
+    untagged = non_transfer_clause() & ~has_tag
+    untagged_spending = spending_impact_clause() & untagged
+    unknown_spending = spending_impact_clause() & non_transfer_clause() & unknown
+    unknown_income = (
+        (transactions_table.c.amount < 0)
+        & income_or_tagged_transfer_credit_clause(include_transfer_credits)
+        & reportable_or_tagged_transfer_credit_clause(include_transfer_credits)
+        & unknown
+    )
     spending_amount = spending_impact_amount_expression()
+    income_amount = income_amount_expression()
     return (
         conn.execute(
             select(
@@ -451,14 +95,21 @@ def fetch_summary(
                 ).label("total_income"),
                 func.count().label("transaction_count"),
                 func.coalesce(func.avg(func.abs(transactions_table.c.amount)), 0).label("average_transaction_amount"),
-                func.coalesce(func.sum(case((category == unknown_category, 1), else_=0)), 0).label(
-                    "uncategorized_count"
-                ),
+                func.coalesce(func.sum(case((unknown, 1), else_=0)), 0).label("uncategorized_count"),
+                func.coalesce(func.sum(case((untagged, 1), else_=0)), 0).label("untagged_count"),
                 func.coalesce(func.sum(case((untagged_spending, 1), else_=0)), 0).label("untagged_spending_count"),
                 func.coalesce(
                     func.sum(case((untagged_spending, spending_amount), else_=0)),
                     0,
                 ).label("untagged_spending_total"),
+                func.coalesce(
+                    func.sum(case((unknown_spending, spending_amount), else_=0)),
+                    0,
+                ).label("unknown_spending_total"),
+                func.coalesce(
+                    func.sum(case((unknown_income, income_amount), else_=0)),
+                    0,
+                ).label("unknown_income_total"),
                 func.coalesce(
                     func.sum(
                         case(
@@ -577,3 +228,272 @@ def fetch_quick_view_counts(conn: Any, filters: Sequence[Any], unknown_category:
         "unknown_count": row["unknown_count"] or 0,
         "categorized_count": row["categorized_count"] or 0,
     }
+
+
+def dashboard_category_label_expression(unknown_category: str) -> Any:
+    """Return the category label expression used by dashboard preview rows."""
+    return func.coalesce(transactions_table.c.category, unknown_category)
+
+
+def dashboard_category_join_condition(unknown_category: str) -> Any:
+    """Return the category join condition for transactions with cached labels."""
+    category_label = dashboard_category_label_expression(unknown_category)
+    return or_(
+        categories_table.c.id == transactions_table.c.category_id,
+        and_(
+            transactions_table.c.category_id.is_(None),
+            func.lower(categories_table.c.name) == func.lower(category_label),
+        ),
+    )
+
+
+def fetch_monthly_preview(
+    conn: Any,
+    filters: Sequence[Any],
+    include_transfer_credits: bool = False,
+) -> list[dict[str, Any]]:
+    """Fetch compact monthly spending, income, and net cash-flow preview rows."""
+    year = date_year(transactions_table.c.tx_date)
+    month = date_month(transactions_table.c.tx_date)
+    spending_amount = spending_impact_amount_expression()
+    income_amount = income_amount_expression()
+    rows = (
+        conn.execute(
+            select(
+                year.label("year"),
+                month.label("month"),
+                func.coalesce(
+                    func.sum(case((spending_impact_clause(), spending_amount), else_=0)),
+                    0,
+                ).label("spending"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                (transactions_table.c.amount < 0)
+                                & income_or_tagged_transfer_credit_clause(include_transfer_credits),
+                                income_amount,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("income"),
+                func.count().label("transaction_count"),
+            )
+            .where(
+                reportable_or_tagged_transfer_credit_clause(include_transfer_credits),
+                *filters,
+            )
+            .group_by(year, month)
+            .order_by(year, month)
+        )
+        .mappings()
+        .fetchall()
+    )
+    return [
+        {
+            "label": month_label(row["year"], row["month"]),
+            "spending": row["spending"],
+            "income": row["income"],
+            "net": money_to_decimal(row["income"]) - money_to_decimal(row["spending"]),
+            "transaction_count": row["transaction_count"],
+        }
+        for row in rows
+    ]
+
+
+def fetch_spending_category_totals(
+    conn: Any,
+    filters: Sequence[Any],
+    unknown_category: str,
+) -> list[dict[str, Any]]:
+    """Fetch reportable spending totals by category for dashboard previews."""
+    category_label = dashboard_category_label_expression(unknown_category)
+    display_label = func.coalesce(categories_table.c.name, category_label)
+    spending_amount = spending_impact_amount_expression()
+    rows = (
+        conn.execute(
+            select(
+                categories_table.c.id.label("category_id"),
+                display_label.label("label"),
+                func.coalesce(func.sum(spending_amount), 0).label("spending"),
+                func.count().label("transaction_count"),
+            )
+            .select_from(
+                transactions_table.outerjoin(
+                    categories_table,
+                    dashboard_category_join_condition(unknown_category),
+                )
+            )
+            .where(
+                non_transfer_clause(),
+                spending_impact_clause(),
+                category_label != unknown_category,
+                or_(
+                    categories_table.c.builtin_key.is_(None),
+                    categories_table.c.builtin_key.not_in(
+                        (
+                            BUILTIN_CATEGORY_UNKNOWN,
+                            BUILTIN_CATEGORY_TRANSFERS,
+                        )
+                    ),
+                ),
+                *filters,
+            )
+            .group_by(categories_table.c.id, display_label)
+            .order_by(func.sum(spending_amount).desc(), display_label)
+        )
+        .mappings()
+        .fetchall()
+    )
+    return [dict(row) for row in rows]
+
+
+def fetch_top_spending_categories(
+    conn: Any,
+    filters: Sequence[Any],
+    unknown_category: str,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Fetch the top spending categories for the dashboard pulse."""
+    return fetch_spending_category_totals(conn, filters, unknown_category)[:limit]
+
+
+def fetch_spending_merchant_totals(conn: Any, filters: Sequence[Any]) -> list[dict[str, Any]]:
+    """Fetch reportable spending totals by merchant identity for dashboard previews."""
+    rows = (
+        conn.execute(
+            select(
+                transactions_table.c.description,
+                transactions_table.c.merchant_id,
+                merchants_table.c.merchant_key.label("merchant_name"),
+                merchants_table.c.merchant_key.label("merchant_key"),
+                spending_impact_amount_expression().label("spending"),
+            )
+            .select_from(
+                transactions_table.outerjoin(
+                    merchants_table,
+                    merchants_table.c.id == transactions_table.c.merchant_id,
+                )
+            )
+            .where(
+                non_transfer_clause(),
+                spending_impact_clause(),
+                *filters,
+            )
+        )
+        .mappings()
+        .fetchall()
+    )
+    aggregates: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        identity = merchant_identity_from_row(row, conn=conn)
+        key = str(identity["key"])
+        aggregate = aggregates.setdefault(
+            key,
+            {
+                "label": identity["name"],
+                "merchant_key": identity["name"],
+                "merchant_id": identity["id"],
+                "spending": Decimal("0"),
+                "transaction_count": 0,
+            },
+        )
+        aggregate["spending"] += money_to_decimal(row["spending"])
+        aggregate["transaction_count"] += 1
+
+    return sorted(
+        aggregates.values(),
+        key=lambda row: (-money_to_decimal(row["spending"]), str(row["label"])),
+    )
+
+
+def fetch_top_spending_merchants(
+    conn: Any,
+    filters: Sequence[Any],
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Fetch the top spending merchants for the dashboard pulse."""
+    return fetch_spending_merchant_totals(conn, filters)[:limit]
+
+
+def fetch_top_spending_changes(
+    conn: Any,
+    current_filters: Sequence[Any],
+    previous_filters: Sequence[Any],
+    unknown_category: str,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Fetch largest spending driver changes versus the previous comparable period."""
+    category_rows = merge_change_rows(
+        "category",
+        fetch_spending_category_totals(conn, current_filters, unknown_category),
+        fetch_spending_category_totals(conn, previous_filters, unknown_category),
+        "category_id",
+    )
+    merchant_rows = merge_change_rows(
+        "merchant",
+        fetch_spending_merchant_totals(conn, current_filters),
+        fetch_spending_merchant_totals(conn, previous_filters),
+        "merchant_id",
+    )
+    rows = [*category_rows, *merchant_rows]
+    rows.sort(key=lambda row: (-row["abs_change"], str(row["label"])))
+    return rows[:limit]
+
+
+def merge_change_rows(
+    row_kind: str,
+    current_rows: Sequence[dict[str, Any]],
+    previous_rows: Sequence[dict[str, Any]],
+    id_key: str,
+) -> list[dict[str, Any]]:
+    """Merge current and previous preview totals into signed change rows."""
+    indexed: dict[str, dict[str, Any]] = {}
+    for period_key, rows in (("current", current_rows), ("previous", previous_rows)):
+        for row in rows:
+            key = change_row_key(row, id_key)
+            aggregate = indexed.setdefault(
+                key,
+                {
+                    "kind": row_kind,
+                    "label": str(row["label"]),
+                    id_key: row.get(id_key),
+                    "merchant_key": row.get("merchant_key"),
+                    "current": Decimal("0"),
+                    "previous": Decimal("0"),
+                },
+            )
+            aggregate["label"] = str(row["label"])
+            if row.get(id_key):
+                aggregate[id_key] = row.get(id_key)
+            if row.get("merchant_key"):
+                aggregate["merchant_key"] = row.get("merchant_key")
+            aggregate[period_key] = money_to_decimal(row["spending"])
+
+    changes: list[dict[str, Any]] = []
+    for row in indexed.values():
+        current = money_to_decimal(row["current"])
+        previous = money_to_decimal(row["previous"])
+        change = current - previous
+        if not current and not previous:
+            continue
+        changes.append(
+            {
+                **row,
+                "current": current,
+                "previous": previous,
+                "change": change,
+                "abs_change": abs(change),
+            }
+        )
+    return changes
+
+
+def change_row_key(row: dict[str, Any], id_key: str) -> str:
+    """Return a stable merge key for category or merchant change rows."""
+    row_id = row.get(id_key)
+    if row_id:
+        return f"id:{row_id}"
+    return f"label:{str(row.get('label') or '').casefold()}"

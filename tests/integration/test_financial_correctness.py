@@ -1,7 +1,7 @@
 """Financial correctness tests for analytics edge cases.
 
-Validates dashboard and comparison totals for refunds, account payments, and
-date boundaries using the SQLAlchemy Core data layer.
+Validates dashboard, Reports, and comparison totals for refunds, account
+payments, and date boundaries using the SQLAlchemy Core data layer.
 """
 
 import pytest
@@ -18,6 +18,8 @@ from finance_app.core.constants import (
 from finance_app.modules.comparison import service as comparison_service
 from finance_app.modules.dashboard.service import build_dashboard_context
 from finance_app.modules.reimbursements.service import create_reimbursement_allocation
+from finance_app.modules.reports.definitions import REPORT_OVERVIEW
+from finance_app.modules.reports.service import build_reports_context
 
 
 class FixedComparisonDate:
@@ -89,6 +91,26 @@ def dashboard_for_range(app, date_from, date_to):
         )
 
 
+def reports_for_range(app, date_from, date_to):
+    """Build a Reports overview context for an inclusive custom range."""
+    with app.test_request_context("/reports"):
+        return build_reports_context(
+            REPORT_OVERVIEW,
+            MultiDict(
+                [
+                    ("period", "custom"),
+                    ("date_from", date_from),
+                    ("date_to", date_to),
+                ]
+            ),
+        )
+
+
+def rows_by_label(rows):
+    """Return report rows keyed by their display label."""
+    return {row["label"]: row for row in rows}
+
+
 @pytest.mark.parametrize(
     ("rows", "expected"),
     [
@@ -142,7 +164,10 @@ def test_dashboard_financial_calculations_table_driven(app, core_conn, rows, exp
     for key, expected_value in expected.items():
         assert context[key] == expected_value
     assert round(context["total_income"] - context["total_spending"], 2) == context["net_cashflow"]
-    assert round(sum(context["category_totals"]), 2) == context["total_spending"]
+
+    reports_context = reports_for_range(app, "2026-01-01", "2026-01-31")
+
+    assert round(sum(row["spending"] for row in reports_context["category_rows"]), 2) == context["total_spending"]
 
 
 def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app, core_conn):
@@ -190,9 +215,14 @@ def test_dashboard_refunds_reduce_expense_totals_without_counting_as_income(app,
     assert context["total_income"] == 1000.00
     assert context["net_cashflow"] == 925.00
     assert context["transaction_count"] == 3
-    assert context["category_totals"] == [75.00]
-    assert context["expense_month_totals"] == [75.00]
-    assert context["income_month_totals"] == [1000.00]
+
+    reports_context = reports_for_range(app, "2026-02-01", "2026-02-28")
+    category_rows = rows_by_label(reports_context["category_rows"])
+    monthly_rows = rows_by_label(reports_context["monthly_rows"])
+
+    assert category_rows["Personal"]["spending"] == 75.00
+    assert monthly_rows["2026-02"]["spending"] == 75.00
+    assert monthly_rows["2026-02"]["income"] == 1000.00
 
 
 def test_dashboard_reimbursements_reduce_original_expense_category(app, core_conn):
@@ -223,9 +253,14 @@ def test_dashboard_reimbursements_reduce_original_expense_category(app, core_con
     assert context["total_income"] == 0.00
     assert context["net_cashflow"] == -100.00
     assert context["transaction_count"] == 1
-    assert context["category_totals"] == [100.00]
-    assert context["expense_month_totals"] == [100.00]
-    assert context["income_month_totals"] == []
+
+    reports_context = reports_for_range(app, "2026-02-01", "2026-02-28")
+    category_rows = rows_by_label(reports_context["category_rows"])
+    monthly_rows = rows_by_label(reports_context["monthly_rows"])
+
+    assert category_rows["Travel"]["spending"] == 100.00
+    assert monthly_rows["2026-02"]["spending"] == 100.00
+    assert monthly_rows["2026-02"]["income"] == 0.00
 
 
 def test_dashboard_custom_date_boundaries_are_inclusive_for_leap_months(app, core_conn):
@@ -253,7 +288,11 @@ def test_dashboard_custom_date_boundaries_are_inclusive_for_leap_months(app, cor
     assert context["transaction_count"] == 2
     assert context["first_tx_date"] == "2024-02-01"
     assert context["last_tx_date"] == "2024-02-29"
-    assert context["category_totals"] == [60.00]
+
+    reports_context = reports_for_range(app, "2024-02-01", "2024-02-29")
+    category_rows = rows_by_label(reports_context["category_rows"])
+
+    assert category_rows["Food"]["spending"] == 60.00
 
 
 def test_comparison_refunds_reduce_current_and_previous_period_spending(app, core_conn, monkeypatch):

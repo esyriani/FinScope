@@ -114,7 +114,7 @@
                 </div>
 
                 <div class="settings-subsection">
-                    <h6 class="settings-subsection-title">{{ _("Table limits") }}</h6>
+                    <h6 class="settings-subsection-title">{{ _("Limits") }}</h6>
                     <div class="settings-subsection-help">{{ _("Default row counts used throughout the app.") }}</div>
                     <div class="settings-grid settings-grid-compact">
                         <div class="settings-field">
@@ -131,18 +131,30 @@
 
                         <div class="settings-field">
                             <label for="comparison_insight_card_limit" class="form-label">{{ _("Comparison insight card limit") }}</label>
-                            <input id="comparison_insight_card_limit" class="form-control" type="number" min="1" name="comparison_insight_card_limit" value="{{ comparison_insight_card_limit }}">
+                            <input id="comparison_insight_card_limit" class="form-control" type="number" min="1" max="{{ comparison_insight_card_limit_max }}" name="comparison_insight_card_limit" value="{{ comparison_insight_card_limit }}">
                             <div class="form-text">{{ _("Ranked insight cards shown on the comparison page.") }}</div>
                         </div>
 
                         <div class="settings-field">
                             <label for="home_top_category_limit" class="form-label">{{ _("Home top category limit") }}</label>
-                            <input id="home_top_category_limit" class="form-control" type="number" min="1" name="home_top_category_limit" value="{{ home_top_category_limit }}">
+                            <input id="home_top_category_limit" class="form-control" type="number" min="1" max="{{ home_top_category_limit_max }}" name="home_top_category_limit" value="{{ home_top_category_limit }}">
                             <div class="form-text">{{ _("Top spending categories shown on the home page.") }}</div>
                         </div>
 
                         <div class="settings-field">
-                            <label for="merchant_table_limit" class="form-label">{{ _("Merchant table limit") }}</label>
+                            <label for="dashboard_top_driver_limit" class="form-label">{{ _("Dashboard top driver limit") }}</label>
+                            <input id="dashboard_top_driver_limit" class="form-control" type="number" min="1" max="{{ dashboard_top_driver_limit_max }}" name="dashboard_top_driver_limit" value="{{ dashboard_top_driver_limit }}">
+                            <div class="form-text">{{ _("Top driver previews shown on the dashboard page.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="pinned_report_limit" class="form-label">{{ _("Pinned report limit") }}</label>
+                            <input id="pinned_report_limit" class="form-control" type="number" min="1" max="{{ pinned_report_limit_max }}" name="pinned_report_limit" value="{{ pinned_report_limit }}">
+                            <div class="form-text">{{ _("Pinned report cards shown on Reports overview.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="merchant_table_limit" class="form-label">{{ _("Merchant comparison table limit") }}</label>
                             <input id="merchant_table_limit" class="form-control" type="number" min="1" name="merchant_table_limit" value="{{ merchant_table_limit }}">
                             <div class="form-text">{{ _("Merchant rows shown in comparison summaries.") }}</div>
                         </div>

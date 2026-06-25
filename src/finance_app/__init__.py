@@ -2,7 +2,7 @@
 
 from flask import Flask, g, request
 
-from finance_app.core.assets import register_asset_helpers
+from finance_app.core.assets import register_asset_helpers, register_static_asset_mimetypes
 from finance_app.core.config import settings
 from finance_app.core.constants import STATIC_DIR, TEMPLATE_DIR, THEME_MODE_DARK, THEME_MODE_LIGHT
 from finance_app.core.csrf import register_csrf
@@ -77,6 +77,8 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Biweekly",
     "Best current-month match: {date}.",
     "Cash flow",
+    "Category",
+    "Categories",
     "Categorize selected ({count})",
     "Chart {number}",
     "Could not save recurring pattern.",
@@ -167,6 +169,11 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Opening statement...",
     "Overdue",
     "Personal",
+    "Keep pinned",
+    "Pinned",
+    "Pinned report limit reached.",
+    "Pinned reports could not be saved.",
+    "Pinned reports saved.",
     "Previous",
     "Preview could not be loaded.",
     "Preview unavailable.",
@@ -179,6 +186,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Max",
     "n/a",
     "Expected",
+    "Edit pins",
     "Possibly inactive",
     "Quarterly",
     "Recurring activity",
@@ -187,9 +195,17 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Refresh ({seconds})",
     "Remove",
     "Remove {label}",
+    "Report could not be pinned.",
+    "Report pinned.",
     "Review this pattern before relying on it.",
     "Spending",
+    "Settings",
     "Table {number}",
+    "Unpin report",
+    "Will be unpinned",
+    "Tag",
+    "Tags",
+    "Composition",
     "The processing progress could not be refreshed.",
     "The processing table could not be refreshed.",
     "Finished batch {start}-{end}: {processed} processed; {updated} categorized total.",
@@ -219,6 +235,7 @@ CLIENT_TRANSLATION_MESSAGES = (
 
 def create_app() -> Flask:
     """Create and configure the Flask application."""
+    register_static_asset_mimetypes()
     app = Flask(
         __name__,
         template_folder=TEMPLATE_DIR,

@@ -1,7 +1,5 @@
 @media (max-width: 1100px) {
     .metric-grid,
-    .quality-metric-grid,
-    .status-strip,
     .quick-links,
     .home-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -66,6 +64,7 @@
 
 @media (max-width: 1100px) {
     .dashboard-breakdown-grid,
+    .dashboard-action-bar,
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
@@ -78,6 +77,11 @@
 }
 
 @container dashboard-page (max-width: 72rem) {
+    .readiness-chip-grid,
+    .readiness-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
@@ -206,8 +210,6 @@
     .shortcut-strip,
     .dashboard-breakdown-grid,
     .dashboard-grid,
-    .quality-metric-grid,
-    .status-strip,
     .quick-links,
     .home-grid,
     .home-facts {
@@ -220,10 +222,23 @@
 
     .rule-summary > div,
     .quality-panel-head,
+    .dashboard-action-bar,
     .rule-form-row,
     .rule-keyword-row {
         align-items: stretch;
         grid-template-columns: 1fr;
+    }
+
+    .quality-panel-head {
+        grid-template-areas:
+            "summary"
+            "highlights"
+            "actions";
+    }
+
+    .quality-actions,
+    .dashboard-action-list {
+        justify-content: flex-start;
     }
 
     .rule-choice-grid {

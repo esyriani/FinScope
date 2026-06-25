@@ -67,7 +67,7 @@ Use the statement import type that matches the file:
 | --- | --- | --- |
 | Checking account | Checking or savings | Creates transactions for bank activity. |
 | Credit card | Credit card | Creates purchase-level transactions. Card payments are marked as payments/transfers so spending is not double-counted. |
-| Interac e-Transfer | Checking account | Updates existing checking transactions with clearer counterparty details. It does not add duplicate transactions. |
+| Interac e-Transfer | Checking account | Updates existing checking transactions with clearer merchant details. It does not add duplicate transactions. |
 
 The upload preview is important. It shows parsed dates, descriptions, amounts, imported row counts, ignored row counts, and date-format handling. For ambiguous slash dates, choose the correct `MM/DD/YYYY` or `DD/MM/YYYY` option before confirming.
 

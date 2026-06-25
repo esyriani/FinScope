@@ -24,6 +24,31 @@ EXPECTED_TABLE_COLUMNS = {
         "locked_until",
     ],
     "user_settings": ["user_id", "key", "value", "updated_at"],
+    "pinned_reports": [
+        "id",
+        "user_id",
+        "report_type",
+        "target_kind",
+        "target_category_id",
+        "target_tag_id",
+        "target_account_id",
+        "target_merchant_id",
+        "period",
+        "date_from",
+        "date_to",
+        "measure",
+        "basis",
+        "account_filter_id",
+        "merchant_filter_id",
+        "merchant_query",
+        "classification_scope",
+        "category_filters",
+        "tag_filters",
+        "fingerprint",
+        "sort_order",
+        "short_title",
+        "created_at",
+    ],
     "audit_log": ["id", "user_id", "username", "action", "details", "ip_address", "created_at"],
     "accounts": ["id", "name", "account_type", "paid_from_account_id"],
     "statement_types": [
@@ -148,6 +173,8 @@ EXPECTED_EXPLICIT_INDEXES = {
     "idx_category_rules_merchant",
     "idx_category_rules_source_approval",
     "idx_merchants_key",
+    "idx_pinned_reports_user_order",
+    "idx_pinned_reports_user_type",
     "idx_recurring_patterns_status",
     "idx_reimbursement_allocations_expense",
     "idx_reimbursement_allocations_reimbursement",
@@ -221,6 +248,9 @@ EXPECTED_UNIQUE_CONSTRAINTS = {
     "reimbursement_expense_completions": {
         "uq_reimbursement_expense_completions_expense": ["expense_transaction_id"],
     },
+    "pinned_reports": {
+        "uq_pinned_reports_user_fingerprint": ["user_id", "fingerprint"],
+    },
 }
 
 
@@ -293,9 +323,12 @@ def test_core_metadata_uses_fixed_scale_numeric_for_money_columns():
 def test_core_metadata_uses_typed_date_and_timestamp_columns():
     """Verify date and timestamp metadata uses SQLAlchemy type decorators."""
     date_columns = [
+        metadata.tables["pinned_reports"].c.date_from,
+        metadata.tables["pinned_reports"].c.date_to,
         metadata.tables["transactions"].c.tx_date,
     ]
     timestamp_columns = [
+        metadata.tables["pinned_reports"].c.created_at,
         metadata.tables["statement_types"].c.created_at,
         metadata.tables["categories"].c.created_at,
         metadata.tables["merchants"].c.created_at,

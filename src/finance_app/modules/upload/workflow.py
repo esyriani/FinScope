@@ -262,7 +262,7 @@ def enrich_interac_transactions(
 
     Interac history rows duplicate bank movements that already exist in the
     checking statement. They update the matched ledger transaction with the real
-    counterparty merchant and then re-run rule categorization for that row.
+    merchant and then re-run rule categorization for that row.
     Unmatched or ambiguous rows are not inserted as transactions.
     """
     categorizer = categorizer or categorize_transactions
@@ -271,7 +271,7 @@ def enrich_interac_transactions(
     skipped_count = 0
 
     for transfer in transfers:
-        merchant = get_or_create_merchant_for_name(conn, transfer["interac_counterparty"])
+        merchant = get_or_create_merchant_for_name(conn, transfer["interac_merchant"])
         if merchant is None:
             ignored_count += 1
             continue
@@ -290,7 +290,7 @@ def enrich_interac_transactions(
                 conn,
                 match["id"],
                 merchant["id"],
-                transfer["interac_counterparty"],
+                transfer["interac_merchant"],
             )
             enriched_count += 1
             continue
@@ -301,7 +301,7 @@ def enrich_interac_transactions(
                     "id": match["id"],
                     "account_id": match["account_id"],
                     "tx_date": match["tx_date"],
-                    "description": transfer["interac_counterparty"],
+                    "description": transfer["interac_merchant"],
                     "amount": match["amount"],
                     "merchant_id": merchant["id"],
                 }
@@ -313,7 +313,7 @@ def enrich_interac_transactions(
             conn,
             match["id"],
             merchant["id"],
-            transfer["interac_counterparty"],
+            transfer["interac_merchant"],
             enriched,
             match["transaction_kind"],
         )
@@ -455,7 +455,7 @@ def find_interac_match_core(
         transactions_table.c.amount < transfer["amount"] + 0.005,
         transactions_table.c.tx_date >= date_window_start(transfer["tx_date"], INTERAC_MATCH_DATE_TOLERANCE_DAYS),
         transactions_table.c.tx_date <= date_window_end(transfer["tx_date"], INTERAC_MATCH_DATE_TOLERANCE_DAYS),
-        interac_counterparty_condition(transfer, merchant_id),
+        interac_merchant_condition(transfer, merchant_id),
     ]
 
     if account_is_null:
@@ -483,8 +483,8 @@ def find_interac_match_core(
     return nearest_unique_match(rows, transfer["tx_date"])
 
 
-def interac_counterparty_condition(transfer: Mapping[str, Any], merchant_id: int) -> Any:
-    """Return the Core condition that matches an Interac counterparty."""
+def interac_merchant_condition(transfer: Mapping[str, Any], merchant_id: int) -> Any:
+    """Return the Core condition that matches an Interac merchant."""
     markers = INTERAC_DESCRIPTION_MARKERS.get(str(transfer.get("interac_direction") or ""), ())
     conditions = [transactions_table.c.merchant_id == merchant_id]
     conditions.extend(func.upper(transactions_table.c.description).like(f"%{marker}%") for marker in markers)

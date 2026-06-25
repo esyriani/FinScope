@@ -37,6 +37,12 @@ Read these files before broad changes:
   abstractions.
 - Keep financial data handling conservative: exact money arithmetic should stay
   Decimal/Numeric until display or serialization boundaries.
+- Treat built-in taxonomy semantics as product behavior, not ad hoc labels.
+  Protected categories and tags such as `UNKNOWN`, `Transfers`,
+  `Reimbursement`, `Income`, `Rental`, and `Reimbursable` can affect analytics,
+  imports, reimbursement workflows, and reporting. Model those effects through
+  explicit metadata, semantic types, or strategy/registry objects rather than
+  scattered string comparisons or one-off patches.
 
 ## Architecture rules
 
@@ -68,6 +74,13 @@ to scan, split by responsibility before adding more branches.
 Avoid import cycles. Shared constants, permissions, runtime settings, and helper
 functions should live in neutral modules rather than relying on delayed imports
 inside functions.
+
+Special taxonomy behavior should have one clear specialization boundary. Code
+that needs to know whether something is income, a transfer, reimbursable,
+unknown, or excluded from ordinary reporting should ask that boundary instead
+of checking category or tag names inline. Keep the implementation modular enough
+that adding a new built-in semantic category or tag changes the taxonomy
+metadata and one specialization point, not every report, route, and template.
 
 ## Database rules
 
@@ -130,8 +143,10 @@ Testing expectations:
 
 - Add or update tests when behavior, schema, security, financial calculations,
   imports, route contracts, or edge cases change.
-- Do not increase test density for trivial refactors, pure renames, or behavior
-  already protected at a better layer.
+- Do not add new test cases for trivial work: copy-only changes, pure CSS
+  polish, simple renames, markup reshuffling with no behavioral contract, or
+  behavior already protected at a better layer. Update existing assertions only
+  when the user-visible contract intentionally changes.
 - Prefer the lowest layer that proves the behavior: unit for pure logic,
   integration for database/services/workflows, route for HTTP/rendered state,
   smoke for high-value happy paths only.
@@ -181,6 +196,38 @@ the final response must say that tests were not run and why.
   roles, focus behavior, and Enter/Space handling.
 - Reuse shared macros/partials such as pagination instead of duplicating
   template structures.
+- Keep cautious workflows close to the user's starting point. For rule editing
+  and audit-heavy flows, prefer modal dialogs that preview impact, confirm
+  risky changes, apply the action, and return the user to the same filtered list
+  state. Do not introduce side drawers unless the app adopts them as a broader
+  design pattern.
+- Name exports by their actual artifact and purpose. If a top-level export
+  produces an importable rules file, label it `Export rules`, not generic
+  `Export CSV`. Avoid showing generic table CSV/Excel exports beside a domain
+  export when the outputs differ enough to confuse users.
+- Responsive report and dashboard layouts should be driven by usable content
+  width, not only by device classes. Charts and tables should span the full
+  available width once a two-column layout would force horizontal scrolling,
+  clip labels/actions, or make table columns cramped. Prefer container queries
+  on the page or report content area with viewport fallbacks; collapse
+  chart/table pairs earlier than lightweight KPI cards. Keep horizontal table
+  scrolling for genuinely wide tables after the table card itself is full
+  width.
+
+## Product terminology
+
+- Use `Spending` for outflows and expense totals. Use `Income and credits` for
+  credits that may include ordinary income, reimbursements, refunds, and other
+  incoming money. Use `Net cash flow` for income minus spending.
+- Merchant summary headings should include the configured limit, for example
+  `Top 10 merchant analytics`, instead of the vague `Merchant analytics`.
+- Built-in taxonomy semantics are internal functioning unless they directly
+  explain an available action. Do not show badges such as `Affects reports`,
+  `Ordinary income`, or `Workflow ready` in normal taxonomy lists. Document what
+  each built-in category or tag affects in user documentation instead.
+- Use canonical taxonomy names consistently in code, docs, and UI where they
+  are data values: `UNKNOWN`, `Transfers`, `Reimbursement`, `Income`, `Rental`,
+  and `Reimbursable`.
 
 ## Internationalization
 
@@ -190,9 +237,14 @@ the final response must say that tests were not run and why.
   `CLIENT_TRANSLATION_MESSAGES`.
 - Add or update French translations in `src/finance_app/translations/fr.json`
   for all new user-facing text.
+- Keep `src/finance_app/translations/fr.json` ASCII-only. Encode French
+  accents, apostrophes, guillemets, non-breaking spaces, and other non-ASCII
+  punctuation with JSON Unicode escapes such as `\u00e9`, `\u00e8`, `\u00e0`,
+  `\u00e7`, and `\u2019`.
 - Do not translate user data: merchant names, account names, category names,
   tag names, statement filenames, uploaded statement contents, and transaction
   descriptions remain user data.
+- In the vocabulary, never user computer-technical terms for user-facing interface. For example, use "categories & tags" instead of "taxonomy", use "processing" instead of "jobs", use "AI" instead of LLM or model.
 
 ## Security and privacy
 

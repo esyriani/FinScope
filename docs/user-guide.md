@@ -64,6 +64,12 @@ Transfers and payments are visible as transactions but excluded from spending an
 
 Unknown categories reduce report usefulness. Use the categorization completeness panel to find transactions that need review.
 
+## Reports
+
+Reports contains deeper financial analysis than Dashboard: overview totals, category and tag reports, account reports, merchant reports, income and credits, comparison links, exports, charts, and detailed tables.
+
+Use Pin report on Reports pages to save the current report view and filters. Pinned report cards appear on the Reports overview with current live values, can be opened directly, and can be reordered, renamed, or removed from Edit pins. The number of cards shown is controlled by Settings > General > Pinned report limit.
+
 ## Comparison
 
 Comparison analyzes spending, income and credits, or net cash flow changes.

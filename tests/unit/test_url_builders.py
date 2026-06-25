@@ -7,7 +7,8 @@ from flask import request
 from finance_app.modules.calendar.urls import calendar_url
 from finance_app.modules.calendar.urls import transactions_url as calendar_transactions_url
 from finance_app.modules.comparison.urls import build_comparison_url
-from finance_app.modules.dashboard.urls import dashboard_transactions_url, dashboard_url, month_bounds
+from finance_app.modules.dashboard.urls import dashboard_transactions_url
+from finance_app.modules.reports.urls import build_reports_url, reports_url
 from finance_app.modules.review.urls import build_review_sort_url, build_review_url
 from finance_app.modules.transactions.urls import transactions_redirect_with_ignored, transactions_url
 
@@ -15,19 +16,6 @@ from finance_app.modules.transactions.urls import transactions_redirect_with_ign
 def parsed_query(url):
     """Return query parameters for a generated application URL."""
     return parse_qs(urlsplit(url).query, keep_blank_values=True)
-
-
-def test_dashboard_url_preserves_and_overrides_query_values(app):
-    """Verify dashboard URLs preserve current filters and stringify override values."""
-    with app.test_request_context("/dashboard?period=all&categories=Food&empty="):
-        url = dashboard_url(request.args, categories=["Food", ""], page=2, empty="")
-
-    assert urlsplit(url).path == "/dashboard"
-    assert parsed_query(url) == {
-        "period": ["all"],
-        "categories": ["Food"],
-        "page": ["2"],
-    }
 
 
 def test_dashboard_transactions_url_builds_drilldown_query(app):
@@ -86,14 +74,6 @@ def test_transactions_redirect_with_ignored_replaces_filter(app):
     }
 
 
-def test_month_bounds_returns_inclusive_month_range():
-    """Verify month bounds account for month length."""
-    assert month_bounds("2024-02") == {
-        "start": "2024-02-01",
-        "end": "2024-02-29",
-    }
-
-
 def test_comparison_url_removes_blank_query_values(app):
     """Verify comparison URLs omit empty filters."""
     with app.test_request_context("/comparison"):
@@ -103,6 +83,30 @@ def test_comparison_url_removes_blank_query_values(app):
     assert parsed_query(url) == {
         "years": ["2026"],
         "view": ["year"],
+    }
+
+
+def test_reports_url_removes_blank_query_values(app):
+    """Verify Reports URLs omit empty filters."""
+    with app.test_request_context("/reports"):
+        url = build_reports_url("reports.income", basis="ledger_rows", account_id=None, empty="")
+
+    assert urlsplit(url).path == "/reports/income"
+    assert parsed_query(url) == {
+        "basis": ["ledger_rows"],
+    }
+
+
+def test_reports_url_preserves_and_overrides_query_values(app):
+    """Verify Reports URLs preserve current filters and stringify overrides."""
+    with app.test_request_context("/reports?period=ytd&account_id=3&empty="):
+        url = reports_url(request.args, measure="spending", empty="")
+
+    assert urlsplit(url).path == "/reports"
+    assert parsed_query(url) == {
+        "period": ["ytd"],
+        "account_id": ["3"],
+        "measure": ["spending"],
     }
 
 
