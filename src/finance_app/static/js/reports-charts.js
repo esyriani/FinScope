@@ -4,7 +4,7 @@ const reportsPalette = reportsChartUtils.palette;
 const reportsTheme = reportsChartUtils.theme();
 const formatReportsMoney = reportsChartUtils.formatMoney;
 const formatReportsAxisMoney = reportsChartUtils.formatAxisMoney;
-const reportsTranslate = reportsChartUtils.translate;
+const reportsChartsTranslate = reportsChartUtils.translate;
 
 function reportsMonthName(monthIndex) {
     return new Date(Date.UTC(2000, monthIndex, 1)).toLocaleString(window.financeLocale || "en-CA", {
@@ -60,7 +60,7 @@ function reportsMonthlyOption() {
         },
         series: [
             {
-                name: reportsTranslate("Spending"),
+                name: reportsChartsTranslate("Spending"),
                 type: "bar",
                 data: reportsCharts.monthlySpending || [],
                 itemStyle: {
@@ -68,7 +68,7 @@ function reportsMonthlyOption() {
                 },
             },
             {
-                name: reportsTranslate("Income and credits"),
+                name: reportsChartsTranslate("Income and credits"),
                 type: "bar",
                 data: reportsCharts.monthlyIncome || [],
                 itemStyle: {
@@ -76,7 +76,7 @@ function reportsMonthlyOption() {
                 },
             },
             {
-                name: reportsTranslate("Net cash flow"),
+                name: reportsChartsTranslate("Net cash flow"),
                 type: "line",
                 data: reportsCharts.monthlyNet || [],
                 itemStyle: {
@@ -148,7 +148,7 @@ function renderReportsCharts(root = document) {
             reportsBreakdownOption(
                 reportsCharts.categoryLabels,
                 reportsCharts.categoryValues || [],
-                reportsTranslate("Categories")
+                reportsChartsTranslate("Categories")
             )
         );
     }
@@ -157,7 +157,11 @@ function renderReportsCharts(root = document) {
     if (tagChart && reportsCharts.tagLabels?.length > 0) {
         reportsCreateChart(
             tagChart,
-            reportsBreakdownOption(reportsCharts.tagLabels, reportsCharts.tagValues || [], reportsTranslate("Tags"))
+            reportsBreakdownOption(
+                reportsCharts.tagLabels,
+                reportsCharts.tagValues || [],
+                reportsChartsTranslate("Tags")
+            )
         );
     }
 
@@ -168,7 +172,7 @@ function renderReportsCharts(root = document) {
             reportsBreakdownOption(
                 reportsCharts.compositionLabels,
                 reportsCharts.compositionValues || [],
-                reportsTranslate(reportsCharts.compositionName || "Composition")
+                reportsChartsTranslate(reportsCharts.compositionName || "Composition")
             )
         );
     }

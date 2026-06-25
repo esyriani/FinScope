@@ -1,5 +1,6 @@
 """Service-level tests for Reports overview context."""
 
+from sqlalchemy import text
 from tests.support.context_services import seed_reporting_data
 from werkzeug.datastructures import MultiDict
 
@@ -78,6 +79,49 @@ def test_reports_overview_all_quick_view_includes_unknown_rows(app, core_conn):
     assert context["transaction_count"] == 5
     assert rows_by_label(context["category_rows"])["UNKNOWN"]["spending"] == 30.00
     assert rows_by_label(context["monthly_rows"])["2026-02"]["spending"] == 150.00
+
+
+def test_reports_overview_implicit_scope_falls_back_when_only_unknown_rows_exist(app, core_conn):
+    """Verify a fresh all-unknown dataset does not render a blank default report."""
+    core_conn.execute(text("""
+        INSERT INTO transactions (
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            category_source,
+            transaction_kind,
+            fingerprint
+        )
+        VALUES ('2026-02-01', 'Unknown store', 42.00, 'UNKNOWN', 1, 'unknown', 'expense', 'reports-unknown-only')
+        """))
+    core_conn.commit()
+
+    default_context = reports_context(
+        app,
+        [
+            ("period", "custom"),
+            ("date_from", "2026-02-01"),
+            ("date_to", "2026-02-28"),
+        ],
+    )
+    explicit_context = reports_context(
+        app,
+        [
+            ("period", "custom"),
+            ("date_from", "2026-02-01"),
+            ("date_to", "2026-02-28"),
+            ("quick_view", "categorized"),
+        ],
+    )
+
+    assert default_context["quick_view"] == "all"
+    assert default_context["transaction_count"] == 1
+    assert default_context["total_spending"] == 42.00
+    assert "quick_view=all" in default_context["reports_export_csv_url"]
+    assert explicit_context["quick_view"] == "categorized"
+    assert explicit_context["transaction_count"] == 0
 
 
 def test_reports_overview_quick_view_filters_unknown_rows(app, core_conn):

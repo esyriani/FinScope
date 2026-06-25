@@ -459,8 +459,25 @@
 </section>
 {%- endmacro %}
 
+{% macro report_pin_button() -%}
+{% if pin_report_payload is defined and pin_report_payload %}
+<button
+    type="button"
+    class="btn btn-outline-secondary btn-sm"
+    data-report-pin-button
+    data-pin-url="{{ pin_report_url }}"
+    {% if pin_report_is_pinned %}disabled{% endif %}
+>
+    <i class="bi {% if pin_report_is_pinned %}bi-pin-fill{% else %}bi-pin-angle{% endif %}" aria-hidden="true" data-report-pin-icon></i>
+    <span data-report-pin-label>{% if pin_report_is_pinned %}{{ _("Pinned") }}{% else %}{{ _("Pin report") }}{% endif %}</span>
+</button>
+<script type="application/json" data-report-pin-payload>{{ pin_report_payload | tojson }}</script>
+{% endif %}
+{%- endmacro %}
+
 {% macro reports_actions(comparison_url, transaction_url="") -%}
 <div class="reports-actions">
+    {{ report_pin_button() }}
     {% if transaction_url %}
     <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
     {% endif %}
@@ -496,34 +513,6 @@
         </div>
     </div>
 </section>
-{%- endmacro %}
-
-{% macro taxonomy_pinned_cards(targets) -%}
-{% if targets %}
-<section class="reports-pinned-section" aria-labelledby="reports-taxonomy-pinned-heading">
-    <div class="page-block-header">
-        <h6 id="reports-taxonomy-pinned-heading" class="card-title mb-0">{{ _("Pinned reports") }}</h6>
-    </div>
-    <div class="reports-pinned-grid">
-        {% for target in targets %}
-        <a class="card reports-pinned-card text-decoration-none" href="{{ target.url }}">
-            <div class="card-body">
-                <div class="reports-pinned-meta">
-                    <span class="badge text-bg-secondary">{{ _(target.type_label) }}</span>
-                    {% if target.is_builtin %}<span class="badge text-bg-info">{{ _("Built-in") }}</span>{% endif %}
-                </div>
-                <h5 class="card-title">{{ target.label }}</h5>
-                {% if target.has_activity %}
-                    <p class="mb-0">{{ target.transaction_count }} {{ _("transactions") }} - {{ target.spending | moneyfmt }} {{ _("spending") }}</p>
-                {% else %}
-                    <p class="mb-0 text-muted">{{ _("No activity in this view.") }}</p>
-                {% endif %}
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-</section>
-{% endif %}
 {%- endmacro %}
 
 {% macro taxonomy_explorer(rows, filter_chips, current_filter="all") -%}
@@ -853,6 +842,7 @@
             {% endif %}
         </div>
         <div class="reports-actions reports-target-actions">
+            {{ report_pin_button() }}
             <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
             <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
             <a class="btn btn-outline-secondary btn-sm" href="{{ back_url }}"><i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Back to categories and tags") }}</a>
@@ -872,6 +862,7 @@
             {% endif %}
         </div>
         <div class="reports-actions reports-target-actions">
+            {{ report_pin_button() }}
             <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
             <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
             <a class="btn btn-outline-secondary btn-sm" href="{{ back_url }}"><i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _(back_label) }}</a>
@@ -1017,6 +1008,8 @@
 
 {% if active_report_section.key == "overview" %}
 <div data-reports-page data-reports-overview>
+{% include "_reports_pins.html" %}
+
 {% call collapsible_filter_panel("reports-overview-filters", reports_filter_summary | trim) %}
     {{ reports_filter_form(reports_clear_url) }}
 {% endcall %}
@@ -1165,7 +1158,6 @@
 {% if transaction_count > 0 %}
 {{ reports_quality_panel() }}
 {{ taxonomy_target_typeahead(taxonomy_target_options, taxonomy_explorer_search) }}
-{{ taxonomy_pinned_cards(taxonomy_pinned_targets) }}
 {{ taxonomy_explorer(taxonomy_explorer_rows, taxonomy_filter_chips, taxonomy_explorer_filter) }}
 {% else %}
 <div class="empty-state">

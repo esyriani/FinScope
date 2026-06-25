@@ -51,7 +51,6 @@ def test_taxonomy_index_lists_category_and_tag_targets(app, core_conn):
     category_rows = rows_by_label(context["taxonomy_category_rows"])
     tag_rows = rows_by_label(context["taxonomy_tag_rows"])
     explorer_rows = rows_by_label(context["taxonomy_explorer_rows"])
-    pinned_labels = {row["label"] for row in context["taxonomy_pinned_targets"]}
     assert context["active_report_section"].key == REPORT_TAXONOMY
     assert category_rows["Food"]["spending"] == 140.00
     assert category_rows["Food"]["url"].startswith("/reports/categories/")
@@ -61,7 +60,7 @@ def test_taxonomy_index_lists_category_and_tag_targets(app, core_conn):
     assert tag_rows["Tax"]["url"].startswith("/reports/tags/")
     assert explorer_rows["Food"]["type_label"] == "Category"
     assert explorer_rows["Tax"]["type_label"] == "Tag"
-    assert {"Rental", "Tax", "Reimbursable", "Reimbursement"} <= pinned_labels
+    assert "taxonomy_pinned_targets" not in context
     assert context["data_quality"]["quality_score"] == 100
 
 

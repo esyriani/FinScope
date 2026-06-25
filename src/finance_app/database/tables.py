@@ -153,6 +153,50 @@ user_settings = Table(
     **MYSQL_TABLE_OPTIONS,
 )
 
+pinned_reports = Table(
+    "pinned_reports",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("report_type", String(32), nullable=False),
+    Column("target_kind", String(32)),
+    Column("target_category_id", Integer, ForeignKey("categories.id", ondelete="SET NULL")),
+    Column("target_tag_id", Integer, ForeignKey("tags.id", ondelete="SET NULL")),
+    Column("target_account_id", Integer, ForeignKey("accounts.id", ondelete="SET NULL")),
+    Column("target_merchant_id", Integer, ForeignKey("merchants.id", ondelete="SET NULL")),
+    Column("period", String(32), nullable=False),
+    Column("date_from", DATE_TYPE),
+    Column("date_to", DATE_TYPE),
+    Column("measure", String(32), nullable=False),
+    Column("basis", String(32), nullable=False),
+    Column("account_filter_id", Integer, ForeignKey("accounts.id", ondelete="SET NULL")),
+    Column("merchant_filter_id", Integer, ForeignKey("merchants.id", ondelete="SET NULL")),
+    Column("merchant_query", String(255), nullable=False, server_default=""),
+    Column("classification_scope", String(32), nullable=False),
+    Column("category_filters", Text, nullable=False, server_default="[]"),
+    Column("tag_filters", Text, nullable=False, server_default="[]"),
+    Column("fingerprint", String(512), nullable=False),
+    Column("sort_order", Integer, nullable=False, server_default=text("0")),
+    Column("short_title", String(30)),
+    Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    UniqueConstraint("user_id", "fingerprint", name="uq_pinned_reports_user_fingerprint"),
+    allowed_values_constraint(
+        "report_type",
+        ("account", "income", "merchant", "overview", "taxonomy"),
+        "pinned_reports_report_type_allowed",
+    ),
+    CheckConstraint(
+        "target_kind IS NULL OR target_kind IN ('account', 'category', 'merchant', 'tag')",
+        name="pinned_reports_target_kind_allowed",
+    ),
+    CheckConstraint("sort_order >= 0", name="pinned_reports_sort_order_non_negative"),
+    CheckConstraint(
+        "short_title IS NULL OR length(trim(short_title)) <= 30",
+        name="pinned_reports_short_title_length",
+    ),
+    **AUTOINCREMENT_TABLE_OPTIONS,
+)
+
 audit_log = Table(
     "audit_log",
     metadata,
@@ -531,12 +575,15 @@ Index(
 Index("idx_category_rule_tags_tag", category_rule_tags.c.tag_id)
 Index("idx_users_role_active", users.c.role, users.c.is_active)
 Index("idx_users_locked_until", users.c.locked_until)
+Index("idx_pinned_reports_user_order", pinned_reports.c.user_id, pinned_reports.c.sort_order, pinned_reports.c.id)
+Index("idx_pinned_reports_user_type", pinned_reports.c.user_id, pinned_reports.c.report_type)
 Index("idx_audit_log_created_at", audit_log.c.created_at)
 Index("idx_audit_log_user", audit_log.c.user_id)
 
 SCHEMA_TABLES = (
     users,
     user_settings,
+    pinned_reports,
     audit_log,
     accounts,
     statement_types,

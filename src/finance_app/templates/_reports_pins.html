@@ -1,0 +1,102 @@
+<section
+    id="reports-pinned-reports"
+    class="reports-pinned-section page-block"
+    aria-labelledby="reports-pinned-heading"
+    data-pinned-reports
+    data-pinned-save-url="{{ pinned_reports_save_url }}"
+    data-pinned-limit="{{ pinned_report_limit }}"
+>
+    <div class="page-block-header">
+        <div>
+            <h6 id="reports-pinned-heading" class="card-title mb-0">{{ _("Pinned reports") }}</h6>
+            <p class="text-muted mb-0">{{ _("Saved report views with current values.") }}</p>
+        </div>
+        {% if pinned_reports %}
+        <div class="reports-pinned-toolbar">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-pinned-edit-toggle>
+                <i class="bi bi-pencil-square" aria-hidden="true"></i>{{ _("Edit pins") }}
+            </button>
+            <div class="reports-pinned-edit-actions" data-pinned-edit-actions>
+                <button type="button" class="btn btn-primary btn-sm" data-pinned-save>
+                    <i class="bi bi-save" aria-hidden="true"></i>{{ _("Save pinned reports") }}
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-pinned-cancel>
+                    <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="reports-pinned-status" role="status" aria-live="polite" data-pinned-status></div>
+    {% if pinned_reports %}
+    <div class="reports-pinned-grid" data-pinned-list>
+        {% for pin in pinned_reports %}
+        <article
+            class="card reports-pinned-card {% if pin.open_url %}reports-pinned-card-clickable{% endif %} {% if pin.is_missing %}reports-pinned-card-missing{% endif %}"
+            data-pinned-card
+            data-pin-id="{{ pin.id }}"
+        >
+            <div class="card-body">
+                {% if pin.open_url %}
+                <a class="reports-pinned-card-link" href="{{ pin.open_url }}" aria-label="{{ _('Open') }} {{ pin.title }}"></a>
+                {% endif %}
+                <div class="reports-pinned-edit-row" data-pinned-edit-only>
+                    <div class="reports-pinned-move-buttons">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-pinned-move="up" aria-label="{{ _('Move up') }}" title="{{ _('Move up') }}">
+                            <i class="bi bi-arrow-up" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-pinned-move="down" aria-label="{{ _('Move down') }}" title="{{ _('Move down') }}">
+                            <i class="bi bi-arrow-down" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <label class="visually-hidden" for="pinned-report-title-{{ pin.id }}">{{ _("Short title") }}</label>
+                    <input
+                        id="pinned-report-title-{{ pin.id }}"
+                        class="form-control form-control-sm"
+                        type="text"
+                        value="{{ pin.short_title }}"
+                        maxlength="30"
+                        placeholder="{{ _('Short title') }}"
+                        data-pinned-title
+                    >
+                </div>
+                <div class="reports-pinned-meta">
+                    <span class="reports-pinned-state" title="{{ _('Pinned') }}" data-pinned-display-only>
+                        <i class="bi bi-pin-fill" aria-hidden="true"></i>
+                    </span>
+                    <button
+                        type="button"
+                        class="reports-pinned-state reports-pinned-state-button"
+                        aria-label="{{ _('Unpin report') }}"
+                        title="{{ _('Unpin report') }}"
+                        aria-pressed="false"
+                        data-pinned-remove-toggle
+                        data-pinned-edit-only
+                    >
+                        <i class="bi bi-pin-fill" aria-hidden="true" data-pinned-remove-icon></i>
+                        <span class="visually-hidden" data-pinned-remove-label>{{ _("Pinned") }}</span>
+                    </button>
+                </div>
+                <h5 class="card-title">
+                    {{ pin.title }}
+                </h5>
+                <p class="reports-pinned-filter-summary">{{ pin.filter_summary }}</p>
+                {% if pin.is_missing %}
+                    <p class="reports-pinned-warning">{{ _(pin.missing_message) }}</p>
+                {% else %}
+                    <div class="reports-pinned-primary">
+                        <span>{{ _(pin.primary_label) }}</span>
+                        <strong>{{ pin.primary_value | moneyfmt }}</strong>
+                    </div>
+                    <p class="mb-0">{{ pin.transaction_count }} {{ _("transactions") }}</p>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state compact reports-pinned-empty">
+        {{ _("No pinned reports yet. Open any report and use Pin report to save it here.") }}
+    </div>
+    {% endif %}
+</section>

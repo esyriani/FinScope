@@ -41,6 +41,9 @@ from finance_app.database.tables import (
     merchants as merchants_table,
 )
 from finance_app.database.tables import (
+    pinned_reports as pinned_reports_table,
+)
+from finance_app.database.tables import (
     recurring_patterns as recurring_patterns_table,
 )
 from finance_app.database.tables import (
@@ -242,6 +245,98 @@ def test_core_schema_creates_category_tag_tables(schema_conn):
     assert "builtin_key" in column_names(schema_conn, "tags")
     assert "merchants" in tables
     assert "merchant_aliases" not in tables
+
+
+def test_core_schema_creates_user_owned_pinned_reports(schema_conn):
+    """Verify pinned report views are owned rows with bounded display metadata."""
+    tables = set(inspect(schema_conn).get_table_names())
+    columns = column_names(schema_conn, "pinned_reports")
+    foreign_keys = foreign_key_triplets(schema_conn, "pinned_reports")
+
+    assert "pinned_reports" in tables
+    assert {
+        "user_id",
+        "report_type",
+        "target_kind",
+        "target_category_id",
+        "target_tag_id",
+        "target_account_id",
+        "target_merchant_id",
+        "period",
+        "date_from",
+        "date_to",
+        "measure",
+        "basis",
+        "account_filter_id",
+        "merchant_filter_id",
+        "merchant_query",
+        "classification_scope",
+        "category_filters",
+        "tag_filters",
+        "fingerprint",
+        "sort_order",
+        "short_title",
+        "created_at",
+    }.issubset(columns)
+    assert ("user_id", "users", "id") in foreign_keys
+    assert ("target_category_id", "categories", "id") in foreign_keys
+    assert ("target_tag_id", "tags", "id") in foreign_keys
+    assert ("target_account_id", "accounts", "id") in foreign_keys
+    assert ("target_merchant_id", "merchants", "id") in foreign_keys
+
+    schema_conn.execute(
+        insert(users_table).values(
+            username="PinOwner",
+            display_name="Pin owner",
+            password_hash="hash",
+            role=USER_ROLE_OWNER,
+        )
+    )
+    user_id = schema_conn.execute(select(users_table.c.id).where(users_table.c.username == "PinOwner")).scalar_one()
+    schema_conn.execute(
+        insert(pinned_reports_table).values(
+            user_id=user_id,
+            report_type="overview",
+            period="year_to_date",
+            measure="spending",
+            basis="cash_flow",
+            classification_scope="categorized",
+            fingerprint="schema-pin",
+            sort_order=0,
+        )
+    )
+    schema_conn.commit()
+
+    with pytest.raises(IntegrityError):
+        schema_conn.execute(
+            insert(pinned_reports_table).values(
+                user_id=user_id,
+                report_type="overview",
+                period="year_to_date",
+                measure="spending",
+                basis="cash_flow",
+                classification_scope="categorized",
+                fingerprint="schema-pin",
+                sort_order=1,
+            )
+        )
+    schema_conn.rollback()
+
+    with pytest.raises(IntegrityError):
+        schema_conn.execute(
+            insert(pinned_reports_table).values(
+                user_id=user_id,
+                report_type="overview",
+                period="year_to_date",
+                measure="spending",
+                basis="cash_flow",
+                classification_scope="categorized",
+                fingerprint="schema-pin-title",
+                sort_order=0,
+                short_title="x" * 31,
+            )
+        )
+    schema_conn.rollback()
 
 
 def test_core_schema_text_constraints_match_shared_constants(schema_conn):

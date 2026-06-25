@@ -24,6 +24,7 @@ def settings_defaults():
         default_comparison_insight_card_limit=4,
         default_home_top_category_limit=6,
         default_dashboard_top_driver_limit=5,
+        default_pinned_report_limit=4,
         default_merchant_table_limit=10,
         default_merchant_suggestion_limit=5,
         default_rule_preview_limit=20,
@@ -46,6 +47,7 @@ def test_parse_general_settings_form_normalizes_user_settings():
             ("comparison_insight_card_limit", "3"),
             ("home_top_category_limit", "7"),
             ("dashboard_top_driver_limit", "4"),
+            ("pinned_report_limit", "6"),
             ("merchant_table_limit", "8"),
             ("merchant_suggestion_limit", "6"),
             ("rule_preview_limit", "9"),
@@ -60,9 +62,42 @@ def test_parse_general_settings_form_normalizes_user_settings():
     assert parsed["default_table_page_size"] == 50
     assert parsed["comparison_max_years"] == 4
     assert parsed["dashboard_top_driver_limit"] == 4
+    assert parsed["pinned_report_limit"] == 6
     assert parsed["merchant_suggestion_limit"] == 6
     assert parsed["theme_mode"] == "dark"
     assert parsed["ui_language"] == "fr"
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        ("comparison_insight_card_limit", "Comparison insight card limit must be at most 12."),
+        ("home_top_category_limit", "Home top category limit must be at most 12."),
+        ("dashboard_top_driver_limit", "Dashboard top driver limit must be at most 12."),
+    ],
+)
+def test_parse_general_settings_form_bounds_compact_preview_limits(field, message):
+    """Verify compact preview limits reject values that would overgrow the UI."""
+    form = MultiDict(
+        [
+            ("default_table_page_size", "50"),
+            ("comparison_max_years", "4"),
+            ("comparison_insight_card_limit", "3"),
+            ("home_top_category_limit", "7"),
+            ("dashboard_top_driver_limit", "4"),
+            ("pinned_report_limit", "6"),
+            ("merchant_table_limit", "8"),
+            ("merchant_suggestion_limit", "6"),
+            ("rule_preview_limit", "9"),
+            ("rule_audit_transaction_limit", "100"),
+            ("theme_mode", "dark"),
+            ("ui_language", "en"),
+        ]
+    )
+    form[field] = "13"
+
+    with pytest.raises(ValueError, match=message):
+        parse_general_settings_form(form, settings_defaults())
 
 
 def test_parse_global_settings_form_normalizes_owner_settings():

@@ -84,6 +84,7 @@ def test_setting_defaults_include_runtime_settings_seed_values(monkeypatch, tmp_
     monkeypatch.setenv("FINANCE_DEFAULT_UI_LANGUAGE", "fr-CA")
     monkeypatch.setenv("FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT", "9")
     monkeypatch.setenv("FINANCE_DEFAULT_DASHBOARD_TOP_DRIVER_LIMIT", "8")
+    monkeypatch.setenv("FINANCE_DEFAULT_PINNED_REPORT_LIMIT", "6")
     monkeypatch.setenv("FINANCE_DEFAULT_MERCHANT_SUGGESTION_LIMIT", "6")
     monkeypatch.setenv("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", "0.62")
     monkeypatch.setenv("FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED", "false")
@@ -100,6 +101,7 @@ def test_setting_defaults_include_runtime_settings_seed_values(monkeypatch, tmp_
     assert settings.default_ui_language == "fr"
     assert settings.default_comparison_insight_card_limit == 9
     assert settings.default_dashboard_top_driver_limit == 8
+    assert settings.default_pinned_report_limit == 6
     assert settings.default_merchant_suggestion_limit == 6
     assert settings.default_llm_review_threshold == 0.62
     assert settings.default_transaction_ai_rerun_enabled is False
@@ -115,11 +117,19 @@ def test_invalid_integer_settings_fall_back_without_import_crash(monkeypatch, tm
     """Verify malformed integer config values do not crash settings loading."""
     monkeypatch.setenv("FINANCE_MAX_UPLOAD_MB", "not-an-int")
     monkeypatch.setenv("FINANCE_PORT", "70000")
+    monkeypatch.setenv("FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT", "20")
+    monkeypatch.setenv("FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT", "20")
+    monkeypatch.setenv("FINANCE_DEFAULT_DASHBOARD_TOP_DRIVER_LIMIT", "20")
+    monkeypatch.setenv("FINANCE_DEFAULT_PINNED_REPORT_LIMIT", "20")
 
     settings = config_module.load_settings(tmp_path / "missing.ini")
 
     assert settings.max_upload_mb == 16
     assert settings.server_port == 5000
+    assert settings.default_comparison_insight_card_limit == 12
+    assert settings.default_home_top_category_limit == 12
+    assert settings.default_dashboard_top_driver_limit == 12
+    assert settings.default_pinned_report_limit == 12
 
 
 def test_invalid_float_settings_fall_back_without_import_crash(monkeypatch, tmp_path):

@@ -136,7 +136,6 @@ def test_reports_taxonomy_route_renders_index_targets(client, core_conn):
     assert_visible_text(
         response,
         "Open a category or tag report...",
-        "Pinned reports",
         "Report explorer",
         "All",
         "Categories",
@@ -148,6 +147,7 @@ def test_reports_taxonomy_route_renders_index_targets(client, core_conn):
         "Tax",
     )
     assert "data-taxonomy-open-control" in body
+    assert "reports-pinned-grid" not in body
     assert "data-taxonomy-open-menu" in body
     assert 'role="combobox"' in body
     assert 'data-taxonomy-filter="analytics-categories"' in body

@@ -7,8 +7,10 @@ service layer.
 
 from typing import Any
 
-from flask import Blueprint, Response, abort, render_template, request
+from flask import Blueprint, Response, abort, jsonify, render_template, request
+from flask_login import current_user  # type: ignore[import-untyped]
 
+from finance_app.core.i18n import gettext
 from finance_app.modules.reports.definitions import (
     REPORT_ACCOUNTS,
     REPORT_INCOME,
@@ -22,6 +24,11 @@ from finance_app.modules.reports.export import (
     report_export_filename,
     reports_overview_csv,
     reports_overview_xlsx,
+)
+from finance_app.modules.reports.pins import (
+    pin_current_report,
+    pinned_reports_overview_context,
+    save_pinned_report_edits,
 )
 from finance_app.modules.reports.service import (
     build_reports_account_detail_context,
@@ -93,6 +100,35 @@ def merchant_report(merchant_id: int) -> str:
 def income() -> str:
     """Render the income and credits report."""
     return _render_reports_section(REPORT_INCOME)
+
+
+@reports_bp.route("/reports/pins", methods=["POST"])
+def pin_report() -> Response:
+    """Pin the current report view for the authenticated user as JSON."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = pin_current_report(int(current_user.id), payload)
+    except ValueError as exc:
+        response = jsonify({"ok": False, "message": gettext(str(exc))})
+        response.status_code = 400
+        return response
+    response = jsonify(result)
+    response.status_code = 400 if not result.get("ok") else 200
+    return response
+
+
+@reports_bp.route("/reports/pins/edit", methods=["POST"])
+def save_pinned_reports() -> Response:
+    """Save pinned report order, title, and removal edits as JSON."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = save_pinned_report_edits(int(current_user.id), payload)
+    except ValueError as exc:
+        response = jsonify({"ok": False, "message": gettext(str(exc))})
+        response.status_code = 400
+        return response
+    html = render_template("_reports_pins.html", **pinned_reports_overview_context())
+    return jsonify({**result, "html": html})
 
 
 @reports_bp.route("/reports/export.csv")

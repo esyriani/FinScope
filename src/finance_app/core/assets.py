@@ -4,6 +4,7 @@ Builds Flask static URLs with content-based cache keys for local assets.
 Depends on the application's configured static folder and Flask's url routing.
 """
 
+import mimetypes
 from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
@@ -12,6 +13,19 @@ from typing import Any
 from flask import url_for
 
 ASSET_HASH_LENGTH = 12
+STATIC_ASSET_MIMETYPES = {
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".json": "application/json",
+    ".svg": "image/svg+xml",
+}
+
+
+def register_static_asset_mimetypes() -> None:
+    """Ensure local static assets are served with browser-valid MIME types."""
+    for extension, mimetype in STATIC_ASSET_MIMETYPES.items():
+        mimetypes.add_type(mimetype, extension, strict=True)
 
 
 def static_asset_hash(filename: str, static_folder: str | Path) -> str | None:

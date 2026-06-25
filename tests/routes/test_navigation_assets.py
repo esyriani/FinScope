@@ -61,6 +61,26 @@ def test_base_template_uses_local_hashed_assets(client):
     assert_asset_reference(response, r"/static/js/core\.js\?v=[0-9a-f]{12}")
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/static/js/app-boot.js",
+        "/static/vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js",
+        "/static/vendor/echarts/5.6.0/echarts.min.js",
+        "/static/js/reports-charts.js",
+    ],
+)
+def test_static_javascript_assets_use_browser_valid_mimetype(client, path):
+    """Verify local scripts are not served as plain text on Windows hosts."""
+    response = client.get(path)
+
+    try:
+        assert response.status_code == 200
+        assert response.mimetype == "text/javascript"
+    finally:
+        response.close()
+
+
 def test_base_template_keeps_feature_assets_page_scoped(client):
     """Verify the home page does not inherit feature assets from unrelated pages."""
     response = client.get("/")

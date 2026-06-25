@@ -83,6 +83,28 @@ def test_transactions_table_exports_category_method_and_score_separately(client,
     )
 
 
+def test_transactions_custom_range_filter_renders_date_fields(client):
+    """Verify custom period filtering exposes bookmarkable date fields."""
+    response = client.get("/transactions?period=custom&date_from=2026-01-01&date_to=2026-01-31")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert_has_element(
+        response,
+        "input",
+        attrs={"id": "transaction-date-from", "name": "date_from", "value": "2026-01-01"},
+    )
+    assert_has_element(
+        response,
+        "input",
+        attrs={"id": "transaction-date-to", "name": "date_to", "value": "2026-01-31"},
+    )
+    assert "data-transactions-custom-range" in body
+    assert "vendor/flatpickr" in body
+    assert "js/dates.js" in body
+    assert "js/transactions.js" in body
+
+
 def test_update_transaction_category_route_saves_manual_category_rule_and_tags(client, core_conn):
     """Verify category route updates transaction and saves an optional rule."""
     tx_id = insert_route_transaction(core_conn)

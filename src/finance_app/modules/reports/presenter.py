@@ -12,12 +12,8 @@ from flask import url_for
 
 from finance_app.core.money import rounded_money_float
 from finance_app.modules.categories.builtins import (
-    BUILTIN_CATEGORY_REIMBURSEMENT,
-    BUILTIN_CATEGORY_RENTAL,
     BUILTIN_CATEGORY_TRANSFERS,
     BUILTIN_CATEGORY_UNKNOWN,
-    BUILTIN_TAG_REIMBURSABLE,
-    BUILTIN_TAG_TAX,
 )
 from finance_app.modules.comparison.urls import build_comparison_url
 from finance_app.modules.dashboard.presenter import build_cash_flow_summary, build_data_quality
@@ -43,13 +39,6 @@ from finance_app.modules.transactions.constants import (
     AMOUNT_TYPE_CREDIT,
     AMOUNT_TYPE_SPENDING,
     IGNORED_FILTER_ACTIVE,
-)
-
-PINNED_TAXONOMY_TARGETS = (
-    (TAXONOMY_TARGET_CATEGORY, BUILTIN_CATEGORY_RENTAL),
-    (TAXONOMY_TARGET_TAG, BUILTIN_TAG_TAX),
-    (TAXONOMY_TARGET_TAG, BUILTIN_TAG_REIMBURSABLE),
-    (TAXONOMY_TARGET_CATEGORY, BUILTIN_CATEGORY_REIMBURSEMENT),
 )
 
 
@@ -337,7 +326,6 @@ def build_taxonomy_index_rows(
                 "comparison_url": taxonomy_row_comparison_url(kind, label, report_request),
                 "target_key": taxonomy_target_key(kind, target_id),
                 "is_builtin": bool(builtin_key),
-                "is_pinned": is_pinned_taxonomy_target(kind, builtin_key),
                 "needs_review": kind == TAXONOMY_TARGET_CATEGORY and builtin_key == BUILTIN_CATEGORY_UNKNOWN,
                 "is_analytics_category": is_analytics_taxonomy_category(kind, builtin_key, label),
                 "has_income": rounded_money_float(row.get("income")) > 0,
@@ -389,11 +377,6 @@ def taxonomy_row_comparison_url(kind: str, label: str, report_request: ReportReq
     return report_comparison_url(report_request, tags=[label])
 
 
-def is_pinned_taxonomy_target(kind: str, builtin_key: str) -> bool:
-    """Return whether a taxonomy target belongs in the pinned report shortcuts."""
-    return (kind, builtin_key) in PINNED_TAXONOMY_TARGETS
-
-
 def is_analytics_taxonomy_category(kind: str, builtin_key: str, label: str) -> bool:
     """Return whether a target belongs in ordinary category analytics."""
     if kind != TAXONOMY_TARGET_CATEGORY:
@@ -425,7 +408,6 @@ def build_taxonomy_target_options(
 ) -> list[dict[str, Any]]:
     """Return all category and tag targets available for direct navigation."""
     prepared = []
-    pinned_rank = {target: index for index, target in enumerate(PINNED_TAXONOMY_TARGETS)}
     for row in rows:
         kind = str(row["kind"])
         target_id = row.get("id")
@@ -444,8 +426,6 @@ def build_taxonomy_target_options(
                 "url": taxonomy_target_report_url(kind, target_id, report_request),
                 "target_key": taxonomy_target_key(kind, target_id),
                 "is_builtin": bool(builtin_key),
-                "is_pinned": is_pinned_taxonomy_target(kind, builtin_key),
-                "pinned_rank": pinned_rank.get((kind, builtin_key), len(pinned_rank)),
                 "search_text": taxonomy_search_text(label, kind, builtin_key, row.get("description")),
             }
         )
@@ -453,36 +433,11 @@ def build_taxonomy_target_options(
     return sorted(
         prepared,
         key=lambda row: (
-            not row["is_pinned"],
-            int(row["pinned_rank"]),
+            not row["is_builtin"],
             str(row["type_label"]),
             str(row["label"]).casefold(),
         ),
     )
-
-
-def build_taxonomy_pinned_targets(
-    target_options: Sequence[Mapping[str, Any]],
-    explorer_rows: Sequence[Mapping[str, Any]],
-) -> list[dict[str, Any]]:
-    """Return pinned built-in report cards with current activity when available."""
-    activity_by_key = {str(row["target_key"]): row for row in explorer_rows}
-    pinned_targets = []
-    for option in target_options:
-        if not option["is_pinned"]:
-            continue
-        activity = activity_by_key.get(str(option["target_key"]), {})
-        pinned_targets.append(
-            {
-                **option,
-                "spending": activity.get("spending", 0),
-                "income": activity.get("income", 0),
-                "net": activity.get("net", 0),
-                "transaction_count": activity.get("transaction_count", 0),
-                "has_activity": bool(activity.get("transaction_count", 0)),
-            }
-        )
-    return sorted(pinned_targets, key=lambda row: int(row["pinned_rank"]))
 
 
 def build_taxonomy_filter_chips(explorer_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -558,7 +513,6 @@ def build_reports_taxonomy_index_view(
         "taxonomy_tag_rows": tag_index_rows,
         "taxonomy_explorer_rows": explorer_rows,
         "taxonomy_target_options": target_option_rows,
-        "taxonomy_pinned_targets": build_taxonomy_pinned_targets(target_option_rows, explorer_rows),
         "taxonomy_filter_chips": build_taxonomy_filter_chips(explorer_rows),
         "transaction_url": build_app_url("transactions.transactions", **base_transaction_params(report_request)),
         "comparison_url": report_comparison_url(report_request),

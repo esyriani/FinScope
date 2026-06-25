@@ -4,8 +4,8 @@ The service parses report request state, coordinates read-side query helpers,
 and returns presenter-shaped contexts for report pages and downloads.
 """
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from typing import Any
 
 from flask import url_for
@@ -16,7 +16,7 @@ from finance_app.database.engine import db_core_transaction
 from finance_app.modules.accounts.queries import list_account_options
 from finance_app.modules.categories.service import get_category_options
 from finance_app.modules.categories.taxonomy import get_tag_option_rows
-from finance_app.modules.dashboard.constants import QUICK_VIEW_CATEGORIZED
+from finance_app.modules.dashboard.constants import QUICK_VIEW_ALL, QUICK_VIEW_CATEGORIZED
 from finance_app.modules.dashboard.presenter import build_quick_view_options
 from finance_app.modules.merchants.repository import find_merchant_by_id
 from finance_app.modules.merchants.service import get_merchant_suggestion_limit
@@ -42,6 +42,12 @@ from finance_app.modules.reports.filters import (
     parse_report_request,
     report_taxonomy_filter_controls_available,
     report_taxonomy_filters_active,
+)
+from finance_app.modules.reports.pins import (
+    REPORT_TYPE_ACCOUNT,
+    REPORT_TYPE_MERCHANT,
+    current_report_pin_context,
+    pinned_reports_overview_context,
 )
 from finance_app.modules.reports.presenter import (
     build_export_rows,
@@ -88,6 +94,7 @@ from finance_app.modules.settings.runtime import get_unknown_category
 class ReportsOverviewQueryData:
     """Database-backed rows for the Reports overview."""
 
+    report_request: ReportRequest
     unknown_category: str
     account_options: list[dict[str, Any]]
     selected_merchant_label: str
@@ -105,6 +112,7 @@ class ReportsOverviewQueryData:
 class ReportsTaxonomyIndexQueryData:
     """Database-backed rows for the taxonomy report index."""
 
+    report_request: ReportRequest
     unknown_category: str
     account_options: list[dict[str, Any]]
     selected_merchant_label: str
@@ -120,6 +128,7 @@ class ReportsTaxonomyIndexQueryData:
 class ReportsTaxonomyDetailQueryData:
     """Database-backed rows for a category or tag report detail page."""
 
+    report_request: ReportRequest
     unknown_category: str
     account_options: list[dict[str, Any]]
     selected_merchant_label: str
@@ -140,6 +149,7 @@ class ReportsTaxonomyDetailQueryData:
 class ReportsEntityIndexQueryData:
     """Database-backed rows for account and merchant report indexes."""
 
+    report_request: ReportRequest
     unknown_category: str
     account_options: list[dict[str, Any]]
     selected_merchant_label: str
@@ -156,6 +166,7 @@ class ReportsEntityIndexQueryData:
 class ReportsEntityDetailQueryData:
     """Database-backed rows for an account or merchant report detail page."""
 
+    report_request: ReportRequest
     unknown_category: str
     account_options: list[dict[str, Any]]
     selected_merchant_label: str
@@ -178,6 +189,7 @@ class ReportsEntityDetailQueryData:
 class ReportsIncomeQueryData:
     """Database-backed rows for the income and credits report."""
 
+    report_request: ReportRequest
     unknown_category: str
     account_options: list[dict[str, Any]]
     selected_merchant_label: str
@@ -192,6 +204,42 @@ class ReportsIncomeQueryData:
     evidence_rows: list[dict[str, Any]]
     category_options: list[str]
     tag_options: list[dict[str, str]]
+
+
+class EffectiveReportArgs:
+    """Query-args adapter used when Reports resolves an implicit scope."""
+
+    def __init__(self, source: Any, overrides: Mapping[str, object]) -> None:
+        raw_values = source.to_dict(flat=False)
+        self._values: dict[str, list[object]] = {}
+        for key, value in raw_values.items():
+            if isinstance(value, (list, tuple)):
+                self._values[str(key)] = list(value)
+            else:
+                self._values[str(key)] = [value]
+
+        for key, value in overrides.items():
+            if value in (None, ""):
+                self._values.pop(key, None)
+            elif isinstance(value, (list, tuple)):
+                self._values[key] = [item for item in value if item not in (None, "")]
+            else:
+                self._values[key] = [value]
+
+    def get(self, key: str, default: object | None = None) -> object:
+        """Return one query value for a key."""
+        values = self._values.get(key)
+        return values[0] if values else default
+
+    def getlist(self, key: str) -> list[object]:
+        """Return all query values for a repeated key."""
+        return list(self._values.get(key, []))
+
+    def to_dict(self, flat: bool = True) -> dict[str, object]:
+        """Return query parameters as a dictionary."""
+        if flat:
+            return {key: values[0] for key, values in self._values.items() if values}
+        return {key: list(values) for key, values in self._values.items() if values}
 
 
 def build_reports_context(section_key: str, args: Any) -> dict[str, Any]:
@@ -218,6 +266,7 @@ def build_reports_context(section_key: str, args: Any) -> dict[str, Any]:
 def build_reports_overview_context(args: Any, report_request: ReportRequest) -> dict[str, Any]:
     """Build Reports overview filters, rows, charts, and export URLs."""
     query_data = fetch_reports_overview_query_data(report_request)
+    report_request = query_data.report_request
     overview = build_reports_overview_view(
         report_request,
         query_data.summary,
@@ -228,8 +277,11 @@ def build_reports_overview_context(args: Any, report_request: ReportRequest) -> 
         query_data.merchant_rows,
     )
     return {
+        "report_request": report_request,
         **overview,
-        **reports_filter_context(args, report_request, query_data),
+        **reports_filter_context(report_request.args, report_request, query_data),
+        **pinned_reports_overview_context(),
+        **current_report_pin_context(REPORT_OVERVIEW, report_request),
         "overview_export_rows": build_export_rows(overview),
     }
 
@@ -237,6 +289,7 @@ def build_reports_overview_context(args: Any, report_request: ReportRequest) -> 
 def build_reports_taxonomy_index_context(args: Any, report_request: ReportRequest) -> dict[str, Any]:
     """Build taxonomy index filters and category/tag report targets."""
     query_data = fetch_reports_taxonomy_index_query_data(report_request)
+    report_request = query_data.report_request
     taxonomy = build_reports_taxonomy_index_view(
         report_request,
         query_data.summary,
@@ -245,11 +298,12 @@ def build_reports_taxonomy_index_context(args: Any, report_request: ReportReques
         query_data.target_options,
     )
     return {
+        "report_request": report_request,
         **taxonomy,
-        "taxonomy_explorer_filter": str(args.get("taxonomy_filter", "all") or "all"),
-        "taxonomy_explorer_search": str(args.get("taxonomy_search", "") or ""),
+        "taxonomy_explorer_filter": str(report_request.args.get("taxonomy_filter", "all") or "all"),
+        "taxonomy_explorer_search": str(report_request.args.get("taxonomy_search", "") or ""),
         **reports_filter_context(
-            args,
+            report_request.args,
             report_request,
             query_data,
             clear_endpoint="reports.taxonomy",
@@ -263,6 +317,7 @@ def build_reports_taxonomy_detail_context(kind: str, target_id: int, args: Any) 
     """Build a category or tag report detail context."""
     report_request = parse_report_request(REPORT_TAXONOMY, args)
     query_data = fetch_reports_taxonomy_detail_query_data(kind, target_id, report_request)
+    report_request = query_data.report_request
     detail = build_reports_taxonomy_detail_view(
         report_request,
         query_data.target,
@@ -291,7 +346,7 @@ def build_reports_taxonomy_detail_context(kind: str, target_id: int, args: Any) 
         "report_sections": REPORT_SECTIONS,
         **detail,
         **reports_filter_context(
-            args,
+            report_request.args,
             report_request,
             query_data,
             clear_endpoint="reports.category_report" if kind == TAXONOMY_TARGET_CATEGORY else "reports.tag_report",
@@ -300,6 +355,13 @@ def build_reports_taxonomy_detail_context(kind: str, target_id: int, args: Any) 
             export_xlsx_endpoint=export_xlsx_endpoint,
             export_route_values=route_values,
         ),
+        **current_report_pin_context(
+            REPORT_TAXONOMY,
+            report_request,
+            target_kind=kind,
+            target_category_id=query_data.target.id if kind == TAXONOMY_TARGET_CATEGORY else None,
+            target_tag_id=query_data.target.id if kind != TAXONOMY_TARGET_CATEGORY else None,
+        ),
     }
 
 
@@ -307,6 +369,7 @@ def build_reports_entity_index_context(section_key: str, args: Any, report_reque
     """Build account or merchant index filters and target rows."""
     kind = REPORT_ENTITY_ACCOUNT if section_key == REPORT_ACCOUNTS else REPORT_ENTITY_MERCHANT
     query_data = fetch_reports_entity_index_query_data(kind, report_request)
+    report_request = query_data.report_request
     entity = build_reports_entity_index_view(
         report_request,
         query_data.summary,
@@ -315,11 +378,12 @@ def build_reports_entity_index_context(section_key: str, args: Any, report_reque
         query_data.target_options,
     )
     return {
+        "report_request": report_request,
         **entity,
-        "entity_explorer_filter": str(args.get("entity_filter", "all") or "all"),
-        "entity_explorer_search": str(args.get("entity_search", "") or ""),
+        "entity_explorer_filter": str(report_request.args.get("entity_filter", "all") or "all"),
+        "entity_explorer_search": str(report_request.args.get("entity_search", "") or ""),
         **reports_filter_context(
-            args,
+            report_request.args,
             report_request,
             query_data,
             clear_endpoint="reports.accounts" if kind == REPORT_ENTITY_ACCOUNT else "reports.merchants",
@@ -344,6 +408,7 @@ def build_reports_entity_detail_context(kind: str, target_id: int, args: Any) ->
     section_key = REPORT_ACCOUNTS if kind == REPORT_ENTITY_ACCOUNT else REPORT_MERCHANTS
     report_request = parse_report_request(section_key, args)
     query_data = fetch_reports_entity_detail_query_data(kind, target_id, report_request)
+    report_request = query_data.report_request
     detail = build_reports_entity_detail_view(
         report_request,
         query_data.target,
@@ -366,7 +431,7 @@ def build_reports_entity_detail_context(kind: str, target_id: int, args: Any) ->
         {"account_id": query_data.target.id} if kind == REPORT_ENTITY_ACCOUNT else {"merchant_id": query_data.target.id}
     )
     filter_context = reports_filter_context(
-        args,
+        report_request.args,
         report_request,
         query_data,
         clear_endpoint="reports.account_report" if kind == REPORT_ENTITY_ACCOUNT else "reports.merchant_report",
@@ -378,13 +443,13 @@ def build_reports_entity_detail_context(kind: str, target_id: int, args: Any) ->
     if kind == REPORT_ENTITY_ACCOUNT:
         filter_context["selected_account_id"] = query_data.target.id
         filter_context["reports_export_csv_url"] = reports_url(
-            args,
+            report_request.args,
             endpoint=export_csv_endpoint,
             route_values=route_values,
             account_id=None,
         )
         filter_context["reports_export_xlsx_url"] = reports_url(
-            args,
+            report_request.args,
             endpoint=export_xlsx_endpoint,
             route_values=route_values,
             account_id=None,
@@ -394,7 +459,7 @@ def build_reports_entity_detail_context(kind: str, target_id: int, args: Any) ->
         filter_context["selected_merchant_label"] = query_data.target.name
         filter_context["merchant_query"] = query_data.target.name
         filter_context["reports_export_csv_url"] = reports_url(
-            args,
+            report_request.args,
             endpoint=export_csv_endpoint,
             route_values=route_values,
             merchant_id=None,
@@ -402,7 +467,7 @@ def build_reports_entity_detail_context(kind: str, target_id: int, args: Any) ->
             merchant_search=None,
         )
         filter_context["reports_export_xlsx_url"] = reports_url(
-            args,
+            report_request.args,
             endpoint=export_xlsx_endpoint,
             route_values=route_values,
             merchant_id=None,
@@ -417,6 +482,13 @@ def build_reports_entity_detail_context(kind: str, target_id: int, args: Any) ->
         "report_sections": REPORT_SECTIONS,
         **detail,
         **filter_context,
+        **current_report_pin_context(
+            REPORT_TYPE_ACCOUNT if kind == REPORT_ENTITY_ACCOUNT else REPORT_TYPE_MERCHANT,
+            report_request,
+            target_kind=kind,
+            target_account_id=query_data.target.id if kind == REPORT_ENTITY_ACCOUNT else None,
+            target_merchant_id=query_data.target.id if kind == REPORT_ENTITY_MERCHANT else None,
+        ),
     }
 
 
@@ -424,6 +496,7 @@ def build_reports_income_context(args: Any, report_request: ReportRequest | None
     """Build income and credits report filters, rows, charts, and export URLs."""
     report_request = report_request or parse_report_request(REPORT_INCOME, args)
     query_data = fetch_reports_income_query_data(report_request)
+    report_request = query_data.report_request
     income = build_reports_income_view(
         report_request,
         query_data.summary,
@@ -435,16 +508,37 @@ def build_reports_income_context(args: Any, report_request: ReportRequest | None
         query_data.evidence_rows,
     )
     return {
+        "report_request": report_request,
         **income,
         **reports_filter_context(
-            args,
+            report_request.args,
             report_request,
             query_data,
             clear_endpoint="reports.income",
             export_csv_endpoint="reports.income_export_csv",
             export_xlsx_endpoint="reports.income_export_xlsx",
         ),
+        **current_report_pin_context(REPORT_INCOME, report_request),
     }
+
+
+def effective_report_request(report_request: ReportRequest, quick_view_counts: Mapping[str, Any]) -> ReportRequest:
+    """Return a report request that avoids an empty implicit categorized view."""
+    explicit_quick_view = str(report_request.args.get("quick_view", "") or "").strip()
+    categorized_count = int(quick_view_counts.get("categorized_count") or 0)
+    all_count = int(quick_view_counts.get("all_count") or 0)
+    if (
+        not explicit_quick_view
+        and report_request.quick_view == QUICK_VIEW_CATEGORIZED
+        and categorized_count == 0
+        and all_count > 0
+    ):
+        return replace(
+            report_request,
+            quick_view=QUICK_VIEW_ALL,
+            args=EffectiveReportArgs(report_request.args, {"quick_view": QUICK_VIEW_ALL}),
+        )
+    return report_request
 
 
 def fetch_reports_overview_query_data(report_request: ReportRequest) -> ReportsOverviewQueryData:
@@ -458,6 +552,7 @@ def fetch_reports_overview_query_data(report_request: ReportRequest) -> ReportsO
             unknown_category,
             report_request.basis,
         )
+        report_request = effective_report_request(report_request, quick_view_counts)
         filters = report_filters_with_quick_view(base_filters, report_request, unknown_category)
         account_options = list_account_options(conn)
         selected_merchant_label = selected_merchant_option_name(
@@ -466,6 +561,7 @@ def fetch_reports_overview_query_data(report_request: ReportRequest) -> ReportsO
             report_request.merchant_query,
         )
         return ReportsOverviewQueryData(
+            report_request=report_request,
             unknown_category=unknown_category,
             account_options=account_options,
             selected_merchant_label=selected_merchant_label,
@@ -492,6 +588,7 @@ def fetch_reports_income_query_data(report_request: ReportRequest) -> ReportsInc
             unknown_category,
             report_request.basis,
         )
+        report_request = effective_report_request(report_request, quick_view_counts)
         income_filters = report_filters_with_quick_view(income_scope_filters, report_request, unknown_category)
         account_options = list_account_options(conn)
         selected_merchant_label = selected_merchant_option_name(
@@ -500,6 +597,7 @@ def fetch_reports_income_query_data(report_request: ReportRequest) -> ReportsInc
             report_request.merchant_query,
         )
         return ReportsIncomeQueryData(
+            report_request=report_request,
             unknown_category=unknown_category,
             account_options=account_options,
             selected_merchant_label=selected_merchant_label,
@@ -528,6 +626,7 @@ def fetch_reports_taxonomy_index_query_data(report_request: ReportRequest) -> Re
             unknown_category,
             report_request.basis,
         )
+        report_request = effective_report_request(report_request, quick_view_counts)
         filters = report_filters_with_quick_view(base_filters, report_request, unknown_category)
         account_options = list_account_options(conn)
         selected_merchant_label = selected_merchant_option_name(
@@ -536,6 +635,7 @@ def fetch_reports_taxonomy_index_query_data(report_request: ReportRequest) -> Re
             report_request.merchant_query,
         )
         return ReportsTaxonomyIndexQueryData(
+            report_request=report_request,
             unknown_category=unknown_category,
             account_options=account_options,
             selected_merchant_label=selected_merchant_label,
@@ -568,6 +668,7 @@ def fetch_reports_taxonomy_detail_query_data(
             unknown_category,
             report_request.basis,
         )
+        report_request = effective_report_request(report_request, quick_view_counts)
         target_filters = report_filters_with_quick_view(target_scope_filters, report_request, unknown_category)
         account_options = list_account_options(conn)
         selected_merchant_label = selected_merchant_option_name(
@@ -587,6 +688,7 @@ def fetch_reports_taxonomy_detail_query_data(
             semantic_summary = fetch_reimbursement_category_summary(conn, target_filters)
 
         return ReportsTaxonomyDetailQueryData(
+            report_request=report_request,
             unknown_category=unknown_category,
             account_options=account_options,
             selected_merchant_label=selected_merchant_label,
@@ -625,6 +727,7 @@ def fetch_reports_entity_index_query_data(kind: str, report_request: ReportReque
             unknown_category,
             report_request.basis,
         )
+        report_request = effective_report_request(report_request, quick_view_counts)
         filters = report_filters_with_quick_view(base_filters, report_request, unknown_category)
         account_options = list_account_options(conn)
         selected_merchant_label = selected_merchant_option_name(
@@ -638,6 +741,7 @@ def fetch_reports_entity_index_query_data(kind: str, report_request: ReportReque
             else fetch_merchant_breakdown(conn, filters, report_request.basis)
         )
         return ReportsEntityIndexQueryData(
+            report_request=report_request,
             unknown_category=unknown_category,
             account_options=account_options,
             selected_merchant_label=selected_merchant_label,
@@ -684,6 +788,7 @@ def fetch_reports_entity_detail_query_data(
             unknown_category,
             report_request.basis,
         )
+        report_request = effective_report_request(report_request, quick_view_counts)
         target_filters = report_filters_with_quick_view(target_scope_filters, report_request, unknown_category)
         account_options = list_account_options(conn)
         selected_merchant_label = selected_merchant_option_name(
@@ -693,6 +798,7 @@ def fetch_reports_entity_detail_query_data(
         )
 
         return ReportsEntityDetailQueryData(
+            report_request=report_request,
             unknown_category=unknown_category,
             account_options=account_options,
             selected_merchant_label=selected_merchant_label,

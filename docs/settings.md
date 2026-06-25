@@ -16,10 +16,11 @@ Every authenticated user can edit General settings for their own account.
 | Interface language | `English` or `French` | Chooses UI language for the user. User-entered financial data such as merchants, accounts, categories, tags, statements, and descriptions is not translated. |
 | Table page size | Whole number, minimum `1` | Sets the default row count for paginated tables. |
 | Comparison default years | Whole number, minimum `2` | Sets how many years are selected by default on the Comparison year-trends view. |
-| Comparison insight card limit | Whole number, minimum `1` | Limits the ranked insight cards shown on Comparison. |
-| Home top category limit | Whole number, minimum `1` | Limits the top spending categories shown on Home. |
-| Dashboard top driver limit | Whole number, minimum `1` | Limits the compact top-driver previews shown on Dashboard. |
-| Merchant table limit | Whole number, minimum `1` | Limits merchant rows shown in comparison summaries. |
+| Comparison insight card limit | Whole number from `1` to `12` | Limits the ranked insight cards shown on Comparison. |
+| Home top category limit | Whole number from `1` to `12` | Limits the top spending categories shown on Home. |
+| Dashboard top driver limit | Whole number from `1` to `12` | Limits the compact top-driver previews shown on Dashboard. |
+| Pinned report limit | Whole number from `1` to `12` | Limits saved report cards shown on the Reports overview. |
+| Merchant comparison table limit | Whole number, minimum `1` | Limits merchant rows shown in comparison summaries. |
 | Merchant suggestion limit | Whole number, minimum `1`; default `5` | Limits merchant suggestions shown in autocomplete fields. |
 | Rule preview limit | Whole number, minimum `1` | Limits matching transactions shown while previewing rule changes. |
 | Rule health check transaction limit | Whole number, minimum `1` | Sets how many newest historical transactions the rule health check analyzes before showing its limited-check notice. |

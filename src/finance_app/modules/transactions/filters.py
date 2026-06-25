@@ -17,6 +17,7 @@ from finance_app.core.constants import (
 )
 from finance_app.core.periods import (
     DEFAULT_DATE_PERIOD,
+    PERIOD_CUSTOM,
     DatePeriod,
     normalize_date_period,
     parse_iso_date,
@@ -136,6 +137,10 @@ def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilte
         ignored = IGNORED_FILTER_ACTIVE
 
     period = normalize_date_period(query_value(args, "period", DEFAULT_DATE_PERIOD).strip())
+    date_from = parse_iso_date(query_value(args, "date_from")) if period == PERIOD_CUSTOM else ""
+    date_to = parse_iso_date(query_value(args, "date_to")) if period == PERIOD_CUSTOM else ""
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
 
     review = query_value(args, "review").strip()
     if review not in REVIEW_FILTERS:
@@ -154,8 +159,8 @@ def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilte
         "amount_type": amount_type,
         "merchant": query_value(args, "merchant").strip(),
         "merchant_key": canonicalize_merchant_key(query_value(args, "merchant_key"), conn=conn),
-        "date_from": parse_iso_date(query_value(args, "date_from")),
-        "date_to": parse_iso_date(query_value(args, "date_to")),
+        "date_from": date_from,
+        "date_to": date_to,
         "ignored": ignored,
         "period": period,
         "sort": query_value(args, "sort", "date").strip(),

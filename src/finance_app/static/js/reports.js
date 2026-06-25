@@ -6,6 +6,19 @@ function reportsScopedElement(root, selector) {
     return root.matches?.(selector) ? root : root.querySelector(selector);
 }
 
+function reportsScopedElements(root, selector) {
+    const scope = reportsRoot(root);
+    const elements = Array.from(scope.querySelectorAll(selector));
+    if (scope.matches?.(selector)) {
+        elements.unshift(scope);
+    }
+    return elements;
+}
+
+function reportsTranslate(message, variables) {
+    return window.financeTranslate ? window.financeTranslate(message, variables) : message;
+}
+
 function setupReportsCustomRange(root = document) {
     const periodSelect = reportsScopedElement(root, "#reports-period");
     if (!periodSelect) return;
@@ -778,6 +791,269 @@ function setupReportExplorers(root = document) {
     });
 }
 
+function setupReportPinButtons(root = document) {
+    reportsScopedElements(root, "[data-report-pin-button]").forEach((button) => {
+        if (button.dataset.reportPinReady === "true") {
+            return;
+        }
+
+        const payloadScript = button.parentElement?.querySelector("[data-report-pin-payload]");
+        if (!payloadScript) {
+            return;
+        }
+
+        let payload = {};
+        try {
+            payload = JSON.parse(payloadScript.textContent || "{}");
+        } catch (_error) {
+            payload = {};
+        }
+
+        function statusElement() {
+            let status = button.parentElement?.querySelector("[data-report-pin-status]");
+            if (!status) {
+                status = document.createElement("span");
+                status.className = "reports-pinned-status";
+                status.setAttribute("role", "status");
+                status.setAttribute("aria-live", "polite");
+                status.dataset.reportPinStatus = "true";
+                button.insertAdjacentElement("afterend", status);
+            }
+            return status;
+        }
+
+        function showLimitMessage(data) {
+            const status = statusElement();
+            status.replaceChildren();
+            status.append(document.createTextNode(data.message || reportsTranslate("Pinned report limit reached.")));
+            if (data.overview_url) {
+                status.append(document.createTextNode(" "));
+                const overviewLink = document.createElement("a");
+                overviewLink.href = data.overview_url;
+                overviewLink.textContent = reportsTranslate("Edit pins");
+                status.append(overviewLink);
+            }
+            if (data.settings_url) {
+                status.append(document.createTextNode(" "));
+                const settingsLink = document.createElement("a");
+                settingsLink.href = data.settings_url;
+                settingsLink.textContent = reportsTranslate("Settings");
+                status.append(settingsLink);
+            }
+        }
+
+        function markPinned(message) {
+            const icon = button.querySelector("[data-report-pin-icon]");
+            const label = button.querySelector("[data-report-pin-label]");
+            icon?.classList.remove("bi-pin-angle");
+            icon?.classList.add("bi-pin-fill");
+            if (label) {
+                label.textContent = reportsTranslate("Pinned");
+            }
+            button.disabled = true;
+            statusElement().textContent = message || reportsTranslate("Report pinned.");
+        }
+
+        button.dataset.reportPinReady = "true";
+        button.addEventListener("click", async () => {
+            if (!button.dataset.pinUrl) {
+                return;
+            }
+            button.disabled = true;
+            try {
+                const response = await fetch(button.dataset.pinUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-Token": getCsrfToken(),
+                        "X-Requested-With": "fetch",
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    markPinned(data.message);
+                    return;
+                }
+                if (data.limit_reached) {
+                    button.disabled = false;
+                    showLimitMessage(data);
+                    return;
+                }
+                button.disabled = false;
+                statusElement().textContent = data.message || reportsTranslate("Report could not be pinned.");
+            } catch (_error) {
+                button.disabled = false;
+                statusElement().textContent = reportsTranslate("Report could not be pinned.");
+            }
+        });
+    });
+}
+
+function setupPinnedReports(root = document) {
+    reportsScopedElements(root, "[data-pinned-reports]").forEach((section) => {
+        if (section.dataset.pinnedReportsReady === "true") {
+            return;
+        }
+
+        const list = section.querySelector("[data-pinned-list]");
+        const editButton = section.querySelector("[data-pinned-edit-toggle]");
+        const saveButton = section.querySelector("[data-pinned-save]");
+        const cancelButton = section.querySelector("[data-pinned-cancel]");
+        const status = section.querySelector("[data-pinned-status]");
+        let snapshot = "";
+
+        function cards() {
+            return Array.from(section.querySelectorAll("[data-pinned-card]"));
+        }
+
+        function setStatus(message) {
+            if (status) {
+                status.textContent = message || "";
+            }
+        }
+
+        function setEditMode(active) {
+            section.classList.toggle("is-editing", active);
+            cards().forEach((card) => {
+                if (!active) {
+                    card.classList.remove("is-removing");
+                    const toggle = card.querySelector("[data-pinned-remove-toggle]");
+                    const icon = card.querySelector("[data-pinned-remove-icon]");
+                    const label = card.querySelector("[data-pinned-remove-label]");
+                    toggle?.setAttribute("aria-pressed", "false");
+                    toggle?.setAttribute("aria-label", reportsTranslate("Unpin report"));
+                    if (toggle) {
+                        toggle.title = reportsTranslate("Unpin report");
+                    }
+                    icon?.classList.remove("bi-pin-angle");
+                    icon?.classList.add("bi-pin-fill");
+                    if (label) {
+                        label.textContent = reportsTranslate("Pinned");
+                    }
+                }
+            });
+        }
+
+        function moveCard(card, direction) {
+            if (!card || !list) {
+                return;
+            }
+            if (direction === "up" && card.previousElementSibling) {
+                list.insertBefore(card, card.previousElementSibling);
+            }
+            if (direction === "down" && card.nextElementSibling) {
+                list.insertBefore(card.nextElementSibling, card);
+            }
+        }
+
+        function toggleRemoval(card) {
+            const removing = !card.classList.contains("is-removing");
+            card.classList.toggle("is-removing", removing);
+            const toggle = card.querySelector("[data-pinned-remove-toggle]");
+            const icon = card.querySelector("[data-pinned-remove-icon]");
+            const label = card.querySelector("[data-pinned-remove-label]");
+            toggle?.setAttribute("aria-pressed", removing ? "true" : "false");
+            toggle?.setAttribute(
+                "aria-label",
+                removing ? reportsTranslate("Keep pinned") : reportsTranslate("Unpin report")
+            );
+            if (toggle) {
+                toggle.title = removing ? reportsTranslate("Keep pinned") : reportsTranslate("Unpin report");
+            }
+            icon?.classList.toggle("bi-pin-fill", !removing);
+            icon?.classList.toggle("bi-pin-angle", removing);
+            if (label) {
+                label.textContent = removing ? reportsTranslate("Will be unpinned") : reportsTranslate("Pinned");
+            }
+        }
+
+        async function saveEdits() {
+            if (!section.dataset.pinnedSaveUrl) {
+                return;
+            }
+            const pins = cards().map((card, index) => ({
+                id: card.dataset.pinId,
+                sort_order: index,
+                short_title: card.querySelector("[data-pinned-title]")?.value || "",
+                remove: card.classList.contains("is-removing"),
+            }));
+
+            saveButton.disabled = true;
+            try {
+                const response = await fetch(section.dataset.pinnedSaveUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-Token": getCsrfToken(),
+                        "X-Requested-With": "fetch",
+                    },
+                    body: JSON.stringify({ pins }),
+                });
+                const data = await response.json();
+                if (!data.ok) {
+                    setStatus(data.message || reportsTranslate("Pinned reports could not be saved."));
+                    saveButton.disabled = false;
+                    return;
+                }
+                if (data.html) {
+                    const wrapper = document.createElement("div");
+                    wrapper.innerHTML = data.html.trim();
+                    const nextSection = wrapper.firstElementChild;
+                    if (nextSection) {
+                        section.replaceWith(nextSection);
+                        window.financeApp?.runInitializers(nextSection);
+                        const nextStatus = nextSection.querySelector("[data-pinned-status]");
+                        if (nextStatus) {
+                            nextStatus.textContent = data.message || reportsTranslate("Pinned reports saved.");
+                        }
+                    }
+                } else {
+                    setStatus(data.message || reportsTranslate("Pinned reports saved."));
+                    setEditMode(false);
+                    saveButton.disabled = false;
+                }
+            } catch (_error) {
+                setStatus(reportsTranslate("Pinned reports could not be saved."));
+                saveButton.disabled = false;
+            }
+        }
+
+        section.dataset.pinnedReportsReady = "true";
+        editButton?.addEventListener("click", () => {
+            snapshot = list?.innerHTML || "";
+            setStatus("");
+            setEditMode(true);
+        });
+        cancelButton?.addEventListener("click", () => {
+            if (list) {
+                list.innerHTML = snapshot;
+            }
+            setStatus("");
+            setEditMode(false);
+        });
+        saveButton?.addEventListener("click", saveEdits);
+
+        section.addEventListener("click", (event) => {
+            if (!section.classList.contains("is-editing")) {
+                return;
+            }
+            const card = event.target.closest("[data-pinned-card]");
+            if (!card) {
+                return;
+            }
+            const moveButton = event.target.closest("[data-pinned-move]");
+            if (moveButton) {
+                moveCard(card, moveButton.dataset.pinnedMove);
+                return;
+            }
+            if (event.target.closest("[data-pinned-remove-toggle]")) {
+                toggleRemoval(card);
+            }
+        });
+    });
+}
+
 function setupReportsPage(root = document) {
     root = reportsRoot(root);
     if (!reportsScopedElement(root, "[data-reports-page]")) return;
@@ -793,9 +1069,13 @@ function setupReportsPage(root = document) {
     setupReportOpenControls(root);
     setupReportTargetSwitchers(root);
     setupReportExplorers(root);
+    setupReportPinButtons(root);
+    setupPinnedReports(root);
 }
 
 window.financeApp?.registerInitializer("reports.page", setupReportsPage);
+window.financeApp?.registerInitializer("reports.pin-buttons", setupReportPinButtons);
+window.financeApp?.registerInitializer("reports.pinned", setupPinnedReports);
 
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => setupReportsPage());
