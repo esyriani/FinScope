@@ -38,6 +38,7 @@ from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
+from finance_app.modules.categories.tag_filters import transaction_tag_condition
 from finance_app.modules.dashboard.constants import (
     QUICK_VIEW_CATEGORIZED,
     QUICK_VIEW_NEEDS_REVIEW,
@@ -46,6 +47,7 @@ from finance_app.modules.dashboard.constants import (
 from finance_app.modules.merchants.filters import merchant_filter_condition
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW, REPORT_BASIS_LEDGER
+from finance_app.modules.reports.entities import REPORT_ENTITY_ACCOUNT, REPORT_ENTITY_MERCHANT
 from finance_app.modules.reports.filters import ReportRequest
 from finance_app.modules.reports.taxonomy import (
     TAXONOMY_TARGET_CATEGORY,
@@ -143,6 +145,17 @@ def report_quick_view_conditions(quick_view: str, unknown_category: str) -> list
     if quick_view == QUICK_VIEW_CATEGORIZED:
         return [category != unknown_category, transactions_table.c.needs_review == 0]
     return []
+
+
+def report_taxonomy_filter_conditions(report_request: ReportRequest, unknown_category: str) -> list[Any]:
+    """Return category and tag predicates for categorized report refiners."""
+    conditions: list[Any] = []
+    if report_request.selected_categories:
+        conditions.append(category_label_expression(unknown_category).in_(report_request.selected_categories))
+    tag_condition = transaction_tag_condition(report_request.selected_tags)
+    if tag_condition is not None:
+        conditions.append(tag_condition)
+    return conditions
 
 
 def spending_amount_expression(basis: str) -> Any:
@@ -507,6 +520,34 @@ def fetch_taxonomy_target_options(conn: Any) -> list[Mapping[str, Any]]:
         }
         for row in tag_rows
     ]
+
+
+def fetch_entity_target_options(conn: Any, kind: str) -> list[Mapping[str, Any]]:
+    """Fetch all account or merchant targets available for report navigation."""
+    if kind == REPORT_ENTITY_ACCOUNT:
+        return (
+            conn.execute(
+                select(
+                    accounts_table.c.id,
+                    accounts_table.c.name,
+                    accounts_table.c.account_type,
+                ).order_by(func.lower(accounts_table.c.name), accounts_table.c.name)
+            )
+            .mappings()
+            .fetchall()
+        )
+    if kind == REPORT_ENTITY_MERCHANT:
+        return (
+            conn.execute(
+                select(
+                    merchants_table.c.id,
+                    merchants_table.c.merchant_key,
+                ).order_by(func.lower(merchants_table.c.merchant_key), merchants_table.c.merchant_key)
+            )
+            .mappings()
+            .fetchall()
+        )
+    return []
 
 
 def fetch_account_breakdown(conn: Any, filters: Sequence[Any], basis: str) -> list[Mapping[str, Any]]:

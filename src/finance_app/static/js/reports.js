@@ -27,6 +27,52 @@ function setupReportsCustomRange(root = document) {
     updateVisibility();
 }
 
+function setupReportsScopeRefiners(root = document) {
+    root.querySelectorAll("[data-reports-scope-controls]").forEach((control) => {
+        if (control.dataset.reportsScopeReady === "true") {
+            return;
+        }
+
+        const form = control.closest("form");
+        const refiners = Array.from(form?.querySelectorAll("[data-reports-scope-refiner]") || []);
+        const radios = Array.from(control.querySelectorAll("input[name='quick_view']"));
+        if (!form || refiners.length === 0 || radios.length === 0) {
+            return;
+        }
+
+        const categorizedScope = control.dataset.categorizedScope || "categorized";
+
+        function syncRefiners() {
+            const activeScope = radios.find((radio) => radio.checked)?.value || "";
+            const showRefiners = activeScope === categorizedScope;
+            refiners.forEach((refiner) => {
+                refiner.classList.toggle("d-none", !showRefiners);
+                refiner.querySelectorAll("input, button").forEach((input) => {
+                    input.disabled = !showRefiners;
+                });
+                refiner.querySelectorAll("[data-tag-multiselect]").forEach((multiselect) => {
+                    multiselect.dataset.disabled = showRefiners ? "false" : "true";
+                    if (!showRefiners) {
+                        const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
+                        const toggle = multiselect.querySelector("[data-tag-multiselect-toggle]");
+                        if (menu) {
+                            menu.style.display = "none";
+                        }
+                        toggle?.setAttribute("aria-expanded", "false");
+                    }
+                });
+            });
+            window.financeApp?.runInitializers(form);
+        }
+
+        control.dataset.reportsScopeReady = "true";
+        radios.forEach((radio) => {
+            radio.addEventListener("change", syncRefiners);
+        });
+        syncRefiners();
+    });
+}
+
 function normalizeReportsSearchText(value) {
     return String(value || "")
         .replace(/\s+/g, " ")
@@ -34,7 +80,7 @@ function normalizeReportsSearchText(value) {
         .toLocaleLowerCase();
 }
 
-function reportsUrlWithTaxonomyState(href, state) {
+function reportsUrlWithExplorerState(href, state, filterParam, searchParam) {
     let url;
     try {
         url = new URL(href, window.location.origin);
@@ -43,21 +89,25 @@ function reportsUrlWithTaxonomyState(href, state) {
     }
 
     if (state.filter && state.filter !== "all") {
-        url.searchParams.set("taxonomy_filter", state.filter);
+        url.searchParams.set(filterParam, state.filter);
     } else {
-        url.searchParams.delete("taxonomy_filter");
+        url.searchParams.delete(filterParam);
     }
 
     if (state.search) {
-        url.searchParams.set("taxonomy_search", state.search);
+        url.searchParams.set(searchParam, state.search);
     } else {
-        url.searchParams.delete("taxonomy_search");
+        url.searchParams.delete(searchParam);
     }
 
     if (url.origin === window.location.origin) {
         return `${url.pathname}${url.search}${url.hash}`;
     }
     return url.href;
+}
+
+function reportsUrlWithTaxonomyState(href, state) {
+    return reportsUrlWithExplorerState(href, state, "taxonomy_filter", "taxonomy_search");
 }
 
 function currentTaxonomyExplorerState(root = document) {
@@ -381,6 +431,353 @@ function setupTaxonomyExplorer(root = document) {
     });
 }
 
+function currentReportExplorerState(root = document, source = null) {
+    const explorer = reportsScopedElement(root, "[data-report-explorer]");
+    const searchSelector =
+        source?.dataset.reportOpenSearchSelector ||
+        explorer?.dataset.reportSearchSelector ||
+        "[data-report-explorer-search]";
+    const searchInput =
+        (searchSelector ? reportsScopedElement(root, searchSelector) : null) ||
+        (searchSelector ? document.querySelector(searchSelector) : null);
+    const activeFilter = explorer?.querySelector("[data-report-filter][aria-pressed='true']");
+    return {
+        filter: activeFilter?.dataset.reportFilter || "all",
+        search: searchInput?.value || "",
+    };
+}
+
+function setupReportOpenControls(root = document) {
+    root.querySelectorAll("[data-report-open-control]").forEach((control) => {
+        if (control.dataset.reportOpenReady === "true") {
+            return;
+        }
+
+        const input = control.querySelector("[data-report-open-input]");
+        const menu = control.querySelector("[data-report-open-menu]");
+        const optionsScript = control.querySelector("[data-report-open-options]");
+        if (!input || !menu || !optionsScript) {
+            return;
+        }
+
+        let targets = [];
+        try {
+            const parsed = JSON.parse(optionsScript.textContent || "[]");
+            targets = Array.isArray(parsed) ? parsed : [];
+        } catch (_error) {
+            targets = [];
+        }
+        if (!targets.length) {
+            return;
+        }
+
+        control.dataset.reportOpenReady = "true";
+        let activeIndex = -1;
+        let suggestions = [];
+        let debounceId = 0;
+        const suggestionsLimit = Math.max(1, Number(control.dataset.suggestionsLimit || 8) || 8);
+        const filterParam = control.dataset.reportOpenFilterParam || "entity_filter";
+        const searchParam = control.dataset.reportOpenSearchParam || "entity_search";
+        const noResultsText =
+            window.financeTranslate?.(control.dataset.noResultsText || "No report targets found.") ||
+            control.dataset.noResultsText ||
+            "No report targets found.";
+
+        function setExpanded(expanded) {
+            input.setAttribute("aria-expanded", expanded ? "true" : "false");
+            menu.hidden = !expanded;
+        }
+
+        function clearMenu() {
+            suggestions = [];
+            activeIndex = -1;
+            menu.replaceChildren();
+            setExpanded(false);
+        }
+
+        function renderStatus(message) {
+            const status = document.createElement("div");
+            status.className = "merchant-autocomplete-status";
+            status.setAttribute("role", "option");
+            status.setAttribute("aria-disabled", "true");
+            status.textContent = message;
+            menu.replaceChildren(status);
+            setExpanded(true);
+        }
+
+        function updateActiveOption() {
+            const options = Array.from(menu.querySelectorAll("[data-report-open-option]"));
+            options.forEach((option, index) => {
+                const active = index === activeIndex;
+                option.classList.toggle("active", active);
+                option.setAttribute("aria-selected", active ? "true" : "false");
+            });
+        }
+
+        function targetUrl(target) {
+            return reportsUrlWithExplorerState(
+                target.url || "",
+                currentReportExplorerState(root, control),
+                filterParam,
+                searchParam
+            );
+        }
+
+        function openTarget(target) {
+            const url = targetUrl(target);
+            if (url) {
+                window.location.href = url;
+            }
+        }
+
+        function renderSuggestions(items) {
+            suggestions = items;
+            activeIndex = -1;
+            menu.replaceChildren();
+            if (!items.length) {
+                renderStatus(noResultsText);
+                return;
+            }
+
+            items.forEach((target, index) => {
+                const option = document.createElement("button");
+                option.type = "button";
+                option.className = "merchant-autocomplete-option reports-taxonomy-open-option";
+                option.id = `${menu.id || input.id}-option-${index}`;
+                option.setAttribute("role", "option");
+                option.setAttribute("aria-selected", "false");
+                option.dataset.reportOpenOption = "true";
+
+                const label = document.createElement("span");
+                label.className = "reports-taxonomy-open-label";
+                label.textContent = target.label || "";
+                const type = document.createElement("small");
+                type.className = "reports-taxonomy-open-type";
+                type.textContent = target.type_label || "";
+                option.append(label, type);
+
+                option.addEventListener("mousedown", (event) => event.preventDefault());
+                option.addEventListener("click", () => openTarget(target));
+                menu.appendChild(option);
+            });
+            setExpanded(true);
+        }
+
+        function matchingTargets(query) {
+            const normalizedQuery = normalizeReportsSearchText(query);
+            return targets
+                .filter((target) =>
+                    normalizeReportsSearchText(target.search_text || target.display_label).includes(normalizedQuery)
+                )
+                .slice(0, suggestionsLimit);
+        }
+
+        function exactTarget() {
+            const normalizedValue = normalizeReportsSearchText(input.value);
+            if (!normalizedValue) {
+                return null;
+            }
+            return (
+                targets.find((target) => normalizeReportsSearchText(target.display_label) === normalizedValue) || null
+            );
+        }
+
+        function scheduleSearch() {
+            const query = input.value.trim();
+            window.clearTimeout(debounceId);
+            if (query.length < 2) {
+                clearMenu();
+                return;
+            }
+            debounceId = window.setTimeout(() => renderSuggestions(matchingTargets(query)), 160);
+        }
+
+        input.addEventListener("input", scheduleSearch);
+        input.addEventListener("focus", scheduleSearch);
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                clearMenu();
+                return;
+            }
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                if (!suggestions.length || menu.hidden) {
+                    return;
+                }
+                event.preventDefault();
+                const step = event.key === "ArrowDown" ? 1 : -1;
+                activeIndex = (activeIndex + step + suggestions.length) % suggestions.length;
+                updateActiveOption();
+                return;
+            }
+            if (event.key === "Enter") {
+                if (activeIndex >= 0 && suggestions[activeIndex]) {
+                    event.preventDefault();
+                    openTarget(suggestions[activeIndex]);
+                    return;
+                }
+                const target = exactTarget();
+                if (target) {
+                    event.preventDefault();
+                    openTarget(target);
+                }
+            }
+        });
+
+        document.addEventListener("click", (event) => {
+            if (!control.contains(event.target)) {
+                clearMenu();
+            }
+        });
+    });
+}
+
+function setupReportTargetSwitchers(root = document) {
+    root.querySelectorAll("[data-report-target-switcher]").forEach((switcher) => {
+        if (switcher.dataset.reportSwitcherReady === "true") {
+            return;
+        }
+
+        const search = switcher.querySelector("[data-report-target-search]");
+        const options = Array.from(switcher.querySelectorAll("[data-report-target-option]"));
+        if (!search || options.length === 0) {
+            return;
+        }
+
+        function applySearch() {
+            const query = normalizeReportsSearchText(search.value);
+            options.forEach((option) => {
+                const matches = !query || normalizeReportsSearchText(option.dataset.searchText).includes(query);
+                option.hidden = !matches;
+            });
+        }
+
+        switcher.dataset.reportSwitcherReady = "true";
+        search.addEventListener("input", applySearch);
+        switcher.addEventListener("shown.bs.dropdown", () => {
+            search.focus();
+            search.select();
+        });
+        applySearch();
+    });
+}
+
+function setupReportExplorers(root = document) {
+    root.querySelectorAll("[data-report-explorer]").forEach((explorer) => {
+        if (explorer.dataset.reportExplorerReady === "true") {
+            return;
+        }
+
+        const table = explorer.querySelector("table");
+        const body = explorer.querySelector("[data-report-explorer-body]");
+        const filterButtons = Array.from(explorer.querySelectorAll("[data-report-filter]"));
+        const searchSelector = explorer.dataset.reportSearchSelector || "[data-report-explorer-search]";
+        const searchInput =
+            reportsScopedElement(root, searchSelector) ||
+            (searchSelector ? document.querySelector(searchSelector) : null);
+        if (!table || !body || filterButtons.length === 0) {
+            return;
+        }
+
+        const rows = Array.from(body.querySelectorAll("[data-report-explorer-row]"));
+        const activeButton =
+            filterButtons.find((button) => button.getAttribute("aria-pressed") === "true") || filterButtons[0];
+        const state = { filter: activeButton?.dataset.reportFilter || "all" };
+        const filterParam = explorer.dataset.reportFilterParam || "entity_filter";
+        const searchParam = explorer.dataset.reportSearchParam || "entity_search";
+
+        function explorerState() {
+            return {
+                filter: state.filter,
+                search: searchInput?.value || "",
+            };
+        }
+
+        function syncReportLinks() {
+            const currentState = explorerState();
+            rows.forEach((row) => {
+                const baseRowHref = row.dataset.baseRowHref || row.dataset.rowHref || "";
+                const rowHref = reportsUrlWithExplorerState(baseRowHref, currentState, filterParam, searchParam);
+                row.dataset.rowHref = rowHref;
+                row.querySelectorAll("[data-report-link]").forEach((link) => {
+                    const baseUrl = link.dataset.baseUrl || link.getAttribute("href") || "";
+                    link.setAttribute(
+                        "href",
+                        reportsUrlWithExplorerState(baseUrl, currentState, filterParam, searchParam)
+                    );
+                });
+            });
+        }
+
+        function syncLocationState() {
+            if (typeof window.history?.replaceState !== "function") {
+                return;
+            }
+            const nextUrl = reportsUrlWithExplorerState(
+                window.location.href,
+                explorerState(),
+                filterParam,
+                searchParam
+            );
+            window.history.replaceState(window.history.state, "", nextUrl);
+        }
+
+        function syncExplorerState({ replaceLocation = true } = {}) {
+            syncReportLinks();
+            if (replaceLocation) {
+                syncLocationState();
+            }
+        }
+
+        function rowMatchesFilter(row) {
+            if (state.filter === "has-income") return row.dataset.hasIncome === "true";
+            if (state.filter === "has-spending") return row.dataset.hasSpending === "true";
+            if (state.filter === "all") return true;
+            return String(row.dataset.filterTokens || "")
+                .split(/\s+/)
+                .includes(state.filter);
+        }
+
+        function rowMatchesSearch(row) {
+            const query = normalizeReportsSearchText(searchInput?.value || "");
+            return !query || normalizeReportsSearchText(row.dataset.searchText).includes(query);
+        }
+
+        function applyFilter() {
+            rows.forEach((row) => {
+                if (rowMatchesFilter(row) && rowMatchesSearch(row)) {
+                    delete row.dataset.tableFilteredOut;
+                } else {
+                    row.dataset.tableFilteredOut = "true";
+                }
+            });
+            table.dispatchEvent(new CustomEvent("finance:table-filtered"));
+        }
+
+        function setActiveFilter(button) {
+            state.filter = button.dataset.reportFilter || "all";
+            filterButtons.forEach((filterButton) => {
+                const isActive = filterButton === button;
+                filterButton.classList.toggle("btn-primary", isActive);
+                filterButton.classList.toggle("btn-outline-secondary", !isActive);
+                filterButton.setAttribute("aria-pressed", isActive ? "true" : "false");
+            });
+            applyFilter();
+            syncExplorerState();
+        }
+
+        explorer.dataset.reportExplorerReady = "true";
+        filterButtons.forEach((button) => {
+            button.addEventListener("click", () => setActiveFilter(button));
+        });
+        searchInput?.addEventListener("input", () => {
+            applyFilter();
+            syncExplorerState();
+        });
+        applyFilter();
+        syncExplorerState({ replaceLocation: false });
+    });
+}
+
 function setupReportsPage(root = document) {
     root = reportsRoot(root);
     if (!reportsScopedElement(root, "[data-reports-page]")) return;
@@ -389,9 +786,13 @@ function setupReportsPage(root = document) {
         setupFlatpickrInputs(root);
     }
     setupReportsCustomRange(root);
+    setupReportsScopeRefiners(root);
     setupTaxonomyOpenControls(root);
     setupTaxonomyTargetSwitchers(root);
     setupTaxonomyExplorer(root);
+    setupReportOpenControls(root);
+    setupReportTargetSwitchers(root);
+    setupReportExplorers(root);
 }
 
 window.financeApp?.registerInitializer("reports.page", setupReportsPage);

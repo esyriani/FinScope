@@ -573,6 +573,27 @@
     color: var(--app-bg);
 }
 
+.reports-entity-type-badge-account,
+.reports-entity-type-badge-checking {
+    background: var(--app-muted);
+    color: var(--app-surface);
+}
+
+.reports-entity-type-badge-savings {
+    background: var(--app-success);
+    color: var(--app-bg);
+}
+
+.reports-entity-type-badge-credit-card {
+    background: var(--app-warning);
+    color: var(--app-bg);
+}
+
+.reports-entity-type-badge-merchant {
+    background: var(--app-accent);
+    color: var(--app-bg);
+}
+
 @media (max-width: 1200px) {
     .reports-insight-grid,
     .reports-pinned-grid {

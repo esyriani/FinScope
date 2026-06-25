@@ -12,12 +12,14 @@
     "css/home-dashboard.css",
     "css/comparison.css",
     "css/reports.css",
+    "css/tag-multiselect.css",
     "css/tables.css",
     "css/exports.css"
 ] %}
 {% set page_scripts = [
     "js/dates.js",
     "js/merchant-autocomplete.js",
+    "js/tag-multiselect.js",
     "js/reports.js",
     "js/tables.js",
     "js/chart-utils.js",
@@ -25,7 +27,7 @@
     "js/exports.js"
 ] %}
 {% extends "base.html" %}
-{% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
 
 {% macro reports_filter_form(clear_url) -%}
 <form method="get" class="row g-3 align-items-end">
@@ -82,6 +84,7 @@
         </select>
     </div>
 
+    {% if reports_show_account_filter %}
     <div class="col-md-3">
         <label class="form-label" for="reports-account">{{ _("Account") }}</label>
         <select id="reports-account" class="form-select" name="account_id">
@@ -91,7 +94,9 @@
             {% endfor %}
         </select>
     </div>
+    {% endif %}
 
+    {% if reports_show_merchant_filter %}
     <div class="col-md-4 merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
         <label class="form-label" for="reports-merchant-search">{{ _("Merchant") }}</label>
         <input
@@ -117,11 +122,12 @@
         >
         <div id="reports-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
     </div>
+    {% endif %}
 
     {% if quick_view_options %}
-    <div class="col-md-6 col-xl-5">
-        <label class="form-label">{{ _("Quick view") }}</label>
-        <div class="app-toggle-group d-flex flex-wrap gap-1" role="radiogroup" aria-label="{{ _('Quick view') }}">
+    <div class="col-md-6 col-xl-4" data-reports-scope-controls data-categorized-scope="{{ categorized_quick_view_value }}">
+        <label class="form-label">{{ _(reports_scope_label) }}</label>
+        <div class="app-toggle-group d-flex flex-wrap gap-1" role="radiogroup" aria-label="{{ _(reports_scope_label) }}">
             {% for option in quick_view_options %}
             <input
                 class="btn-check"
@@ -139,6 +145,83 @@
                 {{ _(option.label) }}{% if option.count is defined %}: {{ option.count }}{% endif %}
             </label>
             {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if reports_taxonomy_filter_controls_available %}
+    {% set reports_refiners_disabled = not reports_taxonomy_filter_controls_visible %}
+    <div class="col-md-6 col-xl-4 {% if reports_refiners_disabled %}d-none{% endif %}" data-reports-scope-refiner>
+        <label class="form-label" id="reports-categories-label">{{ _("Category") }}</label>
+        <div
+            class="tag-multiselect"
+            data-tag-multiselect
+            data-placeholder="{{ _('All categories') }}"
+            data-select-all-label="{{ _('Select all categories') }}"
+        >
+            <div
+                class="tag-multiselect-control"
+                role="button"
+                tabindex="0"
+                aria-labelledby="reports-categories-label"
+                aria-expanded="false"
+                data-tag-multiselect-toggle
+            >
+                <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+            </div>
+            <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                {% for option in category_options %}
+                    <label class="tag-multiselect-option">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="categories"
+                            value="{{ option }}"
+                            {% if option in selected_categories %}checked{% endif %}
+                            {% if reports_refiners_disabled %}disabled{% endif %}
+                        >
+                        <span>{{ option }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-xl-4 {% if reports_refiners_disabled %}d-none{% endif %}" data-reports-scope-refiner>
+        <label class="form-label" id="reports-tags-label">{{ _("Tags") }}</label>
+        <div
+            class="tag-multiselect"
+            data-tag-multiselect
+            data-placeholder="{{ _('All tags') }}"
+            data-select-all-label="{{ _('Select all tags') }}"
+        >
+            <div
+                class="tag-multiselect-control"
+                role="button"
+                tabindex="0"
+                aria-labelledby="reports-tags-label"
+                aria-expanded="false"
+                data-tag-multiselect-toggle
+            >
+                <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+                <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+            </div>
+            <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                {% for option in tag_options %}
+                    <label class="tag-multiselect-option">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="tags"
+                            value="{{ option.name }}"
+                            {% if option.name in selected_tags %}checked{% endif %}
+                            {% if reports_refiners_disabled %}disabled{% endif %}
+                        >
+                        <span>{{ option.name }}</span>
+                    </label>
+                {% endfor %}
+            </div>
         </div>
     </div>
     {% endif %}
@@ -237,66 +320,6 @@
                     <td data-sort-value="{{ row.label }}">
                         <span class="fw-semibold">{{ row.label }}</span>
                     </td>
-                    <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
-                    <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>
-                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ row.net }}">{{ row.net | moneyfmt }}</td>
-                    <td class="text-end" data-sort-value="{{ row.transaction_count }}">{{ row.transaction_count }}</td>
-                    <td class="text-end" data-sort-value="{{ row.share }}">
-                        <span>{{ row.share }}%</span>
-                        <span class="reports-bar-track" aria-hidden="true"><span style="width: {{ row.bar_width }}%;"></span></span>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="empty-state compact">{{ _("No rows available for this report.") }}</div>
-    {% endif %}
-    </div>
-</section>
-{%- endmacro %}
-
-{% macro taxonomy_index_table(title, rows, label_heading, table_id) -%}
-{% set panel_id = table_id ~ "-panel" %}
-{% set transaction_total = rows | sum(attribute="transaction_count") %}
-<section class="card reports-table-card" aria-labelledby="{{ table_id }}-heading" data-table-export-scope>
-    {{ reports_table_header(title, table_id, _("Transactions") ~ ": " ~ transaction_total) }}
-    <div class="collapse reports-table-collapse" id="{{ panel_id }}">
-    {% if rows %}
-    <div class="table-responsive">
-        <table
-            id="{{ table_id }}"
-            class="table table-hover align-middle mb-0 reports-table reports-taxonomy-table"
-            data-sortable-table
-            data-paginated-table
-            data-page-size="{{ reports_table_page_size | default(25) }}"
-            data-pagination-label="{{ _(title) }}"
-            data-export-title="{{ _(title) }}"
-        >
-            <thead>
-                <tr>
-                    {{ sort_header(label_heading, 0) }}
-                    {{ sort_header("Type", 1) }}
-                    {{ sort_header("Spending", 2, "number", "text-end") }}
-                    {{ sort_header("Income and credits", 3, "number", "text-end") }}
-                    {{ sort_header("Net cash flow", 4, "number", "text-end") }}
-                    {{ sort_header("Transactions", 5, "number", "text-end") }}
-                    {{ sort_header("Share", 6, "number", "text-end") }}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in rows %}
-                <tr {% if row.url | default("") %}data-row-href="{{ row.url }}" data-row-drilldown="dblclick"{% endif %}>
-                    <td data-sort-value="{{ row.label }}">
-                        <div class="reports-taxonomy-label">
-                            <span class="fw-semibold">{{ row.label }}</span>
-                        </div>
-                        {% if row.description %}
-                            <div class="text-muted small">{{ row.description }}</div>
-                        {% endif %}
-                    </td>
-                    <td data-sort-value="{{ _(row.type_label) }}">{{ _(row.type_label) }}</td>
                     <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
                     <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>
                     <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ row.net }}">{{ row.net | moneyfmt }}</td>
@@ -445,21 +468,6 @@
     <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
     {% endif %}
 </div>
-{%- endmacro %}
-
-{% macro reports_target_header(kicker, title, description, transaction_url, comparison_url) -%}
-<section class="card reports-target-card">
-    <div class="card-body reports-target-layout">
-        <div>
-            <div class="reports-shell-kicker">{{ _(kicker) }}</div>
-            <h3 class="card-title">{{ title }}</h3>
-            {% if description %}
-                <p>{{ _(description) }}</p>
-            {% endif %}
-        </div>
-        {{ reports_actions(comparison_url, transaction_url) }}
-    </div>
-</section>
 {%- endmacro %}
 
 {% macro taxonomy_target_typeahead(options, search_value="") -%}
@@ -614,6 +622,140 @@
 </section>
 {%- endmacro %}
 
+{% macro report_target_typeahead(options, search_value, label, placeholder, control_id) -%}
+<section class="card reports-taxonomy-search-card reports-target-search-card" aria-labelledby="{{ control_id }}-heading">
+    <div class="card-body">
+        <div
+            class="reports-taxonomy-open merchant-autocomplete"
+            data-report-open-control
+            data-report-open-filter-param="entity_filter"
+            data-report-open-search-param="entity_search"
+            data-report-open-search-selector="[data-report-explorer-search]"
+            data-suggestions-limit="{{ merchant_suggestion_limit }}"
+            data-no-results-text="{{ _('No report targets found.') }}"
+        >
+            <label id="{{ control_id }}-heading" class="form-label" for="{{ control_id }}-input">
+                {{ _(label) }}
+            </label>
+            <input
+                id="{{ control_id }}-input"
+                class="form-control"
+                type="search"
+                value="{{ search_value }}"
+                placeholder="{{ _(placeholder) }}"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="{{ control_id }}-suggestions"
+                data-report-explorer-search
+                data-report-open-input
+            >
+            <div id="{{ control_id }}-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-report-open-menu></div>
+            <script type="application/json" data-report-open-options>{{ options | tojson }}</script>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro report_explorer(rows, filter_chips, current_filter, kicker, title, table_id, label_heading) -%}
+<section
+    class="card reports-taxonomy-explorer reports-target-explorer"
+    aria-labelledby="{{ table_id }}-heading"
+    data-report-explorer
+    data-report-filter-param="entity_filter"
+    data-report-search-param="entity_search"
+    data-report-search-selector="[data-report-explorer-search]"
+>
+    <div class="card-body border-bottom">
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-3">
+            <div>
+                <div class="reports-shell-kicker">{{ _(kicker) }}</div>
+                <h5 id="{{ table_id }}-heading" class="card-title mb-0">{{ _(title) }}</h5>
+            </div>
+        </div>
+        <div class="reports-chip-row" role="group" aria-label="{{ _('Filter report targets') }}">
+            {% for chip in filter_chips %}
+            <button
+                type="button"
+                class="btn btn-sm {% if chip.value == current_filter %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                data-report-filter="{{ chip.value }}"
+                aria-pressed="{% if chip.value == current_filter %}true{% else %}false{% endif %}"
+            >
+                {{ _(chip.label) }}{% if chip.count is defined %}: {{ chip.count }}{% endif %}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% if rows %}
+    <div class="table-responsive">
+        <table
+            id="{{ table_id }}"
+            class="table table-hover align-middle mb-0 reports-table reports-taxonomy-table"
+            data-sortable-table
+            data-paginated-table
+            data-no-export
+            data-page-size="{{ reports_table_page_size | default(25) }}"
+            data-pagination-label="{{ _(kicker) }}"
+        >
+            <thead>
+                <tr>
+                    {{ sort_header(label_heading, 0) }}
+                    {{ sort_header("Spending", 1, "number", "text-end") }}
+                    {{ sort_header("Income and credits", 2, "number", "text-end") }}
+                    {{ sort_header("Net cash flow", 3, "number", "text-end") }}
+                    {{ sort_header("Transactions", 4, "number", "text-end") }}
+                    {{ sort_header("Share", 5, "number", "text-end") }}
+                    <th class="text-end">{{ _("Actions") }}</th>
+                </tr>
+            </thead>
+            <tbody data-report-explorer-body>
+                {% for row in rows %}
+                <tr
+                    data-row-href="{{ row.url }}"
+                    data-base-row-href="{{ row.url }}"
+                    data-row-drilldown="dblclick"
+                    data-report-explorer-row
+                    data-kind="{{ row.kind }}"
+                    data-filter-tokens="{{ row.filter_tokens }}"
+                    data-has-income="{% if row.has_income %}true{% else %}false{% endif %}"
+                    data-has-spending="{% if row.has_spending %}true{% else %}false{% endif %}"
+                    data-search-text="{{ row.search_text }}"
+                >
+                    <td data-sort-value="{{ row.label }}">
+                        <div class="reports-taxonomy-label">
+                            <a class="fw-semibold reports-taxonomy-name-link" href="{{ row.url }}" data-row-action data-report-link data-base-url="{{ row.url }}">{{ row.label }}</a>
+                            {% if row.type_label %}
+                            <span class="badge reports-entity-type-badge reports-entity-type-badge-{{ row.kind }} reports-entity-type-badge-{{ row.account_type | replace('_', '-') }}">{{ _(row.type_label) }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ row.net }}">{{ row.net | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.transaction_count }}">{{ row.transaction_count }}</td>
+                    <td class="text-end" data-sort-value="{{ row.share }}">
+                        <span>{{ row.share }}%</span>
+                        <span class="reports-bar-track" aria-hidden="true"><span style="width: {{ row.bar_width }}%;"></span></span>
+                    </td>
+                    <td class="text-end">
+                        <div class="reports-row-actions">
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.url }}" title="{{ _('Open report') }}" aria-label="{{ _('Open report') }}: {{ row.label }}" data-row-action data-report-link data-base-url="{{ row.url }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.transactions_url }}" title="{{ _('Transactions') }}" aria-label="{{ _('Transactions') }}: {{ row.label }}" data-row-action><i class="bi bi-list-ul" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.comparison_url }}" title="{{ _('Compare') }}" aria-label="{{ _('Compare') }}: {{ row.label }}" data-row-action><i class="bi bi-layout-split" aria-hidden="true"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state compact">{{ _("No rows available for this report.") }}</div>
+    {% endif %}
+</section>
+{%- endmacro %}
+
 {% macro taxonomy_breadcrumb_nav(breadcrumbs) -%}
 <nav class="reports-breadcrumbs" aria-label="{{ _('Breadcrumb') }}">
     <ol class="breadcrumb mb-0">
@@ -628,6 +770,41 @@
         {% endfor %}
     </ol>
 </nav>
+{%- endmacro %}
+
+{% macro report_target_switcher(target, options, search_placeholder) -%}
+{% set current_target_key = target.kind ~ ":" ~ target.id %}
+<div class="dropdown reports-target-switcher" data-report-target-switcher>
+    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        {{ target.name }}
+    </button>
+    <div class="dropdown-menu reports-target-switcher-menu">
+        <div class="p-2">
+            <label class="visually-hidden" for="reports-entity-target-search">{{ _(search_placeholder) }}</label>
+            <input
+                id="reports-entity-target-search"
+                class="form-control form-control-sm"
+                type="search"
+                placeholder="{{ _(search_placeholder) }}"
+                autocomplete="off"
+                data-report-target-search
+            >
+        </div>
+        <div class="reports-target-option-list">
+            {% for option in options %}
+            <a
+                class="dropdown-item reports-target-option {% if option.target_key == current_target_key %}active{% endif %}"
+                href="{{ option.url }}"
+                data-report-target-option
+                data-search-text="{{ option.search_text }}"
+            >
+                <span>{{ option.label }}</span>
+                <small>{{ _(option.type_label) }}</small>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
 {%- endmacro %}
 
 {% macro taxonomy_target_switcher(target, options) -%}
@@ -684,6 +861,25 @@
 </section>
 {%- endmacro %}
 
+{% macro entity_detail_header(target, options, transaction_url, comparison_url, back_url, back_label, search_placeholder) -%}
+<section class="card reports-target-card reports-taxonomy-target-card">
+    <div class="card-body reports-target-layout">
+        <div>
+            <div class="reports-shell-kicker">{{ _(target.report_label) }}</div>
+            {{ report_target_switcher(target, options, search_placeholder) }}
+            {% if target.description %}
+                <p>{{ _(target.description) }}</p>
+            {% endif %}
+        </div>
+        <div class="reports-actions reports-target-actions">
+            <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ back_url }}"><i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _(back_label) }}</a>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
 {% macro render_taxonomy_detail_subnav(items) -%}
 <nav class="reports-detail-subnav" aria-label="{{ _('Report sections') }}">
     {% for item in items %}
@@ -712,8 +908,8 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro evidence_preview(rows, table_id, transaction_url) -%}
-<section id="taxonomy-transactions" class="card reports-evidence-card reports-evidence-preview" aria-labelledby="{{ table_id }}-heading">
+{% macro evidence_preview(rows, table_id, transaction_url, section_id="taxonomy-transactions") -%}
+<section id="{{ section_id }}" class="card reports-evidence-card reports-evidence-preview" aria-labelledby="{{ table_id }}-heading">
     <div class="card-body border-bottom reports-table-header">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
             <div class="reports-table-heading">
@@ -761,8 +957,18 @@
 {% block content %}
 {% set report_request = report_request | default(none) %}
 {% set account_options = account_options | default([]) %}
+{% set category_options = category_options | default([]) %}
+{% set tag_options = tag_options | default([]) %}
+{% set selected_categories = selected_categories | default([]) %}
+{% set selected_tags = selected_tags | default([]) %}
 {% set quick_view_options = quick_view_options | default([]) %}
 {% set quick_view = quick_view | default("all") %}
+{% set reports_show_account_filter = reports_show_account_filter | default(true) %}
+{% set reports_show_merchant_filter = reports_show_merchant_filter | default(true) %}
+{% set reports_scope_label = reports_scope_label | default("Quick view") %}
+{% set categorized_quick_view_value = categorized_quick_view_value | default("categorized") %}
+{% set reports_taxonomy_filter_controls_available = reports_taxonomy_filter_controls_available | default(false) %}
+{% set reports_taxonomy_filter_controls_visible = reports_taxonomy_filter_controls_visible | default(false) %}
 {% set selected_account_id = selected_account_id | default(none) %}
 {% set selected_merchant_id = selected_merchant_id | default(none) %}
 {% set merchant_query = merchant_query | default("") %}
@@ -784,7 +990,7 @@
     {% endif %}
 {% endfor %}
 {% set reports_filter_summary %}
-{{ _("Period") }}: {{ period_label | default("") }}{% if selected_period == period_custom and (selected_date_from or selected_date_to) %} ({{ selected_date_from or _("Any") }} {{ _("to") }} {{ selected_date_to or _("Any") }}){% endif %} - {{ _("Measure") }}: {{ _(measure_options | selectattr("value", "equalto", selected_measure) | map(attribute="label") | first | default("Spending")) }} - {{ _("Basis") }}: {{ _(basis_options | selectattr("value", "equalto", selected_basis) | map(attribute="label") | first | default("Reportable cash flow")) }} - {{ _("Account") }}: {{ reports_account_label.value }} - {{ _("Quick view") }}: {{ reports_quick_view_label.value }} - {{ _("Merchant") }}: {{ reports_merchant_filter_label if reports_merchant_filter_label else _("All") }}
+{{ _("Period") }}: {{ period_label | default("") }}{% if selected_period == period_custom and (selected_date_from or selected_date_to) %} ({{ selected_date_from or _("Any") }} {{ _("to") }} {{ selected_date_to or _("Any") }}){% endif %} - {{ _("Measure") }}: {{ _(measure_options | selectattr("value", "equalto", selected_measure) | map(attribute="label") | first | default("Spending")) }} - {{ _("Basis") }}: {{ _(basis_options | selectattr("value", "equalto", selected_basis) | map(attribute="label") | first | default("Reportable cash flow")) }}{% if reports_show_account_filter %} - {{ _("Account") }}: {{ reports_account_label.value }}{% endif %}{% if reports_show_merchant_filter %} - {{ _("Merchant") }}: {{ reports_merchant_filter_label if reports_merchant_filter_label else _("All") }}{% endif %} - {{ _(reports_scope_label) }}: {{ reports_quick_view_label.value }}{% if reports_taxonomy_filter_controls_visible and selected_categories %} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }}{% endif %}{% if reports_taxonomy_filter_controls_visible and selected_tags %} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }}{% endif %}
 {% endset %}
 
 <div class="page-header">
@@ -969,33 +1175,70 @@
 </div>
 {% elif active_report_section.key in ["accounts", "merchants"] and entity_target is defined %}
 <div data-reports-page data-reports-entity-detail>
+{{ taxonomy_breadcrumb_nav(entity_breadcrumbs) }}
 {% call collapsible_filter_panel("reports-entity-detail-filters", reports_filter_summary | trim) %}
     {{ reports_filter_form(reports_clear_url) }}
 {% endcall %}
 
-{{ reports_target_header(entity_target.report_label, entity_target.name, entity_target.description, transaction_url, comparison_url) }}
+{% set entity_back_label = "Back to accounts" if entity_target.kind == "account" else "Back to merchants" %}
+{{ entity_detail_header(entity_target, entity_target_options, transaction_url, comparison_url, entity_back_url, entity_back_label, entity_search_placeholder) }}
 
 {% if transaction_count > 0 %}
-{{ reports_key_insights(transaction_url) }}
-{{ reports_quality_panel() }}
+{{ render_taxonomy_detail_subnav(entity_detail_subnav) }}
 
-<div class="reports-chart-grid">
-    {{ reports_chart_card("Monthly statement", "reportsMonthlyChart", true) }}
-    {{ reports_chart_card("Category breakdown", "reportsCategoryChart") }}
-    {{ reports_chart_card("Tag breakdown", "reportsTagChart") }}
-</div>
+<section id="entity-summary" class="reports-detail-section">
+    {{ reports_key_insights(transaction_url) }}
+    {{ reports_quality_panel() }}
+</section>
 
-<div class="reports-table-grid">
-    {{ reports_table("Monthly statement", monthly_rows, "Month", "reports-entity-monthly-table") }}
-    {{ reports_table("Category breakdown", category_rows, "Category", "reports-entity-category-table") }}
-    {{ reports_table("Tag breakdown", tag_rows, "Tag", "reports-entity-tag-table") }}
-    {% if entity_target.kind == "account" %}
-        {{ reports_table("Merchants", merchant_rows, "Merchant", "reports-entity-merchant-table") }}
-    {% else %}
-        {{ reports_table("Account breakdown", account_rows, "Account", "reports-entity-account-table") }}
-    {% endif %}
-    {{ evidence_table(entity_evidence_rows, "reports-entity-evidence-table") }}
-</div>
+<section id="entity-monthly" class="reports-detail-section" aria-labelledby="entity-monthly-heading">
+    <div class="page-block-header">
+        <h5 id="entity-monthly-heading" class="card-title mb-0">{{ _("Monthly") }}</h5>
+    </div>
+    <div class="reports-chart-grid">
+        {{ reports_chart_card("Monthly statement", "reportsMonthlyChart", true, false) }}
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Monthly statement", monthly_rows, "Month", "reports-entity-monthly-table", false, false) }}
+    </div>
+</section>
+
+<section id="entity-composition" class="reports-detail-section" aria-labelledby="entity-composition-heading">
+    <div class="page-block-header">
+        <h5 id="entity-composition-heading" class="card-title mb-0">{{ _("Composition") }}</h5>
+    </div>
+    <div class="reports-chart-grid">
+        {{ reports_chart_card("Category breakdown", "reportsCategoryChart", false, false) }}
+        {{ reports_chart_card("Tag breakdown", "reportsTagChart", false, false) }}
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Category breakdown", category_rows, "Category", "reports-entity-category-table", false, false) }}
+        {{ reports_table("Tag breakdown", tag_rows, "Tag", "reports-entity-tag-table", false, false) }}
+    </div>
+</section>
+
+{% if entity_target.kind == "account" %}
+<section id="entity-merchants" class="reports-detail-section" aria-labelledby="entity-merchants-heading">
+    <div class="page-block-header">
+        <h5 id="entity-merchants-heading" class="card-title mb-0">{{ _("Merchants") }}</h5>
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Merchants", merchant_rows, "Merchant", "reports-entity-merchant-table", false, false) }}
+    </div>
+</section>
+{% else %}
+<section id="entity-accounts" class="reports-detail-section" aria-labelledby="entity-accounts-heading">
+    <div class="page-block-header">
+        <h5 id="entity-accounts-heading" class="card-title mb-0">{{ _("Accounts") }}</h5>
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Account breakdown", account_rows, "Account", "reports-entity-account-table", false, false) }}
+    </div>
+</section>
+{% endif %}
+
+{{ taxonomy_related_reports(entity_related_links) }}
+{{ evidence_preview(entity_evidence_rows, "reports-entity-evidence-table", transaction_url, "entity-transactions") }}
 
 <script id="reports-overview-chart-data" type="application/json">
 {{ chart_data | tojson }}
@@ -1012,15 +1255,10 @@
     {{ reports_filter_form(reports_clear_url) }}
 {% endcall %}
 
-{{ reports_actions(comparison_url) }}
-
 {% if transaction_count > 0 %}
-{{ reports_key_insights(transaction_url) }}
 {{ reports_quality_panel() }}
-
-<div class="reports-table-grid">
-    {{ taxonomy_index_table(entity_index_title, entity_rows, entity_index_label_heading, "reports-entity-index-table") }}
-</div>
+{{ report_target_typeahead(entity_target_options, entity_explorer_search, entity_open_label, entity_search_placeholder, "reports-entity-open") }}
+{{ report_explorer(entity_explorer_rows, entity_filter_chips, entity_explorer_filter, active_report_section.label, "Report explorer", "reports-entity-explorer-table", entity_index_label_heading) }}
 {% else %}
 <div class="empty-state">
     {{ _("No transaction data is available for this report.") }}

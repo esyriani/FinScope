@@ -14,6 +14,9 @@ from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.periods import DATE_PERIOD_OPTIONS, PERIOD_CUSTOM, format_date_label, get_period_label
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.accounts.queries import list_account_options
+from finance_app.modules.categories.service import get_category_options
+from finance_app.modules.categories.taxonomy import get_tag_option_rows
+from finance_app.modules.dashboard.constants import QUICK_VIEW_CATEGORIZED
 from finance_app.modules.dashboard.presenter import build_quick_view_options
 from finance_app.modules.merchants.repository import find_merchant_by_id
 from finance_app.modules.merchants.service import get_merchant_suggestion_limit
@@ -34,7 +37,12 @@ from finance_app.modules.reports.entities import (
     resolve_account_report_target,
     resolve_merchant_report_target,
 )
-from finance_app.modules.reports.filters import ReportRequest, parse_report_request
+from finance_app.modules.reports.filters import (
+    ReportRequest,
+    parse_report_request,
+    report_taxonomy_filter_controls_available,
+    report_taxonomy_filters_active,
+)
 from finance_app.modules.reports.presenter import (
     build_export_rows,
     build_reports_entity_detail_view,
@@ -48,6 +56,7 @@ from finance_app.modules.reports.queries import (
     account_target_condition,
     fetch_account_breakdown,
     fetch_category_breakdown,
+    fetch_entity_target_options,
     fetch_merchant_breakdown,
     fetch_monthly_overview,
     fetch_reimbursable_tag_summary,
@@ -62,6 +71,7 @@ from finance_app.modules.reports.queries import (
     income_credit_target_condition,
     merchant_target_condition,
     report_quick_view_conditions,
+    report_taxonomy_filter_conditions,
     reports_base_filters,
     taxonomy_target_condition,
 )
@@ -137,6 +147,9 @@ class ReportsEntityIndexQueryData:
     quick_view_counts: dict[str, Any]
     summary: Any
     rows: list[Any]
+    target_options: list[Any]
+    category_options: list[str]
+    tag_options: list[dict[str, str]]
 
 
 @dataclass(frozen=True)
@@ -156,6 +169,9 @@ class ReportsEntityDetailQueryData:
     account_rows: list[Any]
     merchant_rows: list[dict[str, Any]]
     evidence_rows: list[dict[str, Any]]
+    target_options: list[Any]
+    category_options: list[str]
+    tag_options: list[dict[str, str]]
 
 
 @dataclass(frozen=True)
@@ -174,6 +190,8 @@ class ReportsIncomeQueryData:
     account_rows: list[Any]
     merchant_rows: list[dict[str, Any]]
     evidence_rows: list[dict[str, Any]]
+    category_options: list[str]
+    tag_options: list[dict[str, str]]
 
 
 def build_reports_context(section_key: str, args: Any) -> dict[str, Any]:
@@ -289,9 +307,17 @@ def build_reports_entity_index_context(section_key: str, args: Any, report_reque
     """Build account or merchant index filters and target rows."""
     kind = REPORT_ENTITY_ACCOUNT if section_key == REPORT_ACCOUNTS else REPORT_ENTITY_MERCHANT
     query_data = fetch_reports_entity_index_query_data(kind, report_request)
-    entity = build_reports_entity_index_view(report_request, query_data.summary, query_data.rows, kind)
+    entity = build_reports_entity_index_view(
+        report_request,
+        query_data.summary,
+        query_data.rows,
+        kind,
+        query_data.target_options,
+    )
     return {
         **entity,
+        "entity_explorer_filter": str(args.get("entity_filter", "all") or "all"),
+        "entity_explorer_search": str(args.get("entity_search", "") or ""),
         **reports_filter_context(
             args,
             report_request,
@@ -328,6 +354,7 @@ def build_reports_entity_detail_context(kind: str, target_id: int, args: Any) ->
         query_data.account_rows,
         query_data.merchant_rows,
         query_data.evidence_rows,
+        query_data.target_options,
     )
     export_csv_endpoint = (
         "reports.account_export_csv" if kind == REPORT_ENTITY_ACCOUNT else "reports.merchant_export_csv"
@@ -485,6 +512,8 @@ def fetch_reports_income_query_data(report_request: ReportRequest) -> ReportsInc
             account_rows=fetch_account_breakdown(conn, income_filters, report_request.basis),
             merchant_rows=fetch_merchant_breakdown(conn, income_filters, report_request.basis),
             evidence_rows=fetch_taxonomy_evidence_rows(conn, income_filters, unknown_category, report_request.basis),
+            category_options=report_category_filter_options(conn, unknown_category),
+            tag_options=get_tag_option_rows(conn),
         )
 
 
@@ -585,7 +614,11 @@ def fetch_reports_entity_index_query_data(kind: str, report_request: ReportReque
     """Fetch account or merchant index aggregates inside one database transaction."""
     with db_core_transaction() as conn:
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
-        base_filters = reports_base_filters(report_request).criteria()
+        base_filters = reports_base_filters(
+            report_request,
+            include_account=kind != REPORT_ENTITY_ACCOUNT,
+            include_merchant=kind != REPORT_ENTITY_MERCHANT,
+        ).criteria()
         quick_view_counts = fetch_report_quick_view_counts(
             conn,
             base_filters,
@@ -612,6 +645,9 @@ def fetch_reports_entity_index_query_data(kind: str, report_request: ReportReque
             quick_view_counts=quick_view_counts,
             summary=fetch_report_summary(conn, filters, unknown_category, report_request.basis),
             rows=rows,
+            target_options=fetch_entity_target_options(conn, kind),
+            category_options=report_category_filter_options(conn, unknown_category),
+            tag_options=get_tag_option_rows(conn),
         )
 
 
@@ -669,7 +705,16 @@ def fetch_reports_entity_detail_query_data(
             tag_rows=fetch_tag_breakdown(conn, target_filters, report_request.basis),
             account_rows=fetch_account_breakdown(conn, target_filters, report_request.basis),
             merchant_rows=fetch_merchant_breakdown(conn, target_filters, report_request.basis),
-            evidence_rows=fetch_taxonomy_evidence_rows(conn, target_filters, unknown_category, report_request.basis),
+            evidence_rows=fetch_taxonomy_evidence_rows(
+                conn,
+                target_filters,
+                unknown_category,
+                report_request.basis,
+                limit=5,
+            ),
+            target_options=fetch_entity_target_options(conn, kind),
+            category_options=report_category_filter_options(conn, unknown_category),
+            tag_options=get_tag_option_rows(conn),
         )
 
 
@@ -685,6 +730,7 @@ def reports_filter_context(
     export_route_values: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return filter controls and labels for the Reports overview."""
+    taxonomy_filter_controls_available = report_taxonomy_filter_controls_available(report_request.section_key)
     return {
         "selected_period": report_request.period,
         "period_options": DATE_PERIOD_OPTIONS,
@@ -703,6 +749,16 @@ def reports_filter_context(
             report_request.quick_view,
             query_data.quick_view_counts,
         ),
+        "reports_scope_label": "Scope" if taxonomy_filter_controls_available else "Quick view",
+        "categorized_quick_view_value": QUICK_VIEW_CATEGORIZED,
+        "reports_show_account_filter": report_request.section_key != REPORT_ACCOUNTS,
+        "reports_show_merchant_filter": report_request.section_key != REPORT_MERCHANTS,
+        "reports_taxonomy_filter_controls_available": taxonomy_filter_controls_available,
+        "reports_taxonomy_filter_controls_visible": report_request.quick_view == QUICK_VIEW_CATEGORIZED,
+        "selected_categories": report_request.selected_categories,
+        "selected_tags": report_request.selected_tags,
+        "category_options": getattr(query_data, "category_options", []),
+        "tag_options": getattr(query_data, "tag_options", []),
         "account_options": query_data.account_options,
         "selected_account_id": report_request.selected_account_id,
         "selected_merchant_id": report_request.selected_merchant_id,
@@ -729,7 +785,21 @@ def report_filters_with_quick_view(
     unknown_category: str,
 ) -> list[Any]:
     """Return report filters plus the selected quick-view status shortcut."""
-    return [*filters, *report_quick_view_conditions(report_request.quick_view, unknown_category)]
+    taxonomy_filters = (
+        report_taxonomy_filter_conditions(report_request, unknown_category)
+        if report_taxonomy_filters_active(report_request)
+        else []
+    )
+    return [
+        *filters,
+        *report_quick_view_conditions(report_request.quick_view, unknown_category),
+        *taxonomy_filters,
+    ]
+
+
+def report_category_filter_options(conn: Any, unknown_category: str) -> list[str]:
+    """Return category filter choices for categorized report refiners."""
+    return [category for category in get_category_options(conn) if category != unknown_category]
 
 
 def selected_merchant_option_name(conn: Any, selected_merchant_id: int | None, merchant_query: str = "") -> str:

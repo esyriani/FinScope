@@ -11,6 +11,7 @@ from tests.support.context_services import seed_entity_report_data, seed_reporti
 from tests.support.html import (
     assert_asset_reference,
     assert_has_element,
+    assert_no_element,
     assert_not_visible_text,
     assert_visible_text,
     response_html,
@@ -201,14 +202,87 @@ def test_reports_account_and_merchant_routes_render_entity_indexes(client, core_
 
     assert accounts_response.status_code == 200
     assert merchants_response.status_code == 200
-    assert_visible_text(accounts_response, "Account reports", "Personal Checking", "Travel Card", "Checking account")
-    assert_visible_text(merchants_response, "Merchant reports", seed["metro_merchant_name"], "Merchant")
+    assert_visible_text(
+        accounts_response,
+        "Open an account report...",
+        "Report explorer",
+        "Account",
+        "Personal Checking",
+        "Travel Card",
+        "Checking account",
+        "Credit card",
+        "Has spending",
+        "Scope",
+        "Category",
+        "Tags",
+    )
+    assert_visible_text(
+        merchants_response,
+        "Open a merchant report...",
+        "Report explorer",
+        "Merchant",
+        seed["metro_merchant_name"],
+        "Has income",
+        "Has spending",
+        "Scope",
+        "Category",
+        "Tags",
+    )
+    assert_no_element(accounts_response, "select", attrs={"id": "reports-account"})
+    assert_has_element(accounts_response, "input", attrs={"id": "reports-merchant-search"})
+    assert_has_element(accounts_response, "input", attrs={"name": "categories", "value": "Food"})
+    assert_has_element(accounts_response, "input", attrs={"name": "tags", "value": "Tax"})
+    assert_has_element(merchants_response, "select", attrs={"id": "reports-account"})
+    assert_no_element(merchants_response, "input", attrs={"id": "reports-merchant-search"})
+    assert_has_element(merchants_response, "input", attrs={"name": "categories", "value": "Food"})
+    assert_has_element(merchants_response, "input", attrs={"name": "tags", "value": "Tax"})
     assert f'data-row-href="/reports/accounts/{seed["checking_id"]}' in accounts_body
     assert f'data-row-href="/reports/merchants/{seed["metro_merchant_id"]}' in merchants_body
-    assert f'<a href="/reports/accounts/{seed["checking_id"]}' not in accounts_body
-    assert f'<a href="/reports/merchants/{seed["metro_merchant_id"]}' not in merchants_body
+    assert "data-report-open-control" in accounts_body
+    assert "data-report-open-menu" in accounts_body
+    assert "data-report-explorer" in accounts_body
+    assert 'data-report-filter="checking"' in accounts_body
+    assert (
+        f'<a class="fw-semibold reports-taxonomy-name-link" href="/reports/accounts/{seed["checking_id"]}'
+        in accounts_body
+    )
+    assert (
+        f'<a class="fw-semibold reports-taxonomy-name-link" href="/reports/merchants/{seed["metro_merchant_id"]}'
+        in merchants_body
+    )
+    assert_has_element(
+        accounts_response,
+        "a",
+        attrs={
+            "href": f"/reports/accounts/{seed['checking_id']}?period=custom&date_from=2026-01-01&date_to=2026-01-31"
+        },
+        text="Personal Checking",
+    )
+    assert_has_element(
+        merchants_response,
+        "a",
+        attrs={
+            "href": f"/reports/merchants/{seed['metro_merchant_id']}?period=custom&date_from=2026-01-01&date_to=2026-01-31"
+        },
+        text=seed["metro_merchant_name"],
+    )
     assert_not_visible_text(accounts_response, "Edit category", "Approve selected", "Recategorize selected")
     assert_not_visible_text(merchants_response, "Edit category", "Approve selected", "Recategorize selected")
+
+
+def test_reports_entity_scope_refiners_are_hidden_outside_categorized_scope(client, core_conn, data_factory):
+    """Verify report category and tag refiners are disabled when Scope is not categorized."""
+    seed_entity_report_data(data_factory, core_conn)
+
+    response = client.get(
+        "/reports/accounts?period=custom&date_from=2026-01-01&date_to=2026-01-31"
+        "&quick_view=all&categories=Food&tags=Tax"
+    )
+
+    assert response.status_code == 200
+    assert_has_element(response, "div", attrs={"data-reports-scope-refiner": True, "class": "d-none"})
+    assert_has_element(response, "input", attrs={"name": "categories", "value": "Food", "disabled": True})
+    assert_has_element(response, "input", attrs={"name": "tags", "value": "Tax", "disabled": True})
 
 
 def test_reports_income_route_renders_income_analysis(client, core_conn):
@@ -229,7 +303,14 @@ def test_reports_income_route_renders_income_analysis(client, core_conn):
         "Merchants",
         "Evidence preview",
         "Payroll",
+        "Scope",
+        "Category",
+        "Tags",
     )
+    assert_has_element(response, "select", attrs={"id": "reports-account"})
+    assert_has_element(response, "input", attrs={"id": "reports-merchant-search"})
+    assert_has_element(response, "input", attrs={"name": "categories", "value": "Food"})
+    assert_has_element(response, "input", attrs={"name": "tags", "value": "Tax"})
     assert 'href="/comparison?comparison_view=period&amp;analysis_mode=income"' in body
     assert 'href="/reports/income/export.csv?period=custom' not in body
     assert 'href="/reports/income/export.xlsx?period=custom' not in body
@@ -325,21 +406,35 @@ def test_reports_account_and_merchant_detail_routes_render_read_only_reports(cli
     assert merchant_response.status_code == 200
     assert_visible_text(
         account_response,
+        "Reports",
+        "Accounts",
         "Account report",
         "Personal Checking",
         "Checking account",
+        "Summary",
+        "Monthly",
+        "Composition",
         "Merchants",
         "Evidence preview",
+        "Open all transactions",
+        "Related reports",
         seed["metro_merchant_name"],
         seed["cafe_merchant_name"],
         "Payroll",
     )
     assert_visible_text(
         merchant_response,
+        "Reports",
+        "Merchants",
         "Merchant report",
         seed["metro_merchant_name"],
-        "Account breakdown",
+        "Summary",
+        "Monthly",
+        "Composition",
+        "Accounts",
         "Evidence preview",
+        "Open all transactions",
+        "Related reports",
         "Personal Checking",
         "Metro Grocery",
     )
@@ -349,6 +444,19 @@ def test_reports_account_and_merchant_detail_routes_render_read_only_reports(cli
     assert_not_visible_text(
         merchant_response, "Cafe Bistro", "Edit category", "Approve selected", "Recategorize selected"
     )
+    assert_not_visible_text(account_response, "Export report")
+    assert_not_visible_text(merchant_response, "Export report")
+    account_body = response_html(account_response)
+    merchant_body = response_html(merchant_response)
+    assert 'href="/reports/accounts?period=custom&amp;date_from=2026-01-01&amp;date_to=2026-01-31"' in account_body
+    assert 'href="/reports/merchants?period=custom&amp;date_from=2026-01-01&amp;date_to=2026-01-31"' in merchant_body
+    assert "data-report-target-switcher" in account_body
+    assert "data-chart-export" not in account_body
+    assert "data-chart-export" not in merchant_body
+    assert "data-table-export-toolbar" not in account_body
+    assert "data-table-export-toolbar" not in merchant_body
+    assert "data-table-search" not in account_body
+    assert "data-table-search" not in merchant_body
 
 
 def test_reports_reimbursable_tag_route_renders_tracking_panel(client, core_conn, data_factory):
