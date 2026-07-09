@@ -6,8 +6,12 @@ from flask.typing import ResponseReturnValue
 from finance_app.core.i18n import gettext
 from finance_app.modules.auth.permissions import owner_required
 from finance_app.modules.prompt_lab.service import (
+    build_dataset_builder_context,
     build_dataset_detail_context,
     build_datasets_context,
+    build_labeling_item_context,
+    build_labeling_queue_detail_context,
+    build_labeling_queues_context,
     build_new_run_context,
     build_overview_context,
     build_prompt_editor_context,
@@ -16,8 +20,13 @@ from finance_app.modules.prompt_lab.service import (
     build_run_comparison_context,
     build_run_detail_context,
     build_runs_context,
+    export_labeling_queue_from_form,
     launch_prompt_lab_run,
+    mark_labeling_item_unusable_from_form,
+    preview_dataset_build_from_form,
     rescore_run_by_name,
+    run_dataset_build_from_form,
+    save_labeling_item_from_form,
     save_prompt_content,
     save_prompt_copy,
     validate_dataset_by_name,
@@ -49,6 +58,65 @@ def datasets() -> ResponseReturnValue:
     return render_template("prompt_lab_datasets.html", **build_datasets_context())
 
 
+@prompt_lab_bp.route("/admin/prompt-lab/datasets/build")
+@owner_required
+def dataset_build() -> ResponseReturnValue:
+    """Render the coverage-driven dataset build form."""
+    ensure_prompt_lab_enabled()
+    app_settings = current_app.config["FINANCE_SETTINGS"]
+    return render_template(
+        "prompt_lab_dataset_build.html",
+        **build_dataset_builder_context(request.args, default_db_path=app_settings.database_path),
+    )
+
+
+@prompt_lab_bp.route("/admin/prompt-lab/datasets/build/preview", methods=["POST"])
+@owner_required
+def dataset_build_preview() -> ResponseReturnValue:
+    """Preview coverage for a submitted dataset specification."""
+    ensure_prompt_lab_enabled()
+    app_settings = current_app.config["FINANCE_SETTINGS"]
+    try:
+        preview = preview_dataset_build_from_form(request.form, default_db_path=app_settings.database_path)
+    except (OSError, ValueError) as exc:
+        context = build_dataset_builder_context(
+            request.form,
+            default_db_path=app_settings.database_path,
+            errors=[str(exc)],
+        )
+    else:
+        context = build_dataset_builder_context(
+            request.form,
+            default_db_path=app_settings.database_path,
+            preview=preview,
+        )
+    return render_template("prompt_lab_dataset_build.html", **context)
+
+
+@prompt_lab_bp.route("/admin/prompt-lab/datasets/build/run", methods=["POST"])
+@owner_required
+def dataset_build_run() -> ResponseReturnValue:
+    """Build draft dataset artifacts from a submitted dataset specification."""
+    ensure_prompt_lab_enabled()
+    app_settings = current_app.config["FINANCE_SETTINGS"]
+    try:
+        result = run_dataset_build_from_form(request.form, default_db_path=app_settings.database_path)
+    except (OSError, ValueError) as exc:
+        context = build_dataset_builder_context(
+            request.form,
+            default_db_path=app_settings.database_path,
+            errors=[str(exc)],
+        )
+    else:
+        flash(gettext("Draft dataset built."))
+        context = build_dataset_builder_context(
+            request.form,
+            default_db_path=app_settings.database_path,
+            build_result=result,
+        )
+    return render_template("prompt_lab_dataset_build.html", **context)
+
+
 @prompt_lab_bp.route("/admin/prompt-lab/datasets/<dataset_name>")
 @owner_required
 def dataset_detail(dataset_name: str) -> ResponseReturnValue:
@@ -59,6 +127,85 @@ def dataset_detail(dataset_name: str) -> ResponseReturnValue:
     except (FileNotFoundError, ValueError):
         abort(404)
     return render_template("prompt_lab_dataset_detail.html", **context)
+
+
+@prompt_lab_bp.route("/admin/prompt-lab/labeling")
+@owner_required
+def labeling_queues() -> ResponseReturnValue:
+    """Render available AI-problem manual labeling queues."""
+    ensure_prompt_lab_enabled()
+    return render_template("prompt_lab_labeling_queues.html", **build_labeling_queues_context())
+
+
+@prompt_lab_bp.route("/admin/prompt-lab/labeling/<queue_name>")
+@owner_required
+def labeling_queue_detail(queue_name: str) -> ResponseReturnValue:
+    """Render one AI-problem labeling queue."""
+    ensure_prompt_lab_enabled()
+    try:
+        context = build_labeling_queue_detail_context(queue_name, request.args)
+    except (FileNotFoundError, ValueError):
+        abort(404)
+    return render_template("prompt_lab_labeling_queue_detail.html", **context)
+
+
+@prompt_lab_bp.route("/admin/prompt-lab/labeling/<queue_name>/<request_id>")
+@owner_required
+def labeling_item(queue_name: str, request_id: str) -> ResponseReturnValue:
+    """Render one labeling queue item and manual label form."""
+    ensure_prompt_lab_enabled()
+    try:
+        context = build_labeling_item_context(queue_name, request_id)
+    except (FileNotFoundError, ValueError):
+        abort(404)
+    return render_template("prompt_lab_labeling_item.html", **context)
+
+
+@prompt_lab_bp.route("/admin/prompt-lab/labeling/<queue_name>/<request_id>/save", methods=["POST"])
+@owner_required
+def save_labeling_item(queue_name: str, request_id: str) -> ResponseReturnValue:
+    """Save a manual label for one queue item."""
+    ensure_prompt_lab_enabled()
+    try:
+        next_request_id = save_labeling_item_from_form(queue_name, request_id, request.form)
+    except (FileNotFoundError, ValueError) as exc:
+        try:
+            context = build_labeling_item_context(queue_name, request_id, values=request.form, errors=[str(exc)])
+        except (FileNotFoundError, ValueError):
+            abort(404)
+        return render_template("prompt_lab_labeling_item.html", **context)
+    flash(gettext("Manual label saved."))
+    if request.form.get("save_action") == "save_next" and next_request_id:
+        return redirect(url_for("prompt_lab.labeling_item", queue_name=queue_name, request_id=next_request_id))
+    return redirect(url_for("prompt_lab.labeling_item", queue_name=queue_name, request_id=request_id))
+
+
+@prompt_lab_bp.route("/admin/prompt-lab/labeling/<queue_name>/<request_id>/mark-unusable", methods=["POST"])
+@owner_required
+def mark_labeling_item_unusable(queue_name: str, request_id: str) -> ResponseReturnValue:
+    """Mark one queue item unusable."""
+    ensure_prompt_lab_enabled()
+    try:
+        mark_labeling_item_unusable_from_form(queue_name, request_id, request.form)
+    except (FileNotFoundError, ValueError) as exc:
+        flash(gettext("Queue item could not be updated: {error}", error=str(exc)))
+    else:
+        flash(gettext("Queue item marked unusable."))
+    return redirect(url_for("prompt_lab.labeling_queue_detail", queue_name=queue_name))
+
+
+@prompt_lab_bp.route("/admin/prompt-lab/labeling/<queue_name>/export", methods=["POST"])
+@owner_required
+def export_labeling_queue(queue_name: str) -> ResponseReturnValue:
+    """Export labeled queue items to a valid evaluation JSONL dataset."""
+    ensure_prompt_lab_enabled()
+    try:
+        dataset_name = export_labeling_queue_from_form(queue_name)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        flash(gettext("Labeling queue could not be exported: {error}", error=str(exc)))
+        return redirect(url_for("prompt_lab.labeling_queue_detail", queue_name=queue_name))
+    flash(gettext("Labeled queue exported."))
+    return redirect(url_for("prompt_lab.dataset_detail", dataset_name=dataset_name))
 
 
 @prompt_lab_bp.route("/admin/prompt-lab/datasets/<dataset_name>/validate", methods=["POST"])

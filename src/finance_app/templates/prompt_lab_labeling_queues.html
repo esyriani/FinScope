@@ -1,0 +1,93 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Labeling queues") }}</h2>
+        <p class="text-muted mb-0">{{ _("Manually label AI problem cases before exporting them as eval examples.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.datasets') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Datasets") }}
+        </a>
+        <a class="btn btn-outline-primary" href="{{ url_for('prompt_lab.dataset_build') }}">
+            <i class="bi bi-file-earmark-plus" aria-hidden="true"></i>{{ _("Build dataset from specification") }}
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Queue") }}</th>
+                        <th scope="col">{{ _("Items") }}</th>
+                        <th scope="col">{{ _("Pending") }}</th>
+                        <th scope="col">{{ _("Labeled") }}</th>
+                        <th scope="col">{{ _("Unusable") }}</th>
+                        <th scope="col">{{ _("AI UNKNOWN") }}</th>
+                        <th scope="col">{{ _("AI needs review") }}</th>
+                        <th scope="col">{{ _("AI low confidence") }}</th>
+                        <th scope="col">{{ _("AI corrected later") }}</th>
+                        <th scope="col">{{ _("Valid") }}</th>
+                        <th scope="col">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in queue_rows %}
+                        <tr>
+                            <td><code>{{ row.name }}</code></td>
+                            <td>{{ row.items }}</td>
+                            <td>{{ row.pending }}</td>
+                            <td>{{ row.labeled }}</td>
+                            <td>{{ row.unusable }}</td>
+                            <td>{{ row.ai_unknown }}</td>
+                            <td>{{ row.ai_needs_review }}</td>
+                            <td>{{ row.ai_low_confidence }}</td>
+                            <td>{{ row.ai_corrected_later }}</td>
+                            <td>
+                                {% if row.valid %}
+                                    <span class="badge text-bg-success">{{ _("Valid") }}</span>
+                                {% else %}
+                                    <span class="badge text-bg-danger">{{ _("Invalid") }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('prompt_lab.labeling_queue_detail', queue_name=row.name) }}">
+                                    {{ _("Open") }}
+                                </a>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="11" class="text-muted">{{ _("No labeling queues found.") }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

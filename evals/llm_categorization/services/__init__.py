@@ -9,6 +9,7 @@ from pathlib import Path
 EVAL_MODULE_DIR = Path(__file__).resolve().parents[1]
 PROMPTS_DIR = EVAL_MODULE_DIR / "prompts"
 DATASETS_DIR = EVAL_MODULE_DIR / "datasets"
+DATASET_SPECS_DIR = EVAL_MODULE_DIR / "dataset_specs"
 RUNS_DIR = EVAL_MODULE_DIR / "runs"
 
 PROMPT_LAB_NOTICE = (

@@ -102,6 +102,176 @@ def validate_dataset_by_name(dataset_name: str) -> Any:
     return validate_dataset_file(resolve_dataset_path(dataset_name))
 
 
+def build_dataset_builder_context(
+    values: Mapping[str, Any] | None,
+    *,
+    default_db_path: Path,
+    preview: Any | None = None,
+    build_result: Any | None = None,
+    errors: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Build the dataset-spec builder form and result context."""
+    form = normalize_dataset_build_form(values or {}, default_db_path=default_db_path)
+    return {
+        "prompt_lab_notice": PROMPT_LAB_NOTICE,
+        "form": form,
+        "errors": tuple(errors),
+        "label_source_options": ("prefer", "allow", "candidate_only", "exclude"),
+        "category_target_rows": target_rows_for_form(form, "categories"),
+        "tag_target_rows": target_rows_for_form(form, "tags"),
+        "special_target_rows": special_target_rows(form),
+        "preview_rows": preview_rows(preview) if preview else (),
+        "build_summary": build_summary(build_result) if build_result else None,
+    }
+
+
+def preview_dataset_build_from_form(values: Mapping[str, Any], *, default_db_path: Path) -> Any:
+    """Preview a dataset build from submitted form values without writing datasets."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services.dataset_builder_service import preview_dataset_build
+
+    spec = dataset_spec_from_form(values, default_db_path=default_db_path)
+    save_dataset_builder_spec(spec)
+    return preview_dataset_build(Path(str(values.get("db_path") or default_db_path)), spec)
+
+
+def run_dataset_build_from_form(values: Mapping[str, Any], *, default_db_path: Path) -> Any:
+    """Build draft dataset artifacts from submitted form values."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services.dataset_builder_service import build_draft_dataset_from_spec
+
+    spec = dataset_spec_from_form(values, default_db_path=default_db_path)
+    save_dataset_builder_spec(spec)
+    return build_draft_dataset_from_spec(Path(str(values.get("db_path") or default_db_path)), spec)
+
+
+def build_labeling_queues_context() -> dict[str, Any]:
+    """Build the labeling queue list page context."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services.labeling_queue_service import list_labeling_queues, validate_labeling_queue
+
+    rows = []
+    for artifact in list_labeling_queues():
+        result = validate_labeling_queue(artifact.path)
+        items = read_jsonl_records(artifact.path)
+        rows.append(
+            {
+                "name": artifact.name,
+                "items": result.item_count,
+                "pending": result.pending_count,
+                "labeled": result.labeled_count,
+                "unusable": result.unusable_count,
+                "valid": result.valid,
+                "ai_unknown": count_queue_failure(items, "ai_unknown"),
+                "ai_needs_review": count_queue_failure(items, "ai_needs_review"),
+                "ai_low_confidence": count_queue_failure(items, "ai_low_confidence"),
+                "ai_corrected_later": count_queue_failure(items, "ai_corrected_later"),
+            }
+        )
+    return {"prompt_lab_notice": PROMPT_LAB_NOTICE, "queue_rows": rows}
+
+
+def build_labeling_queue_detail_context(queue_name: str, filters: Mapping[str, Any]) -> dict[str, Any]:
+    """Build one labeling queue detail context."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services.labeling_queue_service import (
+        read_labeling_queue,
+        resolve_labeling_queue_path,
+        validate_labeling_queue,
+    )
+
+    queue_path = resolve_labeling_queue_path(queue_name)
+    result = validate_labeling_queue(queue_path)
+    selected_filter = str(filters.get("filter") or "")
+    items = [item for item in read_labeling_queue(queue_path) if queue_item_matches_filter(item, selected_filter)]
+    return {
+        "prompt_lab_notice": PROMPT_LAB_NOTICE,
+        "queue_name": queue_name,
+        "validation_result": result,
+        "selected_filter": selected_filter,
+        "filter_options": labeling_filter_options(),
+        "queue_rows": [labeling_queue_row(item) for item in items],
+        "export_name": exported_labeling_dataset_name(queue_name),
+    }
+
+
+def build_labeling_item_context(
+    queue_name: str,
+    request_id: str,
+    *,
+    values: Mapping[str, Any] | None = None,
+    errors: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Build one labeling queue item page context."""
+    item = labeling_item_by_request_id(queue_name, request_id)
+    form = normalize_labeling_item_form(item, values)
+    return {
+        "prompt_lab_notice": PROMPT_LAB_NOTICE,
+        "queue_name": queue_name,
+        "request_id": request_id,
+        "item": item,
+        "transaction": mapping_value(item.get("transaction")),
+        "ai_observation": mapping_value(item.get("ai_observation")),
+        "category_options": taxonomy_options(item, "categories"),
+        "tag_options": taxonomy_options(item, "tags"),
+        "form": form,
+        "errors": tuple(errors),
+    }
+
+
+def save_labeling_item_from_form(queue_name: str, request_id: str, values: Mapping[str, Any]) -> str | None:
+    """Save a manual label for one queue item and return the next pending request ID."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services.labeling_queue_service import (
+        read_labeling_queue,
+        resolve_labeling_queue_path,
+        save_manual_label,
+    )
+
+    queue_path = resolve_labeling_queue_path(queue_name)
+    tag_ids = form_getlist(values, "tag_ids")
+    save_manual_label(
+        queue_path,
+        request_id,
+        category_id=str(values.get("category_id") or ""),
+        tag_ids=tag_ids,
+        needs_review=parse_form_bool(str(values.get("needs_review") or "")),
+        label_source=str(values.get("label_source") or "curated_by_researcher"),
+        notes=str(values.get("notes") or ""),
+    )
+    for item in read_labeling_queue(queue_path):
+        if item.get("label_status") == "pending":
+            return str(item.get("request_id"))
+    return None
+
+
+def mark_labeling_item_unusable_from_form(queue_name: str, request_id: str, values: Mapping[str, Any]) -> None:
+    """Mark one labeling queue item unusable."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services.labeling_queue_service import (
+        mark_queue_item_unusable,
+        resolve_labeling_queue_path,
+    )
+
+    reason = str(values.get("unusable_reason") or values.get("notes") or "Marked unusable from Prompt Lab.")
+    mark_queue_item_unusable(resolve_labeling_queue_path(queue_name), request_id, reason=reason)
+
+
+def export_labeling_queue_from_form(queue_name: str) -> str:
+    """Export labeled queue items and return the generated dataset name."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services import DATASETS_DIR
+    from evals.llm_categorization.services.labeling_queue_service import (
+        export_labeled_queue,
+        resolve_labeling_queue_path,
+    )
+
+    output_name = exported_labeling_dataset_name(queue_name)
+    out_path = DATASETS_DIR / output_name
+    export_labeled_queue(resolve_labeling_queue_path(queue_name), out_path)
+    return output_name
+
+
 def build_prompts_context() -> dict[str, Any]:
     """Build Prompt Lab prompts list page context."""
     ensure_eval_services_importable()
@@ -460,6 +630,420 @@ def is_validation_run(run: Any, metrics: Mapping[str, Any], config: Mapping[str,
         if value
     ).lower()
     return "validation" in tokens
+
+
+def normalize_dataset_build_form(values: Mapping[str, Any], *, default_db_path: Path) -> dict[str, Any]:
+    """Return display-ready dataset build form values."""
+    return {
+        "name": str(values.get("name") or values.get("dataset_name") or "curated_v1").strip(),
+        "description": str(values.get("description") or "").strip(),
+        "max_examples": str(values.get("max_examples") or "50"),
+        "seed": str(values.get("seed") or "42"),
+        "redact": form_checked(values, "redact", default=True),
+        "db_path": str(values.get("db_path") or default_db_path),
+        "label_sources": {
+            key: str(values.get(f"label_source_{key}") or default)
+            for key, default in {
+                "manual_edit": "prefer",
+                "reviewed": "prefer",
+                "high_confidence_rule": "allow",
+                "stable_history": "allow",
+                "ai": "candidate_only",
+                "unresolved": "candidate_only",
+            }.items()
+        },
+        "ai": {
+            "include": form_checked(values, "ai_include", default=True),
+            "max_examples": str(values.get("ai_max_examples") or "20"),
+            "include_ai_unknown": form_checked(values, "ai_include_unknown", default=True),
+            "include_ai_needs_review": form_checked(values, "ai_include_needs_review", default=True),
+            "include_low_confidence": form_checked(values, "ai_include_low_confidence", default=True),
+            "low_confidence_threshold": str(values.get("ai_low_confidence_threshold") or "0.85"),
+            "include_ai_corrected_later": form_checked(values, "ai_include_corrected_later", default=True),
+            "require_manual_label_before_export": form_checked(
+                values, "ai_require_manual_label_before_export", default=True
+            ),
+        },
+        "selection": {
+            "max_per_near_duplicate_group": str(values.get("max_per_near_duplicate_group") or "2"),
+            "include_full_taxonomy": form_checked(values, "include_full_taxonomy", default=True),
+        },
+        "targets": {
+            "categories": target_pairs_from_values(values, "category"),
+            "tags": target_pairs_from_values(values, "tag"),
+            "special": {key: str(values.get(f"target_{key}") or "0") for key in special_target_keys()},
+        },
+    }
+
+
+def dataset_spec_from_form(values: Mapping[str, Any], *, default_db_path: Path) -> Any:
+    """Build a normalized dataset spec from Prompt Lab form values."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services.dataset_builder_service import normalize_dataset_spec
+
+    form = normalize_dataset_build_form(values, default_db_path=default_db_path)
+    payload = {
+        "name": form["name"],
+        "description": form["description"],
+        "max_examples": parse_int_text(str(form["max_examples"]), "max examples"),
+        "seed": parse_int_text(str(form["seed"]), "seed"),
+        "redact": bool(form["redact"]),
+        "label_sources": form["label_sources"],
+        "ai_problem_cases": {
+            "include": form["ai"]["include"],
+            "max_examples": parse_int_text(str(form["ai"]["max_examples"]), "AI max examples"),
+            "include_ai_unknown": form["ai"]["include_ai_unknown"],
+            "include_ai_needs_review": form["ai"]["include_ai_needs_review"],
+            "include_low_confidence": form["ai"]["include_low_confidence"],
+            "low_confidence_threshold": parse_float_text(
+                str(form["ai"]["low_confidence_threshold"]), "AI low confidence threshold"
+            ),
+            "include_ai_corrected_later": form["ai"]["include_ai_corrected_later"],
+            "require_manual_label_before_export": form["ai"]["require_manual_label_before_export"],
+        },
+        "targets": {
+            "categories": target_mapping_from_pairs(form["targets"]["categories"], "category"),
+            "tags": target_mapping_from_pairs(form["targets"]["tags"], "tag"),
+            "directions": {
+                "debit": parse_count_text(form["targets"]["special"]["debit"], "debit"),
+                "credit": parse_count_text(form["targets"]["special"]["credit"], "credit"),
+            },
+            "review": {
+                "needs_review_true": parse_count_text(
+                    form["targets"]["special"]["needs_review_true"], "needs_review true"
+                ),
+                "needs_review_false": parse_count_text(
+                    form["targets"]["special"]["needs_review_false"], "needs_review false"
+                ),
+            },
+            "tag_shape": {
+                "no_tags": parse_count_text(form["targets"]["special"]["no_tags"], "no tags"),
+                "one_or_more_tags": parse_count_text(
+                    form["targets"]["special"]["one_or_more_tags"], "one or more tags"
+                ),
+            },
+            "ambiguity_types": {
+                key: parse_count_text(form["targets"]["special"][key], key.replace("_", " "))
+                for key in ambiguity_target_keys()
+            },
+        },
+        "selection": {
+            "max_per_near_duplicate_group": parse_int_text(
+                str(form["selection"]["max_per_near_duplicate_group"]), "max per near-duplicate group"
+            ),
+            "prefer_recent_manual_labels": True,
+            "include_full_taxonomy": bool(form["selection"]["include_full_taxonomy"]),
+            "write_labeling_queue": True,
+            "write_adjudication_queue": True,
+        },
+    }
+    return normalize_dataset_spec(payload)
+
+
+def save_dataset_builder_spec(spec: Any) -> None:
+    """Persist a normalized dataset spec JSON artifact for later reuse."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services import DATASET_SPECS_DIR
+
+    DATASET_SPECS_DIR.mkdir(parents=True, exist_ok=True)
+    spec_path = DATASET_SPECS_DIR / f"{spec.name}.json"
+    spec_payload = {
+        "name": spec.name,
+        "description": spec.description,
+        "max_examples": spec.max_examples,
+        "seed": spec.seed,
+        "redact": spec.redact,
+        "label_sources": spec.label_sources,
+        "ai_problem_cases": spec.ai_problem_cases,
+        "targets": spec.targets,
+        "selection": spec.selection,
+    }
+    spec_path.write_text(json.dumps(spec_payload, ensure_ascii=True, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def preview_rows(preview: Any) -> tuple[dict[str, Any], ...]:
+    """Return target-preview rows for display."""
+    return tuple(
+        {
+            "target": f"{row.target_type}.{row.name}",
+            "requested": row.requested,
+            "eligible_found": f"{row.eligible_candidates}/{row.found_candidates}",
+            "selected_possible": f"{row.possible_selected}/{row.requested}",
+            "status": row.status,
+        }
+        for row in preview.target_previews
+    )
+
+
+def build_summary(result: Any) -> dict[str, Any]:
+    """Return a dataset build result summary."""
+    shortages = [row for row in result.target_previews if row.status != "OK"]
+    return {
+        "files": (
+            {
+                "label": "Draft dataset",
+                "path": result.artifacts.dataset_path,
+                "dataset_name": result.artifacts.dataset_path.name,
+            },
+            {"label": "Coverage report", "path": result.artifacts.coverage_report_path},
+            {"label": "Adjudication queue", "path": result.artifacts.adjudication_path},
+            {
+                "label": "Labeling queue",
+                "path": result.artifacts.labeling_queue_path,
+                "queue_name": result.artifacts.labeling_queue_path.name,
+            },
+            {"label": "Spec snapshot", "path": result.artifacts.spec_used_path},
+        ),
+        "selected_count": len(result.records),
+        "adjudication_count": len(result.adjudication_records),
+        "labeling_queue_count": len(result.labeling_queue_records),
+        "shortages": [f"{row.target_type}.{row.name}: {row.status}" for row in shortages],
+        "warnings": ("Draft dataset. Manual review is recommended before using this file as validation or test data.",),
+    }
+
+
+def target_rows_for_form(form: Mapping[str, Any], kind: str) -> tuple[dict[str, str], ...]:
+    """Return category or tag target rows for the builder form."""
+    pairs = mapping_value(mapping_value(form.get("targets")).get(kind))
+    rows = [{"name": str(name), "count": str(count)} for name, count in pairs.items()]
+    while len(rows) < 5:
+        rows.append({"name": "", "count": "0"})
+    return tuple(rows)
+
+
+def special_target_rows(form: Mapping[str, Any]) -> tuple[dict[str, str], ...]:
+    """Return special target input rows for the builder form."""
+    special = mapping_value(mapping_value(form.get("targets")).get("special"))
+    labels = {
+        "debit": "Debit",
+        "credit": "Credit",
+        "needs_review_true": "needs_review true",
+        "needs_review_false": "needs_review false",
+        "no_tags": "No tags",
+        "one_or_more_tags": "One or more tags",
+        "straightforward": "Straightforward",
+        "transfer_like": "Transfer-like",
+        "reimbursement_like": "Reimbursement-like",
+        "reimbursable_like": "Reimbursable-like",
+        "rental_like": "Rental-like",
+        "tax_like": "Tax-like",
+        "unknown_correct": "UNKNOWN correct",
+        "ai_unknown": "AI UNKNOWN",
+        "ai_needs_review": "AI needs review",
+        "ai_low_confidence": "AI low confidence",
+        "ai_corrected_later": "AI corrected later",
+    }
+    return tuple(
+        {"key": key, "label": labels[key], "value": str(special.get(key) or "0")} for key in special_target_keys()
+    )
+
+
+def special_target_keys() -> tuple[str, ...]:
+    """Return all special target field keys."""
+    return (
+        "debit",
+        "credit",
+        "needs_review_true",
+        "needs_review_false",
+        "no_tags",
+        "one_or_more_tags",
+        *ambiguity_target_keys(),
+    )
+
+
+def ambiguity_target_keys() -> tuple[str, ...]:
+    """Return ambiguity target keys."""
+    return (
+        "straightforward",
+        "transfer_like",
+        "reimbursement_like",
+        "reimbursable_like",
+        "rental_like",
+        "tax_like",
+        "unknown_correct",
+        "ai_unknown",
+        "ai_needs_review",
+        "ai_low_confidence",
+        "ai_corrected_later",
+    )
+
+
+def target_pairs_from_values(values: Mapping[str, Any], prefix: str) -> dict[str, str]:
+    """Return target name/count pairs from repeated form fields."""
+    names = form_getlist(values, f"{prefix}_target_name")
+    counts = form_getlist(values, f"{prefix}_target_count")
+    pairs = {}
+    for name, count in zip(names, counts, strict=False):
+        stripped_name = str(name).strip()
+        if stripped_name:
+            pairs[stripped_name] = str(count or "0").strip() or "0"
+    return pairs
+
+
+def target_mapping_from_pairs(pairs: Mapping[str, Any], label: str) -> dict[str, int]:
+    """Return parsed target count mapping."""
+    return {str(name): parse_count_text(str(count), f"{label} target {name}") for name, count in pairs.items()}
+
+
+def parse_int_text(value: str, label: str) -> int:
+    """Parse an integer form value."""
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(f"{label} must be an integer") from exc
+
+
+def parse_float_text(value: str, label: str) -> float:
+    """Parse a float form value."""
+    try:
+        return float(value)
+    except ValueError as exc:
+        raise ValueError(f"{label} must be numeric") from exc
+
+
+def parse_count_text(value: str, label: str) -> int:
+    """Parse a non-negative target count."""
+    parsed = parse_int_text(value or "0", label)
+    if parsed < 0:
+        raise ValueError(f"{label} must be non-negative")
+    return parsed
+
+
+def form_checked(values: Mapping[str, Any], key: str, *, default: bool) -> bool:
+    """Return checkbox state from form values."""
+    if key not in values:
+        return default
+    submitted_values = form_getlist(values, key)
+    return any(str(value or "").lower() in {"on", "true", "1", "yes"} for value in submitted_values)
+
+
+def form_getlist(values: Mapping[str, Any], key: str) -> list[str]:
+    """Return repeated form values from Flask MultiDict-like or plain mappings."""
+    getlist = getattr(values, "getlist", None)
+    if callable(getlist):
+        return [str(value) for value in getlist(key)]
+    value = values.get(key)
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def parse_form_bool(value: str) -> bool:
+    """Parse an explicit boolean select value."""
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise ValueError("needs_review must be true or false")
+
+
+def read_jsonl_records(path: Path) -> tuple[dict[str, Any], ...]:
+    """Read JSONL records, returning an empty tuple when unavailable."""
+    try:
+        from evals.llm_categorization.tools.io_utils import load_jsonl
+
+        return tuple(load_jsonl(path))
+    except (OSError, ValueError):
+        return ()
+
+
+def count_queue_failure(items: Sequence[Mapping[str, Any]], failure_type: str) -> int:
+    """Count queue items with one AI failure type."""
+    return sum(1 for item in items if mapping_value(item.get("ai_observation")).get("failure_type") == failure_type)
+
+
+def queue_item_matches_filter(item: Mapping[str, Any], selected_filter: str) -> bool:
+    """Return whether a labeling queue item matches the selected filter."""
+    if not selected_filter:
+        return True
+    if selected_filter in {"pending", "labeled", "unusable"}:
+        return item.get("label_status") == selected_filter
+    return mapping_value(item.get("ai_observation")).get("failure_type") == selected_filter
+
+
+def labeling_filter_options() -> tuple[dict[str, str], ...]:
+    """Return labeling queue filter options."""
+    return (
+        {"value": "", "label": "All"},
+        {"value": "pending", "label": "Pending only"},
+        {"value": "ai_unknown", "label": "AI UNKNOWN"},
+        {"value": "ai_needs_review", "label": "AI needs review"},
+        {"value": "ai_low_confidence", "label": "Low confidence"},
+        {"value": "ai_corrected_later", "label": "Corrected later"},
+        {"value": "labeled", "label": "Labeled"},
+        {"value": "unusable", "label": "Unusable"},
+    )
+
+
+def labeling_queue_row(item: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one labeling queue table row."""
+    transaction = mapping_value(item.get("transaction"))
+    observation = mapping_value(item.get("ai_observation"))
+    return {
+        "request_id": str(item.get("request_id") or ""),
+        "description": str(transaction.get("description") or ""),
+        "amount": transaction.get("amount"),
+        "ai_category": observation.get("category_id") or "n/a",
+        "ai_confidence": observation.get("confidence"),
+        "ai_needs_review": observation.get("needs_review"),
+        "failure_type": observation.get("failure_type") or "n/a",
+        "label_status": str(item.get("label_status") or ""),
+    }
+
+
+def labeling_item_by_request_id(queue_name: str, request_id: str) -> dict[str, Any]:
+    """Return one queue item by safe queue name and request ID."""
+    ensure_eval_services_importable()
+    from evals.llm_categorization.services.labeling_queue_service import (
+        read_labeling_queue,
+        resolve_labeling_queue_path,
+    )
+
+    validate_request_id_for_route(request_id)
+    for item in read_labeling_queue(resolve_labeling_queue_path(queue_name)):
+        if item.get("request_id") == request_id:
+            return item
+    raise ValueError(f"request_id not found: {request_id}")
+
+
+def validate_request_id_for_route(request_id: str) -> None:
+    """Reject request IDs that could confuse route/path handling."""
+    if not request_id or "/" in request_id or "\\" in request_id or request_id in {".", ".."}:
+        raise ValueError("invalid request ID")
+
+
+def normalize_labeling_item_form(item: Mapping[str, Any], values: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return form values for a labeling item."""
+    expected = mapping_value(item.get("expected"))
+    source = values or expected
+    return {
+        "category_id": str(source.get("category_id") or ""),
+        "tag_ids": set(form_getlist(source, "tag_ids") or list_value(expected.get("tag_ids"))),
+        "needs_review": str(source.get("needs_review")).lower() if source.get("needs_review") is not None else "true",
+        "label_source": str(source.get("label_source") or item.get("label_source") or "curated_by_researcher"),
+        "notes": str(values.get("notes") if values else ""),
+    }
+
+
+def taxonomy_options(item: Mapping[str, Any], collection_name: str) -> tuple[dict[str, str], ...]:
+    """Return taxonomy options from a queue item."""
+    taxonomy = mapping_value(item.get("candidate_taxonomy"))
+    options = []
+    for taxonomy_item in list_value(taxonomy.get(collection_name)):
+        if isinstance(taxonomy_item, Mapping):
+            item_id = str(taxonomy_item.get("id") or "")
+            if item_id:
+                options.append({"id": item_id, "name": str(taxonomy_item.get("name") or item_id)})
+    return tuple(options)
+
+
+def exported_labeling_dataset_name(queue_name: str) -> str:
+    """Return the exported labeled dataset name for a queue file."""
+    if queue_name.endswith("_labeling_queue.jsonl"):
+        return queue_name.removesuffix("_labeling_queue.jsonl") + "_labeled_queue_export.jsonl"
+    return Path(queue_name).stem + "_labeled_queue_export.jsonl"
 
 
 def dataset_list_row(artifact: Any, result: Any) -> dict[str, Any]:

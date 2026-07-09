@@ -1,0 +1,152 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Labeling queue") }}: <code>{{ queue_name }}</code></h2>
+        <p class="text-muted mb-0">{{ _("Review pending AI problem cases and export only manually labeled examples.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.labeling_queues') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Labeling queues") }}
+        </a>
+        <form method="post" action="{{ url_for('prompt_lab.export_labeling_queue', queue_name=queue_name) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-primary" type="submit">
+                <i class="bi bi-box-arrow-up" aria-hidden="true"></i>{{ _("Export labeled items") }}
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+{% if not validation_result.valid %}
+    <div class="alert alert-danger" role="alert">
+        <h5 class="alert-heading">{{ _("Queue validation errors") }}</h5>
+        <ul class="mb-0">
+            {% for error in validation_result.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _("Pending") }}</div>
+                <div class="h3 mb-0">{{ validation_result.pending_count }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _("Labeled") }}</div>
+                <div class="h3 mb-0">{{ validation_result.labeled_count }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _("Unusable") }}</div>
+                <div class="h3 mb-0">{{ validation_result.unusable_count }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _("Export name") }}</div>
+                <code class="small">{{ export_name }}</code>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form class="row g-2 align-items-end mb-3" method="get" action="{{ url_for('prompt_lab.labeling_queue_detail', queue_name=queue_name) }}">
+    <div class="col-md-4">
+        <label class="form-label" for="queue-filter">{{ _("Filter") }}</label>
+        <select id="queue-filter" class="form-select" name="filter">
+            {% for option in filter_options %}
+                <option value="{{ option.value }}" {% if selected_filter == option.value %}selected{% endif %}>{{ _(option.label) }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-auto">
+        <button class="btn btn-outline-primary" type="submit">{{ _("Apply filter") }}</button>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Request ID") }}</th>
+                        <th scope="col">{{ _("Description") }}</th>
+                        <th scope="col">{{ _("Amount") }}</th>
+                        <th scope="col">{{ _("AI category") }}</th>
+                        <th scope="col">{{ _("AI confidence") }}</th>
+                        <th scope="col">{{ _("AI needs review") }}</th>
+                        <th scope="col">{{ _("Failure type") }}</th>
+                        <th scope="col">{{ _("Label status") }}</th>
+                        <th scope="col">{{ _("Action") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in queue_rows %}
+                        <tr>
+                            <td><code>{{ row.request_id }}</code></td>
+                            <td>{{ row.description }}</td>
+                            <td>{{ row.amount }}</td>
+                            <td><code>{{ row.ai_category }}</code></td>
+                            <td>{{ row.ai_confidence if row.ai_confidence is not none else "n/a" }}</td>
+                            <td>
+                                {% if row.ai_needs_review %}
+                                    <span class="badge text-bg-warning">{{ _("Yes") }}</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{{ _("No") }}</span>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ row.failure_type }}</code></td>
+                            <td>{{ row.label_status }}</td>
+                            <td>
+                                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('prompt_lab.labeling_item', queue_name=queue_name, request_id=row.request_id) }}">
+                                    {{ _("Open") }}
+                                </a>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="9" class="text-muted">{{ _("No queue items match this filter.") }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Label queue item") }}: <code>{{ request_id }}</code></h2>
+        <p class="text-muted mb-0">{{ _("Save a manual ground-truth label or mark the case unusable.") }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.labeling_queue_detail', queue_name=queue_name) }}">
+        <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Queue") }}
+    </a>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+{% if errors %}
+    <div class="alert alert-danger" role="alert">
+        <ul class="mb-0">
+            {% for error in errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">{{ _("Transaction context") }}</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">{{ _("Description") }}</dt>
+                    <dd class="col-sm-8">{{ transaction.description }}</dd>
+                    <dt class="col-sm-4">{{ _("Merchant") }}</dt>
+                    <dd class="col-sm-8">{{ transaction.merchant if transaction.merchant is not none else "n/a" }}</dd>
+                    <dt class="col-sm-4">{{ _("Amount") }}</dt>
+                    <dd class="col-sm-8">{{ transaction.amount }}</dd>
+                    <dt class="col-sm-4">{{ _("Date") }}</dt>
+                    <dd class="col-sm-8">{{ transaction.date if transaction.date is not none else "n/a" }}</dd>
+                    <dt class="col-sm-4">{{ _("Account") }}</dt>
+                    <dd class="col-sm-8">{{ transaction.account if transaction.account is not none else "n/a" }}</dd>
+                    <dt class="col-sm-4">{{ _("Statement type") }}</dt>
+                    <dd class="col-sm-8">{{ transaction.statement_type if transaction.statement_type is not none else "n/a" }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">{{ _("AI observation, not ground truth") }}</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">{{ _("AI category") }}</dt>
+                    <dd class="col-sm-8"><code>{{ ai_observation.category_id }}</code></dd>
+                    <dt class="col-sm-4">{{ _("AI tags") }}</dt>
+                    <dd class="col-sm-8">
+                        {% if ai_observation.tag_ids %}
+                            {% for tag_id in ai_observation.tag_ids %}
+                                <code>{{ tag_id }}</code>{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <span class="text-muted">{{ _("None") }}</span>
+                        {% endif %}
+                    </dd>
+                    <dt class="col-sm-4">{{ _("AI confidence") }}</dt>
+                    <dd class="col-sm-8">{{ ai_observation.confidence if ai_observation.confidence is not none else "n/a" }}</dd>
+                    <dt class="col-sm-4">{{ _("AI needs review") }}</dt>
+                    <dd class="col-sm-8">{{ _("Yes") if ai_observation.needs_review else _("No") }}</dd>
+                    <dt class="col-sm-4">{{ _("Failure type") }}</dt>
+                    <dd class="col-sm-8"><code>{{ ai_observation.failure_type }}</code></dd>
+                    <dt class="col-sm-4">{{ _("Reason") }}</dt>
+                    <dd class="col-sm-8">{{ ai_observation.reason }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ _("Manual label") }}</h5>
+                <form method="post" action="{{ url_for('prompt_lab.save_labeling_item', queue_name=queue_name, request_id=request_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="manual-category">{{ _("Category") }}</label>
+                        <select id="manual-category" class="form-select" name="category_id">
+                            <option value="">{{ _("Choose a category") }}</option>
+                            {% for category in category_options %}
+                                <option value="{{ category.id }}" {% if form.category_id == category.id %}selected{% endif %}>
+                                    {{ category.name }} ({{ category.id }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="manual-tags">{{ _("Tags") }}</label>
+                        <select id="manual-tags" class="form-select" name="tag_ids" multiple size="6">
+                            {% for tag in tag_options %}
+                                <option value="{{ tag.id }}" {% if tag.id in form.tag_ids %}selected{% endif %}>
+                                    {{ tag.name }} ({{ tag.id }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="manual-needs-review">{{ _("Needs review") }}</label>
+                            <select id="manual-needs-review" class="form-select" name="needs_review">
+                                <option value="true" {% if form.needs_review == "true" %}selected{% endif %}>{{ _("true") }}</option>
+                                <option value="false" {% if form.needs_review == "false" %}selected{% endif %}>{{ _("false") }}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="manual-label-source">{{ _("Label source") }}</label>
+                            <select id="manual-label-source" class="form-select" name="label_source">
+                                <option value="curated_by_researcher" {% if form.label_source == "curated_by_researcher" %}selected{% endif %}>curated_by_researcher</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label" for="manual-notes">{{ _("Notes") }}</label>
+                        <textarea id="manual-notes" class="form-control" name="notes" rows="5">{{ form.notes }}</textarea>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-4">
+                        <button class="btn btn-primary" type="submit" name="save_action" value="save">
+                            <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Save label") }}
+                        </button>
+                        <button class="btn btn-outline-primary" type="submit" name="save_action" value="save_next">
+                            <i class="bi bi-arrow-right-circle" aria-hidden="true"></i>{{ _("Save and next") }}
+                        </button>
+                    </div>
+                </form>
+
+                <hr>
+
+                <form method="post" action="{{ url_for('prompt_lab.mark_labeling_item_unusable', queue_name=queue_name, request_id=request_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label class="form-label" for="unusable-reason">{{ _("Unusable reason") }}</label>
+                    <input id="unusable-reason" class="form-control mb-3" type="text" name="unusable_reason" value="{{ form.notes }}">
+                    <button class="btn btn-outline-danger" type="submit">
+                        <i class="bi bi-slash-circle" aria-hidden="true"></i>{{ _("Mark as unusable") }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

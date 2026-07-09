@@ -1,0 +1,341 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Build dataset from specification") }}</h2>
+        <p class="text-muted mb-0">{{ _("Preview coverage targets and write draft eval artifacts from a read-only database.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.datasets') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Datasets") }}
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.labeling_queues') }}">
+            <i class="bi bi-list-check" aria-hidden="true"></i>{{ _("Labeling queues") }}
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+{% if errors %}
+    <div class="alert alert-danger" role="alert">
+        <ul class="mb-0">
+            {% for error in errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<form method="post" class="mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">{{ _("Dataset spec") }}</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="dataset-build-name">{{ _("Dataset name") }}</label>
+                    <input id="dataset-build-name" class="form-control" type="text" name="name" value="{{ form.name }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="dataset-build-max-examples">{{ _("Max examples") }}</label>
+                    <input id="dataset-build-max-examples" class="form-control" type="number" min="1" step="1" name="max_examples" value="{{ form.max_examples }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="dataset-build-seed">{{ _("Seed") }}</label>
+                    <input id="dataset-build-seed" class="form-control" type="number" step="1" name="seed" value="{{ form.seed }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="dataset-build-description">{{ _("Description") }}</label>
+                    <input id="dataset-build-description" class="form-control" type="text" name="description" value="{{ form.description }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="dataset-build-db-path">{{ _("Source database path") }}</label>
+                    <input id="dataset-build-db-path" class="form-control" type="text" name="db_path" value="{{ form.db_path }}">
+                </div>
+                <div class="col-md-6">
+                    <input type="hidden" name="redact" value="false">
+                    <div class="form-check">
+                        <input id="dataset-build-redact" class="form-check-input" type="checkbox" name="redact" value="on" {% if form.redact %}checked{% endif %}>
+                        <label class="form-check-label" for="dataset-build-redact">{{ _("Redact sensitive free text") }}</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <input type="hidden" name="include_full_taxonomy" value="false">
+                    <div class="form-check">
+                        <input id="dataset-build-full-taxonomy" class="form-check-input" type="checkbox" name="include_full_taxonomy" value="on" {% if form.selection.include_full_taxonomy %}checked{% endif %}>
+                        <label class="form-check-label" for="dataset-build-full-taxonomy">{{ _("Include full categories and tags") }}</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="dataset-build-max-duplicates">{{ _("Max per near-duplicate group") }}</label>
+                    <input id="dataset-build-max-duplicates" class="form-control" type="number" min="1" step="1" name="max_per_near_duplicate_group" value="{{ form.selection.max_per_near_duplicate_group }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">{{ _("Label sources") }}</h5>
+            <div class="row g-3">
+                {% for key, selected in form.label_sources.items() %}
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label" for="label-source-{{ key }}">{{ key }}</label>
+                        <select id="label-source-{{ key }}" class="form-select" name="label_source_{{ key }}">
+                            {% for option in label_source_options %}
+                                <option value="{{ option }}" {% if selected == option %}selected{% endif %}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">{{ _("AI problem cases") }}</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <input type="hidden" name="ai_include" value="false">
+                    <div class="form-check">
+                        <input id="ai-include" class="form-check-input" type="checkbox" name="ai_include" value="on" {% if form.ai.include %}checked{% endif %}>
+                        <label class="form-check-label" for="ai-include">{{ _("Include AI problem cases") }}</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <input type="hidden" name="ai_include_unknown" value="false">
+                    <div class="form-check">
+                        <input id="ai-include-unknown" class="form-check-input" type="checkbox" name="ai_include_unknown" value="on" {% if form.ai.include_ai_unknown %}checked{% endif %}>
+                        <label class="form-check-label" for="ai-include-unknown">{{ _("AI UNKNOWN") }}</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <input type="hidden" name="ai_include_needs_review" value="false">
+                    <div class="form-check">
+                        <input id="ai-include-needs-review" class="form-check-input" type="checkbox" name="ai_include_needs_review" value="on" {% if form.ai.include_ai_needs_review %}checked{% endif %}>
+                        <label class="form-check-label" for="ai-include-needs-review">{{ _("AI needs review") }}</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <input type="hidden" name="ai_include_low_confidence" value="false">
+                    <div class="form-check">
+                        <input id="ai-include-low-confidence" class="form-check-input" type="checkbox" name="ai_include_low_confidence" value="on" {% if form.ai.include_low_confidence %}checked{% endif %}>
+                        <label class="form-check-label" for="ai-include-low-confidence">{{ _("AI low confidence") }}</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <input type="hidden" name="ai_include_corrected_later" value="false">
+                    <div class="form-check">
+                        <input id="ai-include-corrected-later" class="form-check-input" type="checkbox" name="ai_include_corrected_later" value="on" {% if form.ai.include_ai_corrected_later %}checked{% endif %}>
+                        <label class="form-check-label" for="ai-include-corrected-later">{{ _("AI corrected later") }}</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <input type="hidden" name="ai_require_manual_label_before_export" value="false">
+                    <div class="form-check">
+                        <input id="ai-require-label" class="form-check-input" type="checkbox" name="ai_require_manual_label_before_export" value="on" {% if form.ai.require_manual_label_before_export %}checked{% endif %}>
+                        <label class="form-check-label" for="ai-require-label">{{ _("Require manual label before export") }}</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="ai-max-examples">{{ _("AI max examples") }}</label>
+                    <input id="ai-max-examples" class="form-control" type="number" min="0" step="1" name="ai_max_examples" value="{{ form.ai.max_examples }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="ai-low-confidence-threshold">{{ _("Low confidence threshold") }}</label>
+                    <input id="ai-low-confidence-threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="ai_low_confidence_threshold" value="{{ form.ai.low_confidence_threshold }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">{{ _("Category targets") }}</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th scope="col">{{ _("Category") }}</th>
+                                    <th scope="col">{{ _("Count") }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in category_target_rows %}
+                                    <tr>
+                                        <td><input class="form-control form-control-sm" type="text" name="category_target_name" value="{{ row.name }}"></td>
+                                        <td><input class="form-control form-control-sm" type="number" min="0" step="1" name="category_target_count" value="{{ row.count }}"></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">{{ _("Tag targets") }}</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th scope="col">{{ _("Tag") }}</th>
+                                    <th scope="col">{{ _("Count") }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in tag_target_rows %}
+                                    <tr>
+                                        <td><input class="form-control form-control-sm" type="text" name="tag_target_name" value="{{ row.name }}"></td>
+                                        <td><input class="form-control form-control-sm" type="number" min="0" step="1" name="tag_target_count" value="{{ row.count }}"></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">{{ _("Special targets") }}</h5>
+            <div class="row g-3">
+                {% for row in special_target_rows %}
+                    <div class="col-md-3">
+                        <label class="form-label" for="target-{{ row.key }}">{{ _(row.label) }}</label>
+                        <input id="target-{{ row.key }}" class="form-control" type="number" min="0" step="1" name="target_{{ row.key }}" value="{{ row.value }}">
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-primary" type="submit" formaction="{{ url_for('prompt_lab.dataset_build_preview') }}">
+            <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview matching pool") }}
+        </button>
+        <button class="btn btn-primary" type="submit" formaction="{{ url_for('prompt_lab.dataset_build_run') }}">
+            <i class="bi bi-file-earmark-plus" aria-hidden="true"></i>{{ _("Build draft dataset") }}
+        </button>
+    </div>
+</form>
+
+{% if preview_rows %}
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">{{ _("Target") }}</th>
+                            <th scope="col">{{ _("Requested") }}</th>
+                            <th scope="col">{{ _("Eligible/found") }}</th>
+                            <th scope="col">{{ _("Selected/possible") }}</th>
+                            <th scope="col">{{ _("Status") }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in preview_rows %}
+                            <tr>
+                                <td><code>{{ row.target }}</code></td>
+                                <td>{{ row.requested }}</td>
+                                <td>{{ row.eligible_found }}</td>
+                                <td>{{ row.selected_possible }}</td>
+                                <td>
+                                    <span class="badge {% if row.status == 'OK' %}text-bg-success{% elif row.status == 'short' %}text-bg-warning{% else %}text-bg-danger{% endif %}">
+                                        {{ row.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+{% if build_summary %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">{{ _("Build result") }}</h5>
+            {% for warning in build_summary.warnings %}
+                <div class="alert alert-warning py-2" role="alert">{{ warning }}</div>
+            {% endfor %}
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">{{ _("Selected examples") }}</div>
+                        <div class="h3 mb-0">{{ build_summary.selected_count }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">{{ _("Adjudication-needed count") }}</div>
+                        <div class="h3 mb-0">{{ build_summary.adjudication_count }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">{{ _("Labeling queue count") }}</div>
+                        <div class="h3 mb-0">{{ build_summary.labeling_queue_count }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <h6>{{ _("Generated files") }}</h6>
+            <ul>
+                {% for file in build_summary.files %}
+                    <li>
+                        {{ _(file.label) }}:
+                        {% if file.dataset_name %}
+                            <a href="{{ url_for('prompt_lab.dataset_detail', dataset_name=file.dataset_name) }}"><code>{{ file.path.name }}</code></a>
+                        {% elif file.queue_name %}
+                            <a href="{{ url_for('prompt_lab.labeling_queue_detail', queue_name=file.queue_name) }}"><code>{{ file.path.name }}</code></a>
+                        {% else %}
+                            <code>{{ file.path.name }}</code>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+
+            {% if build_summary.shortages %}
+                <h6>{{ _("Coverage shortages") }}</h6>
+                <ul class="mb-0">
+                    {% for shortage in build_summary.shortages %}
+                        <li>{{ shortage }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

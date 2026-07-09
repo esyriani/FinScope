@@ -35,6 +35,7 @@ In development mode, owners can open Admin > Prompt Lab or
 file-based eval workflow. It reads and writes artifacts under:
 
 - `evals/llm_categorization/prompts/`
+- `evals/llm_categorization/dataset_specs/`
 - `evals/llm_categorization/datasets/`
 - `evals/llm_categorization/runs/`
 
@@ -45,20 +46,83 @@ runs; Prompt Lab is a convenience interface for the sole local developer.
 Recommended GUI workflow:
 
 1. Open Admin > Prompt Lab.
-2. Validate a dataset.
-3. Preview a prompt on one example.
-4. Run with limit=5.
-5. Inspect failures.
-6. Run the full validation dataset.
-7. Compare selected runs.
+2. Create or load a dataset spec.
+3. Preview coverage.
+4. Build a draft dataset.
+5. Review shortages.
+6. Label AI problem cases, if any.
+7. Export labeled queue items.
+8. Validate the generated dataset.
+9. Preview a prompt on one example.
+10. Run with limit=5.
+11. Inspect failures.
+12. Run the full validation dataset.
+13. Compare selected runs.
+
+The Prompt Lab dataset builder saves specs under `dataset_specs/`, draft JSONL
+datasets and queue files under `datasets/`, and run artifacts under `runs/`.
+Generated draft datasets are not final benchmark files; manually review,
+redact, and validate them before using them for validation or held-out tests.
 
 The shared service modules are:
 
 - `dataset_service.py`: list, validate, summarize, and read JSONL datasets.
+- `dataset_builder_service.py`: validate dataset build specs, preview coverage from a read-only database, and build draft datasets.
+- `labeling_queue_service.py`: validate AI-problem queues, save manual labels, mark unusable cases, and export labeled examples.
 - `prompt_service.py`: list, read, write, and render prompt previews.
 - `run_service.py`: list saved runs and launch eval configurations.
 - `scoring_service.py`: read metrics and failures, score outputs, and rescore runs.
 - `comparison_service.py`: compare selected scored runs.
+
+## Dataset build preview specs
+
+Dataset build specs live under `dataset_specs/`. Specs use JSON in this repo
+because the Python dependencies do not include YAML support.
+
+Preview a spec against a database without writing dataset files:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m evals.llm_categorization.tools.preview_dataset_build `
+  --db instance/finscope.db `
+  --spec evals/llm_categorization/dataset_specs/curated_v1.json
+```
+
+The preview validates the spec, opens SQLite read-only, reports inferred schema
+roles and unavailable fields, and shows whether requested category, tag,
+direction, review, tag-shape, ambiguity, and AI-problem targets are `OK`,
+`short`, or `missing`. AI-only and unresolved labels remain candidate-only by
+default; the preview distinguishes found candidates from trusted eligible
+examples.
+
+Build draft artifacts from a validated spec:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m evals.llm_categorization.tools.build_dataset_from_spec `
+  --db instance/finscope.db `
+  --spec evals/llm_categorization/dataset_specs/curated_v1.json
+```
+
+This writes `<name>_draft.jsonl`, `<name>_coverage_report.md`,
+`<name>_adjudication_needed.jsonl`, `<name>_labeling_queue.jsonl`, and
+`<name>_spec_used.yml` under `datasets/`. Draft datasets are redacted by
+default and must be manually reviewed before being used as validation or test
+data.
+
+AI problem cases are queued for manual labels instead of being treated as
+ground truth. Validate and export labeled queue items with:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m evals.llm_categorization.tools.validate_labeling_queue `
+  --queue evals/llm_categorization/datasets/curated_v1_labeling_queue.jsonl
+
+.\.venv\Scripts\python.exe -B -m evals.llm_categorization.tools.export_labeled_queue `
+  --queue evals/llm_categorization/datasets/curated_v1_labeling_queue.jsonl `
+  --out evals/llm_categorization/datasets/curated_v1_labeled_ai_cases.jsonl
+```
+
+Only items with `label_status: labeled`, valid taxonomy IDs, explicit
+`needs_review`, and a manual label source are exported. Pending and unusable
+items are skipped.
 
 ## Dataset validation
 
