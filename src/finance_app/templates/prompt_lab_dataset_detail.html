@@ -1,0 +1,137 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Dataset") }}: <code>{{ dataset_name }}</code></h2>
+        <p class="text-muted mb-0">{{ _("Inspect validation status and labeled examples.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.datasets') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Datasets") }}
+        </a>
+        <form method="post" action="{{ url_for('prompt_lab.validate_dataset', dataset_name=dataset_name) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-primary" type="submit">
+                <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Validate") }}
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% if validation_completed %}
+    <div class="alert {% if validation_result.valid %}alert-success{% else %}alert-danger{% endif %}" role="alert">
+        {% if validation_result.valid %}
+            {{ _("Validation completed successfully.") }}
+        {% else %}
+            {{ _("Validation found errors.") }}
+        {% endif %}
+    </div>
+{% endif %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<div class="row g-3 mb-4">
+    {% for card in summary_cards %}
+    <div class="col-md-4 col-xl-2">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _(card.label) }}</div>
+                <div class="h3 mb-0 {% if card.tone %}text-{{ card.tone }}{% endif %}">{{ _(card.value|string) }}</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if warnings %}
+    <div class="mb-4">
+        {% for warning in warnings %}
+            <div class="alert alert-warning py-2 mb-2" role="alert">{{ warning }}</div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if error_lines %}
+    <div class="alert alert-danger" role="alert">
+        <h5 class="alert-heading">{{ _("Validation errors") }}</h5>
+        <ul class="mb-0">
+            {% for error in error_lines %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Request ID") }}</th>
+                        <th scope="col">{{ _("Description") }}</th>
+                        <th scope="col">{{ _("Amount") }}</th>
+                        <th scope="col">{{ _("Expected category") }}</th>
+                        <th scope="col">{{ _("Expected tags") }}</th>
+                        <th scope="col">{{ _("Review") }}</th>
+                        <th scope="col">{{ _("Source") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in example_rows %}
+                    <tr>
+                        <td><code>{{ row.request_id }}</code></td>
+                        <td>{{ row.description }}</td>
+                        <td>{{ row.amount }}</td>
+                        <td>{{ row.expected_category }}</td>
+                        <td>
+                            {% if row.expected_tags %}
+                                {{ row.expected_tags | join(", ") }}
+                            {% else %}
+                                <span class="text-muted">{{ _("None") }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.needs_review %}
+                                <span class="badge text-bg-warning">{{ _("Yes") }}</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">{{ _("No") }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ row.label_source }}
+                            <div>
+                                <a class="small" href="{{ url_for('prompt_lab.prompt_preview', dataset=dataset_name, request_id=row.request_id) }}">
+                                    {{ _("Preview with this example") }}
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-muted">
+                            {% if validation_result.valid %}
+                                {{ _("No examples found.") }}
+                            {% else %}
+                                {{ _("Examples are unavailable until validation succeeds.") }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -279,6 +279,7 @@ def create_app() -> Flask:
             "untagged_tag_filter_value": UNTAGGED_TAG_FILTER,
             "category_filter_builtin_exclusions": get_builtin_category_names(),
             "current_user_can": current_user_can,
+            "prompt_lab_enabled": bool(getattr(app.config["FINANCE_SETTINGS"], "server_debug", False)),
         }
 
     register_filters(app)

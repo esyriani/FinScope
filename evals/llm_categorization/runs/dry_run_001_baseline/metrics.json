@@ -1,0 +1,107 @@
+{
+  "confidence_calibration": {
+    "bands": [
+      {
+        "average_confidence": null,
+        "band": "0.00-0.49",
+        "calibration_error": null,
+        "count": 0,
+        "exact_taxonomy_accuracy": null
+      },
+      {
+        "average_confidence": null,
+        "band": "0.50-0.69",
+        "calibration_error": null,
+        "count": 0,
+        "exact_taxonomy_accuracy": null
+      },
+      {
+        "average_confidence": null,
+        "band": "0.70-0.84",
+        "calibration_error": null,
+        "count": 0,
+        "exact_taxonomy_accuracy": null
+      },
+      {
+        "average_confidence": null,
+        "band": "0.85-0.94",
+        "calibration_error": null,
+        "count": 0,
+        "exact_taxonomy_accuracy": null
+      },
+      {
+        "average_confidence": null,
+        "band": "0.95-1.00",
+        "calibration_error": null,
+        "count": 0,
+        "exact_taxonomy_accuracy": null
+      }
+    ],
+    "method": "proxy_exact_taxonomy_rate_no_high_confidence",
+    "note": "Small datasets or sparse confidence bands do not support robust calibration; this score is a simple proxy and should not be treated as authoritative."
+  },
+  "counts": {
+    "category_correct": 0,
+    "exact_taxonomy_match": 0,
+    "false_unknown": 0,
+    "high_confidence_wrong": 0,
+    "missed_unknown": 2,
+    "schema_valid": 0,
+    "tag_false_negatives": 10,
+    "tag_false_positives": 0,
+    "tag_true_positives": 0,
+    "unknown_true_positives": 0,
+    "unsafe_auto_assignment": 0,
+    "valid_category_id": 0,
+    "valid_json": 0,
+    "valid_tag_id": 0,
+    "valid_taxonomy_id": 0
+  },
+  "failure_mode_counts": {
+    "invalid_schema": 45,
+    "missed_unknown": 2,
+    "missing_tag": 8,
+    "reimbursement_confusion": 1
+  },
+  "headline": {
+    "category_accuracy": 0.0,
+    "composite_score": -0.1,
+    "confidence_calibration_score": 0.0,
+    "exact_taxonomy_match_rate": 0.0,
+    "false_unknown_rate": 0.0,
+    "high_confidence_wrong_rate": 0.0,
+    "invalid_output_rate": 1.0,
+    "known_category_accuracy": 0.0,
+    "missed_unknown_rate": 1.0,
+    "needs_review_f1": 0.0,
+    "needs_review_precision": null,
+    "needs_review_recall": 0.0,
+    "over_review_count": 0,
+    "schema_valid_rate": 0.0,
+    "tag_macro_f1": 0.0,
+    "tag_macro_precision": 0.0,
+    "tag_macro_recall": 0.0,
+    "tag_micro_f1": 0.0,
+    "tag_micro_precision": null,
+    "tag_micro_recall": 0.0,
+    "under_review_count": 0,
+    "unknown_precision": null,
+    "unknown_recall": 0.0,
+    "unsafe_auto_assignment_rate": 0.0,
+    "valid_category_id_rate": 0.0,
+    "valid_json_rate": 0.0,
+    "valid_tag_id_rate": 0.0,
+    "valid_taxonomy_id_rate": 0.0
+  },
+  "run": {
+    "dataset": "evals\\llm_categorization\\datasets\\validation.jsonl",
+    "duplicate_output_count": 0,
+    "example_count": 45,
+    "missing_output_count": 45,
+    "models": [],
+    "outputs": "C:\\Users\\syriani\\Documents\\UdeM\\sms\\dev\\applications\\finances\\evals\\llm_categorization\\runs\\dry_run_001_baseline\\raw_outputs.jsonl",
+    "prompt_ids": [],
+    "raw_output_count": 0,
+    "unmatched_output_count": 0
+  }
+}

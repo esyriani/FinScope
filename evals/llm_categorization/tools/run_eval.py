@@ -573,9 +573,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the eval-runner CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    from evals.llm_categorization.services.run_service import launch_evaluation_run
+
     try:
         config = config_from_args(args)
-        config_payload = run_evaluation(config)
+        config_payload = launch_evaluation_run(config)
     except (DatasetValidationError, JsonlError, OSError, RuntimeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

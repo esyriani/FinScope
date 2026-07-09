@@ -1,0 +1,91 @@
+{% set page_stylesheets = ["css/page-tabs.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Prompt preview") }}</h2>
+        <p class="text-muted mb-0">{{ _("Render the model input without calling the OpenAI API.") }}</p>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+{% if warnings %}
+    {% for warning in warnings %}
+        <div class="alert alert-warning" role="alert">{{ warning }}</div>
+    {% endfor %}
+{% endif %}
+
+<form method="post" action="{{ url_for('prompt_lab.prompt_preview') }}" class="card mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label" for="preview-prompt">{{ _("Prompt") }}</label>
+                <select id="preview-prompt" class="form-select" name="prompt">
+                    <option value="">{{ _("Choose a prompt") }}</option>
+                    {% for prompt in prompts %}
+                        <option value="{{ prompt.name }}" {% if selected_prompt == prompt.name %}selected{% endif %}>{{ prompt.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="preview-dataset">{{ _("Dataset") }}</label>
+                <select id="preview-dataset" class="form-select" name="dataset">
+                    <option value="">{{ _("Choose a dataset") }}</option>
+                    {% for dataset in datasets %}
+                        <option value="{{ dataset.name }}" {% if selected_dataset == dataset.name %}selected{% endif %}>{{ dataset.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="preview-request-id">{{ _("Example") }}</label>
+                <select id="preview-request-id" class="form-select" name="request_id">
+                    <option value="">{{ _("Choose an example") }}</option>
+                    {% for request_id in request_choices %}
+                        <option value="{{ request_id }}" {% if selected_request_id == request_id %}selected{% endif %}>{{ request_id }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-primary w-100" type="submit">{{ _("Render preview") }}</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if rendered_prompt_text %}
+    <div class="mb-4">
+        <label class="form-label" for="rendered-prompt">{{ _("Rendered prompt") }}</label>
+        <textarea id="rendered-prompt" class="form-control font-monospace" rows="18" readonly>{{ rendered_prompt_text }}</textarea>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">{{ _("Input example JSON") }}</h5>
+            <pre class="mb-0"><code>{{ input_example_json }}</code></pre>
+        </div>
+    </div>
+
+    <p>
+        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#expected-label" aria-expanded="false" aria-controls="expected-label">
+            {{ _("Show expected label") }}
+        </button>
+    </p>
+    <div class="collapse" id="expected-label">
+        <div class="card card-body">
+            <pre class="mb-0"><code>{{ expected_label_json }}</code></pre>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

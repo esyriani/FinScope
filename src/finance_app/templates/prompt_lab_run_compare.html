@@ -1,0 +1,107 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Run comparison") }}</h2>
+        <p class="text-muted mb-0">{{ _("Compare selected scored prompt evaluation runs.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.runs') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Runs") }}
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+{% for warning in warnings %}
+    <div class="alert alert-warning" role="alert">{{ _(warning) }}</div>
+{% endfor %}
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">{{ _("Compared runs") }}</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Run") }}</th>
+                        <th scope="col">{{ _("Prompt") }}</th>
+                        <th scope="col">{{ _("Dataset") }}</th>
+                        <th scope="col">{{ _("Model") }}</th>
+                        <th scope="col">{{ _("Dataset hash") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in run_rows %}
+                    <tr>
+                        <td><code>{{ row.run_id }}</code></td>
+                        <td>{{ row.prompt }}</td>
+                        <td>{{ row.dataset }}</td>
+                        <td>{{ row.model }}</td>
+                        <td><code>{{ row.dataset_hash_short }}</code></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">{{ _("Headline metrics") }}</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Metric") }}</th>
+                        {% for row in run_rows %}
+                            <th scope="col">{{ row.run_id }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for metric in metric_rows %}
+                    <tr>
+                        <td>{{ _(metric["label"]) }}</td>
+                        {% for value in metric["values"] %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold">{{ _("Interpretation") }}</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <tbody>
+                    {% for row in interpretation %}
+                    <tr>
+                        <th scope="row">{{ _(row["label"]) }}</th>
+                        <td>{{ row["value"] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

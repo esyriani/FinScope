@@ -1212,9 +1212,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the scoring CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    from evals.llm_categorization.services.scoring_service import score_outputs_file
+
     try:
-        run = score_run(args.dataset, args.outputs)
-        write_score_artifacts(run, args.out_dir)
+        score_outputs_file(args.dataset, args.outputs, args.out_dir)
     except (DatasetValidationError, JsonlError, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

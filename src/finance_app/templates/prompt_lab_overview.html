@@ -1,0 +1,117 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Prompt Lab") }}</h2>
+        <p class="text-muted mb-0">{{ _("Evaluate LLM categorization prompts against labeled transaction datasets.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary" href="{{ url_for('prompt_lab.datasets') }}">
+            <i class="bi bi-database" aria-hidden="true"></i>{{ _("Open datasets") }}
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.prompts') }}">
+            <i class="bi bi-file-earmark-text" aria-hidden="true"></i>{{ _("Open prompts") }}
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.runs') }}">
+            <i class="bi bi-activity" aria-hidden="true"></i>{{ _("Open runs") }}
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link active" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _("Datasets") }}</div>
+                <div class="display-6">{{ dataset_count }}</div>
+                {% if latest_dataset_status %}
+                    <div class="small">
+                        <span class="badge {% if latest_dataset_status.valid %}text-bg-success{% else %}text-bg-danger{% endif %}">
+                            {{ _(latest_dataset_status.status) }}
+                        </span>
+                        <code>{{ latest_dataset_status.name }}</code>
+                    </div>
+                {% else %}
+                    <div class="text-muted small">{{ _("No JSONL datasets found.") }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _("Prompts") }}</div>
+                <div class="display-6">{{ prompt_count }}</div>
+                <div class="text-muted small">
+                    {% if prompt_count %}
+                        {{ _("Prompt candidates available.") }}
+                    {% else %}
+                        {{ _("No prompt candidates found.") }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _("Runs") }}</div>
+                <div class="display-6">{{ run_count }}</div>
+                {% if latest_run %}
+                    <div class="small">
+                        <code>{{ latest_run.run_id }}</code>
+                        {% if latest_run.has_metrics %}
+                            <span class="badge text-bg-secondary">{{ _("metrics") }}</span>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="text-muted small">{{ _("No run artifacts found.") }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">{{ _("Best result") }}</div>
+                {% if best_result %}
+                    <div class="display-6">{{ "%.3f"|format(best_result.score) }}</div>
+                    <div class="small">
+                        <code>{{ best_result.run_id }}</code>
+                    </div>
+                {% else %}
+                    <div class="display-6">n/a</div>
+                    <div class="text-muted small">{{ _("No scored validation runs found.") }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">{{ _("Typical workflow") }}</h5>
+        <ol class="mb-0">
+            <li>{{ _("Validate a dataset.") }}</li>
+            <li>{{ _("Preview a prompt on one example.") }}</li>
+            <li>{{ _("Run a prompt on a small limit, such as 5 or 10 examples.") }}</li>
+            <li>{{ _("Inspect failures.") }}</li>
+            <li>{{ _("Run on the full validation set.") }}</li>
+            <li>{{ _("Compare runs.") }}</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}

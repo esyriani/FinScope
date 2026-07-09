@@ -340,12 +340,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the dataset validator CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
-    try:
-        summary = validate_dataset(args.jsonl_path)
-    except (DatasetValidationError, JsonlError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    from evals.llm_categorization.services.dataset_service import validate_dataset_file
+
+    result = validate_dataset_file(args.jsonl_path)
+    if not result.valid or result.summary is None:
+        print(f"error: {result.error}", file=sys.stderr)
         return 1
-    print(format_summary(summary))
+    print(format_summary(result.summary))
     return 0
 
 

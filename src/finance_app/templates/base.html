@@ -20,6 +20,7 @@
     "review": "Review",
     "rules": "Rules",
     "taxonomy_admin": "Categories and tags",
+    "prompt_lab": "Prompt Lab",
     "jobs": "Processing",
     "settings_page": "Settings"
 } %}
@@ -143,6 +144,9 @@
                 <div class="nav-group-label">{{ _("Admin") }}</div>
                 {% if current_user_can('manage_taxonomy') %}
                 <a class="nav-link {% if active_blueprint == 'taxonomy_admin' %}active{% endif %}" href="{{ url_for('taxonomy_admin.taxonomy') }}" title="{{ _('Categories and tags') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Categories and tags") }}</span></a>
+                {% endif %}
+                {% if prompt_lab_enabled and current_user_can('manage_users') %}
+                <a class="nav-link {% if active_blueprint == 'prompt_lab' %}active{% endif %}" href="{{ url_for('prompt_lab.overview') }}" title="{{ _('Prompt Lab') }}"><i class="bi bi-braces" aria-hidden="true"></i><span>{{ _("Prompt Lab") }}</span></a>
                 {% endif %}
                 {% if current_user_can('manage_jobs') %}
                 <a class="nav-link {% if active_blueprint == 'jobs' %}active{% endif %}" href="{{ url_for('jobs.jobs') }}" title="{{ _('Processing') }}"><i class="bi bi-activity" aria-hidden="true"></i><span>{{ _("Processing") }}</span></a>

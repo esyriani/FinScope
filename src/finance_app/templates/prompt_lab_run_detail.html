@@ -1,0 +1,144 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Run") }}: <code>{{ run_header.name }}</code></h2>
+        <p class="text-muted mb-0">
+            {{ _("Prompt") }}: {{ run_header.prompt }}
+            / {{ _("Dataset") }}: {{ run_header.dataset }}
+            / {{ _("Model") }}: {{ run_header.model }}
+            / {{ _("Temperature") }}: {{ run_header.temperature }}
+            / {{ _("Examples") }}: {{ run_header.examples }}
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.runs') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Runs") }}
+        </a>
+        <form method="post" action="{{ url_for('prompt_lab.rescore_run', run_name=run_name) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-primary" type="submit">
+                <i class="bi bi-calculator" aria-hidden="true"></i>{{ _("Re-score") }}
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+{% if not_scored %}
+    <div class="alert alert-info" role="alert">
+        {{ _("This run is not scored yet. Use Re-score to score existing raw outputs without calling the API.") }}
+    </div>
+{% else %}
+    <div class="row g-3 mb-4">
+        {% for card in summary_cards %}
+        <div class="col-md-4 col-xl-2">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">{{ _(card.label) }}</div>
+                    <div class="h3 mb-0">{{ card.value }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">{{ _("Metric") }}</th>
+                            <th scope="col">{{ _("Value") }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in metric_rows %}
+                        <tr>
+                            <td>{{ _(row.label) }}</td>
+                            <td>{{ row.value }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Request ID") }}</th>
+                        <th scope="col">{{ _("Failure modes") }}</th>
+                        <th scope="col">{{ _("Expected") }}</th>
+                        <th scope="col">{{ _("Predicted") }}</th>
+                        <th scope="col">{{ _("Confidence") }}</th>
+                        <th scope="col">{{ _("Review") }}</th>
+                        <th scope="col">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in failure_rows %}
+                    <tr>
+                        <td><code>{{ row.request_id }}</code></td>
+                        <td>{{ row.failure_modes | join(", ") }}</td>
+                        <td>{{ row.expected }}</td>
+                        <td>{{ row.predicted }}</td>
+                        <td>{{ row.confidence if row.confidence is not none else "n/a" }}</td>
+                        <td>{{ row.review if row.review is not none else "n/a" }}</td>
+                        <td>
+                            <details>
+                                <summary>{{ _("Details") }}</summary>
+                                <dl class="mb-0 mt-2">
+                                    <dt>{{ _("Description") }}</dt>
+                                    <dd>{{ row.description }}</dd>
+                                    <dt>{{ _("Amount") }}</dt>
+                                    <dd>{{ row.amount }}</dd>
+                                    <dt>{{ _("Expected") }}</dt>
+                                    <dd>{{ row.expected_category }} / {{ row.expected_tags | join(", ") }} / {{ row.expected_review }}</dd>
+                                    <dt>{{ _("Predicted") }}</dt>
+                                    <dd>{{ row.predicted_category }} / {{ row.predicted_tags | join(", ") }} / {{ row.confidence }} / {{ row.predicted_review }}</dd>
+                                    <dt>{{ _("Model reason") }}</dt>
+                                    <dd>{{ row.reason }}</dd>
+                                    <dt>{{ _("Failure modes") }}</dt>
+                                    <dd>{{ row.failure_modes | join(", ") }}</dd>
+                                </dl>
+                            </details>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-muted">{{ _("No failures recorded.") }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Prompt Lab datasets") }}</h2>
+        <p class="text-muted mb-0">{{ _("Review local JSONL benchmark files before running prompt candidates.") }}</p>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Dataset") }}</th>
+                        <th scope="col">{{ _("Examples") }}</th>
+                        <th scope="col">{{ _("Valid") }}</th>
+                        <th scope="col">{{ _("Categories") }}</th>
+                        <th scope="col">{{ _("Tags") }}</th>
+                        <th scope="col">{{ _("Needs review") }}</th>
+                        <th scope="col">{{ _("UNKNOWN") }}</th>
+                        <th scope="col">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in dataset_rows %}
+                    <tr>
+                        <td><code>{{ row.name }}</code></td>
+                        <td>{{ row.examples if row.examples is not none else "n/a" }}</td>
+                        <td>
+                            {% if row.valid %}
+                                <span class="badge text-bg-success">{{ _("Valid") }}</span>
+                            {% else %}
+                                <span class="badge text-bg-danger">{{ _("Invalid") }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.categories if row.categories is not none else "n/a" }}</td>
+                        <td>{{ row.tags if row.tags is not none else "n/a" }}</td>
+                        <td>{{ row.needs_review if row.needs_review is not none else "n/a" }}</td>
+                        <td>{{ row.expected_unknown if row.expected_unknown is not none else "n/a" }}</td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('prompt_lab.dataset_detail', dataset_name=row.name) }}">
+                                    {{ _("View") }}
+                                </a>
+                                <form method="post" action="{{ url_for('prompt_lab.validate_dataset', dataset_name=row.name) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-sm btn-outline-secondary" type="submit">{{ _("Validate") }}</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-muted">{{ _("No JSONL datasets found.") }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

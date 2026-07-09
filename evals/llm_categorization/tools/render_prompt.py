@@ -15,9 +15,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from evals.llm_categorization.tools import summarize_dataset
 from evals.llm_categorization.tools.io_utils import JsonlError
 from evals.llm_categorization.tools.schemas import DatasetValidationError, EvaluationExample
-from evals.llm_categorization.tools.summarize_dataset import load_validated_records
 
 EVALUATION_CONTRACT = """\
 Evaluation contract:
@@ -51,6 +51,11 @@ Required JSON output format:
   "reason": "short evidence summary"
 }
 """
+
+
+def load_validated_records(path: Path) -> tuple[list[dict[str, Any]], list[EvaluationExample]]:
+    """Return validated dataset records for renderer callers."""
+    return summarize_dataset.load_validated_records(path)
 
 
 def load_prompt(path: Path) -> str:
@@ -231,15 +236,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the prompt renderer CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    from evals.llm_categorization.services.prompt_service import render_prompt_preview
+
     try:
-        prompt_markdown = load_prompt(args.prompt)
-        _, examples = load_validated_records(args.dataset)
-        selected_examples = select_examples(examples, request_id=args.request_id, dry_run_count=args.dry_run)
-        document = render_output_document(
+        document = render_prompt_preview(
             prompt_path=args.prompt,
             dataset_path=args.dataset,
-            prompt_markdown=prompt_markdown,
-            examples=selected_examples,
+            request_id=args.request_id,
+            dry_run_count=args.dry_run,
         )
         rendered_text = json.dumps(document, ensure_ascii=True, indent=2, sort_keys=False)
         if args.out:

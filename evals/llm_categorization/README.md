@@ -11,7 +11,9 @@ prompt, JSONL helpers, typed schema structures, strict dataset validation,
 database inspection, draft dataset extraction, dataset summaries, and
 reproducible splitting, dry-run prompt rendering, and saved-output scoring.
 The eval runner can call OpenAI for saved raw outputs. Prompt-comparison
-reports are generated from saved scoring artifacts.
+reports are generated from saved scoring artifacts. Shared service modules
+under `services/` expose the same artifact operations to CLI tools and the
+local developer Prompt Lab UI without subprocess calls.
 
 ## Workflow
 
@@ -25,6 +27,38 @@ reports are generated from saved scoring artifacts.
 8. Score outputs.
 9. Compare prompt candidates.
 10. Inspect failures and revise prompts.
+
+## Local Prompt Lab
+
+In development mode, owners can open Admin > Prompt Lab or
+`/admin/prompt-lab`. Prompt Lab is a local developer convenience layer for the
+file-based eval workflow. It reads and writes artifacts under:
+
+- `evals/llm_categorization/prompts/`
+- `evals/llm_categorization/datasets/`
+- `evals/llm_categorization/runs/`
+
+The GUI does not modify production transactions, categories and tags, rules, or
+`finscope.db`. The CLI remains the reproducible backend for scripted benchmark
+runs; Prompt Lab is a convenience interface for the sole local developer.
+
+Recommended GUI workflow:
+
+1. Open Admin > Prompt Lab.
+2. Validate a dataset.
+3. Preview a prompt on one example.
+4. Run with limit=5.
+5. Inspect failures.
+6. Run the full validation dataset.
+7. Compare selected runs.
+
+The shared service modules are:
+
+- `dataset_service.py`: list, validate, summarize, and read JSONL datasets.
+- `prompt_service.py`: list, read, write, and render prompt previews.
+- `run_service.py`: list saved runs and launch eval configurations.
+- `scoring_service.py`: read metrics and failures, score outputs, and rescore runs.
+- `comparison_service.py`: compare selected scored runs.
 
 ## Dataset validation
 

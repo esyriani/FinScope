@@ -586,10 +586,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the comparison CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    from evals.llm_categorization.services.comparison_service import compare_selected_runs
+
     try:
-        report = compare_runs(args.runs)
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(f"{report}\n", encoding="utf-8", newline="\n")
+        compare_selected_runs(args.runs, out_path=args.out)
     except (JsonlError, OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

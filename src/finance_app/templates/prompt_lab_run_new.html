@@ -1,0 +1,125 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("New evaluation run") }}</h2>
+        <p class="text-muted mb-0">{{ _("Run synchronously for now. Use a small limit, such as 5 or 10, for quick checks.") }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.runs') }}">
+        <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Runs") }}
+    </a>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% if errors %}
+    <div class="alert alert-danger" role="alert">
+        <ul class="mb-0">
+            {% for error in errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<form method="post" action="{{ url_for('prompt_lab.new_run') }}" class="mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="run-prompt">{{ _("Prompt") }}</label>
+                    <select id="run-prompt" class="form-select" name="prompt">
+                        <option value="">{{ _("Choose a prompt") }}</option>
+                        {% for prompt in prompts %}
+                            <option value="{{ prompt.name }}" {% if form.prompt == prompt.name %}selected{% endif %}>{{ prompt.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="run-dataset">{{ _("Dataset") }}</label>
+                    <select id="run-dataset" class="form-select" name="dataset">
+                        <option value="">{{ _("Choose a dataset") }}</option>
+                        {% for dataset in datasets %}
+                            <option value="{{ dataset.name }}" {% if form.dataset == dataset.name %}selected{% endif %}>{{ dataset.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="run-model">{{ _("Model") }}</label>
+                    <input id="run-model" class="form-control" type="text" name="model" value="{{ form.model }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="run-temperature">{{ _("Temperature") }}</label>
+                    <input id="run-temperature" class="form-control" type="number" min="0" step="0.1" name="temperature" value="{{ form.temperature }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="run-limit">{{ _("Limit") }}</label>
+                    <input id="run-limit" class="form-control" type="number" min="1" step="1" name="limit" value="{{ form.limit }}">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label" for="run-name">{{ _("Run name") }}</label>
+                    <input id="run-name" class="form-control" type="text" name="run_name" value="{{ form.run_name }}">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div>
+                        <div class="form-check">
+                            <input class="form-check-input" id="run-score-auto" type="checkbox" name="score_auto" {% if form.score_auto %}checked{% endif %}>
+                            <label class="form-check-label" for="run-score-auto">{{ _("Score automatically after run") }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" id="run-overwrite" type="checkbox" name="overwrite" {% if form.overwrite %}checked{% endif %}>
+                            <label class="form-check-label" for="run-overwrite">{{ _("Overwrite existing run folder") }}</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">{{ _("Check") }}</th>
+                            <th scope="col">{{ _("Status") }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in preflight.rows %}
+                            <tr>
+                                <td>{{ _(row.check) }}</td>
+                                <td>
+                                    <span class="badge {% if row.ok %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ _(row.status|string) }}</span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-primary" type="submit" name="run_action" value="dry_run" {% if not preflight.can_dry_run %}disabled{% endif %}>
+            <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Dry run") }}
+        </button>
+        <button class="btn btn-primary" type="submit" name="run_action" value="start" {% if not preflight.can_start %}disabled{% endif %}>
+            <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Start run") }}
+        </button>
+    </div>
+</form>
+{% endblock %}

@@ -9,6 +9,7 @@ from finance_app.modules.dashboard.controller import dashboard_bp
 from finance_app.modules.home.controller import home_bp
 from finance_app.modules.jobs.controller import jobs_bp
 from finance_app.modules.merchants.controller import merchants_bp
+from finance_app.modules.prompt_lab.controller import prompt_lab_bp
 from finance_app.modules.recurring.controller import recurring_bp
 from finance_app.modules.reimbursements.controller import reimbursements_bp
 from finance_app.modules.reports.controller import reports_bp
@@ -26,6 +27,7 @@ def register_blueprints(app: Any) -> None:
     app.register_blueprint(home_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(taxonomy_admin_bp)
+    app.register_blueprint(prompt_lab_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(reports_bp)

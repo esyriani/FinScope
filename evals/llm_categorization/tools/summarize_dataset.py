@@ -344,9 +344,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the dataset summary CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    from evals.llm_categorization.services.dataset_service import read_dataset_summary
+
     try:
-        _, examples = load_validated_records(args.input)
-        summary = summarize_examples(args.input, examples)
+        summary = read_dataset_summary(args.input)
     except (DatasetValidationError, JsonlError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

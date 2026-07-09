@@ -1,0 +1,111 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Prompt Lab runs") }}</h2>
+        <p class="text-muted mb-0">{{ _("Inspect saved prompt evaluation run artifacts.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary" href="{{ url_for('prompt_lab.new_run') }}">
+            <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("New evaluation run") }}
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<form id="compare-runs-form" method="post" action="{{ url_for('prompt_lab.compare_runs') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<div class="card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="fw-semibold">{{ _("Saved runs") }}</div>
+        <button class="btn btn-outline-primary" type="submit" form="compare-runs-form">
+            <i class="bi bi-columns-gap" aria-hidden="true"></i>{{ _("Compare selected") }}
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Select") }}</th>
+                        <th scope="col">{{ _("Run") }}</th>
+                        <th scope="col">{{ _("Prompt") }}</th>
+                        <th scope="col">{{ _("Dataset") }}</th>
+                        <th scope="col">{{ _("Model") }}</th>
+                        <th scope="col">{{ _("Examples") }}</th>
+                        <th scope="col">{{ _("Category acc.") }}</th>
+                        <th scope="col">{{ _("Exact match") }}</th>
+                        <th scope="col">{{ _("Unsafe auto") }}</th>
+                        <th scope="col">{{ _("Status") }}</th>
+                        <th scope="col">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in run_rows %}
+                    <tr>
+                        <td>
+                            {% if row.comparable %}
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="run_names"
+                                       value="{{ row.name }}"
+                                       form="compare-runs-form"
+                                       aria-label="{{ _('Select') }} {{ row.run_id }}">
+                            {% else %}
+                                <span class="text-muted small">{{ _("Not scored") }}</span>
+                            {% endif %}
+                        </td>
+                        <td><code>{{ row.run_id }}</code></td>
+                        <td>{{ row.prompt }}</td>
+                        <td>{{ row.dataset }}</td>
+                        <td>{{ row.model }}</td>
+                        <td>{{ row.examples }}</td>
+                        <td>{{ row.category_accuracy }}</td>
+                        <td>{{ row.exact_match }}</td>
+                        <td>{{ row.unsafe_auto }}</td>
+                        <td>{{ _(row.status) }}</td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('prompt_lab.run_detail', run_name=row.name) }}">
+                                    {{ _("Open") }}
+                                </a>
+                                <form method="post" action="{{ url_for('prompt_lab.rescore_run', run_name=row.name) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-sm btn-outline-secondary" type="submit">{{ _("Re-score") }}</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="11" class="text-muted">{{ _("No run artifacts found.") }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

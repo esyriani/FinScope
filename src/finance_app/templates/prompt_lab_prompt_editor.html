@@ -1,0 +1,89 @@
+{% set page_stylesheets = ["css/page-tabs.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Prompt file") }}: <code>{{ prompt_name }}</code></h2>
+        <p class="text-muted mb-0">{{ _("Plain-text prompt candidate editor.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.prompts') }}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Prompts") }}
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.prompt_preview', prompt=prompt_name) }}">
+            <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview") }}
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.new_run', prompt=prompt_name) }}">
+            <i class="bi bi-activity" aria-hidden="true"></i>{{ _("Run") }}
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<form method="post" action="{{ url_for('prompt_lab.save_prompt', prompt_name=prompt_name) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="source_prompt_name" value="{{ prompt_name }}">
+
+    <div class="mb-3">
+        <label class="form-label" for="prompt-content">{{ _("Prompt content") }}</label>
+        <textarea id="prompt-content" class="form-control font-monospace" name="prompt_content" rows="24">{{ prompt_content }}</textarea>
+        <div class="form-text">{{ _("Last modified") }}: {{ last_modified }}</div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">{{ _("Save as new prompt") }}</h5>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-7">
+                    <label class="form-label" for="new-prompt-name">{{ _("New filename") }}</label>
+                    <input id="new-prompt-name" class="form-control" type="text" name="new_prompt_name" value="{{ new_prompt_name }}" placeholder="002_conservative.md">
+                    <div class="form-text">{{ _("Filename must end with .md.") }}</div>
+                </div>
+                <div class="col-md-5">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="overwrite-confirm" name="overwrite_confirm" {% if show_overwrite_warning %}aria-describedby="overwrite-warning"{% endif %}>
+                        <label class="form-check-label" for="overwrite-confirm">{{ _("Overwrite if this prompt already exists") }}</label>
+                    </div>
+                    {% if show_overwrite_warning %}
+                        <div id="overwrite-warning" class="form-text text-warning">{{ _("Prompt already exists. Confirm overwrite to replace it.") }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-primary" type="submit">
+            <i class="bi bi-save" aria-hidden="true"></i>{{ _("Save") }}
+        </button>
+        <button class="btn btn-outline-primary" type="submit" formaction="{{ url_for('prompt_lab.save_prompt_as') }}">
+            <i class="bi bi-files" aria-hidden="true"></i>{{ _("Save as new prompt") }}
+        </button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.prompt_preview', prompt=prompt_name) }}">
+            <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview") }}
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('prompt_lab.new_run', prompt=prompt_name) }}">
+            <i class="bi bi-activity" aria-hidden="true"></i>{{ _("Run") }}
+        </a>
+    </div>
+</form>
+{% endblock %}

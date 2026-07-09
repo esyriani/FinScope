@@ -1,0 +1,70 @@
+{% set page_stylesheets = ["css/page-tabs.css", "css/tables.css"] %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-1">{{ _("Prompt Lab prompts") }}</h2>
+        <p class="text-muted mb-0">{{ _("Edit prompt candidate Markdown files and preview rendered inputs.") }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary" href="{{ url_for('prompt_lab.prompt_preview') }}">
+            <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview") }}
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    {{ prompt_lab_notice }}
+</div>
+
+<div class="page-tabs nav nav-tabs mb-4" role="navigation" aria-label="{{ _('Prompt Lab sections') }}">
+    <a class="nav-link" href="{{ url_for('prompt_lab.overview') }}">{{ _("Overview") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.datasets') }}">{{ _("Datasets") }}</a>
+    <a class="nav-link active" href="{{ url_for('prompt_lab.prompts') }}">{{ _("Prompts") }}</a>
+    <a class="nav-link" href="{{ url_for('prompt_lab.runs') }}">{{ _("Runs") }}</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _("Prompt") }}</th>
+                        <th scope="col">{{ _("Last modified") }}</th>
+                        <th scope="col">{{ _("Runs") }}</th>
+                        <th scope="col">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in prompt_rows %}
+                    <tr>
+                        <td><code>{{ row.name }}</code></td>
+                        <td>{{ row.last_modified }}</td>
+                        <td>{{ row.run_count }}</td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('prompt_lab.prompt_editor', prompt_name=row.name) }}">
+                                    {{ _("Edit") }}
+                                </a>
+                                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('prompt_lab.prompt_preview', prompt=row.name) }}">
+                                    {{ _("Preview") }}
+                                </a>
+                                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('prompt_lab.new_run', prompt=row.name) }}">
+                                    {{ _("Run") }}
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-muted">{{ _("No prompt candidates found.") }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
