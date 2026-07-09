@@ -1,5 +1,7 @@
 """Route-level tests for merchant lookup and analytics filters."""
 
+from datetime import date as real_date
+
 from tests.support.database import insert_merchant, insert_transaction, set_owner_setting
 from tests.support.html import (
     assert_has_element,
@@ -10,6 +12,17 @@ from tests.support.html import (
     parse_html,
     response_html,
 )
+
+from finance_app.modules.comparison import service as comparison_service
+
+
+class FixedDate(real_date):
+    """Fixed replacement for date.today in comparison route tests."""
+
+    @classmethod
+    def today(cls):
+        """Return a deterministic current date."""
+        return cls(2026, 5, 11)
 
 
 def test_merchant_suggestions_require_authentication(anonymous_client):
@@ -256,8 +269,9 @@ def test_comparison_route_preserves_merchant_filter_in_both_tabs(client, core_co
     assert_markup(response, "js/merchant-autocomplete.js")
 
 
-def test_comparison_route_filters_spaced_merchant_query(client, core_conn):
+def test_comparison_route_filters_spaced_merchant_query(client, core_conn, monkeypatch):
     """Verify comparison analytics apply multi-word typed merchant filters."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
     for description, amount, tx_date, fingerprint in [
         ("UDEM - PAIE payroll", 15.00, "2026-05-04", "comparison-route-udem-paie-current"),
         ("UDEM PAIE tuition", 7.00, "2026-04-04", "comparison-route-udem-paie-prior"),

@@ -1,0 +1,23 @@
+{
+  "completed_before_resume": 0,
+  "dataset_hash": "8ac7dfea1eb0d127973cebdce831b4cd4f143b2cc45bdb465fa57d775f3c7ccc",
+  "dataset_path": "evals\\llm_categorization\\datasets\\validation.jsonl",
+  "dry_run": true,
+  "examples_run": 2,
+  "git_commit": null,
+  "max_output_tokens": null,
+  "model": "gpt-5-mini",
+  "number_of_examples": 2,
+  "prompt_hash": "5cd5d89e46e42595bf680b18e1e10a6a184e22ce92ae427fd3bcc3833755e1de",
+  "prompt_path": "evals\\llm_categorization\\prompts\\001_baseline.md",
+  "response_format": "json_object",
+  "resume": false,
+  "retry_policy": {
+    "max_retries": 2,
+    "retry_delay_seconds": 1.0
+  },
+  "run_id": "dry_run_001_baseline",
+  "scorer_version": null,
+  "temperature": 0.0,
+  "timestamp": "2026-07-08T17:42:59Z"
+}

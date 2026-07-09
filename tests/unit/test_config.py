@@ -7,17 +7,28 @@ from finance_app.core.constants import PROJECT_DIR
 from finance_app.database.engine import create_database_engine
 
 
-def test_default_config_files_live_at_project_root():
-    """Verify default config files are resolved from the repository root."""
+def test_default_config_files_live_in_app_package_dir():
+    """Verify default config files are resolved from the app package directory."""
     project_dir = Path(PROJECT_DIR)
 
-    assert config_module.CONFIG_PATH == project_dir / "config.ini"
-    assert config_module.EXAMPLE_CONFIG_PATH == project_dir / "config.example.ini"
+    assert config_module.CONFIG_PATH == project_dir / "src" / "finance_app" / "config.ini"
+    assert config_module.EXAMPLE_CONFIG_PATH == project_dir / "src" / "finance_app" / "config.example.ini"
 
 
 def test_relative_config_paths_resolve_from_project_root():
     """Resolve config file paths relative to the repository root."""
     assert config_module.resolve_path("runtime/finescope.db") == Path(PROJECT_DIR) / "runtime" / "finescope.db"
+
+
+def test_example_config_defaults_to_project_runtime_database(monkeypatch, tmp_path):
+    """Load the packaged example config with a runnable project-local SQLite path."""
+    monkeypatch.delenv("FINANCE_DATABASE_URL", raising=False)
+    monkeypatch.delenv("FINANCE_DB_PATH", raising=False)
+
+    settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    assert settings.database_path == Path(PROJECT_DIR) / "runtime" / "finescope.db"
+    assert settings.database_url == config_module.sqlite_database_url(settings.database_path)
 
 
 def test_database_url_defaults_to_sqlite_path(monkeypatch, tmp_path):

@@ -103,6 +103,21 @@ def test_ensure_database_exists_ignores_sqlite_urls():
     create_engine_mock.assert_not_called()
 
 
+def test_create_database_engine_creates_sqlite_parent_directory(tmp_path):
+    """Create missing filesystem parents before opening a SQLite database."""
+    database_path = tmp_path / "missing" / "finance.db"
+    engine = create_database_engine(sqlite_database_url(database_path))
+
+    try:
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT 1")).scalar_one() == 1
+    finally:
+        engine.dispose()
+
+    assert database_path.parent.is_dir()
+    assert database_path.is_file()
+
+
 def test_core_request_connection_reuses_until_teardown(tmp_path):
     """Reuse a request-scoped Core connection and close it during teardown."""
     database_url = sqlite_database_url(tmp_path / "finance.db")

@@ -12,7 +12,7 @@ from flask import g, has_request_context
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import URL, Connection, Engine, make_url
 
-from finance_app.core.config import settings
+from finance_app.core.config import settings, sqlite_path_from_database_url
 
 CORE_DB_CONTEXT_KEY = "finance_core_db"
 CORE_DB_TRANSACTION_DEPTH_KEY = "finance_core_transaction_depth"
@@ -34,12 +34,22 @@ def create_database_engine(database_url: str | None = None) -> Engine:
     """
     database_url = database_url or settings.database_url
     ensure_database_exists(database_url)
+    ensure_sqlite_parent_directory(database_url)
 
     engine = create_engine(database_url, pool_pre_ping=True)
     if engine.dialect.name == "sqlite":
         register_sqlite_foreign_keys(engine)
 
     return engine
+
+
+def ensure_sqlite_parent_directory(database_url: str) -> None:
+    """Create the parent directory for filesystem-backed SQLite databases."""
+    database_path = sqlite_path_from_database_url(database_url)
+    if database_path is None or str(database_path) == ":memory:":
+        return
+
+    database_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 def ensure_database_exists(database_url: str) -> None:

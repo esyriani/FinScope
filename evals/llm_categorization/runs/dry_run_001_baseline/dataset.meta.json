@@ -1,0 +1,10 @@
+{
+  "dataset_hash": "8ac7dfea1eb0d127973cebdce831b4cd4f143b2cc45bdb465fa57d775f3c7ccc",
+  "dataset_path": "evals\\llm_categorization\\datasets\\validation.jsonl",
+  "example_count": 45,
+  "selected_count": 2,
+  "selected_request_ids": [
+    "db-tx-1000",
+    "db-tx-1009"
+  ]
+}

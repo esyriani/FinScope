@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from finance_app.core.constants import PROJECT_DIR
+from finance_app.core.constants import BASE_DIR, PROJECT_DIR
 from finance_app.core.setting_limits import (
     COMPARISON_INSIGHT_CARD_LIMIT_MAX,
     DASHBOARD_TOP_DRIVER_LIMIT_MAX,
@@ -14,8 +14,8 @@ from finance_app.core.setting_limits import (
     PINNED_REPORT_LIMIT_MAX,
 )
 
-CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(PROJECT_DIR) / "config.ini"))
-EXAMPLE_CONFIG_PATH = Path(PROJECT_DIR) / "config.example.ini"
+CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(BASE_DIR) / "config.ini"))
+EXAMPLE_CONFIG_PATH = Path(BASE_DIR) / "config.example.ini"
 DEVELOPMENT_SECRET_KEY = "dev-secret-key"
 LOCAL_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
@@ -77,7 +77,7 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
 
     database_path_setting = env(
         "FINANCE_DB_PATH",
-        parser.get("database", "path", fallback="finance.db"),
+        parser.get("database", "path", fallback="finescope.db"),
     )
     database_url = env(
         "FINANCE_DATABASE_URL",
