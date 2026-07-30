@@ -17,6 +17,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     category_rule_tags as category_rule_tags_table,
 )
+from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import (
     tags as tags_table,
 )
@@ -227,6 +228,7 @@ def upsert_category_metadata(
     if not category:
         return None
 
+    category_key = normalize_name_key(category)
     normalized_builtin_key = clean_label(builtin_key).casefold() if builtin_key else None
     category_select = select(
         categories_table.c.id,
@@ -234,14 +236,14 @@ def upsert_category_metadata(
     ).where(
         categories_table.c.builtin_key == normalized_builtin_key
         if normalized_builtin_key
-        else categories_table.c.name == category
+        else categories_table.c.name_key == category_key
     )
     existing = conn.execute(category_select).mappings().fetchone()
     if existing is None and normalized_builtin_key:
         category_select = select(
             categories_table.c.id,
             categories_table.c.builtin_key,
-        ).where(categories_table.c.name == category)
+        ).where(categories_table.c.name_key == category_key)
         existing = conn.execute(category_select).mappings().fetchone()
 
     if existing is None:
@@ -287,20 +289,25 @@ def upsert_tag_metadata(
     if not tag:
         return None
     tag_color = clean_color(color) or tag_color_for_name(tag)
+    tag_key = normalize_name_key(tag)
     normalized_builtin_key = clean_label(builtin_key).casefold() if builtin_key else None
 
     tag_select = select(
         tags_table.c.id,
         tags_table.c.builtin_key,
         tags_table.c.color,
-    ).where(tags_table.c.builtin_key == normalized_builtin_key if normalized_builtin_key else tags_table.c.name == tag)
+    ).where(
+        tags_table.c.builtin_key == normalized_builtin_key
+        if normalized_builtin_key
+        else tags_table.c.name_key == tag_key
+    )
     existing = conn.execute(tag_select).mappings().fetchone()
     if existing is None and normalized_builtin_key:
         tag_select = select(
             tags_table.c.id,
             tags_table.c.builtin_key,
             tags_table.c.color,
-        ).where(tags_table.c.name == tag)
+        ).where(tags_table.c.name_key == tag_key)
         existing = conn.execute(tag_select).mappings().fetchone()
 
     if existing is None:
@@ -440,12 +447,16 @@ def tag_ids_by_name(conn: Any, tag_names: Iterable[object] | str | None) -> dict
     if not normalized:
         return {}
 
+    keys_by_name = {name: normalize_name_key(name) for name in normalized}
     rows = (
-        conn.execute(select(tags_table.c.id, tags_table.c.name).where(tags_table.c.name.in_(normalized)))
+        conn.execute(
+            select(tags_table.c.id, tags_table.c.name_key).where(tags_table.c.name_key.in_(keys_by_name.values()))
+        )
         .mappings()
         .fetchall()
     )
-    return {row["name"]: row["id"] for row in rows}
+    ids_by_key = {row["name_key"]: row["id"] for row in rows}
+    return {name: ids_by_key[key] for name, key in keys_by_name.items() if key in ids_by_key}
 
 
 def set_rule_tags(conn: Any, rule_id: object, tag_names: Iterable[object] | str | None) -> None:

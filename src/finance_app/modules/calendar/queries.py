@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.config import settings
 from finance_app.core.constants import NON_REPORTABLE_TRANSACTION_KINDS
 from finance_app.core.periods import shift_months
@@ -76,7 +77,7 @@ def build_category_filter(
     if merchant_condition is not None:
         conditions.append(merchant_condition)
     if selected_categories:
-        conditions.append(func.coalesce(transactions_table.c.category, unknown_category).in_(selected_categories))
+        conditions.append(transaction_category_label_expression(unknown_category).in_(selected_categories))
 
     tag_condition = transaction_tag_condition(selected_tags)
     if tag_condition is not None:
@@ -100,7 +101,7 @@ def transaction_row_select(unknown_category: str) -> Any:
         merchants_table.c.merchant_key.label("merchant_key"),
         transactions_table.c.amount,
         transactions_table.c.transaction_kind,
-        func.coalesce(transactions_table.c.category, unknown_category).label("category"),
+        transaction_category_label_expression(unknown_category).label("category"),
         func.coalesce(accounts_table.c.name, "Personal").label("account_name"),
     ).select_from(
         transactions_table.outerjoin(

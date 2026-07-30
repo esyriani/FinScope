@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy import and_, case, func, or_, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     NON_REPORTABLE_TRANSACTION_KINDS,
     TRANSACTION_KIND_EXPENSE,
@@ -47,7 +48,10 @@ def transaction_has_builtin_category_clause(builtin_key: str) -> Any:
             transactions_table.c.category_id.is_not(None),
             transactions_table.c.category_id.in_(category_ids),
         ),
-        func.coalesce(transactions_table.c.category, "").in_(category_names),
+        and_(
+            transactions_table.c.category_id.is_(None),
+            transaction_category_label_expression("").in_(category_names),
+        ),
     )
 
 

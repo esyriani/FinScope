@@ -32,6 +32,18 @@ def test_get_or_create_account_links_credit_card_to_funding_account(app):
         assert credit_card["paid_from_account_id"] == funding_account["id"]
 
 
+def test_get_or_create_account_uses_database_name_key(app):
+    """Match existing accounts by the generated normalized name key."""
+    del app
+    with db_core_transaction() as conn:
+        original = get_or_create_account(conn, "Travel card", account_type="credit_card")
+        matched = get_or_create_account(conn, " travel CARD ", account_type="checking")
+
+        assert matched["id"] == original["id"]
+        assert matched["name"] == "Travel card"
+        assert matched["account_type"] == "checking"
+
+
 def test_get_or_create_account_requires_core_connection(core_conn):
     """Reject non-Core objects at the account repository boundary."""
     del core_conn

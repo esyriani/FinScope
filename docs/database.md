@@ -1,6 +1,6 @@
 # Database
 
-FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the default local backend at [runtime/finescope.db](../runtime/finescope.db); MySQL is selected by setting a `mysql+pymysql://` SQLAlchemy URL. Runtime schema creation is managed by SQLAlchemy Core metadata in [src/finance_app/database/tables.py](../src/finance_app/database/tables.py).
+FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the default local backend at [runtime/finscope.db](../runtime/finscope.db); MySQL is selected by setting a `mysql+pymysql://` SQLAlchemy URL. Runtime schema creation is managed by SQLAlchemy Core metadata in [src/finance_app/database/tables.py](../src/finance_app/database/tables.py).
 
 The database layer maintains the Core engine/connection lifecycle in [src/finance_app/database/engine.py](../src/finance_app/database/engine.py). Startup creates empty databases from Core metadata, validates existing FinScope databases against the current schema, and seeds runtime defaults through Core for SQLite and MySQL URLs. [src/finance_app/database/tables.py](../src/finance_app/database/tables.py) remains the schema source of truth for the current clean database shape.
 
@@ -16,34 +16,34 @@ Persisted enum-like text values, such as import statuses, parser types, category
 
 | Backend | Minimum version | URL form | Notes |
 | --- | --- | --- | --- |
-| SQLite | 3.31+ | `sqlite:///D:/path/to/finescope.db` | Default local backend. The current development environment uses SQLite 3.45.1. |
+| SQLite | 3.31+ | `sqlite:///D:/path/to/finscope.db` | Default local backend. The current development environment uses SQLite 3.45.1. |
 | MySQL | 8.0.16+ | `mysql+pymysql://user:password@host:3306/finscope` | Fully supported through SQLAlchemy Core and PyMySQL 1.1.3. Compatible MariaDB servers use the same URL form. |
 
 The schema uses generated columns, foreign keys, check constraints, unique constraints, numeric money fields, and timestamp helpers that are kept portable between SQLite and MySQL. MySQL deployments should use an InnoDB-capable server with `utf8mb4` character support; FinScope creates new MySQL databases with `utf8mb4_unicode_ci` when the configured account can create databases.
 
 ## Choosing a database
 
-FinScope selects the active database from a SQLAlchemy database URL. The URL can be provided in root `config.ini` or with an environment variable.
+FinScope selects the active database from a SQLAlchemy database URL. The URL can be provided in `src/finance_app/config.ini` or with an environment variable.
 
 Database URL priority:
 
 1. `FINANCE_DATABASE_URL`, when set.
-2. `database.url` in root `config.ini`, when non-empty.
+2. `database.url` in `src/finance_app/config.ini`, when non-empty.
 3. A generated SQLite URL from the configured database path.
 
 SQLite path priority, used only when no database URL is provided:
 
 1. `FINANCE_DB_PATH`, when set.
-2. `database.path` in root `config.ini`, when present.
-3. `database.path` in root [config.example.ini](../config.example.ini).
+2. `database.path` in `src/finance_app/config.ini`, when present.
+3. `database.path` in [src/finance_app/config.example.ini](../src/finance_app/config.example.ini).
 
-Use these root `config.ini` values for common local setups:
+Use these `src/finance_app/config.ini` values for common local setups:
 
 | Scenario | `database.url` | `database.path` |
 | --- | --- | --- |
-| Default SQLite | Leave blank | [runtime/finescope.db](../runtime/finescope.db) |
-| Explicit SQLite | `sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finescope.db` | [runtime/finescope.db](../runtime/finescope.db) |
-| MySQL | `mysql+pymysql://user:password@127.0.0.1:3306/finscope` | [runtime/finescope.db](../runtime/finescope.db) |
+| Default SQLite | Leave blank | [runtime/finscope.db](../runtime/finscope.db) |
+| Explicit SQLite | `sqlite:///D:/Documents/UdM/sms/dev/applications/finances/runtime/finscope.db` | [runtime/finscope.db](../runtime/finscope.db) |
+| MySQL | `mysql+pymysql://user:password@127.0.0.1:3306/finscope` | [runtime/finscope.db](../runtime/finscope.db) |
 
 When `database.url` points to MySQL, `database.path` is not active. FinScope creates the configured MySQL database when the account has server-level `CREATE DATABASE` permission; otherwise create the empty database first, then FinScope initializes tables and seed rows inside it.
 
@@ -62,8 +62,10 @@ FinScope uses SQLite by default and MySQL when configured. Both backends are sup
 
 #### `accounts`
 
-Stores financial account names used to group statements and transactions. The `name` column is unique and cannot be blank.
+Stores financial account names used to group statements and transactions.
 
+- `name`: User-facing account label. The original spelling is preserved for display.
+- `name_key`: Generated lower-case, trimmed account name used for portable uniqueness and lookups.
 - `account_type`: Account role used by imports and reports. Valid values are `checking`, `savings`, and `credit_card`.
 - `paid_from_account_id`: Optional funding account for credit cards. This lets FinScope mark matching checking-account payments as non-reportable balance movements.
 
@@ -71,7 +73,8 @@ Stores financial account names used to group statements and transactions. The `n
 
 Defines the statement parsers available on the settings and upload pages.
 
-- `name`: User-facing statement type label, such as checking account or credit card.
+- `name`: User-facing statement type label, such as checking account or credit card. The original spelling is preserved for display.
+- `name_key`: Generated lower-case, trimmed statement type name used for portable uniqueness and lookups.
 - `parser_type`: Parser behavior to use for uploads. Valid values are `credit_card`, `bank_account`, and `interac_etransfer`.
 - `import_mode`: Import behavior. `ledger` creates transaction rows; `enrichment` updates existing rows without adding duplicate ledger activity.
 - `default_account_type`: Account role selected by default when a user uploads this statement type.
@@ -129,6 +132,7 @@ Tracks every uploaded statement and its import status.
 - `interac_direction`: Interac e-Transfer direction override for ambiguous exports. `auto` uses header detection; `sent` and `received` sign positive-only exports before matching existing checking rows.
 - `raw_text`: Extracted statement content retained for reprocessing.
 - `import_status`: Import lifecycle state: `pending`, `queued`, `running`, `completed`, or `failed`.
+- `import_token`: Current import-attempt token used to atomically claim queued statement work and prevent stale workers from overwriting status.
 - `import_error`: Last import failure message, when applicable.
 - `import_started_at` and `import_finished_at`: Processing timestamps for diagnostics.
 - `imported_count`, `skipped_count`, `ignored_count`, `llm_candidate_count`: Import result counters shown in statement history.
@@ -160,7 +164,8 @@ Maps cleaned statement variants to canonical merchants.
 
 Stores transaction category definitions.
 
-- `name`: Unique category name.
+- `name`: User-facing category label. The original spelling is preserved for display.
+- `name_key`: Generated lower-case, trimmed category name used for portable uniqueness and lookups.
 - `builtin_key`: Stable FinScope-managed key for protected built-in categories such as `Income`, `Rental`, `UNKNOWN`, `Reimbursement`, and `Transfers`; null for user-managed categories.
 - `description`: Optional explanatory text for users.
 - `instruction`: Optional LLM instruction used during automated categorization.
@@ -186,7 +191,10 @@ Stores imported ledger rows and their categorization state.
 - `categorized_at` and `reviewed_at`: Category workflow timestamps.
 - `ignored`: Soft-ignore flag for excluding rows without deleting them.
 - `transaction_kind`: Cash-flow role used by reports. Expenses and income are reportable; payments and transfers remain visible but are excluded from spending/income totals.
-- `fingerprint`: Unique transaction fingerprint used to prevent duplicate ledger rows.
+- `fingerprint`: Unique import replay fingerprint. Statement imports derive it
+  from the statement, account, source row identity, and row content so replays
+  skip already-imported statement rows without collapsing legitimate repeated
+  transactions that share the same date, description, and amount.
 - `created_at`: Import timestamp for the row.
 
 #### `reimbursement_allocations`
@@ -202,8 +210,9 @@ expenses keep their natural spending category and reimbursement-related tags.
 
 The pair of reimbursement and expense transactions is unique, the two
 transaction ids must be different, and allocation amounts must be positive.
-Application services enforce that allocations do not exceed either the credit
-amount or the covered expense amount.
+Application services lock the affected transaction rows before reading
+allocation totals and writing allocation rows, so allocations cannot exceed
+either the credit amount or the covered expense amount under concurrent writes.
 
 #### `reimbursement_expense_completions`
 
@@ -240,7 +249,8 @@ Unique constraints prevent duplicate rules for the same merchant or keyword, acc
 
 Stores reusable labels that can be attached to transactions or category rules.
 
-- `name`: Unique tag name.
+- `name`: User-facing tag label. The original spelling is preserved for display.
+- `name_key`: Generated lower-case, trimmed tag name used for portable uniqueness and lookups.
 - `builtin_key`: Stable FinScope-managed key for protected built-in tags such as `Reimbursable` and `Tax`; null for user-managed tags.
 - `description`: Optional user-facing explanation.
 - `instruction`: Optional LLM guidance for applying the tag.
@@ -292,7 +302,7 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 - Credit card statements are ledger sources because they contain purchase-level detail. The card purchases count as expenses; card payment rows and matching checking-account payment rows are marked as payments/transfers so spending is not double-counted.
 - Recurring pattern overrides use nullable merchant scope. `recurring_patterns.merchant_id` plus `type` stores merchant-bound overrides when a durable merchant is known. Rows with a null merchant ID remain keyword-fuzzy and are looked up by pattern key.
 
-The default database path configured in root [config.example.ini](../config.example.ini) is [runtime/finescope.db](../runtime/finescope.db), resolved relative to the repository root.
+The default database path configured in [src/finance_app/config.example.ini](../src/finance_app/config.example.ini) is [runtime/finscope.db](../runtime/finscope.db), resolved relative to the repository root.
 
 
 ## Updating the schema documentation
@@ -300,7 +310,7 @@ The default database path configured in root [config.example.ini](../config.exam
 When tables, columns, indexes, or relationships change:
 
 1. Apply the application schema changes in [src/finance_app/database/tables.py](../src/finance_app/database/tables.py).
-2. Rebuild or initialize a representative [finescope.db](../runtime/finescope.db).
+2. Rebuild or initialize a representative [finscope.db](../runtime/finscope.db).
 3. Regenerate [docs/db-schema.html](db-schema.html) and [docs/diagrams/db-schema.dbs](diagrams/db-schema.dbs) from the SQLAlchemy Core metadata.
 4. Update [architecture.md](architecture.md) or this page if the conceptual data model changed.
 

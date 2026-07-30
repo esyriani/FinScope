@@ -10,6 +10,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.database.tables import (
     tags as tags_table,
@@ -167,20 +168,20 @@ def semantic_tokens(value: object) -> set[str]:
 
 def common_category_names(conn: Any, category_options: Sequence[str], unknown_category: str) -> list[str]:
     """Return commonly used non-unknown categories from persisted transactions."""
+    category_label = transaction_category_label_expression(unknown_category)
     rows = (
         conn.execute(
             select(
-                transactions_table.c.category,
+                category_label.label("category"),
                 func.count().label("count"),
             )
             .where(
                 transactions_table.c.ignored == 0,
-                transactions_table.c.category.is_not(None),
-                transactions_table.c.category != unknown_category,
-                transactions_table.c.category.in_(category_options),
+                category_label != unknown_category,
+                category_label.in_(category_options),
             )
-            .group_by(transactions_table.c.category)
-            .order_by(func.count().desc(), transactions_table.c.category)
+            .group_by(category_label)
+            .order_by(func.count().desc(), category_label)
             .limit(COMMON_CATEGORY_LIMIT)
         )
         .mappings()
@@ -200,21 +201,21 @@ def merchant_history_category_names(
     if merchant_id is None:
         return []
 
+    category_label = transaction_category_label_expression(unknown_category)
     rows = (
         conn.execute(
             select(
-                transactions_table.c.category,
+                category_label.label("category"),
                 func.count().label("count"),
             )
             .where(
                 transactions_table.c.ignored == 0,
                 transactions_table.c.merchant_id == int(merchant_id),
-                transactions_table.c.category.is_not(None),
-                transactions_table.c.category != unknown_category,
-                transactions_table.c.category.in_(category_options),
+                category_label != unknown_category,
+                category_label.in_(category_options),
             )
-            .group_by(transactions_table.c.category)
-            .order_by(func.count().desc(), transactions_table.c.category)
+            .group_by(category_label)
+            .order_by(func.count().desc(), category_label)
             .limit(COMMON_CATEGORY_LIMIT)
         )
         .mappings()
@@ -312,6 +313,7 @@ def tags_for_candidate_categories(
     if not concrete_categories or not tag_options:
         return []
 
+    category_label = transaction_category_label_expression(UNKNOWN_CATEGORY)
     rows = (
         conn.execute(
             select(
@@ -324,7 +326,7 @@ def tags_for_candidate_categories(
                 )
             )
             .where(
-                transactions_table.c.category.in_(concrete_categories),
+                category_label.in_(concrete_categories),
                 tags_table.c.name.in_(tag_options),
             )
             .group_by(tags_table.c.name)

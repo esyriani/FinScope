@@ -4,8 +4,9 @@ from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import and_, case, exists, func, or_, select
+from sqlalchemy import case, exists, func, or_, select
 
+from finance_app.core.category_sql import transaction_category_join_condition, transaction_category_label_expression
 from finance_app.core.money import money_to_decimal
 from finance_app.core.reporting import (
     income_amount_expression,
@@ -34,6 +35,7 @@ from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_MANUAL,
     CATEGORY_SOURCE_RULE,
 )
+from finance_app.modules.merchants.queries import merchant_fallback_description_expression
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 
 
@@ -49,7 +51,7 @@ def fetch_summary(
     include_transfer_credits: bool = False,
 ) -> Any:
     """Fetch dashboard summary totals, optionally including filtered transfer credits."""
-    category = func.coalesce(transactions_table.c.category, unknown_category)
+    category = dashboard_category_label_expression(unknown_category)
     has_tag = exists(select(1).where(transaction_tags_table.c.transaction_id == transactions_table.c.id))
     categorized = category != unknown_category
     unknown = category == unknown_category
@@ -194,7 +196,7 @@ def fetch_summary(
 
 def fetch_quick_view_counts(conn: Any, filters: Sequence[Any], unknown_category: str) -> dict[str, Any]:
     """Fetch quick view counts."""
-    category = func.coalesce(transactions_table.c.category, unknown_category)
+    category = dashboard_category_label_expression(unknown_category)
     row = (
         conn.execute(
             select(
@@ -232,19 +234,13 @@ def fetch_quick_view_counts(conn: Any, filters: Sequence[Any], unknown_category:
 
 def dashboard_category_label_expression(unknown_category: str) -> Any:
     """Return the category label expression used by dashboard preview rows."""
-    return func.coalesce(transactions_table.c.category, unknown_category)
+    return transaction_category_label_expression(unknown_category)
 
 
 def dashboard_category_join_condition(unknown_category: str) -> Any:
-    """Return the category join condition for transactions with cached labels."""
-    category_label = dashboard_category_label_expression(unknown_category)
-    return or_(
-        categories_table.c.id == transactions_table.c.category_id,
-        and_(
-            transactions_table.c.category_id.is_(None),
-            func.lower(categories_table.c.name) == func.lower(category_label),
-        ),
-    )
+    """Return the category join condition with legacy cached-label fallback."""
+    del unknown_category
+    return transaction_category_join_condition()
 
 
 def fetch_monthly_preview(
@@ -310,7 +306,10 @@ def fetch_spending_category_totals(
 ) -> list[dict[str, Any]]:
     """Fetch reportable spending totals by category for dashboard previews."""
     category_label = dashboard_category_label_expression(unknown_category)
-    display_label = func.coalesce(categories_table.c.name, category_label)
+    display_label = transaction_category_label_expression(
+        unknown_category,
+        joined_category_name=categories_table.c.name,
+    )
     spending_amount = spending_impact_amount_expression()
     rows = (
         conn.execute(
@@ -362,14 +361,18 @@ def fetch_top_spending_categories(
 
 def fetch_spending_merchant_totals(conn: Any, filters: Sequence[Any]) -> list[dict[str, Any]]:
     """Fetch reportable spending totals by merchant identity for dashboard previews."""
+    fallback_description = merchant_fallback_description_expression()
+    spending_amount = spending_impact_amount_expression()
+    spending_total = func.coalesce(func.sum(spending_amount), 0)
     rows = (
         conn.execute(
             select(
-                transactions_table.c.description,
+                fallback_description.label("description"),
                 transactions_table.c.merchant_id,
                 merchants_table.c.merchant_key.label("merchant_name"),
                 merchants_table.c.merchant_key.label("merchant_key"),
-                spending_impact_amount_expression().label("spending"),
+                spending_total.label("spending"),
+                func.count().label("transaction_count"),
             )
             .select_from(
                 transactions_table.outerjoin(
@@ -382,6 +385,8 @@ def fetch_spending_merchant_totals(conn: Any, filters: Sequence[Any]) -> list[di
                 spending_impact_clause(),
                 *filters,
             )
+            .group_by(transactions_table.c.merchant_id, merchants_table.c.merchant_key, fallback_description)
+            .order_by(spending_total.desc(), merchants_table.c.merchant_key, fallback_description)
         )
         .mappings()
         .fetchall()
@@ -401,7 +406,7 @@ def fetch_spending_merchant_totals(conn: Any, filters: Sequence[Any]) -> list[di
             },
         )
         aggregate["spending"] += money_to_decimal(row["spending"])
-        aggregate["transaction_count"] += 1
+        aggregate["transaction_count"] += int(row["transaction_count"] or 0)
 
     return sorted(
         aggregates.values(),

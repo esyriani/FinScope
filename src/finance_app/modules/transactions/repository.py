@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import case, select, update
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_MANUAL,
     CATEGORY_SOURCE_UNKNOWN,
@@ -15,7 +16,7 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_TRANSFER,
     TRANSFER_CATEGORY,
 )
-from finance_app.core.money import MoneyValue, money_to_float, optional_money_to_float
+from finance_app.core.money import MoneyValue, money_to_float, optional_money_to_decimal
 from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.repository import resolve_category_id
@@ -67,7 +68,7 @@ def get_transaction_for_ai_categorization(conn: Any, transaction_id: int) -> dic
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(None).label("category"),
                 transactions_table.c.category_id,
                 transactions_table.c.needs_review,
                 transactions_table.c.category_source,
@@ -310,7 +311,7 @@ def get_transactions_for_recategorization(conn: Any, transaction_ids: Iterable[o
                 transactions_table.c.merchant_id,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(None).label("category"),
                 transactions_table.c.transaction_kind,
             )
             .where(transactions_table.c.id.in_(ids))
@@ -390,7 +391,7 @@ def ai_transaction_kind(category: object, amount: MoneyValue | None, current_kin
         return TRANSACTION_KIND_TRANSFER
     if current_kind == TRANSACTION_KIND_REFUND:
         return TRANSACTION_KIND_REFUND
-    amount_value = optional_money_to_float(amount)
+    amount_value = optional_money_to_decimal(amount)
     if amount_value is not None and amount_value < 0:
         return TRANSACTION_KIND_INCOME
     return TRANSACTION_KIND_EXPENSE

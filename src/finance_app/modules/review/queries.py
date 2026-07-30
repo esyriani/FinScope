@@ -4,7 +4,8 @@ from typing import Any
 
 from sqlalchemy import case, select
 
-from finance_app.core.constants import CATEGORY_RULE_DIRECTION_ANY, CATEGORY_RULE_SOURCE_MANUAL
+from finance_app.core.category_sql import category_label_expression, transaction_category_label_expression
+from finance_app.core.constants import CATEGORY_RULE_DIRECTION_ANY, CATEGORY_RULE_SOURCE_MANUAL, UNKNOWN_CATEGORY
 from finance_app.database.tables import (
     accounts as accounts_table,
 )
@@ -23,13 +24,10 @@ from finance_app.modules.merchants.sql_filters import (
 
 def review_candidate_rows(conn: Any, unknown_category: str, merchant_candidate: object = "") -> Any:
     """Render candidate rows."""
+    category_label = transaction_category_label_expression(unknown_category)
     filters: list[Any] = [
         transactions_table.c.ignored == 0,
-        (
-            (transactions_table.c.needs_review == 1)
-            | transactions_table.c.category.is_(None)
-            | (transactions_table.c.category == unknown_category)
-        ),
+        ((transactions_table.c.needs_review == 1) | (category_label == unknown_category)),
     ]
     if merchant_candidate:
         filters.append(
@@ -46,7 +44,7 @@ def review_candidate_rows(conn: Any, unknown_category: str, merchant_candidate: 
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                category_label.label("category"),
                 transactions_table.c.category_id,
                 transactions_table.c.needs_review,
                 transactions_table.c.category_source,
@@ -111,7 +109,7 @@ def rule_snapshot(conn: Any, rule_id: int) -> dict[str, Any] | None:
                 category_rules_table.c.account_id,
                 category_rules_table.c.merchant_id,
                 category_rules_table.c.keyword,
-                category_rules_table.c.category,
+                category_label_expression(category_rules_table, UNKNOWN_CATEGORY).label("category"),
                 category_rules_table.c.category_id,
                 category_rules_table.c.amount_min,
                 category_rules_table.c.amount_max,

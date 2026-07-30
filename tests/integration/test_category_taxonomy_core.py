@@ -1,8 +1,15 @@
 """SQLAlchemy Core tests for category taxonomy helpers."""
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 
 from finance_app.database.engine import db_core_transaction
+from finance_app.database.tables import (
+    categories as categories_table,
+)
+from finance_app.database.tables import normalize_name_key
+from finance_app.database.tables import (
+    tags as tags_table,
+)
 from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,
     get_tag_options,
@@ -62,3 +69,26 @@ def test_taxonomy_helpers_support_core_connections(app, core_conn):
     assert tuple(category) == ("City travel", "Use for transit.")
     assert tuple(tag) == ("Reviewed", "Already reviewed.", "#123abc")
     assert tuple(transaction_tag) == ("manual", rule_id)
+
+
+def test_taxonomy_upserts_use_database_name_keys(app, core_conn):
+    """Match category and tag metadata by generated normalized name keys."""
+    del app
+
+    with db_core_transaction() as conn:
+        assert upsert_category_metadata(conn, "Transit", "City travel", "Use for transit.") == "Transit"
+        assert upsert_category_metadata(conn, " transit ", "Updated travel", "Use updated.") == "transit"
+        assert upsert_tag_metadata(conn, "Audit", "Needs audit", "Review later.", "#123abc") == "Audit"
+        assert upsert_tag_metadata(conn, " audit ", "Reviewed", "Done.", "#abcdef") == "audit"
+
+    category_count = core_conn.execute(
+        select(func.count())
+        .select_from(categories_table)
+        .where(categories_table.c.name_key == normalize_name_key("Transit"))
+    ).scalar_one()
+    tag_count = core_conn.execute(
+        select(func.count()).select_from(tags_table).where(tags_table.c.name_key == normalize_name_key("Audit"))
+    ).scalar_one()
+
+    assert category_count == 1
+    assert tag_count == 1

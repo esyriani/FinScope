@@ -44,7 +44,7 @@ echo "$FINANCE_DB_PATH"
 
 </details>
 
-If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is [runtime/finescope.db](../runtime/finescope.db).
+If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is [runtime/finscope.db](../runtime/finscope.db).
 
 ## AI categorization does not run
 

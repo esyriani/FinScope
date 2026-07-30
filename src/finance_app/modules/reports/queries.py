@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy import and_, case, exists, func, or_, select, true
 
+from finance_app.core.category_sql import transaction_category_join_condition, transaction_category_label_expression
 from finance_app.core.money import money_to_decimal
 from finance_app.core.periods import PERIOD_CUSTOM, period_start_date
 from finance_app.core.query import CoreFilters
@@ -45,6 +46,7 @@ from finance_app.modules.dashboard.constants import (
     QUICK_VIEW_UNKNOWN,
 )
 from finance_app.modules.merchants.filters import merchant_filter_condition
+from finance_app.modules.merchants.queries import merchant_fallback_description_expression
 from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW, REPORT_BASIS_LEDGER
 from finance_app.modules.reports.entities import REPORT_ENTITY_ACCOUNT, REPORT_ENTITY_MERCHANT
@@ -82,19 +84,13 @@ def reports_base_filters(
 
 def category_label_expression(unknown_category: str) -> Any:
     """Return the category label expression used by report rows."""
-    return func.coalesce(transactions_table.c.category, unknown_category)
+    return transaction_category_label_expression(unknown_category)
 
 
 def category_lookup_join_condition(unknown_category: str) -> Any:
-    """Return the category join condition for rows with legacy cached labels."""
-    category_label = category_label_expression(unknown_category)
-    return or_(
-        categories_table.c.id == transactions_table.c.category_id,
-        and_(
-            transactions_table.c.category_id.is_(None),
-            func.lower(categories_table.c.name) == func.lower(category_label),
-        ),
-    )
+    """Return the category join condition with legacy cached-label fallback."""
+    del unknown_category
+    return transaction_category_join_condition()
 
 
 def taxonomy_target_condition(target: TaxonomyReportTarget, unknown_category: str) -> Any:
@@ -103,7 +99,10 @@ def taxonomy_target_condition(target: TaxonomyReportTarget, unknown_category: st
         category_label = category_label_expression(unknown_category)
         return or_(
             transactions_table.c.category_id == target.id,
-            func.lower(category_label) == target.name.casefold(),
+            and_(
+                transactions_table.c.category_id.is_(None),
+                func.lower(func.trim(category_label)) == target.name.casefold(),
+            ),
         )
     if target.kind == TAXONOMY_TARGET_TAG:
         return exists(
@@ -202,7 +201,7 @@ def fetch_report_summary(
     basis: str,
 ) -> Mapping[str, Any]:
     """Fetch headline totals and data-quality counters for a Reports scope."""
-    category = func.coalesce(transactions_table.c.category, unknown_category)
+    category = category_label_expression(unknown_category)
     categorized = category != unknown_category
     scope = report_scope_clause(basis)
     spending_amount = spending_amount_expression(basis)
@@ -350,7 +349,7 @@ def fetch_category_breakdown(
     basis: str,
 ) -> list[Mapping[str, Any]]:
     """Fetch category-level report totals."""
-    category = func.coalesce(transactions_table.c.category, unknown_category)
+    category = category_label_expression(unknown_category)
     return (
         conn.execute(
             select(categories_table.c.id.label("category_id"), category.label("label"), *aggregate_columns(basis))
@@ -409,7 +408,10 @@ def fetch_taxonomy_category_rows(
     basis: str,
 ) -> list[Mapping[str, Any]]:
     """Fetch category rows for the taxonomy report index."""
-    category_label = func.coalesce(categories_table.c.name, category_label_expression(unknown_category))
+    category_label = transaction_category_label_expression(
+        unknown_category,
+        joined_category_name=categories_table.c.name,
+    )
     return (
         conn.execute(
             select(
@@ -578,16 +580,21 @@ def fetch_account_breakdown(conn: Any, filters: Sequence[Any], basis: str) -> li
 
 def fetch_merchant_breakdown(conn: Any, filters: Sequence[Any], basis: str) -> list[dict[str, Any]]:
     """Fetch merchant-level report totals using the shared merchant identity boundary."""
+    fallback_description = merchant_fallback_description_expression()
+    spending_total = func.coalesce(func.sum(spending_amount_expression(basis)), 0)
+    income_total = func.coalesce(func.sum(income_credit_amount_expression(basis)), 0)
+    net_total = func.coalesce(func.sum(net_cash_flow_expression(basis)), 0)
     rows = (
         conn.execute(
             select(
-                transactions_table.c.description,
+                fallback_description.label("description"),
                 transactions_table.c.merchant_id,
                 merchants_table.c.merchant_key.label("merchant_name"),
                 merchants_table.c.merchant_key.label("merchant_key"),
-                spending_amount_expression(basis).label("spending"),
-                income_credit_amount_expression(basis).label("income"),
-                net_cash_flow_expression(basis).label("net"),
+                spending_total.label("spending"),
+                income_total.label("income"),
+                net_total.label("net"),
+                func.count().label("transaction_count"),
             )
             .select_from(
                 transactions_table.outerjoin(
@@ -596,6 +603,8 @@ def fetch_merchant_breakdown(conn: Any, filters: Sequence[Any], basis: str) -> l
                 )
             )
             .where(report_scope_clause(basis), *filters)
+            .group_by(transactions_table.c.merchant_id, merchants_table.c.merchant_key, fallback_description)
+            .order_by(spending_total.desc(), merchants_table.c.merchant_key, fallback_description)
         )
         .mappings()
         .fetchall()
@@ -619,7 +628,7 @@ def fetch_merchant_breakdown(conn: Any, filters: Sequence[Any], basis: str) -> l
         aggregate["spending"] += money_to_decimal(row["spending"])
         aggregate["income"] += money_to_decimal(row["income"])
         aggregate["net"] += money_to_decimal(row["net"])
-        aggregate["transaction_count"] += 1
+        aggregate["transaction_count"] += int(row["transaction_count"] or 0)
 
     return sorted(
         aggregates.values(),

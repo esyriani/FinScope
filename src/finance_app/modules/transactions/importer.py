@@ -25,8 +25,9 @@ def filter_new_transactions(
     conn: CoreConnection,
     transactions: Iterable[MutableMapping[str, Any]],
     account_id: int | None,
+    statement_id: int,
 ) -> tuple[list[MutableMapping[str, Any]], int]:
-    """Filter new transactions."""
+    """Filter rows already imported for the same statement replay identity."""
     require_core_connection(conn)
 
     unique_transactions: list[MutableMapping[str, Any]] = []
@@ -34,8 +35,8 @@ def filter_new_transactions(
     seen_in_batch: set[str] = set()
     skipped_count = 0
 
-    for tx in transactions:
-        fingerprint = transaction_fingerprint(tx, account_id)
+    for import_index, tx in enumerate(transactions, start=1):
+        fingerprint = transaction_fingerprint(tx, account_id, statement_id, import_index=import_index)
         tx["fingerprint"] = fingerprint
 
         if fingerprint in seen_in_batch:

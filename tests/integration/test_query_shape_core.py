@@ -7,6 +7,7 @@ regressing back to broad database reads followed by Python-only filtering.
 from contextlib import contextmanager
 
 from sqlalchemy import event, insert, select
+from tests.support.database import insert_transaction
 from werkzeug.datastructures import MultiDict
 
 from finance_app.database import engine as engine_module
@@ -14,14 +15,16 @@ from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.calendar.queries import fetch_month_transactions
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.comparison.queries import fetch_period_summary
+from finance_app.modules.dashboard.queries import fetch_spending_merchant_totals
 from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW
-from finance_app.modules.reports.queries import fetch_category_breakdown
+from finance_app.modules.reports.queries import fetch_category_breakdown, fetch_merchant_breakdown
 from finance_app.modules.review.queries import review_candidate_rows
 from finance_app.modules.rules.engine import rule_sql_candidate_condition
 from finance_app.modules.transactions.filters import (
     build_transaction_core_filters,
     parse_transaction_filters,
 )
+from finance_app.modules.transactions.queries import fetch_transaction_ids
 
 
 @contextmanager
@@ -124,6 +127,68 @@ def test_reports_category_breakdown_uses_sql_grouping(core_conn):
     reports_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
     assert "sum(" in reports_sql
     assert "group by" in reports_sql
+
+
+def test_reports_merchant_breakdown_uses_sql_grouping(core_conn):
+    """Verify merchant report analytics aggregate before Python fallback merging."""
+    with captured_sql() as statements:
+        fetch_merchant_breakdown(core_conn, [transactions_table.c.ignored == 0], REPORT_BASIS_CASH_FLOW)
+
+    reports_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
+    assert "sum(" in reports_sql
+    assert "group by" in reports_sql
+
+
+def test_dashboard_merchant_totals_use_sql_grouping(core_conn):
+    """Verify dashboard merchant driver analytics are grouped in SQL."""
+    with captured_sql() as statements:
+        fetch_spending_merchant_totals(core_conn, [transactions_table.c.ignored == 0])
+
+    dashboard_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
+    assert "sum(" in dashboard_sql
+    assert "group by" in dashboard_sql
+
+
+def test_merchant_breakdown_merges_normalized_fallback_groups(core_conn):
+    """Verify SQL pre-aggregation still preserves merchant fallback identity."""
+    insert_transaction(
+        core_conn,
+        description="SQ *Cosmeta",
+        amount=10.00,
+        tx_date="2026-01-03",
+        category="Food",
+        needs_review=0,
+        fingerprint="query-shape-merchant-fallback-processor",
+    )
+    insert_transaction(
+        core_conn,
+        description="Cosmeta",
+        amount=20.00,
+        tx_date="2026-01-04",
+        category="Food",
+        needs_review=0,
+        fingerprint="query-shape-merchant-fallback-plain",
+    )
+
+    rows = fetch_merchant_breakdown(core_conn, [transactions_table.c.ignored == 0], REPORT_BASIS_CASH_FLOW)
+
+    assert [(row["label"], row["spending"], row["transaction_count"]) for row in rows] == [("COSMETA", 30.00, 2)]
+
+
+def test_transaction_id_navigation_fetches_only_ids(core_conn):
+    """Verify transaction navigation avoids fetching the full page projection."""
+    filters = parse_transaction_filters(MultiDict([("period", "all")]), core_conn)
+    core_filters = build_transaction_core_filters(filters, "UNKNOWN", conn=core_conn)
+
+    with captured_sql() as statements:
+        fetch_transaction_ids(core_conn, core_filters.criteria(), transactions_table.c.tx_date, "desc")
+
+    transaction_sql = "\n".join(
+        statement.lower() for statement in statements if "from transactions" in statement.lower()
+    )
+    assert "select transactions.id" in transaction_sql
+    assert "transactions.description" not in transaction_sql
+    assert "transactions.amount" not in transaction_sql
 
 
 def test_comparison_period_summary_aggregates_with_sql_date_filters(core_conn):

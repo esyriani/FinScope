@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import and_, false, or_, select, update
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTION_CREDIT,
@@ -16,7 +17,7 @@ from finance_app.core.constants import (
     TRANSFER_CATEGORY,
 )
 from finance_app.core.filters import format_money
-from finance_app.core.money import money_to_float
+from finance_app.core.money import MoneyValue, money_to_decimal, money_to_float, rounded_money_decimal
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.builtins import is_income_category_name
@@ -122,7 +123,7 @@ def preview_rule_matches_core(
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(None).label("category"),
             )
             .where(rule_sql_candidate_condition(conn, rule, keyword))
             .order_by(transactions_table.c.tx_date.desc(), transactions_table.c.id.desc())
@@ -165,7 +166,7 @@ def rule_preview_matches_transaction(
     """Return whether a transaction matches the current preview filter."""
     if not rule_account_matches_transaction(rule, transaction):
         return False
-    if not rule_direction_matches_transaction(rule, money_to_float(transaction["amount"])):
+    if not rule_direction_matches_transaction(rule, transaction["amount"]):
         return False
 
     rule_merchant_id = rule.get("merchant_id")
@@ -183,8 +184,8 @@ def rule_preview_matches_transaction(
         if not any(keyword in candidate for candidate in candidates):
             return False
 
-    amount = money_to_float(transaction["amount"])
-    if is_income_category_name(rule["category"]) and (amount is None or amount >= 0):
+    amount = rounded_money_decimal(transaction["amount"])
+    if is_income_category_name(rule["category"]) and amount >= 0:
         return False
 
     return rule_amount_matches(rule, amount)
@@ -192,8 +193,8 @@ def rule_preview_matches_transaction(
 
 def rule_matches_transaction(rule: Mapping[str, Any], transaction: Mapping[str, Any], conn: Any = None) -> bool:
     """Build matches transaction."""
-    amount = money_to_float(transaction["amount"])
-    if is_income_category_name(rule["category"]) and (amount is None or amount >= 0):
+    amount = rounded_money_decimal(transaction["amount"])
+    if is_income_category_name(rule["category"]) and amount >= 0:
         return False
     if not rule_account_matches_transaction(rule, transaction):
         return False
@@ -259,7 +260,7 @@ def apply_single_rule_to_transactions(conn: Any, rule: Mapping[str, Any]) -> int
             conn,
             row["id"],
             state,
-            rule_transaction_kind(rule["category"], money_to_float(row["amount"]), row["transaction_kind"]),
+            rule_transaction_kind(rule["category"], row["amount"], row["transaction_kind"]),
         )
         set_transaction_tags(
             conn,
@@ -291,7 +292,7 @@ def apply_rule_where_it_wins_to_transactions(conn: Any, rule: Mapping[str, Any])
         normalized_merchant = normalize_merchant(row["description"], conn=conn)
         winning_rule = match_category_rule(
             normalized_merchant.merchant_key,
-            money_to_float(row["amount"]),
+            row["amount"],
             rules,
             merchant_candidate=normalized_merchant.merchant_key,
             raw_description=row["description"],
@@ -332,7 +333,7 @@ def apply_rule_where_it_wins_to_transactions(conn: Any, rule: Mapping[str, Any])
             conn,
             row["id"],
             state,
-            rule_transaction_kind(rule["category"], money_to_float(row["amount"]), row["transaction_kind"]),
+            rule_transaction_kind(rule["category"], row["amount"], row["transaction_kind"]),
         )
         set_transaction_tags(
             conn,
@@ -362,7 +363,7 @@ def apply_all_rules_to_transactions(conn: Any, capture_undo: bool = False) -> An
         normalized_merchant = normalize_merchant(row["description"], conn=conn)
         rule = match_category_rule(
             normalized_merchant.merchant_key,
-            money_to_float(row["amount"]),
+            row["amount"],
             rules,
             merchant_candidate=normalized_merchant.merchant_key,
             raw_description=row["description"],
@@ -393,7 +394,7 @@ def apply_all_rules_to_transactions(conn: Any, capture_undo: bool = False) -> An
         ):
             continue
 
-        transaction_kind = rule_transaction_kind(category, money_to_float(row["amount"]), row["transaction_kind"])
+        transaction_kind = rule_transaction_kind(category, row["amount"], row["transaction_kind"])
         old_state = TransactionCategorySnapshot.from_row(row, old_tags)
         state = TransactionCategoryState(
             category=category,
@@ -457,9 +458,10 @@ def active_transaction_rows(
         transactions_table.c.transaction_kind,
     ]
     if include_category_state:
+        category_label = transaction_category_label_expression(None)
         columns.extend(
             [
-                transactions_table.c.category,
+                category_label.label("category"),
                 transactions_table.c.category_id,
                 transactions_table.c.needs_review,
                 transactions_table.c.category_source,
@@ -553,13 +555,14 @@ def rule_direction(rule: Mapping[str, Any]) -> str:
     return CATEGORY_RULE_DIRECTION_ANY
 
 
-def rule_direction_matches_transaction(rule: Mapping[str, Any], amount: float | None) -> bool:
+def rule_direction_matches_transaction(rule: Mapping[str, Any], amount: MoneyValue | None) -> bool:
     """Return whether a transaction amount satisfies a rule direction."""
     direction = rule_direction(rule)
     if direction == CATEGORY_RULE_DIRECTION_ANY:
         return True
     if amount is None:
         return False
+    amount = money_to_decimal(amount)
     if direction == CATEGORY_RULE_DIRECTION_DEBIT:
         return amount >= 0
     if direction == CATEGORY_RULE_DIRECTION_CREDIT:
@@ -666,10 +669,10 @@ def nullable_equals(column: Any, value: object) -> Any:
     return column.is_(None) if value is None else column == value
 
 
-def rule_transaction_kind(category: str, amount: float | None, current_kind: str | None = None) -> str:
+def rule_transaction_kind(category: str, amount: MoneyValue | None, current_kind: str | None = None) -> str:
     """Return transaction kind implied by a rule category and amount direction."""
     if category == TRANSFER_CATEGORY:
         return TRANSACTION_KIND_TRANSFER
     if current_kind == TRANSACTION_KIND_REFUND:
         return TRANSACTION_KIND_REFUND
-    return TRANSACTION_KIND_INCOME if (amount or 0) < 0 else TRANSACTION_KIND_EXPENSE
+    return TRANSACTION_KIND_INCOME if money_to_decimal(amount) < 0 else TRANSACTION_KIND_EXPENSE

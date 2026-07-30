@@ -42,7 +42,7 @@ Minimal local setup on Windows PowerShell:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-Copy-Item config.example.ini config.ini
+Copy-Item src/finance_app/config.example.ini src/finance_app/config.ini
 finscope
 ```
 

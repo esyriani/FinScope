@@ -1,5 +1,7 @@
 """Tests for category rule matching helpers."""
 
+from decimal import Decimal
+
 from finance_app.modules.categories.rules_matching import (
     ScoredRuleMatch,
     match_category_rule,
@@ -50,6 +52,23 @@ def test_merchant_category_cache_key_includes_signed_amount():
         -12.34,
     )
     assert merchant_category_cache_key("METRO", 12.34, merchant_id=7) == ("merchant:7", "12.34")
+
+
+def test_rule_amount_matching_uses_decimal_cent_boundaries():
+    """Verify rule bounds use fixed-scale half-up Decimal comparisons."""
+    rules = [
+        category_rule(
+            1,
+            "ROUNDING STORE",
+            amount_min=Decimal("2.68"),
+            amount_max=Decimal("2.68"),
+        )
+    ]
+
+    winner = match_category_rule("ROUNDING STORE", Decimal("2.675"), rules)
+
+    assert winner["id"] == 1
+    assert match_category_rule("ROUNDING STORE", Decimal("2.674"), rules) is None
 
 
 def test_score_category_rule_matches_returns_all_matches_and_preserves_winner():

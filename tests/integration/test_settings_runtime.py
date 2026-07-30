@@ -99,6 +99,30 @@ def test_sync_statement_types_updates_adds_and_inactivates_rows(core_conn):
     assert get_statement_type_by_parser_type(core_conn, "bank_account")["name"] == "Daily bank account"
 
 
+def test_sync_statement_types_matches_existing_rows_by_database_name_key(core_conn):
+    """Synchronize statement types by lower-trimmed generated name keys."""
+    keep_row = get_statement_type_options(core_conn)[0]
+
+    sync_statement_types(
+        core_conn,
+        [
+            {
+                "id": "",
+                "name": f" {str(keep_row['name']).upper()} ",
+                "parser_type": "bank_account",
+            },
+        ],
+    )
+    core_conn.commit()
+
+    active_rows = get_statement_type_options(core_conn)
+
+    assert len(active_rows) == 1
+    assert active_rows[0]["id"] == keep_row["id"]
+    assert active_rows[0]["name"] == keep_row["name"]
+    assert active_rows[0]["parser_type"] == "bank_account"
+
+
 def test_sync_statement_types_rejects_duplicate_or_empty_rows(core_conn):
     """Verify statement type sync enforces unique active names and non-empty sets."""
     with pytest.raises(ValueError, match="Statement type names must be unique."):

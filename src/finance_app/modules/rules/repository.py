@@ -5,7 +5,8 @@ from typing import Any
 
 from sqlalchemy import and_, delete, func, insert, select
 
-from finance_app.core.money import optional_money_to_float
+from finance_app.core.category_sql import category_assignment_condition
+from finance_app.core.money import quantize_money
 from finance_app.database.tables import (
     accounts as accounts_table,
 )
@@ -18,6 +19,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     merchants as merchants_table,
 )
+from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
@@ -61,8 +63,8 @@ def category_rule_exists(conn: Any, rule: Mapping[str, Any]) -> bool:
     if rule.get("account_name") and account_id is None:
         return False
 
-    amount_min = rule.get("amount_min")
-    amount_max = rule.get("amount_max")
+    amount_min = quantize_money(rule.get("amount_min"))
+    amount_max = quantize_money(rule.get("amount_max"))
     direction = normalize_rule_direction(rule.get("direction"))
     scope_condition = (
         category_rules_table.c.merchant_id == merchant_id
@@ -113,8 +115,8 @@ def insert_imported_rule(conn: Any, rule: Mapping[str, Any]) -> int:
         "keyword": rule["keyword"],
         "category": rule["category"],
         "category_id": resolve_category_id(conn, rule["category"]),
-        "amount_min": rule["amount_min"],
-        "amount_max": rule["amount_max"],
+        "amount_min": quantize_money(rule["amount_min"]),
+        "amount_max": quantize_money(rule["amount_max"]),
         "direction": normalize_rule_direction(rule.get("direction")),
         "source": rule["source"],
         "ai_approved": int(rule.get("ai_approved") or 0),
@@ -159,7 +161,11 @@ def resolve_rule_account_id(conn: Any, rule: Mapping[str, Any], require_existing
     if not account_name:
         return None
 
-    row = conn.execute(select(accounts_table.c.id).where(accounts_table.c.name == account_name)).mappings().fetchone()
+    row = (
+        conn.execute(select(accounts_table.c.id).where(accounts_table.c.name_key == normalize_name_key(account_name)))
+        .mappings()
+        .fetchone()
+    )
     if row:
         return row["id"]
     if require_existing:
@@ -260,8 +266,8 @@ def rule_snapshot(row: Mapping[str, Any]) -> dict[str, Any]:
         "keyword": row["keyword"],
         "category": row["category"],
         "category_id": row.get("category_id"),
-        "amount_min": optional_money_to_float(row["amount_min"]),
-        "amount_max": optional_money_to_float(row["amount_max"]),
+        "amount_min": quantize_money(row["amount_min"]),
+        "amount_max": quantize_money(row["amount_max"]),
         "direction": normalize_rule_direction(row.get("direction")),
         "source": row["source"],
         "ai_approved": row.get("ai_approved", 0),
@@ -361,20 +367,30 @@ def remove_imported_categories(conn: Any, categories: Sequence[str]) -> int:
     removed = 0
 
     for category in categories:
+        category_row = (
+            conn.execute(
+                select(categories_table.c.id).where(categories_table.c.name_key == normalize_name_key(category))
+            )
+            .mappings()
+            .fetchone()
+        )
+        if category_row is None:
+            continue
+
         transaction_count = conn.execute(
             select(func.count().label("count"))
             .select_from(transactions_table)
-            .where(transactions_table.c.category == category)
+            .where(category_assignment_condition(transactions_table, category_row["id"], category))
         ).scalar_one()
         rule_count = conn.execute(
             select(func.count().label("count"))
             .select_from(category_rules_table)
-            .where(category_rules_table.c.category == category)
+            .where(category_assignment_condition(category_rules_table, category_row["id"], category))
         ).scalar_one()
         if transaction_count or rule_count:
             continue
 
-        result = conn.execute(delete(categories_table).where(categories_table.c.name == category))
+        result = conn.execute(delete(categories_table).where(categories_table.c.id == category_row["id"]))
         removed += result.rowcount or 0
 
     return removed

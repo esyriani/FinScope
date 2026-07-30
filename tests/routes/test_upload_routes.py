@@ -3,11 +3,14 @@
 import io
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 from tests.support.database import set_owner_setting
 from tests.support.html import assert_has_element, assert_markup, assert_visible_text
+from tests.support.jobs import capture_background_jobs
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.modules.upload import controller as upload_controller
 
 
 def test_upload_route_rejects_missing_file_without_statement_insert(client, core_conn):
@@ -495,3 +498,55 @@ def test_upload_route_rejects_duplicate_statement_checksum(client, core_conn, mo
     assert response.status_code == 200
     assert_visible_text(response, "This statement was already uploaded as already.csv on 2026-05-11T12:00:00Z")
     assert statement_count == 1
+
+
+def test_upload_route_handles_racing_duplicate_statement_checksum(client, core_conn, monkeypatch):
+    """Verify checksum insert conflicts return the controlled duplicate-upload outcome."""
+    statement_type_id = core_conn.execute(text("""
+        SELECT id
+        FROM statement_types
+        WHERE active = 1
+        ORDER BY id
+        LIMIT 1
+    """)).fetchone()._mapping["id"]
+    monkeypatch.setattr("finance_app.modules.upload.controller.file_checksum", lambda uploaded_file: "race-checksum")
+    lookups = {"count": 0}
+    submitted_jobs = capture_background_jobs(monkeypatch, upload_controller)
+
+    def racing_statement_lookup(conn, checksum):
+        """Miss the pre-check, then find the row inserted by another request."""
+        del conn
+        assert checksum == "race-checksum"
+        lookups["count"] += 1
+        if lookups["count"] == 1:
+            return None
+        return {
+            "filename": "race.csv",
+            "uploaded_at": "2026-05-11T12:00:00Z",
+            "import_status": "queued",
+        }
+
+    def duplicate_statement_insert(*args, **kwargs):
+        """Simulate the database checksum constraint losing a concurrent insert race."""
+        del args, kwargs
+        raise SqlAlchemyIntegrityError("duplicate checksum", {}, Exception("unique checksum"))
+
+    monkeypatch.setattr(upload_controller, "statement_by_checksum", racing_statement_lookup)
+    monkeypatch.setattr(upload_controller, "create_uploaded_statement", duplicate_statement_insert)
+
+    response = client.post(
+        "/upload",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": "Personal",
+            "statement_type_id": str(statement_type_id),
+            "statement": (io.BytesIO(b"Date,Description,Amount\n"), "duplicate.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert lookups["count"] == 2
+    assert len(submitted_jobs) == 0
+    assert_visible_text(response, "This statement was already uploaded as race.csv on 2026-05-11T12:00:00Z")

@@ -2,8 +2,7 @@
 
 from dataclasses import dataclass
 
-from sqlalchemy import func
-
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.periods import (
     DEFAULT_DATE_PERIOD,
     PERIOD_CUSTOM,
@@ -93,7 +92,7 @@ def apply_quick_view_core_filter(
     unknown_category: str,
 ) -> None:
     """Apply a quick-view status shortcut to SQLAlchemy Core filters."""
-    category_value = func.coalesce(transactions_table.c.category, unknown_category)
+    category_value = transaction_category_label_expression(unknown_category)
 
     if quick_view == QUICK_VIEW_CATEGORIZED:
         filters.add(category_value != unknown_category)

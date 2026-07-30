@@ -138,7 +138,8 @@ def test_build_transaction_core_filters_combines_high_value_filters(core_conn):
     core_filters = build_transaction_core_filters(filters, "UNKNOWN")
     sql = "\n".join(str(condition) for condition in core_filters.criteria())
 
-    assert "coalesce(transactions.category" in sql.lower()
+    assert "transactions.category_id" in sql
+    assert "transactions.category" in sql
     assert "NOT IN" in sql
     assert "NOT (EXISTS" in sql
     assert "transaction_tags" in sql

@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy import and_, case, or_, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_MANUAL,
@@ -127,10 +128,10 @@ def retrieve_historical_decision(
 
 def historical_candidate_rows(conn: Any, transaction: Mapping[str, Any], unknown_category: str) -> list[Any]:
     """Return a bounded SQL candidate pool for historical similarity scoring."""
+    category_label = transaction_category_label_expression(unknown_category)
     conditions = [
         transactions_table.c.ignored == 0,
-        transactions_table.c.category.is_not(None),
-        transactions_table.c.category != unknown_category,
+        category_label != unknown_category,
     ]
     transaction_id = transaction.get("id")
     if transaction_id is not None:
@@ -149,7 +150,7 @@ def historical_candidate_rows(conn: Any, transaction: Mapping[str, Any], unknown
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                category_label.label("category"),
                 transactions_table.c.category_source,
                 transactions_table.c.category_confidence,
                 transactions_table.c.reviewed_at,

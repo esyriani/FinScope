@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from decimal import InvalidOperation
+from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -13,7 +13,7 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_AUTOMATIC,
     CATEGORY_RULE_SOURCE_MANUAL,
 )
-from finance_app.core.money import MoneyValue, money_to_float, quantize_money
+from finance_app.core.money import MoneyValue, quantize_money, rounded_money_decimal
 from finance_app.core.text import strip_accents
 from finance_app.modules.categories.builtins import is_income_category_name
 from finance_app.modules.merchants.normalization import normalize_merchant_description
@@ -123,7 +123,7 @@ def score_category_rule_matches(
         merchant_candidate,
         raw_description=raw_description,
     )
-    amount_value = money_to_float(amount) if amount is not None else None
+    amount_value = rounded_money_decimal(amount) if amount is not None else None
     matches: list[ScoredRuleMatch] = []
     for rule in rules:
         if is_income_category_name(rule["category"]) and (amount_value is None or amount_value >= 0):
@@ -327,7 +327,7 @@ def rule_confidence(
     confidence += rule_source_adjustment(rule)
     confidence += amount_specificity_adjustment(rule, amount)
 
-    amount_value = money_to_float(amount) if amount is not None else None
+    amount_value = rounded_money_decimal(amount) if amount is not None else None
     if is_income_category_name(rule["category"]) and amount_value is not None and amount_value < 0:
         confidence += 0.06
 
@@ -356,14 +356,14 @@ def amount_specificity_adjustment(rule: Mapping[str, Any], amount: MoneyValue | 
     if amount is None:
         return -0.05
 
-    amount_value = abs(money_to_float(amount))
-    parsed_min = money_to_float(amount_min) if amount_min is not None else None
-    parsed_max = money_to_float(amount_max) if amount_max is not None else None
+    amount_value = abs(rounded_money_decimal(amount))
+    parsed_min = rounded_money_decimal(amount_min) if amount_min is not None else None
+    parsed_max = rounded_money_decimal(amount_max) if amount_max is not None else None
     if parsed_min is not None and parsed_max is not None:
         if parsed_min == parsed_max:
             return 0.08
         width = abs(parsed_max - parsed_min)
-        return 0.08 if width <= max(amount_value, 10.0) else 0.04
+        return 0.08 if width <= max(amount_value, Decimal("10.00")) else 0.04
 
     return 0.03
 
@@ -421,8 +421,8 @@ def rule_direction_matches(
         return True
     if amount is None:
         return False
-    amount = money_to_float(amount)
-    is_credit = amount < 0
+    amount_value = rounded_money_decimal(amount)
+    is_credit = amount_value < 0
     if direction == CATEGORY_RULE_DIRECTION_CREDIT:
         return is_credit
     if direction == CATEGORY_RULE_DIRECTION_DEBIT:
@@ -441,11 +441,11 @@ def rule_amount_matches(rule: Mapping[str, Any], amount: MoneyValue | None) -> b
     if amount is None:
         return False
 
-    amount = money_to_float(amount)
+    amount = rounded_money_decimal(amount)
     if amount_min is not None:
-        amount_min = money_to_float(amount_min)
+        amount_min = rounded_money_decimal(amount_min)
     if amount_max is not None:
-        amount_max = money_to_float(amount_max)
+        amount_max = rounded_money_decimal(amount_max)
 
     if amount_min is not None and amount < amount_min:
         return False

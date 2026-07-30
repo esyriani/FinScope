@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.database.tables import (
     accounts as accounts_table,
 )
@@ -20,7 +21,7 @@ def transaction_list_select() -> Any:
         transactions_table.c.tx_date,
         transactions_table.c.description,
         transactions_table.c.amount,
-        transactions_table.c.category,
+        transaction_category_label_expression(None).label("category"),
         transactions_table.c.category_source,
         transactions_table.c.category_confidence,
         transactions_table.c.category_rule_id,
@@ -76,24 +77,33 @@ def fetch_transactions(
 
 
 def fetch_transaction_ids(conn: Any, filters: Iterable[Any], sort_expression: Any, direction: str) -> list[int]:
-    """Fetch IDs for all transactions matching the current list filters."""
+    """Fetch ordered IDs for all transactions matching the current list filters."""
     sort_order = sort_expression.desc() if direction == "desc" else sort_expression.asc()
     return [
         row["id"]
         for row in conn.execute(
-            transaction_list_select().where(*filters).order_by(sort_order, transactions_table.c.id.desc())
+            select(transactions_table.c.id)
+            .select_from(
+                transactions_table.outerjoin(
+                    accounts_table,
+                    accounts_table.c.id == transactions_table.c.account_id,
+                )
+            )
+            .where(*filters)
+            .order_by(sort_order, transactions_table.c.id.desc())
         ).mappings()
     ]
 
 
 def fetch_distinct_categories(conn: Any) -> Any:
     """Fetch distinct categories."""
+    category_label = transaction_category_label_expression(None)
     return (
         conn.execute(
-            select(transactions_table.c.category)
-            .where(transactions_table.c.category.is_not(None))
+            select(category_label.label("category"))
+            .where(category_label.is_not(None))
             .distinct()
-            .order_by(transactions_table.c.category)
+            .order_by(category_label)
         )
         .mappings()
         .fetchall()

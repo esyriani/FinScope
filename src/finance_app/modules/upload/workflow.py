@@ -1,6 +1,7 @@
 """Background workflow helpers for the upload feature."""
 
 from collections.abc import Mapping, Sequence
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, insert, or_, select, update
@@ -14,6 +15,7 @@ from finance_app.background.runner import (
     submit_background_job,
     update_background_job_progress,
 )
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
     ACCOUNT_TYPE_SAVINGS,
@@ -22,18 +24,15 @@ from finance_app.core.constants import (
     STATEMENT_IMPORT_MODE_ENRICHMENT,
     STATEMENT_IMPORT_STATUS_COMPLETED,
     STATEMENT_IMPORT_STATUS_FAILED,
-    STATEMENT_IMPORT_STATUS_QUEUED,
     STATEMENT_IMPORT_STATUS_RUNNING,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
     TRANSACTION_KIND_EXPENSE,
     UNKNOWN_CATEGORY,
 )
+from finance_app.core.money import money_to_decimal
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
-)
-from finance_app.database.tables import (
-    statements as statements_table,
 )
 from finance_app.database.tables import (
     transactions as transactions_table,
@@ -65,6 +64,10 @@ from finance_app.modules.upload.messages import (
     merge_source_counts,
     upload_result_message,
 )
+from finance_app.modules.upload.repository import (
+    claim_statement_import,
+    update_statement_import_state,
+)
 from finance_app.modules.upload.transaction_kinds import (
     apply_transaction_kind_categories,
     classify_transaction_kind,
@@ -85,10 +88,15 @@ from finance_app.modules.upload.undo import (
 )
 
 INTERAC_MATCH_DATE_TOLERANCE_DAYS = 5
+INTERAC_MATCH_AMOUNT_TOLERANCE = Decimal("0.005")
 INTERAC_DESCRIPTION_MARKERS: dict[str, tuple[str, ...]] = {
     "sent": ("ENVOI", "SENT E-TRANSFER"),
     "received": ("RECEPT", "RECEIVED E-TRANSFER"),
 }
+
+
+class StatementImportClaimError(RuntimeError):
+    """Raised when a statement import attempt loses its database claim."""
 
 
 def import_transactions(
@@ -167,6 +175,7 @@ def import_transactions(
         conn,
         parse_result["transactions"],
         account_id,
+        statement_id,
     )
     skipped_count += duplicate_count
     for tx in transactions:
@@ -449,10 +458,11 @@ def find_interac_match_core(
 ) -> Any:
     """Return a Core Interac match for one account scope."""
     statement = transaction_snapshot_select()
+    amount = money_to_decimal(transfer["amount"])
     conditions = [
         transactions_table.c.ignored == 0,
-        transactions_table.c.amount > transfer["amount"] - 0.005,
-        transactions_table.c.amount < transfer["amount"] + 0.005,
+        transactions_table.c.amount > amount - INTERAC_MATCH_AMOUNT_TOLERANCE,
+        transactions_table.c.amount < amount + INTERAC_MATCH_AMOUNT_TOLERANCE,
         transactions_table.c.tx_date >= date_window_start(transfer["tx_date"], INTERAC_MATCH_DATE_TOLERANCE_DAYS),
         transactions_table.c.tx_date <= date_window_end(transfer["tx_date"], INTERAC_MATCH_DATE_TOLERANCE_DAYS),
         interac_merchant_condition(transfer, merchant_id),
@@ -497,6 +507,7 @@ def import_statement_transactions_job(
     statement_type: str,
     extension: str,
     raw_text: str,
+    import_token: str,
     undo_state: dict[str, Any] | None = None,
     import_mode: str | None = None,
     interac_direction: str = INTERAC_DIRECTION_AUTO,
@@ -511,14 +522,14 @@ def import_statement_transactions_job(
 
     try:
         with db_core_transaction() as conn:
-            update_statement_import_state(
+            claimed = claim_statement_import(
                 conn,
                 statement_id,
-                STATEMENT_IMPORT_STATUS_RUNNING,
-                import_error=None,
-                import_started_at=utc_timestamp(),
-                import_finished_at=None,
+                import_token,
+                utc_timestamp(),
             )
+            if not claimed:
+                return "Statement import was already claimed by another attempt."
 
         with db_core_transaction() as conn:
             inserted_count, skipped_count, ignored_count = import_transactions(
@@ -536,10 +547,12 @@ def import_statement_transactions_job(
             if extension == "csv" and inserted_count and statement_type != STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
                 llm_candidate_count = count_statement_unknown_transactions(conn, statement_id)
                 auto_queue_llm = should_auto_queue_statement_llm(conn, llm_candidate_count)
-            update_statement_import_state(
+            updated = update_statement_import_state(
                 conn,
                 statement_id,
                 STATEMENT_IMPORT_STATUS_COMPLETED,
+                expected_statuses=(STATEMENT_IMPORT_STATUS_RUNNING,),
+                expected_import_token=import_token,
                 import_error=None,
                 import_finished_at=utc_timestamp(),
                 imported_count=inserted_count,
@@ -547,6 +560,8 @@ def import_statement_transactions_job(
                 ignored_count=ignored_count,
                 llm_candidate_count=llm_candidate_count,
             )
+            if not updated:
+                raise StatementImportClaimError("Statement import attempt is no longer active.")
         if auto_queue_llm:
             auto_llm_job_id = queue_statement_llm_categorization(statement_id)
     except Exception as exc:
@@ -555,6 +570,8 @@ def import_statement_transactions_job(
                 conn,
                 statement_id,
                 STATEMENT_IMPORT_STATUS_FAILED,
+                expected_statuses=(STATEMENT_IMPORT_STATUS_RUNNING,),
+                expected_import_token=import_token,
                 import_error=f"{type(exc).__name__}: {exc}",
                 import_finished_at=utc_timestamp(),
             )
@@ -595,46 +612,6 @@ def queue_all_unknown_llm_categorization() -> str:
     )
 
 
-def reset_statement_import_state(
-    conn: Any,
-    statement_id: int,
-    status: str = STATEMENT_IMPORT_STATUS_QUEUED,
-) -> None:
-    """Reset persisted import metadata before queueing a statement import."""
-    update_statement_import_state(
-        conn,
-        statement_id,
-        status,
-        import_error=None,
-        import_started_at=None,
-        import_finished_at=None,
-        imported_count=0,
-        skipped_count=0,
-        ignored_count=0,
-        llm_candidate_count=0,
-    )
-
-
-def update_statement_import_state(conn: Any, statement_id: int, status: str, **fields: Any) -> None:
-    """Persist import status, timestamps, counters, and errors for a statement."""
-    allowed_fields = {
-        "import_error",
-        "import_started_at",
-        "import_finished_at",
-        "imported_count",
-        "skipped_count",
-        "ignored_count",
-        "llm_candidate_count",
-    }
-    for field, value in fields.items():
-        if field not in allowed_fields:
-            raise ValueError(f"Unsupported statement import field: {field}")
-
-    conn.execute(
-        update(statements_table).where(statements_table.c.id == statement_id).values(import_status=status, **fields)
-    )
-
-
 def count_statement_unknown_transactions(conn: Any, statement_id: int) -> int:
     """Count statement unknown transactions."""
     return count_unknown_transactions(conn, statement_id=statement_id)
@@ -658,7 +635,7 @@ def unknown_transaction_conditions(
     """Return Core predicates for active transactions eligible for AI reruns."""
     conditions = [
         transactions_table.c.ignored == 0,
-        (transactions_table.c.category.is_(None) | (transactions_table.c.category == unknown_category)),
+        transaction_category_label_expression(unknown_category) == unknown_category,
     ]
     if statement_id is not None:
         conditions.append(transactions_table.c.statement_id == statement_id)
@@ -1011,7 +988,7 @@ def unknown_transaction_rows(
             transactions_table.c.merchant_id,
             transactions_table.c.description,
             transactions_table.c.amount,
-            transactions_table.c.category,
+            transaction_category_label_expression(unknown_category).label("category"),
             transactions_table.c.transaction_kind,
         )
         .where(
@@ -1048,7 +1025,7 @@ def update_unknown_transaction_category(conn: Any, tx: Mapping[str, Any], unknow
         update(transactions_table)
         .where(
             transactions_table.c.id == tx["id"],
-            (transactions_table.c.category.is_(None) | (transactions_table.c.category == unknown_category)),
+            transaction_category_label_expression(unknown_category) == unknown_category,
         )
         .values(**values)
     )

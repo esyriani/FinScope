@@ -285,8 +285,16 @@ def _save_reimbursement_allocation(
         raise ReimbursementAllocationError("A reimbursement cannot be matched to itself.")
 
     normalized_amount = positive_money(amount)
-    reimbursement = require_transaction(conn, normalized_reimbursement_id, "Reimbursement transaction")
-    expense = require_transaction(conn, normalized_expense_id, "Expense transaction")
+    locked_transactions = repository.lock_transaction_allocation_subjects(
+        conn,
+        (normalized_reimbursement_id, normalized_expense_id),
+    )
+    reimbursement = require_transaction_subject(
+        locked_transactions,
+        normalized_reimbursement_id,
+        "Reimbursement transaction",
+    )
+    expense = require_transaction_subject(locked_transactions, normalized_expense_id, "Expense transaction")
     validate_reimbursement_transaction(reimbursement)
     validate_expense_transaction(expense)
 
@@ -354,6 +362,18 @@ def require_transaction(conn: Any, transaction_id: int, label: str) -> dict[str,
     return transaction
 
 
+def require_transaction_subject(
+    transactions_by_id: dict[int, dict[str, Any]],
+    transaction_id: int,
+    label: str,
+) -> dict[str, Any]:
+    """Return a locked transaction allocation subject or raise a domain error."""
+    transaction = transactions_by_id.get(transaction_id)
+    if transaction is None:
+        raise ReimbursementAllocationError(f"{label} was not found.")
+    return transaction
+
+
 def validate_reimbursement_transaction(transaction: dict[str, Any]) -> None:
     """Validate that a transaction can provide reimbursement funds."""
     if not is_reimbursement_category(transaction):
@@ -374,10 +394,11 @@ def validate_expense_transaction(transaction: dict[str, Any]) -> None:
 
 def is_reimbursement_category(transaction: dict[str, Any]) -> bool:
     """Return whether a transaction is categorized as a reimbursement credit."""
-    return transaction.get(
-        "category_builtin_key"
-    ) == BUILTIN_CATEGORY_REIMBURSEMENT or is_category_name_for_builtin_key(
-        transaction.get("category"), BUILTIN_CATEGORY_REIMBURSEMENT
+    if transaction.get("category_builtin_key") == BUILTIN_CATEGORY_REIMBURSEMENT:
+        return True
+    return transaction.get("category_id") is None and is_category_name_for_builtin_key(
+        transaction.get("category"),
+        BUILTIN_CATEGORY_REIMBURSEMENT,
     )
 
 

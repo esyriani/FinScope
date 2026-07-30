@@ -30,6 +30,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     merchants as merchants_table,
 )
+from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import (
     statement_types as statement_types_table,
 )
@@ -274,7 +275,11 @@ def insert_account(
             account_type=ACCOUNT_TYPE_CHECKING,
         )
 
-    row = conn.execute(select(accounts_table.c.id).where(accounts_table.c.name == account_name)).mappings().fetchone()
+    row = (
+        conn.execute(select(accounts_table.c.id).where(accounts_table.c.name_key == normalize_name_key(account_name)))
+        .mappings()
+        .fetchone()
+    )
     if row is None:
         result = conn.execute(
             insert(accounts_table).values(
@@ -319,7 +324,9 @@ def insert_statement_type(
     """
     type_name = name or unique_test_value("statement-type")
     row = (
-        conn.execute(select(statement_types_table.c.id).where(statement_types_table.c.name == type_name))
+        conn.execute(
+            select(statement_types_table.c.id).where(statement_types_table.c.name_key == normalize_name_key(type_name))
+        )
         .mappings()
         .fetchone()
     )
@@ -460,7 +467,9 @@ def insert_tag(conn, name=None, *, description="", instruction="", color=None):
     if tag_name is None:
         raise ValueError("Tag name cannot be blank.")
 
-    tag_id = conn.execute(select(tags_table.c.id).where(tags_table.c.name == tag_name)).scalar_one()
+    tag_id = conn.execute(
+        select(tags_table.c.id).where(tags_table.c.name_key == normalize_name_key(tag_name))
+    ).scalar_one()
     conn.commit()
     return tag_id
 

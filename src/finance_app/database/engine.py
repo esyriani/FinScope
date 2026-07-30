@@ -188,7 +188,7 @@ def db_core_transaction(conn: Connection | None = None) -> Iterator[Connection]:
         conn = get_core_connection()
 
     transaction_depth = conn.info.get(CORE_DB_TRANSACTION_DEPTH_KEY, 0)
-    use_savepoint = transaction_depth > 0 or conn.in_transaction()
+    use_savepoint = transaction_depth > 0 or (not owns_connection and conn.in_transaction())
     conn.info[CORE_DB_TRANSACTION_DEPTH_KEY] = transaction_depth + 1
     try:
         if use_savepoint:

@@ -13,7 +13,7 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_TRANSFER,
     TRANSFER_CATEGORY,
 )
-from finance_app.core.money import MoneyValue, optional_money_to_float
+from finance_app.core.money import MoneyValue, optional_money_to_decimal
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import category_rules as category_rules_table
 from finance_app.database.tables import transactions as transactions_table
@@ -42,8 +42,8 @@ def apply_review_group_job(
     tags: Iterable[str],
     create_rule: bool,
     rule_keyword: str,
-    amount_min: float | None = None,
-    amount_max: float | None = None,
+    amount_min: MoneyValue | None = None,
+    amount_max: MoneyValue | None = None,
     transaction_id: int | None = None,
     selected_transaction_ids: Iterable[int] | None = None,
 ) -> str:
@@ -260,7 +260,7 @@ def reviewed_transaction_kind(category: object, amount: MoneyValue | None, curre
         return TRANSACTION_KIND_TRANSFER
     if current_kind == TRANSACTION_KIND_REFUND:
         return TRANSACTION_KIND_REFUND
-    amount_value = optional_money_to_float(amount)
+    amount_value = optional_money_to_decimal(amount)
     return TRANSACTION_KIND_INCOME if amount_value is not None and amount_value < 0 else TRANSACTION_KIND_EXPENSE
 
 
@@ -268,8 +268,8 @@ def save_review_rule(
     conn: Any,
     merchant_key: str,
     category: str,
-    amount_min: float | None = None,
-    amount_max: float | None = None,
+    amount_min: MoneyValue | None = None,
+    amount_max: MoneyValue | None = None,
     tags: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """Save review rule."""

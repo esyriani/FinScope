@@ -4,8 +4,16 @@ Exercises SQLAlchemy Core repository helpers when another writer creates the
 same logical row between the helper's preselect and insert attempt.
 """
 
+from decimal import Decimal
+
+import pytest
 from sqlalchemy import func, insert, select
 
+from finance_app.core.constants import (
+    REIMBURSEMENT_CATEGORY,
+    TRANSACTION_KIND_EXPENSE,
+    TRANSACTION_KIND_INCOME,
+)
 from finance_app.database.tables import (
     categories as categories_table,
 )
@@ -13,10 +21,18 @@ from finance_app.database.tables import (
     merchants as merchants_table,
 )
 from finance_app.database.tables import (
+    reimbursement_allocations as reimbursement_allocations_table,
+)
+from finance_app.database.tables import (
     tags as tags_table,
 )
 from finance_app.modules.categories import taxonomy as category_taxonomy
 from finance_app.modules.merchants import repository as merchant_repository
+from finance_app.modules.reimbursements import repository as reimbursement_repository
+from finance_app.modules.reimbursements.service import (
+    ReimbursementAllocationError,
+    create_reimbursement_allocation,
+)
 
 
 def test_concurrent_merchant_get_or_create_reselects_existing_row(core_conn, monkeypatch):
@@ -124,3 +140,142 @@ def test_concurrent_category_and_tag_metadata_create_handles_unique_conflicts(co
     assert injected == {"category": True, "tag": True}
     assert tuple(category_row) == ("Updated description", "Updated instruction", 1)
     assert tuple(tag_row) == ("Updated tag description", "Updated tag instruction", "#123456", 1)
+
+
+def test_concurrent_reimbursement_allocation_rechecks_reimbursement_total_after_lock(
+    core_conn,
+    data_factory,
+    monkeypatch,
+):
+    """Verify racing allocations cannot overdraw the same reimbursement credit."""
+    first_expense_id = data_factory.transactions.create(
+        description="Race conference hotel",
+        amount=Decimal("800.00"),
+        category="Travel",
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+        needs_review=0,
+        tags=["Reimbursable"],
+    )
+    second_expense_id = data_factory.transactions.create(
+        description="Race conference meals",
+        amount=Decimal("300.00"),
+        category="Food",
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+        needs_review=0,
+        tags=["Reimbursable"],
+    )
+    reimbursement_id = data_factory.transactions.create(
+        description="Race employer reimbursement",
+        amount=Decimal("-900.00"),
+        category=REIMBURSEMENT_CATEGORY,
+        transaction_kind=TRANSACTION_KIND_INCOME,
+        needs_review=0,
+    )
+    real_lock_subjects = reimbursement_repository.lock_transaction_allocation_subjects
+    real_sum_allocated = reimbursement_repository.sum_allocated_to_reimbursement
+    injected = {"locked": False, "allocation": False}
+
+    def lock_subjects(conn, transaction_ids):
+        subjects = real_lock_subjects(conn, transaction_ids)
+        injected["locked"] = True
+        return subjects
+
+    def simulate_racing_reimbursement_allocation(conn, reimbursement_transaction_id, *, exclude_allocation_id=None):
+        if reimbursement_transaction_id == reimbursement_id and not injected["allocation"]:
+            assert injected["locked"] is True
+            injected["allocation"] = True
+            reimbursement_repository.insert_allocation(
+                conn,
+                reimbursement_id,
+                first_expense_id,
+                Decimal("800.00"),
+            )
+        return real_sum_allocated(
+            conn,
+            reimbursement_transaction_id,
+            exclude_allocation_id=exclude_allocation_id,
+        )
+
+    monkeypatch.setattr(reimbursement_repository, "lock_transaction_allocation_subjects", lock_subjects)
+    monkeypatch.setattr(
+        reimbursement_repository,
+        "sum_allocated_to_reimbursement",
+        simulate_racing_reimbursement_allocation,
+    )
+
+    with pytest.raises(ReimbursementAllocationError, match="still unmatched"):
+        create_reimbursement_allocation(reimbursement_id, second_expense_id, Decimal("150.00"), conn=core_conn)
+
+    allocation_count = core_conn.execute(select(func.count()).select_from(reimbursement_allocations_table)).scalar_one()
+
+    assert injected == {"locked": True, "allocation": True}
+    assert allocation_count == 0
+
+
+def test_concurrent_reimbursement_allocation_rechecks_expense_total_after_lock(
+    core_conn,
+    data_factory,
+    monkeypatch,
+):
+    """Verify racing allocations cannot over-reimburse the same expense."""
+    expense_id = data_factory.transactions.create(
+        description="Race reimbursable hotel",
+        amount=Decimal("500.00"),
+        category="Travel",
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+        needs_review=0,
+        tags=["Reimbursable"],
+    )
+    first_reimbursement_id = data_factory.transactions.create(
+        description="Race first reimbursement",
+        amount=Decimal("-300.00"),
+        category=REIMBURSEMENT_CATEGORY,
+        transaction_kind=TRANSACTION_KIND_INCOME,
+        needs_review=0,
+    )
+    second_reimbursement_id = data_factory.transactions.create(
+        description="Race second reimbursement",
+        amount=Decimal("-300.00"),
+        category=REIMBURSEMENT_CATEGORY,
+        transaction_kind=TRANSACTION_KIND_INCOME,
+        needs_review=0,
+    )
+    real_lock_subjects = reimbursement_repository.lock_transaction_allocation_subjects
+    real_sum_allocated = reimbursement_repository.sum_allocated_to_expense
+    injected = {"locked": False, "allocation": False}
+
+    def lock_subjects(conn, transaction_ids):
+        subjects = real_lock_subjects(conn, transaction_ids)
+        injected["locked"] = True
+        return subjects
+
+    def simulate_racing_expense_allocation(conn, expense_transaction_id, *, exclude_allocation_id=None):
+        if expense_transaction_id == expense_id and not injected["allocation"]:
+            assert injected["locked"] is True
+            injected["allocation"] = True
+            reimbursement_repository.insert_allocation(
+                conn,
+                first_reimbursement_id,
+                expense_id,
+                Decimal("300.00"),
+            )
+        return real_sum_allocated(
+            conn,
+            expense_transaction_id,
+            exclude_allocation_id=exclude_allocation_id,
+        )
+
+    monkeypatch.setattr(reimbursement_repository, "lock_transaction_allocation_subjects", lock_subjects)
+    monkeypatch.setattr(
+        reimbursement_repository,
+        "sum_allocated_to_expense",
+        simulate_racing_expense_allocation,
+    )
+
+    with pytest.raises(ReimbursementAllocationError, match="still to reimburse"):
+        create_reimbursement_allocation(second_reimbursement_id, expense_id, Decimal("250.00"), conn=core_conn)
+
+    allocation_count = core_conn.execute(select(func.count()).select_from(reimbursement_allocations_table)).scalar_one()
+
+    assert injected == {"locked": True, "allocation": True}
+    assert allocation_count == 0

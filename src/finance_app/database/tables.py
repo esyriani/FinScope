@@ -109,6 +109,16 @@ def non_empty_constraint(column_name: str, name: str) -> CheckConstraint:
     return CheckConstraint(func.trim(column(column_name)) != "", name=name)
 
 
+def normalized_name_key_sql(column_name: str) -> str:
+    """Return the generated-key SQL used for visible display names."""
+    return f"lower(trim({column_name}))"
+
+
+def normalize_name_key(value: object) -> str:
+    """Return the lookup key produced by normalized display-name columns."""
+    return str(value or "").strip().lower()
+
+
 users = Table(
     "users",
     metadata,
@@ -217,9 +227,10 @@ accounts = Table(
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String(255), nullable=False),
+    Column("name_key", String(255), Computed(normalized_name_key_sql("name"), persisted=True)),
     Column("account_type", String(32), nullable=False, server_default=ACCOUNT_TYPE_CHECKING),
     Column("paid_from_account_id", Integer, ForeignKey("accounts.id", ondelete="SET NULL")),
-    UniqueConstraint("name", name="uq_accounts_name"),
+    UniqueConstraint("name_key", name="uq_accounts_name_key"),
     allowed_values_constraint("account_type", ACCOUNT_TYPES, "accounts_account_type_allowed"),
     non_empty_constraint("name", "accounts_name_non_empty"),
     **AUTOINCREMENT_TABLE_OPTIONS,
@@ -230,12 +241,13 @@ statement_types = Table(
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String(255), nullable=False),
+    Column("name_key", String(255), Computed(normalized_name_key_sql("name"), persisted=True)),
     Column("parser_type", String(64), nullable=False, server_default=STATEMENT_TYPE_PARSER_CREDIT_CARD),
     Column("import_mode", String(32), nullable=False, server_default=STATEMENT_IMPORT_MODE_LEDGER),
     Column("default_account_type", String(32), nullable=False, server_default=ACCOUNT_TYPE_CHECKING),
     Column("active", Integer, nullable=False, server_default=text("1")),
     Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
-    UniqueConstraint("name", name="uq_statement_types_name"),
+    UniqueConstraint("name_key", name="uq_statement_types_name_key"),
     non_empty_constraint("name", "statement_types_name_non_empty"),
     allowed_values_constraint("parser_type", STATEMENT_TYPE_PARSER_TYPES, "statement_types_parser_type_allowed"),
     allowed_values_constraint("import_mode", STATEMENT_IMPORT_MODES, "statement_types_import_mode_allowed"),
@@ -249,11 +261,12 @@ categories = Table(
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String(255), nullable=False),
+    Column("name_key", String(255), Computed(normalized_name_key_sql("name"), persisted=True)),
     Column("builtin_key", String(64)),
     Column("description", Text),
     Column("instruction", Text),
     Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
-    UniqueConstraint("name", name="uq_categories_name"),
+    UniqueConstraint("name_key", name="uq_categories_name_key"),
     UniqueConstraint("builtin_key", name="uq_categories_builtin_key"),
     non_empty_constraint("name", "categories_name_non_empty"),
     **AUTOINCREMENT_TABLE_OPTIONS,
@@ -346,6 +359,7 @@ statements = Table(
     Column("date_order", String(32), nullable=False, server_default=DATE_ORDER_AUTO),
     Column("raw_text", Text),
     Column("import_status", String(32), nullable=False, server_default=STATEMENT_IMPORT_STATUS_PENDING),
+    Column("import_token", String(64)),
     Column("import_error", Text),
     Column("import_started_at", TIMESTAMP_TYPE),
     Column("import_finished_at", TIMESTAMP_TYPE),
@@ -444,12 +458,13 @@ tags = Table(
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String(255), nullable=False),
+    Column("name_key", String(255), Computed(normalized_name_key_sql("name"), persisted=True)),
     Column("builtin_key", String(64)),
     Column("description", Text),
     Column("instruction", Text),
     Column("color", String(64)),
     Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
-    UniqueConstraint("name", name="uq_tags_name"),
+    UniqueConstraint("name_key", name="uq_tags_name_key"),
     UniqueConstraint("builtin_key", name="uq_tags_builtin_key"),
     non_empty_constraint("name", "tags_name_non_empty"),
     **AUTOINCREMENT_TABLE_OPTIONS,

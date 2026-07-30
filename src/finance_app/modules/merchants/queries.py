@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import and_, case, func, or_, select
 
 from finance_app.database.tables import merchants as merchants_table
+from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.merchants.filters import (
     merchant_search_term_groups,
     merchant_search_terms,
@@ -80,3 +81,8 @@ def normalize_suggestion_query(value: object) -> str:
 def escape_like_prefix(value: object) -> str:
     """Escape SQL LIKE wildcard characters for a prefix match."""
     return str(value).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def merchant_fallback_description_expression(transaction_table: Any = transactions_table) -> Any:
+    """Return fallback grouping text only for rows without durable merchant IDs."""
+    return case((transaction_table.c.merchant_id.is_(None), transaction_table.c.description), else_=None)

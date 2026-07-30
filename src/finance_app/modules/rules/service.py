@@ -5,8 +5,9 @@ from typing import Any
 
 from sqlalchemy import delete, func, select, union_all, update
 
-from finance_app.core.constants import CATEGORY_RULE_SOURCE_AUTOMATIC, CATEGORY_RULE_SOURCE_MANUAL
-from finance_app.core.money import money_to_float
+from finance_app.core.category_sql import category_label_expression
+from finance_app.core.constants import CATEGORY_RULE_SOURCE_AUTOMATIC, CATEGORY_RULE_SOURCE_MANUAL, UNKNOWN_CATEGORY
+from finance_app.core.money import quantize_money
 from finance_app.database.tables import (
     category_rules as category_rules_table,
 )
@@ -253,7 +254,7 @@ def get_rule_for_apply(conn: Any, rule_id: int) -> dict[str, Any] | None:
                 category_rules_table.c.account_id,
                 category_rules_table.c.merchant_id,
                 category_rules_table.c.keyword,
-                category_rules_table.c.category,
+                category_label_expression(category_rules_table, UNKNOWN_CATEGORY).label("category"),
                 category_rules_table.c.category_id,
                 category_rules_table.c.amount_min,
                 category_rules_table.c.amount_max,
@@ -269,9 +270,9 @@ def get_rule_for_apply(conn: Any, rule_id: int) -> dict[str, Any] | None:
 
     rule = dict(row)
     if rule["amount_min"] is not None:
-        rule["amount_min"] = money_to_float(rule["amount_min"])
+        rule["amount_min"] = quantize_money(rule["amount_min"])
     if rule["amount_max"] is not None:
-        rule["amount_max"] = money_to_float(rule["amount_max"])
+        rule["amount_max"] = quantize_money(rule["amount_max"])
     rule["tags"] = get_rule_tags_by_rule_id(conn, [rule["id"]]).get(rule["id"], [])
     return rule
 

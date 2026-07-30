@@ -5,6 +5,7 @@ SQLAlchemy Core reads and writes focused on reimbursement allocation rows and
 the transaction fields needed to validate links.
 """
 
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import delete, func, insert, select, update
@@ -12,6 +13,7 @@ from sqlalchemy import delete, func, insert, select, update
 from finance_app.core.constants import CATEGORY_SOURCE_MANUAL
 from finance_app.core.money import MoneyValue, money_to_decimal
 from finance_app.database.tables import categories as categories_table
+from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import reimbursement_expense_completions as expense_completions_table
 from finance_app.database.tables import tags as tags_table
@@ -68,30 +70,61 @@ def get_allocation_pair(
 def get_transaction_allocation_subject(conn: Any, transaction_id: int) -> dict[str, Any] | None:
     """Return transaction fields used by reimbursement allocation validation."""
     row = (
-        conn.execute(
-            select(
-                transactions_table.c.id,
-                transactions_table.c.tx_date,
-                transactions_table.c.description,
-                transactions_table.c.amount,
-                transactions_table.c.category,
-                transactions_table.c.category_id,
-                transactions_table.c.transaction_kind,
-                transactions_table.c.ignored,
-                categories_table.c.builtin_key.label("category_builtin_key"),
-            )
-            .select_from(
-                transactions_table.outerjoin(
-                    categories_table,
-                    categories_table.c.id == transactions_table.c.category_id,
-                )
-            )
-            .where(transactions_table.c.id == transaction_id)
-        )
+        conn.execute(transaction_allocation_subjects_statement().where(transactions_table.c.id == transaction_id))
         .mappings()
         .fetchone()
     )
     return dict(row) if row is not None else None
+
+
+def lock_transaction_allocation_subjects(conn: Any, transaction_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
+    """Lock and return transaction fields used by allocation validation.
+
+    The intentional no-op updates acquire write locks before allocation totals
+    are read. This serializes competing reimbursement writes for the same
+    reimbursement or expense transaction across SQLite and MySQL.
+    """
+    normalized_ids = sorted({int(transaction_id) for transaction_id in transaction_ids})
+    if not normalized_ids:
+        return {}
+
+    for transaction_id in normalized_ids:
+        conn.execute(
+            update(transactions_table)
+            .where(transactions_table.c.id == transaction_id)
+            .values(id=transactions_table.c.id)
+        )
+
+    rows = (
+        conn.execute(
+            transaction_allocation_subjects_statement()
+            .where(transactions_table.c.id.in_(normalized_ids))
+            .order_by(transactions_table.c.id)
+        )
+        .mappings()
+        .fetchall()
+    )
+    return {int(row["id"]): dict(row) for row in rows}
+
+
+def transaction_allocation_subjects_statement() -> Any:
+    """Build the transaction subject query shared by reimbursement validators."""
+    return select(
+        transactions_table.c.id,
+        transactions_table.c.tx_date,
+        transactions_table.c.description,
+        transactions_table.c.amount,
+        transactions_table.c.category,
+        transactions_table.c.category_id,
+        transactions_table.c.transaction_kind,
+        transactions_table.c.ignored,
+        categories_table.c.builtin_key.label("category_builtin_key"),
+    ).select_from(
+        transactions_table.outerjoin(
+            categories_table,
+            categories_table.c.id == transactions_table.c.category_id,
+        )
+    )
 
 
 def sum_allocated_to_reimbursement(
@@ -215,12 +248,13 @@ def set_transaction_tag_state(
     builtin_key: str | None = None,
 ) -> bool:
     """Add or remove one transaction tag while preserving other tag rows."""
+    tag_key = normalize_name_key(tag_name)
     tag_id_select = select(tags_table.c.id).where(
-        tags_table.c.builtin_key == builtin_key if builtin_key else tags_table.c.name == tag_name
+        tags_table.c.builtin_key == builtin_key if builtin_key else tags_table.c.name_key == tag_key
     )
     tag_id = conn.execute(tag_id_select).scalar_one_or_none()
     if tag_id is None and builtin_key:
-        tag_id = conn.execute(select(tags_table.c.id).where(tags_table.c.name == tag_name)).scalar_one_or_none()
+        tag_id = conn.execute(select(tags_table.c.id).where(tags_table.c.name_key == tag_key)).scalar_one_or_none()
     if tag_id is None:
         return False
 

@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
 from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.tables import categories as categories_table
@@ -24,7 +25,10 @@ def reimbursement_category_clause(transaction_table: Any, category_table: Any) -
     """Return a predicate for rows categorized as reimbursement credits."""
     return or_(
         category_table.c.builtin_key == BUILTIN_CATEGORY_REIMBURSEMENT,
-        transaction_table.c.category == builtin_category_name_for_key(BUILTIN_CATEGORY_REIMBURSEMENT),
+        and_(
+            transaction_table.c.category_id.is_(None),
+            transaction_table.c.category == builtin_category_name_for_key(BUILTIN_CATEGORY_REIMBURSEMENT),
+        ),
     )
 
 
@@ -62,7 +66,7 @@ def fetch_reimbursement_transactions(conn: Any) -> list[dict[str, Any]]:
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(None).label("category"),
                 transactions_table.c.transaction_kind,
                 func.coalesce(allocated.c.allocated, 0).label("allocated"),
             )
@@ -130,7 +134,7 @@ def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(None).label("category"),
                 transactions_table.c.transaction_kind,
                 accounts_table.c.name.label("account_name"),
                 func.coalesce(allocated.c.allocated, 0).label("allocated"),
@@ -184,7 +188,7 @@ def fetch_reimbursement_allocations(conn: Any) -> list[dict[str, Any]]:
                 expense_tx.c.tx_date.label("expense_date"),
                 expense_tx.c.description.label("expense_description"),
                 expense_tx.c.amount.label("expense_amount"),
-                expense_tx.c.category.label("expense_category"),
+                transaction_category_label_expression(None, transaction_table=expense_tx).label("expense_category"),
             )
             .select_from(
                 reimbursement_allocations_table.join(

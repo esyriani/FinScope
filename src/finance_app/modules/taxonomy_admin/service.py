@@ -4,8 +4,9 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from sqlalchemy import case, delete, func, or_, select, update
+from sqlalchemy import case, delete, func, select, update
 
+from finance_app.core.category_sql import category_assignment_condition, category_assignment_to_row_condition
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     categories as categories_table,
@@ -16,6 +17,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     category_rules as category_rules_table,
 )
+from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import (
     tags as tags_table,
 )
@@ -409,7 +411,7 @@ def update_tag_from_form(form: Any) -> str:
 
         existing = conn.execute(
             select(tags_table.c.id).where(
-                tags_table.c.name == tag_name,
+                tags_table.c.name_key == normalize_name_key(tag_name),
                 tags_table.c.id != tag_id,
             )
         ).fetchone()
@@ -470,24 +472,14 @@ def fetch_category_rows(conn: Any) -> list[dict[str, Any]]:
     transaction_count = (
         select(func.count())
         .select_from(transactions_table)
-        .where(
-            or_(
-                transactions_table.c.category_id == categories_table.c.id,
-                transactions_table.c.category == categories_table.c.name,
-            )
-        )
+        .where(category_assignment_to_row_condition(transactions_table, categories_table))
         .correlate(categories_table)
         .scalar_subquery()
     )
     rule_count = (
         select(func.count())
         .select_from(category_rules_table)
-        .where(
-            or_(
-                category_rules_table.c.category_id == categories_table.c.id,
-                category_rules_table.c.category == categories_table.c.name,
-            )
-        )
+        .where(category_assignment_to_row_condition(category_rules_table, categories_table))
         .correlate(categories_table)
         .scalar_subquery()
     )
@@ -621,21 +613,11 @@ def fetch_category_usage(conn: Any, category_id: int, category_name: str) -> dic
         "transaction_count": conn.execute(
             select(func.count())
             .select_from(transactions_table)
-            .where(
-                or_(
-                    transactions_table.c.category_id == category_id,
-                    transactions_table.c.category == category_name,
-                )
-            )
+            .where(category_assignment_condition(transactions_table, category_id, category_name))
         ).scalar_one(),
         "rule_count": conn.execute(
             select(func.count())
             .select_from(category_rules_table)
-            .where(
-                or_(
-                    category_rules_table.c.category_id == category_id,
-                    category_rules_table.c.category == category_name,
-                )
-            )
+            .where(category_assignment_condition(category_rules_table, category_id, category_name))
         ).scalar_one(),
     }

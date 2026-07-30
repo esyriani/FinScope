@@ -12,6 +12,7 @@ from sqlalchemy.engine import Connection as CoreConnection
 
 from finance_app.core.constants import ACCOUNT_TYPE_CHECKING, ACCOUNT_TYPES
 from finance_app.database.tables import accounts as accounts_table
+from finance_app.database.tables import normalize_name_key
 from finance_app.database.upsert import insert_or_select_unique_row
 
 
@@ -49,12 +50,13 @@ def get_or_create_account(
     require_core_connection(conn)
 
     account_name = str(name or "").strip() or "Personal"
+    account_key = normalize_name_key(account_name)
     normalized_account_type = normalize_account_type(account_type)
     paid_from_id = None
     update_paid_from = paid_from_account_name is not None
     paid_from_name = str(paid_from_account_name or "").strip() if update_paid_from else ""
 
-    if paid_from_name and paid_from_name.casefold() != account_name.casefold():
+    if paid_from_name and normalize_name_key(paid_from_name) != account_key:
         paid_from_account = get_or_create_account(
             conn,
             paid_from_name,
@@ -62,7 +64,7 @@ def get_or_create_account(
         )
         paid_from_id = paid_from_account["id"]
 
-    account_id_select = select(accounts_table.c.id).where(accounts_table.c.name == account_name)
+    account_id_select = select(accounts_table.c.id).where(accounts_table.c.name_key == account_key)
     existing = conn.execute(account_id_select).mappings().fetchone()
     if existing is None:
         insert_or_select_unique_row(
@@ -79,7 +81,7 @@ def get_or_create_account(
     if update_paid_from:
         values["paid_from_account_id"] = paid_from_id
 
-    conn.execute(update(accounts_table).where(accounts_table.c.name == account_name).values(**values))
+    conn.execute(update(accounts_table).where(accounts_table.c.name_key == account_key).values(**values))
     return (
         conn.execute(
             select(
@@ -87,7 +89,7 @@ def get_or_create_account(
                 accounts_table.c.name,
                 accounts_table.c.account_type,
                 accounts_table.c.paid_from_account_id,
-            ).where(accounts_table.c.name == account_name)
+            ).where(accounts_table.c.name_key == account_key)
         )
         .mappings()
         .fetchone()

@@ -24,7 +24,7 @@ This guide covers repository onboarding and development workflow. Detailed archi
 - [src/finance_app/templates/](../src/finance_app/templates/): Jinja templates.
 - [src/finance_app/static/](../src/finance_app/static/): CSS, JavaScript, image assets, and vendored browser libraries.
 - [src/finance_app/translations/](../src/finance_app/translations/): JSON translation catalogs for user interface text.
-- [config.example.ini](../config.example.ini): sample root runtime configuration copied to ignored `config.ini` for local runs.
+- [src/finance_app/config.example.ini](../src/finance_app/config.example.ini): sample runtime configuration copied to ignored `src/finance_app/config.ini` for local runs.
 - [tests/](../tests/): unit, integration, route, smoke, and shared support helpers.
 - [docs/](./): project documentation.
 - [runtime/](../runtime/): local runtime data, including the default SQLite database.

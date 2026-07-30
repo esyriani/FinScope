@@ -8,6 +8,7 @@ settings fixtures are present.
 from sqlalchemy import text
 
 from finance_app.modules.upload import workflow as upload_workflow
+from finance_app.modules.upload.repository import new_statement_import_token, reset_statement_import_state
 
 
 def first_statement_type_id(conn):
@@ -71,6 +72,14 @@ def create_account_statement(conn, filename="statement.csv"):
     ).lastrowid
     conn.commit()
     return account_id, statement_id
+
+
+def queue_statement_import_attempt(conn, statement_id):
+    """Mark a statement queued and return its import attempt token."""
+    import_token = new_statement_import_token()
+    assert reset_statement_import_state(conn, statement_id, import_token) is True
+    conn.commit()
+    return import_token
 
 
 def insert_llm_progress_transactions(conn, statement_id, account_id):

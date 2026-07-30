@@ -1,6 +1,7 @@
 """Tests for recurring pattern routes and persistence helpers."""
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -17,8 +18,8 @@ from finance_app.modules.recurring.patterns import (
     get_recurring_pattern_metadata,
     normalize_active,
     normalize_frequency,
-    normalize_optional_float,
     normalize_optional_int,
+    normalize_optional_money,
     normalize_user_status,
     recurring_pattern_key,
     upsert_recurring_pattern,
@@ -492,8 +493,8 @@ def test_recurring_pattern_normalizers():
     assert normalize_active("yes") == 1
     assert normalize_optional_int("12", minimum=1, maximum=31) == 12
     assert normalize_optional_int("32", minimum=1, maximum=31) is None
-    assert normalize_optional_float("12.345", minimum=0) == 12.35
-    assert normalize_optional_float("-1", minimum=0) is None
+    assert normalize_optional_money("12.345", minimum=0) == Decimal("12.35")
+    assert normalize_optional_money("-1", minimum=0) is None
 
 
 def test_upsert_recurring_pattern_preserves_existing_values_when_not_overridden(core_conn):

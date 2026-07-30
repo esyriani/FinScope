@@ -148,7 +148,7 @@ Operational recommendations:
 
 - Keep `FINANCE_SECRET_KEY` private.
 - Keep `OPENAI_API_KEY` out of source control.
-- Protect `runtime/finescope.db`, MySQL credentials, and backups.
+- Protect `runtime/finscope.db`, MySQL credentials, and backups.
 - Back up the active database regularly.
 - Do not run with debug mode enabled on a shared network.
 

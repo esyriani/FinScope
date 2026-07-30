@@ -13,7 +13,7 @@ Start from the repository root.
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-Copy-Item config.example.ini config.ini
+Copy-Item src/finance_app/config.example.ini src/finance_app/config.ini
 finscope
 ```
 
@@ -26,7 +26,7 @@ finscope
 python -m venv .venv
 .venv\Scripts\activate.bat
 python -m pip install -r requirements.txt
-copy /Y config.example.ini config.ini
+copy /Y src\finance_app\config.example.ini src\finance_app\config.ini
 finscope
 ```
 
@@ -39,7 +39,7 @@ finscope
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-cp config.example.ini config.ini
+cp src/finance_app/config.example.ini src/finance_app/config.ini
 finscope
 ```
 
@@ -52,15 +52,15 @@ finscope
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-cp config.example.ini config.ini
+cp src/finance_app/config.example.ini src/finance_app/config.ini
 finscope
 ```
 
 </details>
 
-Modify `config.ini` according to your settings, including `database`, `server`, `categorization_model`, and `openai_api_key`.
+Modify `src/finance_app/config.ini` according to your settings, including `database`, `server`, `categorization_model`, and `openai_api_key`.
 
-If `config.ini` is left as default, open `http://127.0.0.1:5000` in a browser. FinScope uses the repository-level `runtime/finescope.db` SQLite database by default unless `FINANCE_DATABASE_URL`, `FINANCE_DB_PATH`, or root `config.ini` selects another database.
+If `src/finance_app/config.ini` is left as default, open `http://127.0.0.1:5000` in a browser. FinScope uses the repository-level `runtime/finscope.db` SQLite database by default unless `FINANCE_DATABASE_URL`, `FINANCE_DB_PATH`, or app `config.ini` selects another database.
 
 ## Create the owner account
 

@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     ACCOUNT_TYPES,
@@ -82,6 +83,7 @@ def build_upload_context(args: Any) -> dict[str, Any]:
         page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
         confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
         statement_types = get_statement_type_options(conn)
+        unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
         accounts = (
             conn.execute(
                 select(
@@ -112,7 +114,7 @@ def build_upload_context(args: Any) -> dict[str, Any]:
             .where(
                 transactions_table.c.statement_id == statements_table.c.id,
                 transactions_table.c.ignored == 0,
-                (transactions_table.c.category.is_(None) | (transactions_table.c.category == UNKNOWN_CATEGORY)),
+                transaction_category_label_expression(unknown_category) == unknown_category,
             )
             .scalar_subquery()
         )
