@@ -3,6 +3,8 @@
 Counts tokens for the final chat-message payload assembled by the categories
 prompt builders. The estimator prefers tiktoken when installed and falls back
 to a conservative character-based estimate so previews can degrade gracefully.
+Constants in this module are local OpenAI chat-estimation heuristics, not
+authoritative model capability metadata.
 """
 
 from collections.abc import Callable, Mapping, Sequence

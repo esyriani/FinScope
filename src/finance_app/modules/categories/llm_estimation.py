@@ -15,18 +15,6 @@ from finance_app.modules.categories.llm_tokens import DEFAULT_EXPECTED_OUTPUT_TO
 from finance_app.modules.settings.runtime import get_setting
 
 LLM_EXPECTED_OUTPUT_TOKENS_PER_RESULT = 80
-MODEL_CONTEXT_LIMIT_TOKENS = {
-    "gpt-4o-mini": 128_000,
-    "gpt-4.1": 1_000_000,
-    "gpt-4.1-mini": 1_000_000,
-    "gpt-4.1-nano": 1_000_000,
-}
-MODEL_CONTEXT_LIMIT_PREFIXES = (
-    ("gpt-4o-mini-", 128_000),
-    ("gpt-4.1-mini-", 1_000_000),
-    ("gpt-4.1-nano-", 1_000_000),
-    ("gpt-4.1-", 1_000_000),
-)
 
 
 def expected_llm_output_tokens(requested_count: int) -> int:
@@ -34,34 +22,18 @@ def expected_llm_output_tokens(requested_count: int) -> int:
     return max(DEFAULT_EXPECTED_OUTPUT_TOKENS, requested_count * LLM_EXPECTED_OUTPUT_TOKENS_PER_RESULT)
 
 
-def model_context_limit_tokens(model: str) -> int | None:
-    """Return a known per-request context limit for an OpenAI model id."""
-    normalized = str(model or "").strip().lower()
-    if not normalized:
-        return None
-    limit = MODEL_CONTEXT_LIMIT_TOKENS.get(normalized)
-    if limit is not None:
-        return limit
-    for prefix, prefix_limit in MODEL_CONTEXT_LIMIT_PREFIXES:
-        if normalized.startswith(prefix):
-            return prefix_limit
-    return None
+def context_limit_fields(_model: str, _usage_tokens: int) -> dict[str, Any]:
+    """Return empty context-limit metadata for the local usage estimate.
 
-
-def context_limit_fields(model: str, usage_tokens: int) -> dict[str, Any]:
-    """Return context-limit metadata for one model request when known."""
-    limit = model_context_limit_tokens(model)
-    if limit is None:
-        return {
-            "context_limit_tokens": None,
-            "context_usage_tokens": None,
-            "context_usage_ratio": None,
-        }
-    bounded_usage = max(0, int(usage_tokens or 0))
+    Model context windows change independently of FinScope releases, and the
+    estimator's job is to preview likely usage rather than assert provider
+    limits. Keep these fields nullable so the browser can show a context warning
+    only when a trusted limit source is introduced.
+    """
     return {
-        "context_limit_tokens": limit,
-        "context_usage_tokens": bounded_usage,
-        "context_usage_ratio": bounded_usage / limit if limit else None,
+        "context_limit_tokens": None,
+        "context_usage_tokens": None,
+        "context_usage_ratio": None,
     }
 
 
