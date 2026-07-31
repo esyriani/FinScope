@@ -3,17 +3,16 @@
     "css/tables.css",
     "css/rules-list.css",
     "css/rule-forms.css",
-    "css/tag-multiselect.css",
-    "css/exports.css"
+    "css/tag-multiselect.css"
 ] %}
 {% set page_scripts = [
     "js/rules.js",
     "js/tag-multiselect.js",
-    "js/tables.js",
-    "js/exports.js"
+    "js/tables.js"
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_help.html" import help_tip with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_account_control, rule_category_control, rule_direction_control, rule_keyword_control, rule_scope_control, rule_tag_control with context %}
 {% from "_pagination.html" import pagination with context %}
 
@@ -73,7 +72,10 @@
 
 <div class="page-header">
     <div>
-        <h2 class="mb-1">{{ _("Category rules") }}</h2>
+        <h2 class="mb-1">
+            {{ _("Category rules") }}
+            {{ help_tip("A rule remembers how to categorize future matching transactions.", "Explain rules") }}
+        </h2>
         <p class="text-muted mb-0">{{ _("Manual rules are applied before automatic suggestions.") }}</p>
     </div>
     <div class="home-actions">
@@ -82,9 +84,9 @@
             href="{{ url_for('rules.audit_rules') }}"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Loading rule audit...') }}"
+            data-busy-message="{{ _('Loading rule health check...') }}"
         >
-            <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule audit") }}
+            <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule health check") }}
         </a>
         <form
             method="post"
@@ -92,10 +94,10 @@
             class="d-inline"
             data-busy-overlay
             data-busy-delay-ms="0"
-            data-busy-message="{{ _('Preparing rule audit preview...') }}"
+            data-busy-message="{{ _('Preparing rule health check preview...') }}"
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="hidden" name="next" value="{{ current_rules_url }}">
             <input type="hidden" name="action" value="apply_all_rules">
             <button class="btn btn-outline-success" type="submit">
                 <i class="bi bi-play-circle" aria-hidden="true"></i>{{ _("Preview apply all") }}
@@ -105,7 +107,7 @@
             <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import rules") }}
         </button>
         <a class="btn btn-outline-secondary" href="{{ url_for('rules.export_rules') }}">
-            <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>{{ _("Export CSV") }}
+            <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>{{ _("Export rules") }}
         </a>
         <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-rule-modal">
             <i class="bi bi-plus-circle" aria-hidden="true"></i>{{ _("New rule") }}
@@ -118,7 +120,7 @@
         <div class="modal-content">
             <form method="post" action="{{ url_for('rules.import_rules') }}" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="next" value="{{ current_rules_url }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="import-rules-title">{{ _("Import rules") }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
@@ -143,7 +145,7 @@
                             <label class="form-check-label" for="rules-import-override">
                                 {{ _("Override all rules") }}
                             </label>
-                            <div class="form-text text-danger">{{ _("Removes all existing rules and replaces them with the imported file. The job can be undone from Jobs.") }}</div>
+                            <div class="form-text text-danger">{{ _("Removes all existing rules and replaces them with the imported file. The queued work can be undone from Processing.") }}</div>
                         </div>
                     </div>
                     <p class="text-muted mb-0">{{ _("The import is previewed before a background job is queued.") }}</p>
@@ -168,6 +170,59 @@
     {% endif %}
 {% endwith %}
 <div class="alert alert-info d-none" role="status" data-rules-ajax-status></div>
+
+{% if post_save_rule %}
+<section class="alert alert-success rule-followup" role="status" aria-live="polite">
+    <div class="rule-followup-body">
+        <div>
+            <h5 class="mb-1">
+                {% if post_save_rule.action == "created" %}
+                    {{ _("Rule saved") }}
+                {% else %}
+                    {{ _("Rule updated") }}
+                {% endif %}
+            </h5>
+            <p class="mb-1">{{ _("Historical transactions were not changed.") }}</p>
+            <div class="small">
+                <span class="fw-semibold">{{ post_save_rule.keyword }}</span>
+                <span class="text-muted">-></span>
+                {{ post_save_rule.category }}
+                <span class="badge {{ post_save_rule.source_badge_class }} ms-2">{{ _(post_save_rule.source_label) }}</span>
+                {% if post_save_rule.source == "automatic" %}
+                    <span class="badge {{ post_save_rule.approval_badge_class }}">{{ _(post_save_rule.approval_label) }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="rule-followup-actions">
+            <form
+                method="post"
+                action="{{ url_for('rules.audit_rule_preview') }}"
+                class="d-inline"
+                data-busy-overlay
+                data-busy-delay-ms="0"
+                data-busy-message="{{ _('Preparing rule health check preview...') }}"
+            >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ current_rules_url }}">
+                <input type="hidden" name="action" value="apply_where_wins">
+                <input type="hidden" name="rule_id" value="{{ post_save_rule.id }}">
+                <button class="btn btn-success" type="submit">
+                    <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Review apply") }}
+                </button>
+            </form>
+            <a
+                class="btn btn-outline-secondary"
+                href="{{ url_for('rules.audit_rule_detail', rule_id=post_save_rule.id) }}"
+                data-busy-overlay
+                data-busy-delay-ms="0"
+                data-busy-message="{{ _('Loading rule health check details...') }}"
+            >
+                <i class="bi bi-clipboard-data" aria-hidden="true"></i>{{ _("Rule detail") }}
+            </a>
+        </div>
+    </div>
+</section>
+{% endif %}
 
 {% call collapsible_filter_panel("rules-filters", rules_filter_summary | trim) %}
         <form method="get" class="row g-3 align-items-end">
@@ -290,15 +345,15 @@
         <div class="modal-content">
             <form
                 method="post"
-                action="{{ url_for('rules.audit_rule_preview') }}"
+                action="{{ url_for('rules.add_rule') }}"
                 data-rule-editor
                 data-rule-preview-url="/rules/preview"
                 data-busy-overlay
                 data-busy-delay-ms="0"
-                data-busy-message="{{ _('Preparing rule audit preview...') }}"
+                data-busy-message="{{ _('Saving rule...') }}"
             >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="next" value="{{ current_rules_url }}">
                 <input type="hidden" name="action" value="create_rule">
                 <div class="modal-header">
                     <h5 class="modal-title" id="create-rule-title">{{ _("New rule") }}</h5>
@@ -310,12 +365,19 @@
                     {{ rule_tag_control("new-rule", tag_options) }}
                     {{ rule_account_control("new-rule", account_options) }}
                     {{ rule_direction_control("new-rule", direction_options) }}
-                    {{ amount_rule_control("new-rule") }}
+                    {{ amount_rule_control("new-rule", show_help=True) }}
                     {{ rule_preview_panel() }}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview create") }}</button>
+                    <button
+                        class="btn btn-outline-secondary"
+                        type="submit"
+                        formaction="{{ url_for('rules.audit_rule_preview') }}"
+                    >
+                        <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Review impact") }}
+                    </button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save rule") }}</button>
                 </div>
             </form>
         </div>
@@ -336,7 +398,7 @@
 
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" data-rules-table data-selected-approval="{{ selected_approval }}">
+            <table class="table table-hover align-middle mb-0" data-rules-table data-no-export data-selected-approval="{{ selected_approval }}">
                 <thead>
                     <tr>
                         <th>
@@ -376,7 +438,7 @@
                             {% if rule["merchant_id"] %}
                                 <div class="small text-muted">{{ _("Merchant") }}: {{ rule["merchant_name"] }}</div>
                             {% else %}
-                                <div class="small text-muted">{{ _("Fuzzy keyword") }}</div>
+                                <div class="small text-muted">{{ _("Approximate keyword") }}</div>
                             {% endif %}
                             {% if rule["account_name"] %}
                                 <div class="small text-muted">{{ _("Account") }}: {{ rule["account_name"] }}</div>
@@ -437,7 +499,7 @@
                                 {% if rule["requires_approval"] %}
                                 <form method="post" action="{{ url_for('rules.approve_rule', rule_id=rule['id']) }}" class="d-inline" data-rule-table-action>
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <input type="hidden" name="next" value="{{ current_rules_url }}">
                                     <button
                                         class="btn btn-sm btn-outline-success"
                                         type="submit"
@@ -453,10 +515,10 @@
                                     class="d-inline"
                                     data-busy-overlay
                                     data-busy-delay-ms="0"
-                                    data-busy-message="{{ _('Preparing rule audit preview...') }}"
+                                        data-busy-message="{{ _('Preparing rule health check preview...') }}"
                                 >
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                                    <input type="hidden" name="next" value="{{ current_rules_url }}">
                                     <input type="hidden" name="action" value="apply_where_wins">
                                     <input type="hidden" name="rule_id" value="{{ rule['id'] }}">
                                     <button
@@ -501,15 +563,15 @@
         <div class="modal-content">
             <form
                 method="post"
-                action="{{ url_for('rules.audit_rule_preview') }}"
+                action="{{ url_for('rules.update_rule', rule_id=rule['id']) }}"
                 data-rule-editor
                 data-rule-preview-url="/rules/preview"
                 data-busy-overlay
                 data-busy-delay-ms="0"
-                data-busy-message="{{ _('Preparing rule audit preview...') }}"
+                data-busy-message="{{ _('Saving rule...') }}"
             >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="next" value="{{ current_rules_url }}">
                 <input type="hidden" name="action" value="edit_rule">
                 <input type="hidden" name="rule_id" value="{{ rule['id'] }}">
                 <div class="modal-header">
@@ -527,12 +589,19 @@
                     {{ rule_tag_control("rule-" ~ rule["id"], tag_options, rule["tags"]) }}
                     {{ rule_account_control("rule-" ~ rule["id"], account_options, rule["account_id"]) }}
                     {{ rule_direction_control("rule-" ~ rule["id"], direction_options, rule["direction"]) }}
-                    {{ amount_rule_control("rule-" ~ rule["id"], rule["amount_min"], rule["amount_max"]) }}
+                    {{ amount_rule_control("rule-" ~ rule["id"], rule["amount_min"], rule["amount_max"], show_help=True) }}
                     {{ rule_preview_panel() }}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
-                    <button class="btn btn-primary" type="submit"><i class="bi bi-eye" aria-hidden="true"></i>{{ _("Preview changes") }}</button>
+                    <button
+                        class="btn btn-outline-secondary"
+                        type="submit"
+                        formaction="{{ url_for('rules.audit_rule_preview') }}"
+                    >
+                        <i class="bi bi-eye" aria-hidden="true"></i>{{ _("Review impact") }}
+                    </button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-floppy" aria-hidden="true"></i>{{ _("Save rule") }}</button>
                 </div>
             </form>
         </div>
@@ -548,10 +617,10 @@
                 {% if rule["can_delete_without_preview"] %}data-rule-table-action{% endif %}
                 data-busy-overlay
                 data-busy-delay-ms="0"
-                {% if not rule["can_delete_without_preview"] %}data-busy-message="{{ _('Preparing rule audit preview...') }}"{% endif %}
+                {% if not rule["can_delete_without_preview"] %}data-busy-message="{{ _('Preparing rule health check preview...') }}"{% endif %}
             >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="next" value="{{ current_rules_url }}">
                 {% if not rule["can_delete_without_preview"] %}
                 <input type="hidden" name="action" value="delete_rule">
                 <input type="hidden" name="rule_id" value="{{ rule['id'] }}">

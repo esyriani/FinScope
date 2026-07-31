@@ -6,6 +6,12 @@ from typing import Any
 from finance_app.core.constants import THEME_MODE_DARK, THEME_MODE_LIGHT
 from finance_app.core.i18n import normalize_language
 from finance_app.core.query import QueryArgs
+from finance_app.core.setting_limits import (
+    COMPARISON_INSIGHT_CARD_LIMIT_MAX,
+    DASHBOARD_TOP_DRIVER_LIMIT_MAX,
+    HOME_TOP_CATEGORY_LIMIT_MAX,
+    PINNED_REPORT_LIMIT_MAX,
+)
 
 
 def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, object]:
@@ -21,18 +27,38 @@ def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str,
             minimum=2,
             label="Comparison default years",
         ),
-        "comparison_insight_card_limit": parse_positive_int(
+        "comparison_insight_card_limit": parse_bounded_int(
             form.get("comparison_insight_card_limit"),
             app_settings.default_comparison_insight_card_limit,
+            minimum=1,
+            maximum=COMPARISON_INSIGHT_CARD_LIMIT_MAX,
             label="Comparison insight card limit",
         ),
-        "home_top_category_limit": parse_positive_int(
+        "home_top_category_limit": parse_bounded_int(
             form.get("home_top_category_limit"),
             app_settings.default_home_top_category_limit,
+            minimum=1,
+            maximum=HOME_TOP_CATEGORY_LIMIT_MAX,
+            label="Home top category limit",
+        ),
+        "dashboard_top_driver_limit": parse_bounded_int(
+            form.get("dashboard_top_driver_limit"),
+            app_settings.default_dashboard_top_driver_limit,
+            minimum=1,
+            maximum=DASHBOARD_TOP_DRIVER_LIMIT_MAX,
+            label="Dashboard top driver limit",
+        ),
+        "pinned_report_limit": parse_bounded_int(
+            form.get("pinned_report_limit"),
+            app_settings.default_pinned_report_limit,
+            minimum=1,
+            maximum=PINNED_REPORT_LIMIT_MAX,
+            label="Pinned report limit",
         ),
         "merchant_table_limit": parse_positive_int(
             form.get("merchant_table_limit"),
             app_settings.default_merchant_table_limit,
+            label="Merchant comparison table limit",
         ),
         "merchant_suggestion_limit": parse_positive_int(
             form.get("merchant_suggestion_limit"),
@@ -46,7 +72,7 @@ def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str,
         "rule_audit_transaction_limit": parse_positive_int(
             form.get("rule_audit_transaction_limit"),
             app_settings.default_rule_audit_transaction_limit,
-            label="Rule audit transaction limit",
+            label="Rule health check transaction limit",
         ),
         "theme_mode": normalize_theme_mode(form.get("theme_mode", THEME_MODE_DARK)),
         "ui_language": normalize_language(form.get("ui_language", app_settings.default_ui_language)),
@@ -58,11 +84,11 @@ def parse_global_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, 
     return {
         "llm_confidence_threshold": parse_probability(
             form.get("llm_confidence_threshold"),
-            "LLM confidence threshold",
+            "AI acceptance threshold",
         ),
         "llm_review_threshold": parse_probability(
             form.get("llm_review_threshold"),
-            "LLM review threshold",
+            "AI review threshold",
         ),
         "verify_threshold": parse_probability(
             form.get("verify_threshold"),
@@ -109,6 +135,14 @@ def parse_positive_int(value: object, fallback: int, minimum: int = 1, label: st
         raise ValueError(f"{label} must be at least {minimum}.")
 
     return parsed if parsed > 0 else fallback
+
+
+def parse_bounded_int(value: object, fallback: int, minimum: int, maximum: int, label: str) -> int:
+    """Parse an integer constrained to an inclusive range."""
+    parsed = parse_positive_int(value, fallback, minimum=minimum, label=label)
+    if parsed > maximum:
+        raise ValueError(f"{label} must be at most {maximum}.")
+    return parsed
 
 
 def normalize_minimum_int(value: object, minimum: int, fallback: int) -> str:

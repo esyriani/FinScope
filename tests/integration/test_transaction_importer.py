@@ -12,21 +12,17 @@ from finance_app.modules.transactions.importer import (
 )
 
 
-def test_filter_new_transactions_skips_batch_and_existing_fingerprint_duplicates(app):
-    """Verify import dedupe handles in-batch duplicates and already imported rows."""
+def test_filter_new_transactions_skips_replayed_statement_rows_without_collapsing_repeats(app):
+    """Verify replay dedupe keeps repeated source rows distinct."""
     del app
     account_id = 42
+    statement_id = 7
     existing_tx = {
         "tx_date": "2026-01-01",
         "description": "Metro Grocery",
         "amount": 20.00,
     }
-    duplicate_tx = {
-        "tx_date": "2026-01-02",
-        "description": "Cafe Bistro",
-        "amount": 12.50,
-    }
-    duplicate_tx_copy = dict(duplicate_tx)
+    repeated_tx = dict(existing_tx)
     fresh_tx = {
         "tx_date": "2026-01-03",
         "description": "Hydro Quebec",
@@ -38,46 +34,56 @@ def test_filter_new_transactions_skips_batch_and_existing_fingerprint_duplicates
                 tx_date=existing_tx["tx_date"],
                 description=existing_tx["description"],
                 amount=existing_tx["amount"],
-                fingerprint=transaction_fingerprint(existing_tx, account_id),
+                fingerprint=transaction_fingerprint(existing_tx, account_id, statement_id, import_index=1),
             )
         )
 
         new_transactions, skipped_count = filter_new_transactions(
             conn,
-            [existing_tx, duplicate_tx, duplicate_tx_copy, fresh_tx],
+            [existing_tx, repeated_tx, fresh_tx],
             account_id,
+            statement_id,
         )
 
-    assert skipped_count == 2
-    assert [tx["description"] for tx in new_transactions] == ["Cafe Bistro", "Hydro Quebec"]
-    assert duplicate_tx["fingerprint"] == duplicate_tx_copy["fingerprint"]
-    assert fresh_tx["fingerprint"] == transaction_fingerprint(fresh_tx, account_id)
+    assert skipped_count == 1
+    assert [tx["description"] for tx in new_transactions] == ["Metro Grocery", "Hydro Quebec"]
+    assert existing_tx["fingerprint"] != repeated_tx["fingerprint"]
+    assert fresh_tx["fingerprint"] == transaction_fingerprint(fresh_tx, account_id, statement_id, import_index=3)
 
 
 def test_filter_new_transactions_handles_empty_batches(app):
     """Verify empty imports return an empty result without querying bad SQL."""
     del app
     with db_core_transaction() as conn:
-        assert filter_new_transactions(conn, [], account_id=1) == ([], 0)
+        assert filter_new_transactions(conn, [], account_id=1, statement_id=1) == ([], 0)
 
 
 def test_filter_new_transactions_requires_core_connection():
     """Reject non-Core connections at the transaction importer boundary."""
     with pytest.raises(TypeError):
-        filter_new_transactions(object(), [], account_id=1)
+        filter_new_transactions(object(), [], account_id=1, statement_id=1)
 
 
 @pytest.mark.parametrize(
-    ("candidate_tx", "candidate_account_id", "expected_descriptions", "expected_skipped"),
+    ("candidate_tx", "candidate_account_id", "candidate_statement_id", "expected_descriptions", "expected_skipped"),
     [
         (
             {"tx_date": "2026-02-01", "description": "Shared Merchant", "amount": 12.34},
+            1,
             1,
             [],
             1,
         ),
         (
+            {"tx_date": "2026-02-01", "description": "Shared Merchant", "amount": 12.34},
+            1,
+            2,
+            ["Shared Merchant"],
+            0,
+        ),
+        (
             {"tx_date": "2026-02-01", "description": "Shared Merchant", "amount": 12.35},
+            1,
             1,
             ["Shared Merchant"],
             0,
@@ -85,11 +91,13 @@ def test_filter_new_transactions_requires_core_connection():
         (
             {"tx_date": "2026-02-01", "description": "Shared Merchant", "amount": 12.34},
             2,
+            1,
             ["Shared Merchant"],
             0,
         ),
         (
             {"tx_date": "2026-02-01", "description": "Different Merchant", "amount": 12.34},
+            1,
             1,
             ["Different Merchant"],
             0,
@@ -100,10 +108,11 @@ def test_filter_new_transactions_table_driven_dedup_boundaries(
     core_conn,
     candidate_tx,
     candidate_account_id,
+    candidate_statement_id,
     expected_descriptions,
     expected_skipped,
 ):
-    """Verify import dedupe keys include account, date, description, and amount."""
+    """Verify replay dedupe keys include statement row, account, and row content."""
     existing_tx = {
         "tx_date": "2026-02-01",
         "description": "Shared Merchant",
@@ -114,7 +123,7 @@ def test_filter_new_transactions_table_driven_dedup_boundaries(
             tx_date=existing_tx["tx_date"],
             description=existing_tx["description"],
             amount=existing_tx["amount"],
-            fingerprint=transaction_fingerprint(existing_tx, 1),
+            fingerprint=transaction_fingerprint(existing_tx, 1, 1, import_index=1),
         )
     )
 
@@ -122,14 +131,15 @@ def test_filter_new_transactions_table_driven_dedup_boundaries(
         core_conn,
         [dict(candidate_tx)],
         candidate_account_id,
+        candidate_statement_id,
     )
 
     assert skipped_count == expected_skipped
     assert [tx["description"] for tx in new_transactions] == expected_descriptions
 
 
-def test_filter_new_transactions_preserves_first_occurrence_order_for_generated_duplicates(core_conn):
-    """Verify in-batch dedupe keeps first rows and counts generated duplicates."""
+def test_filter_new_transactions_preserves_repeated_same_value_rows(core_conn):
+    """Verify equal rows at different statement positions remain importable."""
     unique_rows = [
         {
             "tx_date": f"2026-03-{day:02d}",
@@ -144,11 +154,11 @@ def test_filter_new_transactions_preserves_first_occurrence_order_for_generated_
         if int(row["tx_date"][-2:]) % 4 == 0:
             batch.extend([dict(row), dict(row)])
 
-    new_transactions, skipped_count = filter_new_transactions(core_conn, batch, account_id=7)
+    new_transactions, skipped_count = filter_new_transactions(core_conn, batch, account_id=7, statement_id=77)
 
-    assert skipped_count == len(batch) - len(unique_rows)
-    assert [tx["description"] for tx in new_transactions] == [row["description"] for row in unique_rows]
-    assert len({tx["fingerprint"] for tx in new_transactions}) == len(unique_rows)
+    assert skipped_count == 0
+    assert [tx["description"] for tx in new_transactions] == [row["description"] for row in batch]
+    assert len({tx["fingerprint"] for tx in new_transactions}) == len(batch)
 
 
 def test_get_existing_transaction_fingerprints_checks_all_chunks(core_conn):

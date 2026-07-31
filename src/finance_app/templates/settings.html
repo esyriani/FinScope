@@ -1,6 +1,7 @@
 {% set page_stylesheets = ["css/page-tabs.css", "css/settings.css", "css/rules-list.css", "css/tables.css"] %}
 {% set page_scripts = ["js/settings.js"] %}
 {% extends "base.html" %}
+{% from "_help.html" import help_tip with context %}
 
 {% block content %}
 <div class="page-header">
@@ -113,7 +114,7 @@
                 </div>
 
                 <div class="settings-subsection">
-                    <h6 class="settings-subsection-title">{{ _("Table limits") }}</h6>
+                    <h6 class="settings-subsection-title">{{ _("Limits") }}</h6>
                     <div class="settings-subsection-help">{{ _("Default row counts used throughout the app.") }}</div>
                     <div class="settings-grid settings-grid-compact">
                         <div class="settings-field">
@@ -130,18 +131,30 @@
 
                         <div class="settings-field">
                             <label for="comparison_insight_card_limit" class="form-label">{{ _("Comparison insight card limit") }}</label>
-                            <input id="comparison_insight_card_limit" class="form-control" type="number" min="1" name="comparison_insight_card_limit" value="{{ comparison_insight_card_limit }}">
+                            <input id="comparison_insight_card_limit" class="form-control" type="number" min="1" max="{{ comparison_insight_card_limit_max }}" name="comparison_insight_card_limit" value="{{ comparison_insight_card_limit }}">
                             <div class="form-text">{{ _("Ranked insight cards shown on the comparison page.") }}</div>
                         </div>
 
                         <div class="settings-field">
                             <label for="home_top_category_limit" class="form-label">{{ _("Home top category limit") }}</label>
-                            <input id="home_top_category_limit" class="form-control" type="number" min="1" name="home_top_category_limit" value="{{ home_top_category_limit }}">
+                            <input id="home_top_category_limit" class="form-control" type="number" min="1" max="{{ home_top_category_limit_max }}" name="home_top_category_limit" value="{{ home_top_category_limit }}">
                             <div class="form-text">{{ _("Top spending categories shown on the home page.") }}</div>
                         </div>
 
                         <div class="settings-field">
-                            <label for="merchant_table_limit" class="form-label">{{ _("Merchant table limit") }}</label>
+                            <label for="dashboard_top_driver_limit" class="form-label">{{ _("Dashboard top driver limit") }}</label>
+                            <input id="dashboard_top_driver_limit" class="form-control" type="number" min="1" max="{{ dashboard_top_driver_limit_max }}" name="dashboard_top_driver_limit" value="{{ dashboard_top_driver_limit }}">
+                            <div class="form-text">{{ _("Top driver previews shown on the dashboard page.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="pinned_report_limit" class="form-label">{{ _("Pinned report limit") }}</label>
+                            <input id="pinned_report_limit" class="form-control" type="number" min="1" max="{{ pinned_report_limit_max }}" name="pinned_report_limit" value="{{ pinned_report_limit }}">
+                            <div class="form-text">{{ _("Pinned report cards shown on Reports overview.") }}</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="merchant_table_limit" class="form-label">{{ _("Merchant comparison table limit") }}</label>
                             <input id="merchant_table_limit" class="form-control" type="number" min="1" name="merchant_table_limit" value="{{ merchant_table_limit }}">
                             <div class="form-text">{{ _("Merchant rows shown in comparison summaries.") }}</div>
                         </div>
@@ -159,9 +172,9 @@
                         </div>
 
                         <div class="settings-field">
-                            <label for="rule_audit_transaction_limit" class="form-label">{{ _("Rule audit transaction limit") }}</label>
+                            <label for="rule_audit_transaction_limit" class="form-label">{{ _("Rule health check transaction limit") }}</label>
                             <input id="rule_audit_transaction_limit" class="form-control" type="number" min="1" name="rule_audit_transaction_limit" value="{{ rule_audit_transaction_limit }}">
-                            <div class="form-text">{{ _("Newest historical transactions analyzed by Rule audit before the limited-audit notice appears.") }}</div>
+                            <div class="form-text">{{ _("Newest historical transactions analyzed by the rule health check before the limited-check notice appears.") }}</div>
                         </div>
                     </div>
                 </div>
@@ -175,7 +188,7 @@
                 </div>
 
                 <div class="settings-subsection">
-                    <h6 class="settings-subsection-title">{{ _("LLM settings") }}</h6>
+                    <h6 class="settings-subsection-title">{{ _("AI settings") }}</h6>
                     <div class="settings-subsection-help">{{ _("Thresholds and model used for automated category suggestions.") }}</div>
                     <div class="settings-grid settings-grid-mixed">
                         <div class="settings-field">
@@ -196,7 +209,10 @@
                         </div>
 
                         <div class="settings-field">
-                            <label class="form-label" for="confirm_ai_token_usage_enabled">{{ _("Confirm token usage") }}</label>
+                            <div class="form-label-with-help">
+                                <label class="form-label" for="confirm_ai_token_usage_enabled">{{ _("Review AI usage") }}</label>
+                                {{ help_tip("FinScope shows an estimate before sending data to AI, so you can cancel first.", "Explain review AI usage") }}
+                            </div>
                             <div class="form-check form-switch">
                                 <input
                                     class="form-check-input"
@@ -207,19 +223,19 @@
                                     value="1"
                                     {% if confirm_ai_token_usage_enabled %}checked{% endif %}
                                 >
-                                <label class="form-check-label" for="confirm_ai_token_usage_enabled">{{ _("Confirm token usage before AI calls") }}</label>
+                                <label class="form-check-label" for="confirm_ai_token_usage_enabled">{{ _("Ask before sending AI requests") }}</label>
                             </div>
-                            <div class="form-text">{{ _("Show a token estimate and require confirmation before an AI request is sent.") }}</div>
+                            <div class="form-text">{{ _("Show an estimated AI usage summary and ask before sending a request.") }}</div>
                         </div>
 
                         <div class="settings-field">
-                            <label for="llm_confidence_threshold" class="form-label">{{ _("LLM confidence threshold") }}</label>
+                            <label for="llm_confidence_threshold" class="form-label">{{ _("AI acceptance threshold") }}</label>
                             <input id="llm_confidence_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="llm_confidence_threshold" value="{{ llm_confidence_threshold }}">
                             <div class="form-text">{{ _("Minimum confidence required before AI can create an automatic rule for a no-review result.") }}</div>
                         </div>
 
                         <div class="settings-field">
-                            <label for="llm_review_threshold" class="form-label">{{ _("LLM review threshold") }}</label>
+                            <label for="llm_review_threshold" class="form-label">{{ _("AI review threshold") }}</label>
                             <input id="llm_review_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="llm_review_threshold" value="{{ llm_review_threshold }}">
                             <div class="form-text">{{ _("Minimum confidence required to keep a best-fit AI category as a review item instead of UNKNOWN.") }}</div>
                         </div>
@@ -333,7 +349,7 @@
                                             <option value="{{ import_mode }}" {% if statement_type["import_mode"] == import_mode %}selected{% endif %}>{{ _(label) }}</option>
                                         {% endfor %}
                                     </select>
-                                    <div class="form-text">{{ _("Choose whether uploads create ledger rows or enrich existing rows.") }}</div>
+                                    <div class="form-text">{{ _("Choose whether imports add new transactions or update transactions already imported.") }}</div>
                                 </td>
                                 <td>
                                     <select class="form-select" name="statement_type_default_account_types">

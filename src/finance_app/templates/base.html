@@ -10,6 +10,7 @@
 } %}
 {% set blueprint_titles = {
     "dashboard": "Dashboard",
+    "reports": "Reports",
     "comparison": "Comparison",
     "calendar_page": "Calendar",
     "recurring": "Recurring",
@@ -18,8 +19,8 @@
     "transactions": "Transactions",
     "review": "Review",
     "rules": "Rules",
-    "taxonomy_admin": "Taxonomy",
-    "jobs": "Jobs",
+    "taxonomy_admin": "Categories and tags",
+    "jobs": "Processing",
     "settings_page": "Settings"
 } %}
 {% set route_title = endpoint_titles.get(active_endpoint) or blueprint_titles.get(active_blueprint) %}
@@ -113,13 +114,12 @@
         <nav class="sidebar-nav" aria-label="{{ _('Primary navigation') }}">
             <div class="nav-group">
                 <a class="nav-link {% if active_endpoint == 'home.home' %}active{% endif %}" href="{{ url_for('home.home') }}" title="{{ _('Home') }}"><i class="bi bi-house-door" aria-hidden="true"></i><span>{{ _("Home") }}</span></a>
-                <a class="nav-link {% if active_endpoint == 'auth.account' %}active{% endif %}" href="{{ url_for('auth.account') }}" title="{{ _('Account') }}"><i class="bi bi-person-circle" aria-hidden="true"></i><span>{{ _("Account") }}</span></a>
             </div>
 
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Analytics") }}</div>
                 <a class="nav-link {% if active_blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.dashboard') }}" title="{{ _('Dashboard') }}"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>{{ _("Dashboard") }}</span></a>
-                <a class="nav-link {% if active_blueprint == 'comparison' %}active{% endif %}" href="{{ url_for('comparison.comparison') }}" title="{{ _('Comparison') }}"><i class="bi bi-layout-split" aria-hidden="true"></i><span>{{ _("Comparison") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'reports' %}active{% endif %}" href="{{ url_for('reports.overview') }}" title="{{ _('Reports') }}"><i class="bi bi-pie-chart" aria-hidden="true"></i><span>{{ _("Reports") }}</span></a>
                 <a class="nav-link {% if active_blueprint == 'calendar_page' %}active{% endif %}" href="{{ url_for('calendar_page.calendar_view') }}" title="{{ _('Calendar') }}"><i class="bi bi-calendar3" aria-hidden="true"></i><span>{{ _("Calendar") }}</span></a>
                 <a class="nav-link {% if active_blueprint == 'recurring' %}active{% endif %}" href="{{ url_for('recurring.recurring') }}" title="{{ _('Recurring') }}"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>{{ _("Recurring") }}</span></a>
             </div>
@@ -142,12 +142,13 @@
             <div class="nav-group">
                 <div class="nav-group-label">{{ _("Admin") }}</div>
                 {% if current_user_can('manage_taxonomy') %}
-                <a class="nav-link {% if active_blueprint == 'taxonomy_admin' %}active{% endif %}" href="{{ url_for('taxonomy_admin.taxonomy') }}" title="{{ _('Taxonomy') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Taxonomy") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'taxonomy_admin' %}active{% endif %}" href="{{ url_for('taxonomy_admin.taxonomy') }}" title="{{ _('Categories and tags') }}"><i class="bi bi-tags" aria-hidden="true"></i><span>{{ _("Categories and tags") }}</span></a>
                 {% endif %}
                 {% if current_user_can('manage_jobs') %}
-                <a class="nav-link {% if active_blueprint == 'jobs' %}active{% endif %}" href="{{ url_for('jobs.jobs') }}" title="{{ _('Jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i><span>{{ _("Jobs") }}</span></a>
+                <a class="nav-link {% if active_blueprint == 'jobs' %}active{% endif %}" href="{{ url_for('jobs.jobs') }}" title="{{ _('Processing') }}"><i class="bi bi-activity" aria-hidden="true"></i><span>{{ _("Processing") }}</span></a>
                 {% endif %}
                 <a class="nav-link {% if active_blueprint == 'settings_page' %}active{% endif %}" href="{{ url_for('settings_page.settings_page') }}" title="{{ _('Settings') }}"><i class="bi bi-gear" aria-hidden="true"></i><span>{{ _("Settings") }}</span></a>
+                <a class="nav-link {% if active_endpoint == 'auth.account' %}active{% endif %}" href="{{ url_for('auth.account') }}" title="{{ _('Account') }}"><i class="bi bi-person-circle" aria-hidden="true"></i><span>{{ _("Account") }}</span></a>
                 {% if current_user_can('manage_users') %}
                 <a class="nav-link {% if active_endpoint == 'auth.users' %}active{% endif %}" href="{{ url_for('auth.users') }}" title="{{ _('Users') }}"><i class="bi bi-people" aria-hidden="true"></i><span>{{ _("Users") }}</span></a>
                 {% endif %}

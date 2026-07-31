@@ -17,13 +17,18 @@ from finance_app.modules.reimbursements.service import (
     complete_reimbursable_expense,
     create_reimbursement_allocation,
     delete_reimbursement_allocation,
-    reopen_reimbursable_expense,
+    resume_reimbursable_expense,
     update_reimbursement_allocation_amount,
 )
 
 
 def expense_transaction(
-    data_factory, *, amount="1000.00", category="Travel", transaction_kind=TRANSACTION_KIND_EXPENSE
+    data_factory,
+    *,
+    amount="1000.00",
+    category="Travel",
+    transaction_kind=TRANSACTION_KIND_EXPENSE,
+    tags=("Conference", "Reimbursable"),
 ):
     """Create a positive expense transaction for reimbursement tests."""
     return data_factory.transactions.create(
@@ -32,7 +37,7 @@ def expense_transaction(
         category=category,
         transaction_kind=transaction_kind,
         needs_review=0,
-        tags=["Conference", "Reimbursable"],
+        tags=list(tags),
     )
 
 
@@ -85,8 +90,8 @@ def test_reimbursement_allocation_updates_and_deletes(core_conn, data_factory):
     assert allocation_count(core_conn) == 0
 
 
-def test_reimbursable_expense_completion_closes_and_reopens_pending_balance(core_conn, data_factory):
-    """Verify policy-limited reimbursement expenses can be closed and reopened."""
+def test_reimbursable_expense_completion_completes_and_resumes_pending_balance(core_conn, data_factory):
+    """Verify policy-limited reimbursement expenses can be completed and resumed."""
     expense_id = expense_transaction(data_factory, amount="1000.00")
     reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
     create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("900.00"), conn=core_conn)
@@ -97,13 +102,34 @@ def test_reimbursable_expense_completion_closes_and_reopens_pending_balance(core
         queries.fetch_reimbursable_expense_transactions(core_conn),
         queries.fetch_reimbursement_allocations(core_conn),
     )
-    reopened = reopen_reimbursable_expense(expense_id, conn=core_conn)
+    resumed = resume_reimbursable_expense(expense_id, conn=core_conn)
 
     assert completion_id > 0
     assert context["summary"]["pending_reimbursable_expenses"] == Decimal("0")
     assert context["expense_options"] == []
     assert context["reimbursable_expenses"][0]["status_label"] == "Complete"
-    assert reopened is True
+    assert resumed is True
+
+
+def test_action_needed_expenses_only_include_tagged_active_pending_rows(core_conn, data_factory):
+    """Verify active expenses exclude untagged matches and completed tagged rows."""
+    tagged_expense_id = expense_transaction(data_factory, amount="1000.00")
+    untagged_expense_id = expense_transaction(data_factory, amount="1000.00", tags=("Conference",))
+    completed_expense_id = expense_transaction(data_factory, amount="1000.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-100.00")
+    create_reimbursement_allocation(reimbursement_id, untagged_expense_id, Decimal("100.00"), conn=core_conn)
+    complete_reimbursable_expense(completed_expense_id, conn=core_conn)
+
+    context = presenter.build_reimbursements_view_model(
+        queries.fetch_reimbursement_transactions(core_conn),
+        queries.fetch_reimbursable_expense_transactions(core_conn),
+        queries.fetch_reimbursement_allocations(core_conn),
+    )
+    active_expense_ids = {row["id"] for row in context["action_needed"]["expenses"]}
+    all_expense_ids = {row["id"] for row in context["reimbursable_expenses"]}
+
+    assert active_expense_ids == {tagged_expense_id}
+    assert {tagged_expense_id, untagged_expense_id, completed_expense_id}.issubset(all_expense_ids)
 
 
 def test_reimbursement_allocation_rejects_duplicate_transaction_pair(core_conn, data_factory):
@@ -134,7 +160,7 @@ def test_reimbursement_allocation_rejects_over_allocated_expense(core_conn, data
     second_reimbursement_id = reimbursement_transaction(data_factory, amount="-300.00")
     create_reimbursement_allocation(first_reimbursement_id, expense_id, Decimal("300.00"), conn=core_conn)
 
-    with pytest.raises(ReimbursementAllocationError, match="still owed"):
+    with pytest.raises(ReimbursementAllocationError, match="still to reimburse"):
         create_reimbursement_allocation(second_reimbursement_id, expense_id, Decimal("250.00"), conn=core_conn)
 
 

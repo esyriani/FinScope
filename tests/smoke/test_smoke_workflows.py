@@ -238,7 +238,11 @@ def test_smoke_dashboard_loads_with_seeded_data(client, core_conn):
 
     assert response.status_code == 200
     assert 'id="dashboard-chart-data"' in body
-    assert "SMOKE DASHBOARD HYDRO" in body
+    assert "Analysis readiness" in body
+    assert "Trend preview" in body
+    assert "Top drivers" in body
+    assert "Explore reports" in body
+    assert "Income and credits" in body
 
 
 def test_smoke_same_transaction_can_import_for_different_accounts(client, core_conn):

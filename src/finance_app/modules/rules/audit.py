@@ -11,15 +11,16 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Any, TypeAlias, TypeVar
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.engine import Connection
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_MANUAL,
     CATEGORY_SOURCE_MANUAL,
     UNKNOWN_CATEGORY,
 )
-from finance_app.core.money import money_to_float
+from finance_app.core.money import rounded_money_decimal
 from finance_app.database.tables import (
     accounts as accounts_table,
 )
@@ -240,15 +241,11 @@ def audit_transaction_rows(
     include_unknown: bool = False,
 ) -> tuple[tuple[TransactionRow, ...], bool]:
     """Return active historical transaction rows eligible for rule auditing."""
+    category_label = transaction_category_label_expression(unknown_category)
     conditions = [transactions_table.c.ignored == 0]
     if not include_unknown:
-        conditions.append(
-            and_(
-                transactions_table.c.category.is_not(None),
-                transactions_table.c.category != unknown_category,
-                transactions_table.c.category != UNKNOWN_CATEGORY,
-            )
-        )
+        conditions.append(category_label != unknown_category)
+        conditions.append(category_label != UNKNOWN_CATEGORY)
 
     query = (
         select(
@@ -260,7 +257,7 @@ def audit_transaction_rows(
             transactions_table.c.tx_date,
             transactions_table.c.description,
             transactions_table.c.amount,
-            transactions_table.c.category,
+            category_label.label("category"),
             transactions_table.c.category_source,
             transactions_table.c.category_confidence,
             transactions_table.c.category_rule_id,
@@ -292,9 +289,8 @@ def audit_transaction_rows(
 
     tags_by_transaction_id = get_transaction_tags_by_id(conn, [row["id"] for row in rows])
     for row in rows:
-        amount = money_to_float(row["amount"])
         normalized = normalize_merchant(row["description"], conn=conn)
-        row["amount"] = amount
+        row["amount"] = rounded_money_decimal(row["amount"])
         row["tags"] = tags_by_transaction_id.get(row["id"], [])
         row["merchant_key"] = normalized.merchant_key
         row["merchant"] = normalized.merchant_key

@@ -6,6 +6,7 @@ import io
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from finance_app.core.config import settings
@@ -29,6 +30,7 @@ from finance_app.core.constants import (
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
     UNKNOWN_CATEGORY,
 )
+from finance_app.core.money import canonical_money_text, parse_money_text
 from finance_app.core.text import normalize_header, strip_accents
 
 
@@ -205,54 +207,12 @@ def slash_date_order_counts(values: Iterable[object]) -> tuple[int, int, int, in
     return month_first_count, day_first_count, ambiguous_count, numeric_date_count
 
 
-def parse_money(value: object) -> float | None:
+MONEY_PRESENT_THRESHOLD = Decimal("0.00")
+
+
+def parse_money(value: object) -> Decimal | None:
     """Parse money."""
-    if value is None:
-        return None
-
-    text = str(value).strip()
-
-    if text in {"", "-", "--", "N/A"}:
-        return None
-
-    negative = False
-    text = text.replace("\xa0", " ")
-    text = re.sub(r"(?i)\bCAD\b", "", text)
-    text = re.sub(r"(?i)CA\$", "", text)
-    text = text.replace("$", "")
-    text = text.strip()
-
-    if text.startswith("(") and text.endswith(")"):
-        negative = True
-        text = text[1:-1]
-
-    if text.endswith("-"):
-        negative = True
-        text = text[:-1]
-
-    if text.startswith("-"):
-        negative = True
-        text = text[1:]
-
-    text = re.sub(r"[^0-9,.]", "", text)
-
-    if not text:
-        return None
-
-    if "," in text and "." in text:
-        if text.rfind(",") > text.rfind("."):
-            text = text.replace(".", "").replace(",", ".")
-        else:
-            text = text.replace(",", "")
-    elif "," in text:
-        parts = text.split(",")
-        if len(parts[-1]) in {1, 2}:
-            text = "".join(parts[:-1]) + "." + parts[-1]
-        else:
-            text = text.replace(",", "")
-
-    amount = float(text)
-    return -amount if negative else amount
+    return parse_money_text(value)
 
 
 def csv_rows(raw_text: str) -> list[list[str]]:
@@ -323,7 +283,7 @@ def detect_csv_header(rows: Sequence[list[str]]) -> tuple[int | None, list[str] 
     return None, None
 
 
-def normalize_signed_amount(raw_amount: float | None, statement_type: str) -> float | None:
+def normalize_signed_amount(raw_amount: Decimal | None, statement_type: str) -> Decimal | None:
     """Normalize signed amount."""
     if raw_amount is None:
         return None
@@ -354,19 +314,17 @@ def build_transaction(
     credit = parse_money(raw_credit)
     signed_amount = parse_money(raw_amount)
 
-    if debit is not None and abs(debit) > 0.004:
+    if debit is not None and abs(debit) > MONEY_PRESENT_THRESHOLD:
         amount = abs(debit)
-    elif credit is not None and abs(credit) > 0.004:
+    elif credit is not None and abs(credit) > MONEY_PRESENT_THRESHOLD:
         amount = -abs(credit)
-    elif signed_amount is not None and abs(signed_amount) > 0.004:
+    elif signed_amount is not None and abs(signed_amount) > MONEY_PRESENT_THRESHOLD:
         normalized_amount = normalize_signed_amount(signed_amount, statement_type)
         if normalized_amount is None:
             return None
         amount = normalized_amount
     else:
         return None
-
-    amount = round(amount, 2)
 
     return {
         "tx_date": tx_date,
@@ -379,7 +337,7 @@ def build_transaction(
 
 def build_interac_transfer(
     raw_date: object,
-    counterparty: object,
+    merchant_name: object,
     raw_amount: object,
     direction: str,
     method: object | None = None,
@@ -394,11 +352,11 @@ def build_interac_transfer(
     Cancelled or otherwise incomplete rows are ignored.
     """
     tx_date = parse_date(raw_date, date_formats=date_formats)
-    description = str(counterparty or "").strip()
+    description = str(merchant_name or "").strip()
     amount = parse_money(raw_amount)
     normalized_status = str(status or "").strip().lower()
 
-    if not tx_date or not description or amount is None or abs(amount) <= 0.004:
+    if not tx_date or not description or amount is None or abs(amount) <= MONEY_PRESENT_THRESHOLD:
         return None
     if require_deposited_status and not (
         normalized_status.startswith("deposited") or normalized_status.startswith("autodeposited")
@@ -409,11 +367,11 @@ def build_interac_transfer(
     return {
         "tx_date": tx_date,
         "description": description,
-        "amount": round(signed_amount, 2),
+        "amount": signed_amount,
         "category": UNKNOWN_CATEGORY,
         "needs_review": 1,
         "interac_direction": direction,
-        "interac_counterparty": description,
+        "interac_merchant": description,
         "interac_method": str(method or "").strip(),
         "interac_status": str(status or "").strip(),
     }
@@ -455,43 +413,43 @@ def parse_interac_transactions(
     if interac_direction in {INTERAC_DIRECTION_SENT, INTERAC_DIRECTION_RECEIVED}:
         direction = interac_direction
         date_col = sent_date_col or deposited_date_col or find_column(header_map, DATE_COLUMNS)
-        counterparty_col = (
+        merchant_col = (
             recipient_col or received_from_col or find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
         )
     elif sent_date_col and recipient_col:
         direction = INTERAC_DIRECTION_SENT
         date_col = sent_date_col
-        counterparty_col = recipient_col
+        merchant_col = recipient_col
     elif deposited_date_col and received_from_col:
         direction = INTERAC_DIRECTION_RECEIVED
         date_col = deposited_date_col
-        counterparty_col = received_from_col
+        merchant_col = received_from_col
     else:
         return {
             "transactions": [],
             "ignored_rows": max(0, len(rows) - 1),
         }
-    if not date_col or not counterparty_col:
+    if not date_col or not merchant_col:
         return {
             "transactions": [],
             "ignored_rows": max(0, len(rows) - 1),
         }
 
-    records: list[dict[str, str]] = []
-    for row in rows[1:]:
+    records: list[tuple[int, dict[str, str]]] = []
+    for source_row_number, row in enumerate(rows[1:], start=2):
         padded_row = row + [""] * max(0, len(header) - len(row))
-        records.append(dict(zip(header, padded_row)))
+        records.append((source_row_number, dict(zip(header, padded_row))))
 
     date_formats = preferred_date_formats_for_values(
-        (record.get(date_col) for record in records),
+        (record.get(date_col) for _source_row_number, record in records),
         date_order=date_order,
     )
     transactions: list[dict[str, Any]] = []
     ignored_rows = 0
-    for record in records:
+    for source_row_number, record in records:
         tx = build_interac_transfer(
             record.get(date_col),
-            record.get(counterparty_col),
+            record.get(merchant_col),
             record.get(amount_col) if amount_col else None,
             direction,
             method=record.get(method_col) if method_col else None,
@@ -500,6 +458,7 @@ def parse_interac_transactions(
             date_formats=date_formats,
         )
         if tx:
+            tx["source_row_number"] = source_row_number
             transactions.append(tx)
         else:
             ignored_rows += 1
@@ -542,16 +501,16 @@ def parse_csv_transactions(
         assert date_col is not None
         assert description_col is not None
 
-        records: list[dict[str, str]] = []
-        for row in rows[header_index + 1 :]:
+        records: list[tuple[int, dict[str, str]]] = []
+        for source_row_number, row in enumerate(rows[header_index + 1 :], start=header_index + 2):
             padded_row = row + [""] * max(0, len(header) - len(row))
-            records.append(dict(zip(header, padded_row)))
+            records.append((source_row_number, dict(zip(header, padded_row))))
 
         date_formats = preferred_date_formats_for_values(
-            (record.get(date_col) for record in records),
+            (record.get(date_col) for _source_row_number, record in records),
             date_order=date_order,
         )
-        for record in records:
+        for source_row_number, record in records:
             tx = build_transaction(
                 record.get(date_col),
                 record.get(description_col),
@@ -563,6 +522,7 @@ def parse_csv_transactions(
             )
 
             if tx:
+                tx["source_row_number"] = source_row_number
                 transactions.append(tx)
             else:
                 ignored_rows += 1
@@ -572,7 +532,7 @@ def parse_csv_transactions(
             (row[0] for row in rows if len(row) >= 3),
             date_order=date_order,
         )
-        for row in rows:
+        for source_row_number, row in enumerate(rows, start=1):
             if len(row) < 3:
                 ignored_rows += 1
                 continue
@@ -588,6 +548,7 @@ def parse_csv_transactions(
             )
 
             if tx:
+                tx["source_row_number"] = source_row_number
                 transactions.append(tx)
             else:
                 ignored_rows += 1
@@ -598,7 +559,32 @@ def parse_csv_transactions(
     }
 
 
-def transaction_fingerprint(tx: Mapping[str, Any], account_id: object | None = None) -> str:
-    """Build fingerprint."""
-    raw = f"{account_id}|{tx['tx_date']}|{tx['description']}|{tx['amount']}"
+def transaction_fingerprint(
+    tx: Mapping[str, Any],
+    account_id: object | None,
+    statement_id: object,
+    import_index: int | None = None,
+) -> str:
+    """Build a statement-scoped import fingerprint for one parsed row."""
+    if statement_id in (None, ""):
+        raise ValueError("Imported transaction fingerprints require a statement id.")
+
+    source_identity = transaction_source_identity(tx, import_index)
+    raw = (
+        f"statement:{statement_id}|account:{account_id}|{source_identity}|"
+        f"date:{tx['tx_date']}|description:{tx['description']}|amount:{canonical_money_text(tx['amount'])}"
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def transaction_source_identity(tx: Mapping[str, Any], import_index: int | None = None) -> str:
+    """Return the stable source-row identity used in imported row fingerprints."""
+    for key in ("provider_transaction_id", "source_transaction_id", "source_row_number"):
+        value = tx.get(key)
+        if value not in (None, ""):
+            return f"{key}:{value}"
+
+    if import_index is None:
+        raise ValueError("Imported transaction fingerprints require a source row identity.")
+
+    return f"parsed_index:{import_index}"

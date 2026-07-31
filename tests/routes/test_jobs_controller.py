@@ -137,7 +137,7 @@ def test_jobs_page_paginates_and_renders_public_job_data(client, core_conn):
 
 
 def test_jobs_page_renders_ai_estimate_hook_by_default(client):
-    """Verify the Run AI form opens the token estimate modal by default."""
+    """Verify the Run AI form opens the AI usage estimate modal by default."""
     response = client.get("/jobs")
 
     assert response.status_code == 200
@@ -376,7 +376,7 @@ def test_categorize_all_unknowns_requires_token_estimate_confirmation(client, co
 
     assert response.status_code == 200
     assert submitted == []
-    assert "Review the token estimate before running AI." in response.get_data(as_text=True)
+    assert "Review the estimated AI usage before continuing." in response.get_data(as_text=True)
 
 
 def test_categorize_all_unknowns_runs_without_confirmation_when_setting_disabled(client, core_conn, monkeypatch):
@@ -419,7 +419,7 @@ def test_estimate_categorize_all_unknowns_returns_json(client, monkeypatch):
         "estimate_all_unknown_llm_categorization",
         lambda: {
             "ok": True,
-            "message": "AI token estimate ready.",
+            "message": "AI usage estimate ready.",
             "estimate": {"request_count": 3, "input_tokens": 234},
         },
     )
@@ -431,7 +431,7 @@ def test_estimate_categorize_all_unknowns_returns_json(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["estimate"]["request_count"] == 3
-    assert response.get_json()["message"] == "AI token estimate ready."
+    assert response.get_json()["message"] == "AI usage estimate ready."
 
 
 def test_cancel_queued_ai_jobs_route_clears_only_ai_queue(client):

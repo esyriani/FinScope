@@ -53,6 +53,73 @@ function setupReviewTransactionSelectors(root = document) {
     });
 }
 
+const reviewTerminalJobStatuses = new Set(["completed", "failed", "cancelled"]);
+const reviewTrackedJobStatusUrls = new Set();
+
+function delayReviewRefresh(milliseconds) {
+    return new Promise((resolve) => {
+        window.setTimeout(resolve, milliseconds);
+    });
+}
+
+async function fetchReviewJobStatus(statusUrl) {
+    const response = await fetch(statusUrl, {
+        headers: {
+            "X-Requested-With": "fetch",
+        },
+        credentials: "same-origin",
+    });
+
+    if (!response.ok) {
+        throw new Error("Review job status could not be loaded.");
+    }
+
+    return response.json();
+}
+
+async function refreshReviewAfterJob(statusUrl, refreshUrl, selector) {
+    if (!statusUrl || !refreshUrl || !selector || reviewTrackedJobStatusUrls.has(statusUrl)) {
+        return;
+    }
+
+    reviewTrackedJobStatusUrls.add(statusUrl);
+    try {
+        for (let attempt = 0; attempt < 120; attempt += 1) {
+            const job = await fetchReviewJobStatus(statusUrl);
+            if (reviewTerminalJobStatuses.has(job.status)) {
+                await window.ajaxRefreshFromUrl?.(refreshUrl, selector);
+                return;
+            }
+            await delayReviewRefresh(750);
+        }
+    } catch (_error) {
+        return;
+    } finally {
+        reviewTrackedJobStatusUrls.delete(statusUrl);
+    }
+}
+
+function setupReviewApplyAjaxRefresh() {
+    if (document.documentElement.dataset.reviewApplyAjaxRefreshReady === "true") {
+        return;
+    }
+
+    document.documentElement.dataset.reviewApplyAjaxRefreshReady = "true";
+    document.addEventListener("finance:ajax-action-complete", (event) => {
+        const detail = event.detail || {};
+        if (!detail.form?.matches?.("[data-review-apply-form]")) {
+            return;
+        }
+
+        refreshReviewAfterJob(
+            detail.data?.job_status_url,
+            detail.data?.refresh_url || detail.refreshUrl || window.location.href,
+            detail.selector
+        );
+    });
+}
+
 window.financeApp?.registerInitializer("review.transaction-selectors", setupReviewTransactionSelectors);
 
+setupReviewApplyAjaxRefresh();
 setupReviewTransactionSelectors();

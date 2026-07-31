@@ -130,7 +130,7 @@ function setupAiJobProgressPolling(root = document) {
                     window.setTimeout(refreshJobsSection, 500);
                 }
             } catch (_error) {
-                summary.textContent = translateJobsMessage("The job progress could not be refreshed.");
+                summary.textContent = translateJobsMessage("The processing progress could not be refreshed.");
             }
         }
 
@@ -247,7 +247,7 @@ function setupJobsAutoRefresh(root = document) {
                 window.showAjaxRefreshError(
                     activeTarget || button,
                     selector,
-                    translateJobsMessage("The jobs table could not be refreshed.")
+                    translateJobsMessage("The processing table could not be refreshed.")
                 );
             }
         } finally {

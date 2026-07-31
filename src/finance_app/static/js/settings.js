@@ -51,7 +51,7 @@ function setupStatementTypesEditor() {
                     <select class="form-select" name="statement_type_import_modes">
                         ${selectOptions("statement_type_import_modes", importMode)}
                     </select>
-                    <div class="form-text">${escapeHtml(t("Choose whether uploads create ledger rows or enrich existing rows."))}</div>
+                    <div class="form-text">${escapeHtml(t("Choose whether imports add new transactions or update transactions already imported."))}</div>
                 </td>
                 <td>
                     <select class="form-select" name="statement_type_default_account_types">

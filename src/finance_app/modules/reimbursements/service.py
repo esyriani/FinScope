@@ -11,14 +11,18 @@ from decimal import Decimal
 from typing import Any
 
 from finance_app.core.config import settings
-from finance_app.core.constants import (
-    REIMBURSEMENT_CATEGORY,
-    TRANSACTION_KIND_EXPENSE,
-)
+from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
 from finance_app.core.money import MoneyValue, money_to_decimal, quantize_money
 from finance_app.database.engine import db_core_transaction
-from finance_app.modules.categories.builtins import BUILTIN_CATEGORY_REIMBURSEMENT
+from finance_app.modules.categories.builtins import (
+    BUILTIN_CATEGORY_REIMBURSEMENT,
+    BUILTIN_TAG_REIMBURSABLE,
+    builtin_tag_by_key,
+    is_category_name_for_builtin_key,
+)
+from finance_app.modules.categories.taxonomy import get_tag_color_map, get_transaction_tags_by_id, upsert_tag_metadata
 from finance_app.modules.reimbursements import presenter, queries, repository
+from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 from finance_app.modules.settings.runtime import get_int_setting
 
 
@@ -42,16 +46,26 @@ class ReimbursementAllocationResult:
 
 def build_reimbursements_context() -> dict[str, Any]:
     """Build the reimbursement monitoring page context."""
+    return build_reimbursements_context_from_args({})
+
+
+def build_reimbursements_context_from_args(args: Any) -> dict[str, Any]:
+    """Build the reimbursement monitoring page context for request filters."""
     with db_core_transaction() as conn:
         reimbursement_rows = queries.fetch_reimbursement_transactions(conn)
         expense_rows = queries.fetch_reimbursable_expense_transactions(conn)
         allocation_rows = queries.fetch_reimbursement_allocations(conn)
+        expense_tag_map = get_transaction_tags_by_id(conn, [row["id"] for row in expense_rows])
+        tag_colors = get_tag_color_map(conn)
         table_page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
 
     context = presenter.build_reimbursements_view_model(
         reimbursement_rows,
         expense_rows,
         allocation_rows,
+        expense_tag_map,
+        tag_colors,
+        args,
     )
     context["table_page_size"] = table_page_size
     return context
@@ -123,6 +137,42 @@ def create_reimbursement_matches(
         ]
 
 
+def create_expense_reimbursement_matches(
+    expense_transaction_id: object,
+    reimbursement_matches: Sequence[tuple[object, MoneyValue]],
+    conn: Any | None = None,
+) -> list[ReimbursementAllocationResult]:
+    """Create one or more reimbursement matches for the same expense.
+
+    Args:
+        expense_transaction_id: Expense transaction id receiving reimbursement.
+        reimbursement_matches: Reimbursement transaction ids with the amount
+            matched from each credit.
+        conn: Optional active Core connection.
+
+    Returns:
+        Allocation states after all inserts.
+
+    Raises:
+        ReimbursementAllocationError: If no reimbursements were selected or any
+            match violates transaction-role or remaining-balance limits.
+    """
+    if not reimbursement_matches:
+        raise ReimbursementAllocationError("Select at least one reimbursement to match.")
+
+    with db_core_transaction(conn) as active_conn:
+        return [
+            _save_reimbursement_allocation(
+                active_conn,
+                allocation_id=None,
+                reimbursement_transaction_id=reimbursement_transaction_id,
+                expense_transaction_id=expense_transaction_id,
+                amount=amount,
+            )
+            for reimbursement_transaction_id, amount in reimbursement_matches
+        ]
+
+
 def update_reimbursement_allocation_amount(
     allocation_id: object,
     amount: MoneyValue,
@@ -173,10 +223,10 @@ def delete_reimbursement_allocation(allocation_id: object, conn: Any | None = No
 
 
 def complete_reimbursable_expense(expense_transaction_id: object, conn: Any | None = None) -> int:
-    """Close a reimbursable expense without adding fake reimbursement money.
+    """Mark a reimbursable expense complete without adding fake reimbursement money.
 
     Args:
-        expense_transaction_id: Transaction id for the expense to close.
+        expense_transaction_id: Transaction id for the expense to complete.
         conn: Optional active Core connection.
 
     Returns:
@@ -193,11 +243,31 @@ def complete_reimbursable_expense(expense_transaction_id: object, conn: Any | No
         return repository.insert_expense_completion(active_conn, normalized_expense_id)
 
 
-def reopen_reimbursable_expense(expense_transaction_id: object, conn: Any | None = None) -> bool:
-    """Reopen a completed reimbursable expense for matching."""
+def resume_reimbursable_expense(expense_transaction_id: object, conn: Any | None = None) -> bool:
+    """Return a completed reimbursable expense to reimbursement tracking."""
     normalized_expense_id = positive_int(expense_transaction_id, "expense transaction id")
     with db_core_transaction(conn) as active_conn:
         return repository.delete_expense_completion(active_conn, normalized_expense_id)
+
+
+def set_expense_reimbursable_tag(
+    expense_transaction_id: object,
+    enabled: bool,
+    conn: Any | None = None,
+) -> bool:
+    """Add or remove the Reimbursable tag for one expense transaction."""
+    normalized_expense_id = positive_int(expense_transaction_id, "expense transaction id")
+    with db_core_transaction(conn) as active_conn:
+        expense = require_transaction(active_conn, normalized_expense_id, "Expense transaction")
+        validate_expense_transaction(expense)
+        ensure_reimbursable_tag(active_conn)
+        return repository.set_transaction_tag_state(
+            active_conn,
+            normalized_expense_id,
+            REIMBURSABLE_TAG,
+            enabled,
+            builtin_key=BUILTIN_TAG_REIMBURSABLE,
+        )
 
 
 def _save_reimbursement_allocation(
@@ -215,8 +285,16 @@ def _save_reimbursement_allocation(
         raise ReimbursementAllocationError("A reimbursement cannot be matched to itself.")
 
     normalized_amount = positive_money(amount)
-    reimbursement = require_transaction(conn, normalized_reimbursement_id, "Reimbursement transaction")
-    expense = require_transaction(conn, normalized_expense_id, "Expense transaction")
+    locked_transactions = repository.lock_transaction_allocation_subjects(
+        conn,
+        (normalized_reimbursement_id, normalized_expense_id),
+    )
+    reimbursement = require_transaction_subject(
+        locked_transactions,
+        normalized_reimbursement_id,
+        "Reimbursement transaction",
+    )
+    expense = require_transaction_subject(locked_transactions, normalized_expense_id, "Expense transaction")
     validate_reimbursement_transaction(reimbursement)
     validate_expense_transaction(expense)
 
@@ -247,7 +325,7 @@ def _save_reimbursement_allocation(
     if reimbursement_allocated_before + normalized_amount > reimbursement_limit:
         raise ReimbursementAllocationError("The match amount exceeds the reimbursement amount still unmatched.")
     if expense_allocated_before + normalized_amount > expense_limit:
-        raise ReimbursementAllocationError("The match amount exceeds the expense amount still owed.")
+        raise ReimbursementAllocationError("The match amount exceeds the expense amount still to reimburse.")
 
     if allocation_id is None:
         allocation_id = repository.insert_allocation(
@@ -284,6 +362,18 @@ def require_transaction(conn: Any, transaction_id: int, label: str) -> dict[str,
     return transaction
 
 
+def require_transaction_subject(
+    transactions_by_id: dict[int, dict[str, Any]],
+    transaction_id: int,
+    label: str,
+) -> dict[str, Any]:
+    """Return a locked transaction allocation subject or raise a domain error."""
+    transaction = transactions_by_id.get(transaction_id)
+    if transaction is None:
+        raise ReimbursementAllocationError(f"{label} was not found.")
+    return transaction
+
+
 def validate_reimbursement_transaction(transaction: dict[str, Any]) -> None:
     """Validate that a transaction can provide reimbursement funds."""
     if not is_reimbursement_category(transaction):
@@ -304,9 +394,26 @@ def validate_expense_transaction(transaction: dict[str, Any]) -> None:
 
 def is_reimbursement_category(transaction: dict[str, Any]) -> bool:
     """Return whether a transaction is categorized as a reimbursement credit."""
-    return (
-        transaction.get("category_builtin_key") == BUILTIN_CATEGORY_REIMBURSEMENT
-        or str(transaction.get("category") or "").strip().casefold() == REIMBURSEMENT_CATEGORY.casefold()
+    if transaction.get("category_builtin_key") == BUILTIN_CATEGORY_REIMBURSEMENT:
+        return True
+    return transaction.get("category_id") is None and is_category_name_for_builtin_key(
+        transaction.get("category"),
+        BUILTIN_CATEGORY_REIMBURSEMENT,
+    )
+
+
+def ensure_reimbursable_tag(conn: Any) -> None:
+    """Ensure the built-in reimbursable tag row exists before assignment."""
+    tag = builtin_tag_by_key(BUILTIN_TAG_REIMBURSABLE)
+    if tag is None:
+        return
+    upsert_tag_metadata(
+        conn,
+        tag.name,
+        tag.description,
+        tag.instruction,
+        tag.color,
+        builtin_key=tag.key,
     )
 
 

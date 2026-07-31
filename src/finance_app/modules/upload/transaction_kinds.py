@@ -6,6 +6,7 @@ updates linked payment rows. Callers provide an active SQLAlchemy connection.
 
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select, update
@@ -25,6 +26,7 @@ from finance_app.core.constants import (
     TRANSFER_CATEGORY,
     UNKNOWN_CATEGORY,
 )
+from finance_app.core.money import MoneyValue, money_to_decimal
 from finance_app.database.dates import coerce_date
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -43,6 +45,7 @@ from finance_app.modules.categories.taxonomy import get_transaction_tag_names
 from finance_app.modules.settings.runtime import get_unknown_category
 
 PAYMENT_MATCH_DATE_TOLERANCE_DAYS = 5
+PAYMENT_MATCH_AMOUNT_TOLERANCE = Decimal("0.005")
 PAYMENT_DESCRIPTION_MARKERS = (
     "PAYMENT THANK YOU",
     "PAIEMENT",
@@ -195,10 +198,11 @@ def mark_linked_account_payments(
 def find_linked_payment_match(
     conn: Any,
     credit_account: Mapping[str, Any],
-    amount: float,
+    amount: MoneyValue,
     tx_date: object,
 ) -> Mapping[str, Any] | str | None:
     """Return the unique funding-account row that matches a card payment."""
+    amount_decimal = money_to_decimal(amount)
     rows = (
         conn.execute(
             transaction_snapshot_select()
@@ -206,8 +210,8 @@ def find_linked_payment_match(
                 transactions_table.c.account_id == credit_account["paid_from_account_id"],
                 transactions_table.c.ignored == 0,
                 transactions_table.c.amount > 0,
-                transactions_table.c.amount > amount - 0.005,
-                transactions_table.c.amount < amount + 0.005,
+                transactions_table.c.amount > amount_decimal - PAYMENT_MATCH_AMOUNT_TOLERANCE,
+                transactions_table.c.amount < amount_decimal + PAYMENT_MATCH_AMOUNT_TOLERANCE,
                 transactions_table.c.tx_date >= date_window_start(tx_date, PAYMENT_MATCH_DATE_TOLERANCE_DAYS),
                 transactions_table.c.tx_date <= date_window_end(tx_date, PAYMENT_MATCH_DATE_TOLERANCE_DAYS),
                 transactions_table.c.transaction_kind != TRANSACTION_KIND_PAYMENT,

@@ -14,6 +14,7 @@ from finance_app.background.runner import (
 )
 from finance_app.core.config import settings
 from finance_app.core.constants import CATEGORY_RULE_SOURCE_MANUAL, TRANSACTION_KINDS, UNKNOWN_CATEGORY
+from finance_app.core.money import MoneyValue
 from finance_app.core.periods import DATE_PERIOD_OPTIONS, PERIOD_CUSTOM
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.accounts.queries import list_account_options
@@ -136,6 +137,8 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "selected_category_source": filters["category_source"],
         "selected_ignored": filters["ignored"],
         "selected_period": filters["period"],
+        "selected_date_from": filters["date_from"],
+        "selected_date_to": filters["date_to"],
         "period_options": DATE_PERIOD_OPTIONS,
         "period_custom": PERIOD_CUSTOM,
         "review_filter_options": REVIEW_FILTER_OPTIONS,
@@ -454,8 +457,8 @@ def apply_transaction_ai_suggestion(
     suggestion: Mapping[str, Any] | None,
     action: str = APPLY_AI_SUGGESTION_ACTION,
     rule_keyword: str = "",
-    amount_min: float | None = None,
-    amount_max: float | None = None,
+    amount_min: MoneyValue | None = None,
+    amount_max: MoneyValue | None = None,
 ) -> dict[str, Any]:
     """Apply a pending single-transaction AI suggestion.
 
@@ -782,7 +785,7 @@ def ai_token_estimate_result(scope: str, transaction_count: int, estimate: Mappi
         "scope": scope,
         "transaction_count": transaction_count,
         "message": (
-            "No LLM request would be sent for this action." if request_count == 0 else "AI token estimate ready."
+            "No AI request would be sent for this action." if request_count == 0 else "AI usage estimate ready."
         ),
         "estimate": dict(estimate),
     }

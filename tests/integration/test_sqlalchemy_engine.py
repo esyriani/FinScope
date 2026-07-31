@@ -98,14 +98,14 @@ def test_ensure_database_exists_creates_mysql_schema_from_server_url():
 def test_ensure_database_exists_ignores_sqlite_urls():
     """Keep SQLite behavior delegated to SQLAlchemy's normal file creation."""
     with patch.object(engine_module, "create_engine") as create_engine_mock:
-        ensure_database_exists("sqlite:///finance.db")
+        ensure_database_exists("sqlite:///finscope.db")
 
     create_engine_mock.assert_not_called()
 
 
 def test_core_request_connection_reuses_until_teardown(tmp_path):
     """Reuse a request-scoped Core connection and close it during teardown."""
-    database_url = sqlite_database_url(tmp_path / "finance.db")
+    database_url = sqlite_database_url(tmp_path / "finscope.db")
     app = Flask(__name__)
     register_core_db(app)
     seen_connections = []
@@ -127,7 +127,7 @@ def test_core_request_connection_reuses_until_teardown(tmp_path):
 
 def test_core_request_teardown_rolls_back_uncommitted_work(tmp_path):
     """Rollback uncommitted request work when Flask tears down the context."""
-    database_path = tmp_path / "finance.db"
+    database_path = tmp_path / "finscope.db"
     database_url = sqlite_database_url(database_path)
     setup_engine = create_engine(database_url)
     try:
@@ -158,9 +158,44 @@ def test_core_request_teardown_rolls_back_uncommitted_work(tmp_path):
     assert count == 0
 
 
+def test_core_transaction_commits_after_request_scoped_read(tmp_path):
+    """Commit managed writes even when an earlier request read opened a transaction."""
+    database_path = tmp_path / "finscope.db"
+    database_url = sqlite_database_url(database_path)
+    setup_engine = create_engine(database_url)
+    try:
+        with setup_engine.begin() as conn:
+            conn.execute(text("CREATE TABLE sample (value TEXT NOT NULL)"))
+    finally:
+        setup_engine.dispose()
+
+    app = Flask(__name__)
+    register_core_db(app)
+
+    @app.route("/read-then-write")
+    def read_then_write():
+        """Run a request-scoped read before a managed write transaction."""
+        get_core_connection().execute(text("SELECT COUNT(*) FROM sample")).scalar_one()
+        with db_core_transaction() as conn:
+            conn.execute(text("INSERT INTO sample (value) VALUES ('committed')"))
+        return "ok"
+
+    with patch.object(engine_module, "settings", SimpleNamespace(database_url=database_url)):
+        response = app.test_client().get("/read-then-write")
+
+    assert response.status_code == 200
+    verification_engine = create_engine(database_url)
+    try:
+        with verification_engine.connect() as conn:
+            count = conn.execute(text("SELECT COUNT(*) FROM sample")).scalar_one()
+    finally:
+        verification_engine.dispose()
+    assert count == 1
+
+
 def test_core_request_nested_transaction_without_conn_uses_savepoint(tmp_path):
     """Keep a request-owned outer transaction open across nested helper calls."""
-    database_path = tmp_path / "finance.db"
+    database_path = tmp_path / "finscope.db"
     database_url = sqlite_database_url(database_path)
     setup_engine = create_engine(database_url)
     try:
@@ -232,7 +267,7 @@ def test_app_request_nested_transaction_without_conn_keeps_outer_boundary(app):
 
 def test_core_transaction_commits_and_rolls_back(tmp_path):
     """Commit successful Core transactions and roll back failed ones."""
-    database_path = tmp_path / "finance.db"
+    database_path = tmp_path / "finscope.db"
     database_url = sqlite_database_url(database_path)
 
     with patch.object(engine_module, "settings", SimpleNamespace(database_url=database_url)):
@@ -260,7 +295,7 @@ def test_core_transaction_commits_and_rolls_back(tmp_path):
 
 def test_core_transaction_with_external_transaction_does_not_commit_outer(tmp_path):
     """Verify an external transaction remains caller-owned after helper success."""
-    database_url = sqlite_database_url(tmp_path / "finance.db")
+    database_url = sqlite_database_url(tmp_path / "finscope.db")
     engine = create_engine(database_url)
     try:
         with engine.begin() as conn:
@@ -283,7 +318,7 @@ def test_core_transaction_with_external_transaction_does_not_commit_outer(tmp_pa
 
 def test_core_transaction_with_external_transaction_rolls_back_only_savepoint(tmp_path):
     """Verify helper failures do not roll back a caller-owned transaction."""
-    database_url = sqlite_database_url(tmp_path / "finance.db")
+    database_url = sqlite_database_url(tmp_path / "finscope.db")
     engine = create_engine(database_url)
     try:
         with engine.begin() as conn:
@@ -314,7 +349,7 @@ def test_core_transaction_with_external_transaction_rolls_back_only_savepoint(tm
 
 def test_core_sqlite_connections_enforce_foreign_keys(tmp_path):
     """Enable SQLite foreign-key enforcement on pooled Core connections."""
-    database_url = sqlite_database_url(tmp_path / "finance.db")
+    database_url = sqlite_database_url(tmp_path / "finscope.db")
 
     with patch.object(engine_module, "settings", SimpleNamespace(database_url=database_url)):
         with db_core_transaction() as conn:

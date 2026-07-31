@@ -2,7 +2,7 @@
 
 Settings stores runtime preferences in the active database. General settings are personal to each signed-in user. Owner-only settings control shared behavior for the deployment and are saved on the owner account so background jobs and non-request workflows can resolve the same values.
 
-Initial values come from the `[setting_defaults]` entries in root `config.ini`, environment variables, or built-in defaults when a setting has not been saved yet. Root [config.example.ini](../config.example.ini) lists a seed value for every Settings-page parameter. Changing configuration defaults later does not overwrite settings already stored in the database; use the Settings page to change saved runtime behavior.
+Initial values come from the `[setting_defaults]` entries in [src/finance_app/config.ini](../src/finance_app/config.ini), environment variables, or built-in defaults when a setting has not been saved yet. [src/finance_app/config.example.ini](../src/finance_app/config.example.ini) lists a seed value for every Settings-page parameter. Changing configuration defaults later does not overwrite settings already stored in the database; use the Settings page to change saved runtime behavior.
 
 See [Authentication and authorization](authentication.md#settings-permissions) for role-specific access rules.
 
@@ -16,12 +16,14 @@ Every authenticated user can edit General settings for their own account.
 | Interface language | `English` or `French` | Chooses UI language for the user. User-entered financial data such as merchants, accounts, categories, tags, statements, and descriptions is not translated. |
 | Table page size | Whole number, minimum `1` | Sets the default row count for paginated tables. |
 | Comparison default years | Whole number, minimum `2` | Sets how many years are selected by default on the Comparison year-trends view. |
-| Comparison insight card limit | Whole number, minimum `1` | Limits the ranked insight cards shown on Comparison. |
-| Home top category limit | Whole number, minimum `1` | Limits the top spending categories shown on Home. |
-| Merchant table limit | Whole number, minimum `1` | Limits merchant rows shown in comparison summaries. |
+| Comparison insight card limit | Whole number from `1` to `12` | Limits the ranked insight cards shown on Comparison. |
+| Home top category limit | Whole number from `1` to `12` | Limits the top spending categories shown on Home. |
+| Dashboard top driver limit | Whole number from `1` to `12` | Limits the compact top-driver previews shown on Dashboard. |
+| Pinned report limit | Whole number from `1` to `12` | Limits saved report cards shown on the Reports overview. |
+| Merchant comparison table limit | Whole number, minimum `1` | Limits merchant rows shown in comparison summaries. |
 | Merchant suggestion limit | Whole number, minimum `1`; default `5` | Limits merchant suggestions shown in autocomplete fields. |
 | Rule preview limit | Whole number, minimum `1` | Limits matching transactions shown while previewing rule changes. |
-| Rule audit transaction limit | Whole number, minimum `1` | Sets how many newest historical transactions Rule audit analyzes before showing its limited-audit notice. |
+| Rule health check transaction limit | Whole number, minimum `1` | Sets how many newest historical transactions the rule health check analyzes before showing its limited-check notice. |
 
 ## Categorization
 
@@ -30,9 +32,9 @@ Owners can edit Categorization settings. Optional AI behavior still requires an 
 | Setting | Allowed values | Effect |
 | --- | --- | --- |
 | Single-transaction AI | On or off | Shows or hides the Suggest category action on transaction rows. The action previews one AI category suggestion and lets the user decide whether to apply it or save a rule. |
-| Confirm token usage | On or off | When on, AI actions show a token estimate and require confirmation before sending a request. When off, statement imports can automatically queue AI categorization for remaining unknown rows. |
-| LLM confidence threshold | Number from `0` to `1` | Minimum confidence required before AI can create an automatic rule for a no-review result. |
-| LLM review threshold | Number from `0` to `1` | Minimum confidence required to keep the best-fit AI category as a review item instead of leaving the transaction as `UNKNOWN`. |
+| Review AI usage | On or off | When on, AI actions show an estimated AI usage summary and ask before sending a request. When off, statement imports can automatically queue AI categorization for remaining unknown rows. |
+| AI acceptance threshold | Number from `0` to `1` | Minimum confidence required before AI can create an automatic rule for a no-review result. |
+| AI review threshold | Number from `0` to `1` | Minimum confidence required to keep the best-fit AI category as a review item instead of leaving the transaction as `UNKNOWN`. |
 | Verify threshold | Number from `0` to `1` | Accepted AI categories below this confidence stay marked for review. |
 | OpenAI model | Model name containing letters, numbers, `.`, `_`, `:`, `/`, `+`, or `-` | Sets the categorization model. The Validate button checks whether the configured API key can see the model through the OpenAI models API. |
 

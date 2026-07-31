@@ -2,9 +2,19 @@
 
 from sqlalchemy import text
 from tests.support.context_services import FixedDate, seed_reporting_data
+from tests.support.database import insert_transaction
 
+from finance_app.core.constants import (
+    REIMBURSEMENT_CATEGORY,
+    TRANSACTION_KIND_EXPENSE,
+    TRANSACTION_KIND_INCOME,
+    TRANSACTION_KIND_PAYMENT,
+    TRANSACTION_KIND_REFUND,
+    TRANSACTION_KIND_TRANSFER,
+)
 from finance_app.modules.comparison import service as comparison_service
 from finance_app.modules.home import service as home_service
+from finance_app.modules.reimbursements.service import create_reimbursement_allocation
 
 
 def test_home_context_summarizes_seeded_year_to_date_data(core_conn, monkeypatch):
@@ -27,8 +37,8 @@ def test_home_context_summarizes_seeded_year_to_date_data(core_conn, monkeypatch
     assert context["financial_pulse"]["title"] == "Positive cash flow"
     assert context["financial_pulse"]["state"] == "surplus"
     assert [row["label"] for row in context["pulse_kpis"]] == [
-        "YTD cash flow",
-        "YTD spending",
+        "Year-to-date cash flow",
+        "Year-to-date spending",
         "Open attention",
     ]
     assert context["attention_counts"]["unknown_transactions"] == 3
@@ -45,6 +55,59 @@ def test_home_context_summarizes_seeded_year_to_date_data(core_conn, monkeypatch
     assert len(context["quick_insights"]) == 3
     assert all(item["href"].startswith(("/comparison", "/transactions")) for item in context["quick_insights"])
     assert all("insight_type" in item for item in context["quick_insights"])
+
+
+def test_home_context_applies_refund_and_reimbursement_reporting_rules(core_conn, monkeypatch):
+    """Verify Home uses the shared report math for special cash-flow rows."""
+    monkeypatch.setattr(home_service, "date", FixedDate)
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    travel_expense_id = insert_transaction(
+        core_conn,
+        description="Conference hotel",
+        amount=1000.00,
+        tx_date="2026-02-01",
+        category="Travel",
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+        fingerprint="home-financial-travel-expense",
+    )
+    reimbursement_id = insert_transaction(
+        core_conn,
+        description="Conference reimbursement",
+        amount=-900.00,
+        tx_date="2026-02-15",
+        category=REIMBURSEMENT_CATEGORY,
+        transaction_kind=TRANSACTION_KIND_INCOME,
+        fingerprint="home-financial-reimbursement-credit",
+    )
+    create_reimbursement_allocation(reimbursement_id, travel_expense_id, 900.00, conn=core_conn)
+    for tx_date, description, amount, category, kind, fingerprint in [
+        ("2026-02-02", "Book purchase", 100.00, "Food", TRANSACTION_KIND_EXPENSE, "home-financial-food-expense"),
+        ("2026-02-03", "Book refund", -25.00, "Food", TRANSACTION_KIND_REFUND, "home-financial-food-refund"),
+        ("2026-02-04", "Payroll", -1000.00, "Income", TRANSACTION_KIND_INCOME, "home-financial-income"),
+        ("2026-02-05", "Card payment", 500.00, "Transfers", TRANSACTION_KIND_PAYMENT, "home-financial-payment"),
+        ("2026-02-06", "Savings transfer", 300.00, "Transfers", TRANSACTION_KIND_TRANSFER, "home-financial-transfer"),
+    ]:
+        insert_transaction(
+            core_conn,
+            description=description,
+            amount=amount,
+            tx_date=tx_date,
+            category=category,
+            transaction_kind=kind,
+            fingerprint=fingerprint,
+        )
+
+    context = home_service.build_home_context()
+
+    assert context["overview"]["transaction_count"] == 4
+    assert context["overview"]["latest_tx_date"] == "2026-02-04"
+    assert context["ytd_spending"] == 175.00
+    assert context["ytd_income"] == 1000.00
+    assert context["ytd_cashflow"] == 825.00
+    assert [(row["category"], row["total"]) for row in context["top_categories"]] == [
+        ("Travel", 100.00),
+        ("Food", 75.00),
+    ]
 
 
 def test_home_context_surfaces_command_center_activity(core_conn, monkeypatch):

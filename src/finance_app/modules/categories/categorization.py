@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping, MutableMapping
 from typing import Any
 
 from finance_app.core.constants import UNKNOWN_CATEGORY
-from finance_app.core.money import optional_money_to_float
+from finance_app.core.money import optional_money_to_float, rounded_money_decimal
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.decision import (
     DECISION_SOURCE_RULE,
@@ -62,7 +62,8 @@ def categorize_transactions(
     merchant_categorizations: dict[object, TransactionCategoryState] = {}
 
     for tx in transactions:
-        tx["amount"] = optional_money_to_float(tx.get("amount"))
+        if tx.get("amount") is not None:
+            tx["amount"] = rounded_money_decimal(tx.get("amount"))
         normalized_merchant = normalize_merchant(tx.get("description", ""), conn=conn)
         merchant_key = normalized_merchant.cleaned_key
         scored_rule = score_category_rule_match(

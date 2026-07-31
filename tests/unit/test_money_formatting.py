@@ -7,7 +7,6 @@ import pytest
 
 from finance_app.core import money
 from finance_app.core.filters import format_money
-from finance_app.modules.dashboard import presenter as dashboard_presenter
 from finance_app.modules.recurring import service as recurring_service
 
 
@@ -69,5 +68,4 @@ def test_money_formatting_uses_configured_currency_symbol(monkeypatch):
     assert money.format_money_display(Decimal("1234.5"), places=0) == "1 235 €"
     assert money.format_signed_money_display(Decimal("-12.3")) == "-12.30 €"
     assert format_money(Decimal("12.3")) == "12.30 €"
-    assert dashboard_presenter.format_money_text(Decimal("1234.5")) == "1 235 €"
     assert recurring_service.recurring_signed_amount_label({"type": "income", "amount": 42}) == "+42.00 €"

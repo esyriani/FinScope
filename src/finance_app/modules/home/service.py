@@ -9,6 +9,7 @@ from flask_login import current_user  # type: ignore[import-untyped]
 from sqlalchemy import case, func, select
 
 from finance_app.background.runner import list_background_jobs
+from finance_app.core.category_sql import category_label_expression, transaction_category_label_expression
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_AUTOMATIC,
@@ -20,6 +21,13 @@ from finance_app.core.constants import (
 from finance_app.core.i18n import gettext
 from finance_app.core.money import rounded_money_float
 from finance_app.core.periods import PERIOD_CUSTOM
+from finance_app.core.reporting import (
+    income_amount_expression,
+    income_or_tagged_transfer_credit_clause,
+    reportable_transaction_clause,
+    spending_impact_amount_expression,
+    spending_impact_clause,
+)
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -87,9 +95,9 @@ def build_home_context() -> Any:
         review_work = build_review_work_summary(conn, unknown_category)
         top_categories = fetch_top_categories(conn, unknown_category, start_date, top_category_limit)
         recent_statements = fetch_recent_statements(conn)
-        recent_reviewed = fetch_recent_reviewed_transactions(conn)
-        recent_categorizations = fetch_recent_categorizations(conn)
-        recent_rules = fetch_recent_rules(conn)
+        recent_reviewed = fetch_recent_reviewed_transactions(conn, unknown_category)
+        recent_categorizations = fetch_recent_categorizations(conn, unknown_category)
+        recent_rules = fetch_recent_rules(conn, unknown_category)
         comparison_quick_insights = fetch_ranked_comparison_quick_insights(
             conn,
             unknown_category,
@@ -281,54 +289,34 @@ def fetch_home_overview(conn: Any, unknown_category: Any, start_date: Any) -> An
         start_date: Inclusive date for the current calendar year.
 
     Returns:
-        A mapping with transaction counts, YTD spending, income, unknown count,
+        A mapping with transaction counts, year-to-date spending, income, unknown count,
         and the latest active reportable transaction date.
     """
+    category_value = transaction_category_label_expression(unknown_category)
+    reportable = reportable_transaction_clause()
+    spending_amount = spending_impact_amount_expression()
+    income_amount = income_amount_expression()
+    income_clause = income_or_tagged_transfer_credit_clause()
     return (
         conn.execute(
             select(
                 func.count().label("transaction_count"),
                 func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                (transactions_table.c.amount > 0)
-                                & (transactions_table.c.transaction_kind == "expense"),
-                                transactions_table.c.amount,
-                            ),
-                            else_=0,
-                        )
-                    ),
+                    func.sum(case((spending_impact_clause(), spending_amount), else_=0)),
                     0,
                 ).label("ytd_spending"),
                 func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                (transactions_table.c.amount < 0) & (transactions_table.c.transaction_kind == "income"),
-                                -transactions_table.c.amount,
-                            ),
-                            else_=0,
-                        )
-                    ),
+                    func.sum(case((income_clause, income_amount), else_=0)),
                     0,
                 ).label("ytd_income"),
                 func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                func.coalesce(transactions_table.c.category, unknown_category) == unknown_category,
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ),
+                    func.sum(case((category_value == unknown_category, 1), else_=0)),
                     0,
                 ).label("uncategorized_count"),
                 func.max(transactions_table.c.tx_date).label("latest_tx_date"),
             ).where(
                 transactions_table.c.ignored == 0,
-                transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS),
+                reportable,
                 transactions_table.c.tx_date >= start_date,
             )
         )
@@ -339,7 +327,7 @@ def fetch_home_overview(conn: Any, unknown_category: Any, start_date: Any) -> An
 
 def fetch_attention_summary(conn: Any, unknown_category: Any) -> Any:
     """Return active ledger counts that should remain visible until resolved."""
-    category_value = func.coalesce(transactions_table.c.category, unknown_category)
+    category_value = transaction_category_label_expression(unknown_category)
     return (
         conn.execute(
             select(
@@ -436,20 +424,22 @@ def build_review_work_summary(conn: Any, unknown_category: Any) -> Any:
 
 def fetch_top_categories(conn: Any, unknown_category: Any, start_date: Any, limit: Any) -> Any:
     """Return top current-year spending categories for compact Home insights."""
+    category = transaction_category_label_expression(unknown_category)
+    total = func.sum(spending_impact_amount_expression())
     return (
         conn.execute(
             select(
-                func.coalesce(transactions_table.c.category, unknown_category).label("category"),
-                func.sum(transactions_table.c.amount).label("total"),
+                category.label("category"),
+                total.label("total"),
             )
             .where(
-                transactions_table.c.amount > 0,
-                transactions_table.c.transaction_kind == "expense",
+                spending_impact_clause(),
+                reportable_transaction_clause(),
                 transactions_table.c.ignored == 0,
                 transactions_table.c.tx_date >= start_date,
             )
-            .group_by(transactions_table.c.category)
-            .order_by(func.sum(transactions_table.c.amount).desc())
+            .group_by(category)
+            .order_by(total.desc())
             .limit(limit)
         )
         .mappings()
@@ -457,7 +447,7 @@ def fetch_top_categories(conn: Any, unknown_category: Any, start_date: Any, limi
     )
 
 
-def fetch_recent_reviewed_transactions(conn: Any, limit: Any = 2) -> Any:
+def fetch_recent_reviewed_transactions(conn: Any, unknown_category: str, limit: Any = 2) -> Any:
     """Return recently reviewed transactions for the activity feed."""
     return (
         conn.execute(
@@ -466,7 +456,7 @@ def fetch_recent_reviewed_transactions(conn: Any, limit: Any = 2) -> Any:
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(unknown_category).label("category"),
                 transactions_table.c.reviewed_at,
             )
             .where(
@@ -481,7 +471,7 @@ def fetch_recent_reviewed_transactions(conn: Any, limit: Any = 2) -> Any:
     )
 
 
-def fetch_recent_categorizations(conn: Any, limit: Any = 2) -> Any:
+def fetch_recent_categorizations(conn: Any, unknown_category: str, limit: Any = 2) -> Any:
     """Return recent categorization events that were not already reviewed."""
     return (
         conn.execute(
@@ -490,7 +480,7 @@ def fetch_recent_categorizations(conn: Any, limit: Any = 2) -> Any:
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(unknown_category).label("category"),
                 transactions_table.c.category_source,
                 transactions_table.c.categorized_at,
             )
@@ -507,14 +497,14 @@ def fetch_recent_categorizations(conn: Any, limit: Any = 2) -> Any:
     )
 
 
-def fetch_recent_rules(conn: Any, limit: Any = 2) -> Any:
+def fetch_recent_rules(conn: Any, unknown_category: str, limit: Any = 2) -> Any:
     """Return recently created category rules for the activity feed."""
     return (
         conn.execute(
             select(
                 category_rules_table.c.id,
                 category_rules_table.c.keyword,
-                category_rules_table.c.category,
+                category_label_expression(category_rules_table, unknown_category).label("category"),
                 category_rules_table.c.source,
                 category_rules_table.c.created_at,
                 merchants_table.c.merchant_key.label("merchant_name"),
@@ -573,7 +563,7 @@ def build_pulse_kpis(ytd_spending: Any, ytd_cashflow: Any, attention_counts: Any
     """Build compact KPI cards for the command-center header."""
     return [
         {
-            "label": "YTD cash flow",
+            "label": "Year-to-date cash flow",
             "value": ytd_cashflow,
             "value_type": "money",
             "href": "/dashboard?period=ytd",
@@ -581,7 +571,7 @@ def build_pulse_kpis(ytd_spending: Any, ytd_cashflow: Any, attention_counts: Any
             "detail": "Income less spending.",
         },
         {
-            "label": "YTD spending",
+            "label": "Year-to-date spending",
             "value": ytd_spending,
             "value_type": "money",
             "href": "/transactions?period=ytd&amount_type=spending",
@@ -1113,7 +1103,7 @@ def build_operational_quick_insights(
         category = top_categories[0]
         insights.append(
             {
-                "label": "Top YTD category",
+                "label": "Top year-to-date category",
                 "value": rounded_money_float(category["total"]),
                 "value_type": "money",
                 "detail": category["category"],

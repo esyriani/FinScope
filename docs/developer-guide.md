@@ -1,6 +1,6 @@
 # Developer guide
 
-This guide covers repository onboarding and development workflow. Detailed architecture, database, testing, and background-job behavior remains in [Architecture](architecture.md), [Database](database.md), [Testing](testing.md), and [Background jobs](background-jobs.md).
+This guide covers repository onboarding and development workflow. Detailed architecture, database, testing, and background processing behavior remains in [Architecture](architecture.md), [Database](database.md), [Testing](testing.md), and [Processing activity](background-jobs.md).
 
 ## Tech stack
 
@@ -10,7 +10,7 @@ This guide covers repository onboarding and development workflow. Detailed archi
 - Jinja templates 3.1.6.
 - Bootstrap 5.3.3 and ECharts 5.6.0.
 - pytest 9.0.3 with pytest-xdist.
-- OpenAI SDK 2.33.0 for optional LLM categorization.
+- OpenAI SDK 2.33.0 for optional AI categorization.
 - Node.js 20+ with npm for frontend formatting and linting.
 
 ## Repository layout
@@ -24,7 +24,7 @@ This guide covers repository onboarding and development workflow. Detailed archi
 - [src/finance_app/templates/](../src/finance_app/templates/): Jinja templates.
 - [src/finance_app/static/](../src/finance_app/static/): CSS, JavaScript, image assets, and vendored browser libraries.
 - [src/finance_app/translations/](../src/finance_app/translations/): JSON translation catalogs for user interface text.
-- [config.example.ini](../config.example.ini): sample root runtime configuration copied to ignored `config.ini` for local runs.
+- [src/finance_app/config.example.ini](../src/finance_app/config.example.ini): sample runtime configuration copied to ignored `src/finance_app/config.ini` for local runs.
 - [tests/](../tests/): unit, integration, route, smoke, and shared support helpers.
 - [docs/](./): project documentation.
 - [runtime/](../runtime/): local runtime data, including the default SQLite database.
@@ -187,9 +187,9 @@ about each quality tool.
 - [Architecture](architecture.md): feature-module layering and runtime boundaries.
 - [Database](database.md): backend selection, schema responsibilities, table documentation, and generated artifacts.
 - [Testing](testing.md): pytest markers, command reference, suite layout, and quality gates.
-- [Background jobs](background-jobs.md): queue behavior, state lifecycle, cancellation, and undo behavior.
+- [Processing activity](background-jobs.md): queue behavior, state lifecycle, cancellation, and undo behavior.
 - [Authentication and authorization](authentication.md): owner bootstrap, roles, password handling, settings permissions, and deployment notes.
-- [Taxonomy and categorization](taxonomy.md): category/tag storage, seed data, synchronization, and categorization flow.
+- [Categories, tags, and categorization](taxonomy.md): category/tag storage, seed data, synchronization, and categorization flow.
 - [Troubleshooting](troubleshooting.md): common local setup and runtime issues.
 
 ## Contribution baseline

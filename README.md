@@ -2,7 +2,7 @@
 
 FinScope is a local, single-tenant personal finance web application for importing statement files, categorizing transactions, reviewing unknown merchants, managing rules, and analyzing spending over time.
 
-It is built with Flask, SQLAlchemy Core, SQLite or MySQL, Bootstrap, ECharts, Jinja templates, vanilla JavaScript, JSON translation catalogs, background jobs, optional OpenAI LLM categorization, and pytest.
+It is built with Flask, SQLAlchemy Core, SQLite or MySQL, Bootstrap, ECharts, Jinja templates, vanilla JavaScript, JSON translation catalogs, background processing, optional OpenAI AI categorization, and pytest.
 
 > **DISCLAIMER:** *This application has been vibe coded using OpenAI's Codex: source code, documentation, tests. The content, code quality, and design has been manually reviewed, but code smells and other problems may still be present. Use with care.*
 
@@ -25,24 +25,14 @@ It is built with Flask, SQLAlchemy Core, SQLite or MySQL, Bootstrap, ECharts, Ji
 
 - Import CSV statements into SQLite or MySQL storage.
 - Deduplicate transactions with account-aware fingerprints.
-- Categorize transactions with rules, historical matches, manual edits, optional LLM assistance, and persisted decision evidence.
+- Categorize transactions with rules, historical matches, manual edits, optional AI assistance, and persisted decision evidence.
 - Review grouped unknown merchants and save reusable categorization rules.
-- Audit overlapping rules and preview rule changes before applying them.
+- Check rule health and preview rule changes before applying them.
 - Track reimbursements by linking repayment credits to covered expenses.
-- Manage categories, tags, merchants, statement types, accounts, jobs, and recurring activity.
+- Manage categories, tags, merchants, statement types, accounts, processing activity, and recurring activity.
 - Analyze spending, income, transfers, tags, merchants, calendars, period changes, and year trends.
 - Use owner-managed access for owner, editor, and viewer workflows.
 - Switch between English and French, with dark and light interface modes.
-
-## Screenshots
-
-| Dashboard | Transactions |
-| --- | --- |
-| ![Dashboard page](docs/img/dashboard.png) | ![Transactions page](docs/img/transactions.png) |
-
-| Calendar | Taxonomy admin |
-| --- | --- |
-| ![Calendar page](docs/img/calendar.png) | ![Taxonomy admin page](docs/img/taxonomy.png) |
 
 ## Quick start
 
@@ -52,7 +42,7 @@ Minimal local setup on Windows PowerShell:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-Copy-Item config.example.ini config.ini
+Copy-Item src/finance_app/config.example.ini src/finance_app/config.ini
 finscope
 ```
 
@@ -77,7 +67,7 @@ Development uses Python 3.10+ and Node.js 20+ with npm. See [Developer guide](do
 - [Tutorial](docs/tutorial.md): practical workflow and best-practices guide for the first month and beyond.
 - [User guide](docs/user-guide.md): concise feature reference for each major application area.
 - [Settings reference](docs/settings.md): all runtime settings available from the Settings page.
-- [Taxonomy and categorization](docs/taxonomy.md): detailed category, tag, rule, historical, and LLM categorization reference.
+- [Categories, tags, and categorization](docs/taxonomy.md): detailed category, tag, rule, historical, and AI categorization reference.
 - [Troubleshooting](docs/troubleshooting.md): problem/solution notes for local setup, imports, dates, duplicate uploads, and AI categorization.
 
 ### For developers
@@ -86,7 +76,7 @@ Development uses Python 3.10+ and Node.js 20+ with npm. See [Developer guide](do
 - [Architecture](docs/architecture.md): module structure, layering expectations, and runtime boundaries.
 - [Database](docs/database.md): SQLite/MySQL backend behavior, schema responsibilities, and generated schema artifacts.
 - [Testing](docs/testing.md): pytest markers, suite layout, quality commands, and recommended execution patterns.
-- [Background jobs](docs/background-jobs.md): queued workflows, job state lifecycle, cancellation, and undo behavior.
+- [Processing activity](docs/background-jobs.md): queued workflows, processing state lifecycle, cancellation, and undo behavior.
 - [Authentication and authorization](docs/authentication.md): owner bootstrap, roles, password handling, settings permissions, and deployment notes.
 
 ## Testing

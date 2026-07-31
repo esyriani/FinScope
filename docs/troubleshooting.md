@@ -44,13 +44,13 @@ echo "$FINANCE_DB_PATH"
 
 </details>
 
-If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is [runtime/finescope.db](../runtime/finescope.db).
+If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or MySQL database. If no database URL is set, FinScope uses the SQLite path from `FINANCE_DB_PATH` or `database.path`; the default is [runtime/finscope.db](../runtime/finscope.db).
 
-## LLM categorization does not run
+## AI categorization does not run
 
 Verify that `OPENAI_API_KEY` or `api_keys.openai_api_key` is configured.
-By default, statement imports leave unknown rows ready for a manual AI run from Uploaded statements or Jobs after you review the token estimate.
-If Settings > Categorization > Confirm token usage is off, statement imports automatically queue AI categorization for remaining unknown rows.
+By default, statement imports leave unknown rows ready for a manual AI run from Uploaded statements or Processing after you review the AI usage estimate.
+If Settings > Categorization > Review AI usage is off, statement imports automatically queue AI categorization for remaining unknown rows.
 
 Without a key, unknown transactions remain unknown and can be reviewed manually.
 

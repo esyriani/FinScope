@@ -10,12 +10,27 @@ from tests.support.upload import (
     build_llm_progress_categorizer,
     create_account_statement,
     insert_llm_progress_transactions,
+    queue_statement_import_attempt,
 )
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names
 from finance_app.modules.upload import workflow as upload_workflow
+
+
+def run_statement_import_job(conn, statement_id, account_id, statement_type, extension, raw_text, **kwargs):
+    """Queue and run one statement import job with a matching claim token."""
+    import_token = queue_statement_import_attempt(conn, statement_id)
+    return upload_workflow.import_statement_transactions_job(
+        statement_id,
+        account_id,
+        statement_type,
+        extension,
+        raw_text,
+        import_token,
+        **kwargs,
+    )
 
 
 def test_import_statement_job_keeps_ai_candidates_for_manual_estimate_first_run(app, core_conn, monkeypatch):
@@ -37,7 +52,8 @@ def test_import_statement_job_keeps_ai_candidates_for_manual_estimate_first_run(
 
     monkeypatch.setattr(upload_workflow, "submit_background_job", capture_job)
 
-    message = upload_workflow.import_statement_transactions_job(
+    message = run_statement_import_job(
+        core_conn,
         statement_id,
         account_id,
         "credit_card",
@@ -88,7 +104,8 @@ def test_import_statement_job_auto_queues_ai_when_token_confirmation_disabled(ap
 
     monkeypatch.setattr(upload_workflow, "submit_background_job", capture_job)
 
-    message = upload_workflow.import_statement_transactions_job(
+    message = run_statement_import_job(
+        core_conn,
         statement_id,
         account_id,
         "credit_card",
@@ -118,7 +135,8 @@ def test_import_statement_job_reports_no_ai_candidates_when_none_remain(app, cor
         lambda *args, **kwargs: submitted_jobs.append((args, kwargs)),
     )
 
-    message = upload_workflow.import_statement_transactions_job(
+    message = run_statement_import_job(
+        core_conn,
         statement_id,
         account_id,
         "credit_card",

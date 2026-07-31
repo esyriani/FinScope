@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from flask import url_for
 from sqlalchemy import String, and_, case, cast, func, literal, or_, select
 
+from finance_app.core.category_sql import category_label_expression
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
@@ -15,6 +16,7 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_AUTOMATIC,
     CATEGORY_RULE_SOURCE_MANUAL,
     CATEGORY_RULE_SOURCES,
+    UNKNOWN_CATEGORY,
 )
 from finance_app.core.money import money_to_float
 from finance_app.core.query import parse_page, parse_sort_direction
@@ -57,6 +59,7 @@ RULE_SOURCE_FILTER_OPTIONS = (
     (CATEGORY_RULE_SOURCE_MANUAL, "Manual"),
     (CATEGORY_RULE_SOURCE_AUTOMATIC, "Automatic"),
 )
+POST_SAVE_RULE_ACTIONS = {"created", "updated"}
 
 
 def build_rules_context(args: Any) -> dict[str, Any]:
@@ -76,6 +79,8 @@ def build_rules_context(args: Any) -> dict[str, Any]:
     sort = args.get("sort", "source").strip()
     direction = parse_sort_direction(args.get("direction"), default="asc")
     page = parse_page(args.get("page"))
+    saved_rule_id = parse_optional_int(args.get("saved_rule_id"))
+    saved_rule_action = args.get("saved_rule_action", "").strip()
 
     with db_core_transaction() as conn:
         page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
@@ -101,6 +106,18 @@ def build_rules_context(args: Any) -> dict[str, Any]:
         rows = rule_rows(conn, filters, sort_expression, direction, page_size, offset)
         decorate_rule_rows(conn, rows)
         tag_options = get_tag_option_rows(conn)
+        post_save_rule = post_save_rule_followup(conn, saved_rule_id, saved_rule_action)
+
+    current_rules_url = rules_list_url(
+        search,
+        selected_categories,
+        selected_source,
+        approval,
+        selected_tags,
+        sort,
+        direction,
+        page,
+    )
 
     return {
         "rules": rows,
@@ -147,6 +164,8 @@ def build_rules_context(args: Any) -> dict[str, Any]:
         "total_pages": total_pages,
         "page_start": offset + 1 if total_count else 0,
         "page_end": min(offset + page_size, total_count),
+        "current_rules_url": current_rules_url,
+        "post_save_rule": post_save_rule,
     }
 
 
@@ -172,7 +191,7 @@ def resolve_rules_sort(sort: object) -> tuple[str, Any]:
     )
     sort_columns = {
         "keyword": category_rules_table.c.keyword,
-        "category": category_rules_table.c.category,
+        "category": rule_category_label_expression(),
         "amount_min": category_rules_table.c.amount_min,
         "amount_max": category_rules_table.c.amount_max,
         "direction": category_rules_table.c.direction,
@@ -206,7 +225,7 @@ def build_rule_filters(
         filters.append(category_rules_table.c.ai_approved == 0)
 
     if selected_categories:
-        filters.append(category_rules_table.c.category.in_(selected_categories))
+        filters.append(rule_category_label_expression().in_(selected_categories))
     if selected_source:
         filters.append(category_rules_table.c.source == selected_source)
     if selected_tags:
@@ -225,7 +244,7 @@ def rule_search_filter(search: str) -> Any:
     expressions = (
         category_rules_table.c.keyword,
         func.coalesce(merchants_table.c.merchant_key, ""),
-        category_rules_table.c.category,
+        rule_category_label_expression(),
         category_rules_table.c.source,
         approval_text,
         category_rules_table.c.created_at,
@@ -275,7 +294,7 @@ def rule_rows(
         category_rules_table.c.merchant_id,
         merchants_table.c.merchant_key.label("merchant_name"),
         category_rules_table.c.keyword,
-        category_rules_table.c.category,
+        rule_category_label_expression().label("category"),
         category_rules_table.c.amount_min,
         category_rules_table.c.amount_max,
         category_rules_table.c.direction,
@@ -287,8 +306,8 @@ def rule_rows(
     query = (
         query.order_by(
             sort_expression.desc() if direction == "desc" else sort_expression.asc(),
-            func.lower(category_rules_table.c.category),
-            category_rules_table.c.category,
+            func.lower(rule_category_label_expression()),
+            rule_category_label_expression(),
             func.lower(category_rules_table.c.keyword),
             category_rules_table.c.keyword,
         )
@@ -336,6 +355,52 @@ def decorate_rule_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
         row["approval_badge_class"] = "text-bg-success" if row["ai_approved"] else "text-bg-warning"
         row["transaction_reference_count"] = transaction_reference_counts.get(row["id"], 0)
         row["can_delete_without_preview"] = row["transaction_reference_count"] == 0
+
+
+def post_save_rule_followup(conn: Any, rule_id: int | None, action: str) -> dict[str, Any] | None:
+    """Return the rule summary used by the post-save follow-up panel."""
+    if rule_id is None:
+        return None
+
+    row = (
+        conn.execute(
+            rules_select_base(
+                category_rules_table.c.id,
+                category_rules_table.c.keyword,
+                rule_category_label_expression().label("category"),
+                category_rules_table.c.source,
+                category_rules_table.c.ai_approved,
+            ).where(category_rules_table.c.id == rule_id)
+        )
+        .mappings()
+        .fetchone()
+    )
+    if row is None:
+        return None
+
+    followup = dict(row)
+    followup["action"] = action if action in POST_SAVE_RULE_ACTIONS else "updated"
+    followup["source_label"] = rule_source_label(followup["source"])
+    followup["source_badge_class"] = rule_source_badge_class(followup["source"])
+    followup["approval_label"] = "Approved" if followup["ai_approved"] else "Suggested"
+    followup["approval_badge_class"] = "text-bg-success" if followup["ai_approved"] else "text-bg-warning"
+    return followup
+
+
+def rule_category_label_expression() -> Any:
+    """Return the canonical category label for category rule rows."""
+    return category_label_expression(category_rules_table, UNKNOWN_CATEGORY)
+
+
+def parse_optional_int(value: object) -> int | None:
+    """Return a positive integer from a request value when available."""
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(str(value))
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def rules_list_url(

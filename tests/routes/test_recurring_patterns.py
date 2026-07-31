@@ -1,6 +1,7 @@
 """Tests for recurring pattern routes and persistence helpers."""
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -17,8 +18,8 @@ from finance_app.modules.recurring.patterns import (
     get_recurring_pattern_metadata,
     normalize_active,
     normalize_frequency,
-    normalize_optional_float,
     normalize_optional_int,
+    normalize_optional_money,
     normalize_user_status,
     recurring_pattern_key,
     upsert_recurring_pattern,
@@ -182,7 +183,7 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
     assert "data-flatpickr-submit-on-change" in body
     assert "Repeating merchants detected for the selected month." in body
     assert "No recurring activity detected for this month." in body
-    assert "Confidence: High" in body
+    assert "Confidence level: High" in body
     assert '<option value="High" selected>High</option>' in body
     assert 'data-sort-column="8" data-sort-type="number"' in body
     assert "data-paginated-table" in body
@@ -206,7 +207,7 @@ def test_recurring_page_all_confidence_filter_is_explicit(client):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Confidence: All confidence" in body
+    assert "Confidence level: All confidence" in body
     assert '<option value="all" selected>All confidence</option>' in body
     assert 'name="confidence" value="all"' in body
     assert "confidence=all" in body
@@ -492,8 +493,8 @@ def test_recurring_pattern_normalizers():
     assert normalize_active("yes") == 1
     assert normalize_optional_int("12", minimum=1, maximum=31) == 12
     assert normalize_optional_int("32", minimum=1, maximum=31) is None
-    assert normalize_optional_float("12.345", minimum=0) == 12.35
-    assert normalize_optional_float("-1", minimum=0) is None
+    assert normalize_optional_money("12.345", minimum=0) == Decimal("12.35")
+    assert normalize_optional_money("-1", minimum=0) is None
 
 
 def test_upsert_recurring_pattern_preserves_existing_values_when_not_overridden(core_conn):

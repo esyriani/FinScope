@@ -49,10 +49,28 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
     assert filters["sort"] == "amount"
     assert filters["direction"] == "asc"
     assert filters["page"] == 2
-    assert filters["date_from"] == "2026-01-01"
+    assert filters["date_from"] == ""
     assert filters["date_to"] == ""
     assert filters["merchant_key"] == "AMZN MKTP"
     assert filters["account_id"] == 7
+
+
+def test_parse_transaction_filters_keeps_custom_range_dates(core_conn):
+    """Verify custom range dates are normalized only for the custom period."""
+    filters = parse_transaction_filters(
+        MultiDict(
+            [
+                ("period", "custom"),
+                ("date_from", "2026-02-28"),
+                ("date_to", "2026-01-01"),
+            ]
+        ),
+        core_conn,
+    )
+
+    assert filters["period"] == "custom"
+    assert filters["date_from"] == "2026-01-01"
+    assert filters["date_to"] == "2026-02-28"
 
 
 def test_parse_transaction_filters_defaults_invalid_values(core_conn):
@@ -120,7 +138,8 @@ def test_build_transaction_core_filters_combines_high_value_filters(core_conn):
     core_filters = build_transaction_core_filters(filters, "UNKNOWN")
     sql = "\n".join(str(condition) for condition in core_filters.criteria())
 
-    assert "coalesce(transactions.category" in sql.lower()
+    assert "transactions.category_id" in sql
+    assert "transactions.category" in sql
     assert "NOT IN" in sql
     assert "NOT (EXISTS" in sql
     assert "transaction_tags" in sql

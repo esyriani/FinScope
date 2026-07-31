@@ -24,6 +24,7 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_help.html" import help_tip with context %}
 
 {% block content %}
 {% set selected_tags = selected_tags | default([]) %}
@@ -48,7 +49,7 @@
     {% endif %}
 {% endfor %}
 {% set recurring_filter_summary %}
-{{ _("Month") }}: {{ selected_month }} - {{ _("Account") }}: {{ recurring_account_label.value }} - {{ _("Merchant") }}: {{ recurring_merchant_filter_label if recurring_merchant_filter_label else _("All") }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ recurring_status_labels.values | join(", ") if recurring_status_labels.values else _("All statuses") }} - {{ _("Confidence") }}: {{ _(selected_confidence) if selected_confidence else _("All confidence") }}
+{{ _("Month") }}: {{ selected_month }} - {{ _("Account") }}: {{ recurring_account_label.value }} - {{ _("Merchant") }}: {{ recurring_merchant_filter_label if recurring_merchant_filter_label else _("All") }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ recurring_status_labels.values | join(", ") if recurring_status_labels.values else _("All statuses") }} - {{ _("Confidence level") }}: {{ _(selected_confidence) if selected_confidence else _("All confidence") }}
 {% endset %}
 <div class="page-header">
     <div>
@@ -210,7 +211,10 @@
             </div>
 
             <div class="recurring-confidence-field">
-                <label class="form-label" for="recurring-confidence">{{ _("Confidence") }}</label>
+                <div class="form-label-with-help">
+                    <label class="form-label" for="recurring-confidence">{{ _("Confidence level") }}</label>
+                    {{ help_tip("How strongly FinScope believes this is a repeating pattern based on past transactions.", "Explain confidence level") }}
+                </div>
                 <select id="recurring-confidence" class="form-select" name="confidence">
                     <option value="all" {% if not selected_confidence %}selected{% endif %}>{{ _("All confidence") }}</option>
                     {% for option in confidence_options %}
@@ -356,7 +360,7 @@
                     <th>{{ _("Last seen") }}</th>
                     <th>{{ _("Typical amount") }}</th>
                     <th>{{ _("Actual amount") }}</th>
-                    <th>{{ _("Confidence") }}</th>
+                    <th>{{ _("Confidence level") }}</th>
                     <th>{{ _("Observed months") }}</th>
                     <th>{{ _("Amount change") }}</th>
                 </tr>

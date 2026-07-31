@@ -3,7 +3,7 @@
 import io
 
 from sqlalchemy import select
-from tests.support.html import assert_has_element, assert_visible_text, parse_html
+from tests.support.html import assert_has_element, assert_not_visible_text, assert_visible_text, parse_html
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
@@ -33,11 +33,30 @@ def test_taxonomy_page_exposes_yaml_import_and_export_controls(client):
     document = parse_html(response)
 
     assert response.status_code == 200
-    assert_visible_text(response, "Import taxonomy", "Export YAML", "Categories", "Tags")
+    assert_visible_text(
+        response,
+        "Import categories and tags",
+        "Export YAML",
+        "Categories",
+        "Tags",
+        "Built-in",
+    )
+    assert_not_visible_text(
+        response,
+        "Affects reports",
+        "Workflow ready",
+        "Ordinary income",
+        "Default category for ordinary income; income totals use transaction type.",
+        "Excluded from ordinary income; allocations offset covered expenses.",
+    )
     assert_has_element(response, "a", attrs={"href": "/taxonomy/export.yml"}, text="Export YAML")
     assert_has_element(response, "div", attrs={"id": "import-taxonomy-modal"})
     assert_has_element(response, "input", attrs={"name": "taxonomy_file"})
-    assert_has_element(response, "div", attrs={"class": "taxonomy-tabs", "role": "tablist", "aria-label": "Taxonomy"})
+    assert_has_element(
+        response,
+        "div",
+        attrs={"class": "taxonomy-tabs", "role": "tablist", "aria-label": "Categories and tags"},
+    )
     assert_has_element(
         response,
         "button",
@@ -135,8 +154,8 @@ def test_taxonomy_tables_export_description_and_llm_instruction_separately(clien
         "span",
         attrs={
             "data-export-part": True,
-            "data-export-label": "LLM instruction",
-            "data-export-header": "LLM instruction",
+            "data-export-label": "AI guidance",
+            "data-export-header": "AI guidance",
             "data-export-text": "Use this category for export coverage.",
         },
     )
@@ -155,8 +174,8 @@ def test_taxonomy_tables_export_description_and_llm_instruction_separately(clien
         "span",
         attrs={
             "data-export-part": True,
-            "data-export-label": "LLM instruction",
-            "data-export-header": "LLM instruction",
+            "data-export-label": "AI guidance",
+            "data-export-header": "AI guidance",
             "data-export-text": "Use this tag for export coverage.",
         },
     )
@@ -174,6 +193,8 @@ def test_taxonomy_export_route_returns_yaml(client):
     assert "tags:" in body
     assert 'name: "Income"' in body
     assert 'name: "Reimbursable"' in body
+    assert 'builtin_key: "income"' in body
+    assert 'builtin_key: "reimbursable"' in body
     assert "builtin_key:" in body
     assert "color:" in body
 
@@ -233,3 +254,48 @@ tags:
     assert tag["description"] == "Imported tag"
     assert tag["instruction"] == "Use when audit context is relevant."
     assert tag["color"] == "#123abc"
+
+
+def test_taxonomy_import_route_skips_builtin_tag_metadata(client, core_conn):
+    """Verify taxonomy YAML import cannot mutate built-in tag definitions."""
+    token = set_csrf_token(client)
+    original = (
+        core_conn.execute(
+            select(tags_table.c.id, tags_table.c.description, tags_table.c.instruction, tags_table.c.color).where(
+                tags_table.c.builtin_key == "reimbursable"
+            )
+        )
+        .mappings()
+        .one()
+    )
+    payload = b"""
+tags:
+  - name: "Reimbursable"
+    description: "Override"
+    instruction: "Override"
+    color: "#000000"
+    builtin_key: "reimbursable"
+"""
+
+    response = client.post(
+        "/taxonomy/import",
+        data={
+            CSRF_FIELD_NAME: token,
+            "taxonomy_file": (io.BytesIO(payload), "taxonomy.yml"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    current = (
+        core_conn.execute(
+            select(tags_table.c.id, tags_table.c.description, tags_table.c.instruction, tags_table.c.color).where(
+                tags_table.c.builtin_key == "reimbursable"
+            )
+        )
+        .mappings()
+        .one()
+    )
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Only built-in categories or tags were found. Nothing was imported.")
+    assert dict(current) == dict(original)

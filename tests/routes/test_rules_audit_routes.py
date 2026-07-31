@@ -54,7 +54,7 @@ def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
     assert response.status_code == 200
     assert_visible_text(
         response,
-        "Rule audit",
+        "Rule health check",
         "Rule overlap findings",
         "Conflict type",
     )
@@ -69,8 +69,10 @@ def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
         None,
         attrs={"class": "rule-audit-search-row", "data-ajax-refresh-form": True},
     )
-    assert_has_element(response, None, attrs={"data-busy-message": "Preparing rule audit preview..."})
-    assert_has_element(response, None, attrs={"data-busy-message": "Loading rule audit details..."})
+    assert_has_element(response, None, attrs={"data-busy-message": "Preparing rule health check preview..."})
+    assert_has_element(response, None, attrs={"data-busy-message": "Loading rule health check details..."})
+    assert_has_element(response, None, attrs={"data-collapse-panel-header-toggle": True})
+    assert_has_element(response, None, attrs={"data-collapse-panel-heading-toggle": True})
     assert_has_element(response, None, attrs={"data-row-drilldown": "dblclick"})
     assert 'data-row-href="/rules/audit/overlap/' in body
     row_fragment = html_fragment_after(body, 'data-row-href="/rules/audit/overlap/')
@@ -79,7 +81,7 @@ def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
     assert_visible_text(
         response,
         "Category conflict",
-        "Shadowed rules",
+        "Rules skipped by priority",
         "Stale and unused rules",
         "Scope",
         "METRO",
@@ -130,7 +132,7 @@ def test_rules_audit_route_paginates_and_sorts_overlap_table(client, core_conn):
     response = client.get("/rules/audit?overlap_sort=rule_a&overlap_direction=asc&overlap_page=2")
     body = response.get_data(as_text=True)
     overlap_section = body.split("Rule overlap findings", 1)[1].split(
-        "Specificity and precedence warnings",
+        "Precision and priority warnings",
         1,
     )[0]
 
@@ -170,7 +172,7 @@ def test_rules_audit_route_filters_overlap_findings(client, core_conn):
     response = client.get("/rules/audit?overlap_filter=tag_difference")
     body = response.get_data(as_text=True)
     overlap_section = body.split("Rule overlap findings", 1)[1].split(
-        "Specificity and precedence warnings",
+        "Precision and priority warnings",
         1,
     )[0]
 
@@ -178,8 +180,10 @@ def test_rules_audit_route_filters_overlap_findings(client, core_conn):
     assert "Showing 1-1 of 1 findings" in overlap_section
     assert "CAFE" in overlap_section
     assert "METRO" not in overlap_section
-    assert "Hide table" in overlap_section
-    assert "bi-chevron-up" in overlap_section
+    assert "Hide table" not in overlap_section
+    assert "Show table" not in overlap_section
+    assert 'aria-expanded="true"' in body
+    assert "data-collapse-panel-header-toggle" in overlap_section
     assert 'value="category_conflict"' in body
     assert 'class="btn-check"' in body
     assert 'type="radio"' in body
@@ -190,7 +194,7 @@ def test_rules_audit_route_filters_overlap_findings(client, core_conn):
     search_response = client.get("/rules/audit?overlap_q=cafe&overlap_filter=all")
     search_body = search_response.get_data(as_text=True)
     search_overlap_section = search_body.split("Rule overlap findings", 1)[1].split(
-        "Specificity and precedence warnings",
+        "Precision and priority warnings",
         1,
     )[0]
 
@@ -204,7 +208,7 @@ def test_rules_audit_route_filters_overlap_findings(client, core_conn):
     unused_response = client.get("/rules/audit?overlap_q=unused&overlap_filter=all")
     unused_body = unused_response.get_data(as_text=True)
     unused_overlap_section = unused_body.split("Rule overlap findings", 1)[1].split(
-        "Specificity and precedence warnings",
+        "Precision and priority warnings",
         1,
     )[0]
     unused_stale_section = unused_body.split("Stale and unused rules", 1)[1]
@@ -270,17 +274,17 @@ def test_rules_audit_overlap_route_renders_shared_transactions(client, core_conn
         "Shared matching transactions",
         "Every row below is matched by both rules.",
         "Metro Grocery #123",
-        "Winning rule result",
-        "Losing rule result",
-        "Losing rule",
-        "Why this rule wins",
-        "Final winner",
+        "Applied rule result",
+        "Rule not applied result",
+        "Rule not applied",
+        "Why this rule is applied",
+        "Applied rule",
         "Recommended action",
-        "Confidence",
+        "Confidence level",
         "Match score",
-        "Specificity",
-        "More specific",
-        "Less specific",
+        "Precision",
+        "More precise",
+        "Less precise",
         "Suggested",
         "Approved",
     )
@@ -361,10 +365,10 @@ def test_rules_audit_route_renders_specificity_warnings(client, core_conn):
     assert response.status_code == 200
     assert_visible_text(
         response,
-        "Specificity and precedence warnings",
-        "A broader winning rule can hide a more constrained overlapping rule.",
-        "Broad winning rule",
-        "More specific rule",
+        "Precision and priority warnings",
+        "A broader applied rule can hide a more constrained overlapping rule.",
+        "Broad applied rule",
+        "More precise rule",
         "Higher confidence",
     )
     assert_link(response, f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}")
@@ -411,7 +415,7 @@ def test_rules_audit_preview_route_renders_remove_rule_impact(client, core_conn)
         "Impact preview",
         "Preview is read-only and does not modify rules or transactions.",
         "Affected transactions",
-        "Winning rule changes",
+        "Applied rule changes",
         "Category would change",
         "Confirm delete",
         "Deleting this rule keeps existing transaction categories and tags",
@@ -480,7 +484,7 @@ def test_rules_audit_preview_route_renders_no_material_change_state(client, core
     assert_visible_text(
         response,
         "Historical categories and tags would stay the same.",
-        "Winning rule would change",
+        "Applied rule would change",
     )
     assert_not_visible_text(response, "No transactions in this group.")
 
@@ -702,16 +706,16 @@ def test_rules_audit_rule_route_renders_rule_diagnostics(client, core_conn):
         "Rule detail",
         "This page is read-only and does not change rule behavior.",
         "Delete rule",
-        "Preview apply where winner",
+        "Preview normal apply",
         "Preview force apply",
         "Rule summary",
         "Manual",
         "Assessment",
         "Recommended action",
         "Historical matches",
-        "Win rate",
+        "Applied rate",
         "Overlapping rules",
-        "Rules shadowing this rule",
+        "Rules taking priority over this rule",
         "METRO GROCERY",
     )
     assert_has_element(

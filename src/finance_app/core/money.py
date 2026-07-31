@@ -5,7 +5,8 @@ uses decimal-compatible schema types, while read models can explicitly convert
 amounts to floats for JSON payloads and existing presentation code.
 """
 
-from decimal import ROUND_HALF_UP, Decimal
+import re
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import TypeAlias, cast
 
 from finance_app.core.config import settings
@@ -24,7 +25,66 @@ def quantize_money(value: MoneyValue | None) -> Decimal | None:
     if value is None or value == "":
         return None
 
-    return _decimal_value(value).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+    amount = _decimal_value(value).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+    return abs(amount) if amount == 0 else amount
+
+
+def canonical_money_text(value: MoneyValue | None) -> str:
+    """Return a fixed-scale string for stable money identities."""
+    amount = quantize_money(value)
+    return "" if amount is None else f"{amount:.2f}"
+
+
+def parse_money_text(value: object) -> Decimal | None:
+    """Parse common statement or form money text to a fixed-scale Decimal."""
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if text in {"", "-", "--", "N/A"}:
+        return None
+
+    negative = False
+    text = text.replace("\xa0", " ")
+    text = re.sub(r"(?i)\bCAD\b", "", text)
+    text = re.sub(r"(?i)CA\$", "", text)
+    text = text.replace("$", "").strip()
+
+    if text.startswith("(") and text.endswith(")"):
+        negative = True
+        text = text[1:-1]
+
+    if text.endswith("-"):
+        negative = True
+        text = text[:-1]
+
+    if text.startswith("-"):
+        negative = True
+        text = text[1:]
+
+    text = re.sub(r"[^0-9,.]", "", text)
+    if not text:
+        return None
+
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif "," in text:
+        parts = text.split(",")
+        if len(parts[-1]) in {1, 2}:
+            text = "".join(parts[:-1]) + "." + parts[-1]
+        else:
+            text = text.replace(",", "")
+
+    try:
+        amount = _decimal_value(text)
+    except InvalidOperation as exc:
+        raise ValueError(f"Invalid money value: {value}") from exc
+    if negative:
+        amount = -amount
+    return cast(Decimal, quantize_money(amount))
 
 
 def quantize_display_money(value: MoneyValue | None, places: int = 2) -> Decimal | None:
@@ -33,7 +93,8 @@ def quantize_display_money(value: MoneyValue | None, places: int = 2) -> Decimal
         return None
 
     quantum = Decimal("1") if places == 0 else Decimal("1").scaleb(-int(places))
-    return _decimal_value(value).quantize(quantum, rounding=ROUND_HALF_UP)
+    amount = _decimal_value(value).quantize(quantum, rounding=ROUND_HALF_UP)
+    return abs(amount) if amount == 0 else amount
 
 
 def money_to_decimal(value: MoneyValue | None, default: Decimal = Decimal("0")) -> Decimal:
@@ -52,7 +113,8 @@ def rounded_money_decimal(value: MoneyValue | None, default: Decimal = Decimal("
     """Return a two-decimal Decimal for internal finance calculations."""
     if value is None or value == "":
         return default
-    return _decimal_value(value).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+    amount = _decimal_value(value).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+    return abs(amount) if amount == 0 else amount
 
 
 def money_to_float(value: MoneyValue | None, default: float = 0.0) -> float:

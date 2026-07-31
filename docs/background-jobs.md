@@ -1,52 +1,52 @@
-# Background jobs
+# Processing activity
 
-Longer workflows run through the in-memory background job runner.
+Longer workflows run through the in-memory processing runner.
 
-## Job types
+## Processing types
 
-Common jobs include:
+Common processing activity includes:
 
 - statement import
-- LLM categorization follow-up
+- AI categorization follow-up
 - applying all rules
 - review-group operations
 - rule import
 
 Statement imports, rules, and review operations use the main background queue.
-LLM categorization uses a separate AI queue so model timeouts do not block
+AI categorization uses a separate AI queue so model timeouts do not block
 future imports or other local work.
 
 ## State lifecycle
 
-Jobs move through a small lifecycle:
+Processing items move through a small lifecycle:
 
 - `queued -> running -> completed`
 - `queued -> running -> failed`
 - `queued -> cancelled`
 - `queued -> running -> cancelled`
 
-Each job records its label, payload, status, result, error details, timestamps, and optional undo metadata.
+Each processing item records its label, payload, status, result, error details, timestamps, and optional undo metadata.
 
-Running jobs can only stop cooperatively. AI categorization checks for cancel
+Running processing can only stop cooperatively. AI categorization checks for cancel
 requests between batches and records a cancelled result after the active batch
 finishes.
 
 ## AI categorization controls
 
 Automatic AI categorization after imports is controlled by Settings >
-Categorization > Confirm token usage. The confirmation step is on by default,
+Categorization > Review AI usage. The confirmation step is on by default,
 so imports report remaining unknown rows and wait for a manual AI run. When an
 owner turns confirmation off, statement imports automatically queue AI
 follow-up work for those remaining unknown rows.
 
-Use Jobs to queue AI categorization for all active unknown transactions or to
+Use Processing to queue AI categorization for all active unknown transactions or to
 clear queued AI jobs. Use Upload > Uploaded statements to queue AI
 categorization for one statement. AI reruns only select active transactions
 whose category is still null or `UNKNOWN`, so manual and already categorized
 rows are left unchanged.
 
 AI categorization commits after each batch. If the process is interrupted,
-rerun AI categorization and the job resumes from the remaining unknown rows.
+rerun AI categorization and processing resumes from the remaining unknown rows.
 
 The transaction-table Suggest category action is an exception to the queue model.
 It runs synchronously for one selected transaction, shows the model result and
@@ -57,12 +57,12 @@ visibility is controlled by `setting_defaults.transaction_ai_rerun_enabled`.
 
 ## Undo behavior
 
-Some jobs register undo handlers. Undo is available only when the job completed successfully and the handler still has enough metadata to reverse the operation.
+Some processing items register undo handlers. Undo is available only when the item completed successfully and the handler still has enough metadata to reverse the operation.
 
 Examples include statement uploads and supported review/rule operations.
 
 ## Current limitations
 
-The job runner is process-local and in memory. Job history, progress, undo metadata, cancellation requests, and errors are lost when the Flask process restarts.
+The processing runner is process-local and in memory. Processing history, progress, undo metadata, cancellation requests, and errors are lost when the Flask process restarts.
 
 This is acceptable for the current local FinScope shape, but a shared or hosted deployment should move job state to durable storage.

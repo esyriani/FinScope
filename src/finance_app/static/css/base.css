@@ -415,6 +415,38 @@ a:focus {
     outline: none;
 }
 
+.nav-cluster {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.nav-sublinks {
+    border-left: 1px solid rgba(255, 255, 255, 0.16);
+    display: grid;
+    gap: 0.2rem;
+    margin-left: 1.2rem;
+    padding-left: 0.65rem;
+}
+
+.sidebar .nav-sub-link {
+    border-radius: 8px;
+    color: #cad6d1;
+    font-size: 0.9rem;
+    padding: 0.35rem 0.55rem;
+    text-decoration: none;
+}
+
+.sidebar .nav-sub-link:hover,
+.sidebar .nav-sub-link.active {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--sidebar-text);
+}
+
+.sidebar .nav-sub-link:focus-visible {
+    box-shadow: 0 0 0 0.2rem rgba(var(--app-accent-rgb), 0.32);
+    outline: none;
+}
+
 .sidebar-collapsed .sidebar {
     padding-inline: 1rem;
 }
@@ -426,6 +458,7 @@ a:focus {
 
 .sidebar-collapsed .brand-copy,
 .sidebar-collapsed .nav-group-label,
+.sidebar-collapsed .nav-sublinks,
 .sidebar-collapsed .sidebar .nav-link span {
     display: none;
 }
@@ -586,6 +619,50 @@ h2 {
     color: var(--app-text);
 }
 
+.filter-panel-heading,
+.collapse-panel-heading {
+    border-radius: 6px;
+    min-width: 0;
+}
+
+.filter-panel-heading[role="button"]:focus-visible,
+.collapse-panel-heading[role="button"]:focus-visible {
+    box-shadow: var(--focus-shadow);
+    outline: none;
+}
+
+.filter-panel-header[data-filter-panel-header-toggle],
+.collapse-panel-header[data-collapse-panel-header-toggle] {
+    cursor: pointer;
+}
+
+.filter-panel-summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-panel {
+    overflow: visible;
+}
+
+.filter-panel .card-body,
+.filter-panel .collapse.show {
+    overflow: visible;
+}
+
+.filter-block-header {
+    border-bottom: 1px solid var(--app-border);
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+}
+
+@media (max-width: 640px) {
+    .filter-panel-summary {
+        white-space: normal;
+    }
+}
+
 .alert-info {
     --bs-alert-bg: var(--app-accent-soft);
     --bs-alert-border-color: rgba(var(--app-accent-rgb), 0.32);
@@ -727,6 +804,40 @@ h2 {
 
 .btn-icon-only .bi {
     margin-right: 0;
+}
+
+.help-tip {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--bs-secondary-color);
+    display: inline-flex;
+    height: 1.15rem;
+    justify-content: center;
+    line-height: 1;
+    margin-left: 0.25rem;
+    padding: 0;
+    vertical-align: text-bottom;
+    width: 1.15rem;
+}
+
+.help-tip:hover,
+.help-tip:focus {
+    color: var(--bs-info);
+}
+
+.help-tip i {
+    font-size: 0.95rem;
+}
+
+.form-label-with-help {
+    align-items: center;
+    display: flex;
+    margin-bottom: 0.5rem;
+}
+
+.form-label-with-help .form-label {
+    margin-bottom: 0;
 }
 
 .filter-actions {

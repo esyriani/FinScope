@@ -1,5 +1,7 @@
 """Tests for statement parsing helpers."""
 
+from decimal import Decimal
+
 import pytest
 
 from finance_app.core.constants import (
@@ -22,10 +24,11 @@ from finance_app.modules.statements.importer import (
 @pytest.mark.parametrize(
     ("raw_value", "expected"),
     [
-        ("$1,234.56", 1234.56),
-        ("CA$ 1 234,56", 1234.56),
-        ("(42.10)", -42.10),
-        ("12.34-", -12.34),
+        ("$1,234.56", Decimal("1234.56")),
+        ("CA$ 1 234,56", Decimal("1234.56")),
+        ("(42.10)", Decimal("-42.10")),
+        ("12.34-", Decimal("-12.34")),
+        ("2.675", Decimal("2.68")),
         ("N/A", None),
         ("", None),
     ],
@@ -170,11 +173,11 @@ def test_build_transaction_prefers_debit_credit_columns():
     assert debit_tx == {
         "tx_date": "2026-01-02",
         "description": "GROCERY",
-        "amount": 12.34,
+        "amount": Decimal("12.34"),
         "category": UNKNOWN_CATEGORY,
         "needs_review": 1,
     }
-    assert credit_tx["amount"] == -100.00
+    assert credit_tx["amount"] == Decimal("-100.00")
 
 
 def test_parse_csv_transactions_detects_header_after_intro_rows():
@@ -194,9 +197,10 @@ def test_parse_csv_transactions_detects_header_after_intro_rows():
 
     assert result["ignored_rows"] == 1
     assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
-        ("2026-01-02", "GROCERY", 12.34),
-        ("2026-01-03", "PAYMENT", -100.00),
+        ("2026-01-02", "GROCERY", Decimal("12.34")),
+        ("2026-01-03", "PAYMENT", Decimal("-100.00")),
     ]
+    assert [tx["source_row_number"] for tx in result["transactions"]] == [4, 5]
 
 
 def test_parse_csv_transactions_uses_compact_fallback_without_header():
@@ -208,7 +212,8 @@ def test_parse_csv_transactions_uses_compact_fallback_without_header():
 
     assert result["ignored_rows"] == 1
     assert result["transactions"][0]["description"] == "CORNER STORE"
-    assert result["transactions"][0]["amount"] == 8.50
+    assert result["transactions"][0]["amount"] == Decimal("8.50")
+    assert result["transactions"][0]["source_row_number"] == 1
 
 
 def test_parse_csv_transactions_infers_month_first_slash_dates_without_header():
@@ -224,8 +229,8 @@ def test_parse_csv_transactions_infers_month_first_slash_dates_without_header():
 
     assert result["ignored_rows"] == 0
     assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
-        ("2026-05-18", "DISNEY PLUS", 9.19),
-        ("2026-05-06", "HANGTAG PARKING", 2.25),
+        ("2026-05-18", "DISNEY PLUS", Decimal("9.19")),
+        ("2026-05-06", "HANGTAG PARKING", Decimal("2.25")),
     ]
 
 
@@ -278,8 +283,8 @@ def test_parse_csv_transactions_parses_quoted_iso_debit_credit_without_header():
 
     assert result["ignored_rows"] == 0
     assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
-        ("2026-04-29", "PMT PRET  *326060301", 2400.00),
-        ("2026-04-30", "UDEM            PAIE", -3505.37),
+        ("2026-04-29", "PMT PRET  *326060301", Decimal("2400.00")),
+        ("2026-04-30", "UDEM            PAIE", Decimal("-3505.37")),
     ]
 
 
@@ -296,8 +301,8 @@ def test_parse_csv_transactions_parses_td_checking_two_digit_hyphen_dates():
 
     assert result["ignored_rows"] == 0
     assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
-        ("2024-01-01", "Recept - VFC ***F3I REN", -1440.80),
-        ("2024-01-13", "HYPOTHEQUE MAISON DESJARDINS", 1760.38),
+        ("2024-01-01", "Recept - VFC ***F3I REN", Decimal("-1440.80")),
+        ("2024-01-13", "HYPOTHEQUE MAISON DESJARDINS", Decimal("1760.38")),
     ]
 
 
@@ -319,8 +324,8 @@ def test_parse_csv_transactions_counts_malformed_rows_without_losing_valid_rows(
 
     assert result["ignored_rows"] == 3
     assert [(tx["tx_date"], tx["description"], tx["amount"]) for tx in result["transactions"]] == [
-        ("2026-01-02", "Quoted, Merchant", -1234.56),
-        ("2026-01-05", "Valid Cafe", 42.10),
+        ("2026-01-02", "Quoted, Merchant", Decimal("-1234.56")),
+        ("2026-01-05", "Valid Cafe", Decimal("42.10")),
     ]
 
 
@@ -341,13 +346,14 @@ def test_parse_csv_transactions_parses_interac_sent_history():
         {
             "tx_date": "2026-05-08",
             "description": "Kiet Menage",
-            "amount": 350.00,
+            "amount": Decimal("350.00"),
             "category": UNKNOWN_CATEGORY,
             "needs_review": 1,
             "interac_direction": "sent",
-            "interac_counterparty": "Kiet Menage",
+            "interac_merchant": "Kiet Menage",
             "interac_method": "Mobile",
             "interac_status": "DepositedGo to Details",
+            "source_row_number": 2,
         }
     ]
 
@@ -366,7 +372,7 @@ def test_parse_csv_transactions_parses_interac_received_history():
     assert result["ignored_rows"] == 0
     assert result["transactions"][0]["tx_date"] == "2023-01-02"
     assert result["transactions"][0]["description"] == "CHARLES-ANTOINE DEMERS"
-    assert result["transactions"][0]["amount"] == -1250.00
+    assert result["transactions"][0]["amount"] == Decimal("-1250.00")
     assert result["transactions"][0]["interac_direction"] == "received"
 
 
@@ -390,19 +396,59 @@ def test_parse_csv_transactions_applies_interac_direction_override():
         interac_direction="received",
     )
 
-    assert sent["transactions"][0]["amount"] == 350.00
+    assert sent["transactions"][0]["amount"] == Decimal("350.00")
     assert sent["transactions"][0]["interac_direction"] == "sent"
-    assert received["transactions"][0]["amount"] == -350.00
+    assert received["transactions"][0]["amount"] == Decimal("-350.00")
     assert received["transactions"][0]["interac_direction"] == "received"
 
 
-def test_transaction_fingerprint_includes_account_boundary():
-    """Verify that identical statement rows from different accounts do not collide."""
+def test_transaction_fingerprint_uses_statement_scoped_source_identity():
+    """Verify repeated rows and statement/account replays have distinct identities."""
     tx = {
         "tx_date": "2026-01-02",
         "description": "GROCERY",
-        "amount": 12.34,
+        "amount": Decimal("12.34"),
     }
 
-    assert transaction_fingerprint(tx, account_id=1) == transaction_fingerprint(tx, account_id=1)
-    assert transaction_fingerprint(tx, account_id=1) != transaction_fingerprint(tx, account_id=2)
+    assert transaction_fingerprint(tx, account_id=1, statement_id=10, import_index=1) == transaction_fingerprint(
+        tx,
+        account_id=1,
+        statement_id=10,
+        import_index=1,
+    )
+    assert transaction_fingerprint(tx, account_id=1, statement_id=10, import_index=1) != transaction_fingerprint(
+        tx,
+        account_id=1,
+        statement_id=10,
+        import_index=2,
+    )
+    assert transaction_fingerprint(tx, account_id=1, statement_id=10, import_index=1) != transaction_fingerprint(
+        tx,
+        account_id=2,
+        statement_id=10,
+        import_index=1,
+    )
+    assert transaction_fingerprint(tx, account_id=1, statement_id=10, import_index=1) != transaction_fingerprint(
+        tx,
+        account_id=1,
+        statement_id=11,
+        import_index=1,
+    )
+
+
+def test_transaction_fingerprint_uses_canonical_money_amount():
+    """Verify imported row identity uses fixed-scale amount text."""
+    high_precision = {
+        "tx_date": "2026-01-02",
+        "description": "ROUNDING STORE",
+        "amount": Decimal("2.675"),
+    }
+    fixed_scale = {**high_precision, "amount": Decimal("2.68")}
+    different_cent = {**high_precision, "amount": Decimal("2.67")}
+
+    assert transaction_fingerprint(high_precision, account_id=1, statement_id=10, import_index=1) == (
+        transaction_fingerprint(fixed_scale, account_id=1, statement_id=10, import_index=1)
+    )
+    assert transaction_fingerprint(high_precision, account_id=1, statement_id=10, import_index=1) != (
+        transaction_fingerprint(different_cent, account_id=1, statement_id=10, import_index=1)
+    )

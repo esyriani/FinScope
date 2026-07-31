@@ -24,6 +24,7 @@ from finance_app.core.constants import (
     UNKNOWN_CATEGORY,
 )
 from finance_app.database.engine import db_core_connection
+from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import (
     statement_types as statement_types_table,
 )
@@ -40,6 +41,8 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "comparison_max_years": str(settings.default_comparison_max_years),
     "comparison_insight_card_limit": str(settings.default_comparison_insight_card_limit),
     "home_top_category_limit": str(settings.default_home_top_category_limit),
+    "dashboard_top_driver_limit": str(settings.default_dashboard_top_driver_limit),
+    "pinned_report_limit": str(settings.default_pinned_report_limit),
     "merchant_table_limit": str(settings.default_merchant_table_limit),
     "merchant_suggestion_limit": str(settings.default_merchant_suggestion_limit),
     "rule_preview_limit": str(settings.default_rule_preview_limit),
@@ -64,6 +67,8 @@ GENERAL_SETTING_KEYS: tuple[str, ...] = (
     "comparison_max_years",
     "comparison_insight_card_limit",
     "home_top_category_limit",
+    "dashboard_top_driver_limit",
+    "pinned_report_limit",
     "merchant_table_limit",
     "merchant_suggestion_limit",
     "rule_preview_limit",
@@ -101,12 +106,13 @@ def seed_runtime_settings(conn: Any) -> None:
 def seed_statement_types(conn: Any) -> None:
     """Seed statement types."""
     for name, parser_type, import_mode, default_account_type in DEFAULT_STATEMENT_TYPE_SEED_ROWS:
+        name_key = normalize_name_key(name)
         type_select = select(
             statement_types_table.c.id,
             statement_types_table.c.parser_type,
             statement_types_table.c.import_mode,
             statement_types_table.c.default_account_type,
-        ).where(statement_types_table.c.name == name)
+        ).where(statement_types_table.c.name_key == name_key)
         existing = conn.execute(type_select).mappings().fetchone()
         if existing is None:
             existing, inserted = insert_or_select_unique_row(
@@ -221,7 +227,7 @@ def sync_statement_types(conn: Any, rows: Iterable[Mapping[str, Any]]) -> None:
         if not name:
             continue
 
-        normalized_name = name.casefold()
+        normalized_name = normalize_name_key(name)
         if normalized_name in seen_names:
             raise ValueError("Statement type names must be unique.")
         seen_names.add(normalized_name)
@@ -261,7 +267,9 @@ def sync_statement_types(conn: Any, rows: Iterable[Mapping[str, Any]]) -> None:
             )
             kept_ids.add(row["id"])
         else:
-            type_select = select(statement_types_table.c.id).where(statement_types_table.c.name == row["name"])
+            type_select = select(statement_types_table.c.id).where(
+                statement_types_table.c.name_key == normalize_name_key(row["name"])
+            )
             type_row = conn.execute(type_select).mappings().fetchone()
             if type_row is None:
                 type_row, _ = insert_or_select_unique_row(

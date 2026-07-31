@@ -5,18 +5,21 @@ import io
 import re
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import case, delete, func, select, update
 
+from finance_app.core.category_sql import category_label_expression
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTIONS,
     CATEGORY_RULE_SOURCE_AUTOMATIC,
     CATEGORY_RULE_SOURCE_MANUAL,
     IMPORTABLE_CATEGORY_RULE_SOURCES,
+    UNKNOWN_CATEGORY,
 )
-from finance_app.core.money import MoneyValue, money_to_float
+from finance_app.core.money import MoneyValue, money_to_float, parse_money_text
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -141,7 +144,7 @@ def export_rule_rows(conn: Any) -> list[dict[str, Any]]:
                 category_rules_table.c.direction,
                 accounts_table.c.name.label("account_name"),
                 merchants_table.c.merchant_key.label("merchant_name"),
-                category_rules_table.c.category,
+                category_label_expression(category_rules_table, UNKNOWN_CATEGORY).label("category"),
                 category_rules_table.c.amount_min,
                 category_rules_table.c.amount_max,
                 category_rules_table.c.source,
@@ -162,8 +165,8 @@ def export_rule_rows(conn: Any) -> list[dict[str, Any]]:
                     (category_rules_table.c.source == CATEGORY_RULE_SOURCE_AUTOMATIC, 1),
                     else_=2,
                 ),
-                func.lower(category_rules_table.c.category),
-                category_rules_table.c.category,
+                func.lower(category_label_expression(category_rules_table, UNKNOWN_CATEGORY)),
+                category_label_expression(category_rules_table, UNKNOWN_CATEGORY),
                 func.lower(category_rules_table.c.keyword),
                 category_rules_table.c.keyword,
                 category_rules_table.c.amount_min,
@@ -614,20 +617,22 @@ def rule_import_value(row: Mapping[str, Any], *keys: str) -> Any:
     return ""
 
 
-def parse_optional_rule_amount(value: object) -> float | None:
+def parse_optional_rule_amount(value: object) -> Decimal | None:
     """Parse optional rule amount."""
     text = str(value or "").strip()
     if not text or text.casefold() in {"any", "none", "null"}:
         return None
 
-    normalized = text.replace("$", "").replace("\u00a0", "").replace(" ", "").replace(",", "")
     try:
-        return float(normalized)
-    except ValueError as exc:
+        amount = parse_money_text(text)
+    except (InvalidOperation, ValueError) as exc:
         raise ValueError(f"Invalid amount: {value}") from exc
+    if amount is None:
+        raise ValueError(f"Invalid amount: {value}")
+    return amount
 
 
-def parse_rule_amount_range(value: object, line_number: int) -> tuple[float | None, float | None]:
+def parse_rule_amount_range(value: object, line_number: int) -> tuple[Decimal | None, Decimal | None]:
     """Parse rule amount range."""
     text = str(value or "").strip()
     if not text or text.casefold() == "any":

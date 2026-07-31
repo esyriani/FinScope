@@ -44,13 +44,8 @@ def get_or_create_merchant_for_name(conn: Any, merchant_name: object) -> Any:
 def get_or_create_merchant(
     conn: Any,
     merchant_key: object,
-    **_ignored_legacy_fields: object,
 ) -> Any:
-    """Return a merchant row, inserting a deterministic merchant key if needed.
-
-    Extra keyword parameters are accepted for older callers but ignored because
-    merchant identity is no longer managed outside the deterministic key.
-    """
+    """Return a merchant row, inserting a deterministic merchant key if needed."""
     merchant_key = normalize_merchant(merchant_key).merchant_key
     if not merchant_key:
         return None

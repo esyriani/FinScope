@@ -2,6 +2,7 @@
 
 import pytest
 from sqlalchemy import event, insert, select, text
+from tests.support.upload import queue_statement_import_attempt
 
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
@@ -24,6 +25,7 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.categories.repository import rename_category, resolve_category_id
 from finance_app.modules.upload import workflow as upload_workflow
+from finance_app.modules.upload.repository import new_statement_import_token, reset_statement_import_state
 
 
 def create_statement(conn, filename="workflow.csv", account_name="Personal"):
@@ -112,6 +114,20 @@ def categorized_food(transactions, conn=None, use_llm=True):
     return transactions
 
 
+def run_statement_import_job(conn, statement_id, account_id, statement_type, extension, raw_text, **kwargs):
+    """Queue and run one statement import job with a matching claim token."""
+    import_token = queue_statement_import_attempt(conn, statement_id)
+    return upload_workflow.import_statement_transactions_job(
+        statement_id,
+        account_id,
+        statement_type,
+        extension,
+        raw_text,
+        import_token,
+        **kwargs,
+    )
+
+
 def test_import_transactions_counts_ignored_csv_rows(app, monkeypatch):
     """Verify ignored parser rows are reported with successful inserts."""
     del app
@@ -157,6 +173,52 @@ def test_import_transactions_counts_ignored_csv_rows(app, monkeypatch):
     assert tuple(row) == ("Unknown Shop", "UNKNOWN", 1, "UNKNOWN SHOP")
 
 
+def test_import_transactions_preserves_repeated_same_value_statement_rows(app, monkeypatch):
+    """Verify repeated statement rows import once each while replay stays idempotent."""
+    del app
+    monkeypatch.setattr(upload_workflow, "categorize_transactions", categorized_unknowns)
+    raw_csv = "\n".join(
+        [
+            "Date,Description,Amount",
+            "2026-01-02,Cafe Bistro,8.50",
+            "2026-01-02,Cafe Bistro,8.50",
+        ]
+    )
+
+    with db_core_transaction() as conn:
+        account_id, statement_id = create_core_statement(conn, "repeated-rows.csv")
+        first_result = upload_workflow.import_transactions(
+            conn,
+            statement_id,
+            account_id,
+            "credit_card",
+            "csv",
+            raw_csv,
+        )
+        second_result = upload_workflow.import_transactions(
+            conn,
+            statement_id,
+            account_id,
+            "credit_card",
+            "csv",
+            raw_csv,
+        )
+        rows = (
+            conn.execute(
+                select(transactions_table.c.description, transactions_table.c.fingerprint)
+                .where(transactions_table.c.statement_id == statement_id)
+                .order_by(transactions_table.c.id)
+            )
+            .mappings()
+            .fetchall()
+        )
+
+    assert first_result == (2, 0, 0)
+    assert second_result == (0, 2, 0)
+    assert [row["description"] for row in rows] == ["Cafe Bistro", "Cafe Bistro"]
+    assert len({row["fingerprint"] for row in rows}) == 2
+
+
 def test_import_transactions_counts_sqlite_integrity_duplicate_skips(app, monkeypatch):
     """Verify insert-time unique fingerprint collisions increment skipped count."""
     del app
@@ -182,7 +244,7 @@ def test_import_transactions_counts_sqlite_integrity_duplicate_skips(app, monkey
     monkeypatch.setattr(
         upload_workflow,
         "filter_new_transactions",
-        lambda conn, transactions, account_id: ([dict(row) for row in duplicate_rows], 0),
+        lambda conn, transactions, account_id, statement_id: ([dict(row) for row in duplicate_rows], 0),
     )
     monkeypatch.setattr(upload_workflow, "categorize_transactions", categorized_unknowns)
 
@@ -230,7 +292,7 @@ def test_import_transactions_wraps_insert_time_duplicates_in_savepoints(app, mon
     monkeypatch.setattr(
         upload_workflow,
         "filter_new_transactions",
-        lambda conn, transactions, account_id: ([dict(row) for row in duplicate_rows], 0),
+        lambda conn, transactions, account_id, statement_id: ([dict(row) for row in duplicate_rows], 0),
     )
     monkeypatch.setattr(upload_workflow, "categorize_transactions", categorized_unknowns)
 
@@ -394,7 +456,8 @@ def test_import_statement_job_records_failed_statement_status(core_conn, monkeyp
     )
 
     with pytest.raises(RuntimeError, match="parser broke"):
-        upload_workflow.import_statement_transactions_job(
+        run_statement_import_job(
+            core_conn,
             statement_id,
             account_id,
             "credit_card",
@@ -425,7 +488,8 @@ def test_import_statement_job_rolls_back_inserted_rows_when_finalization_fails(c
     )
 
     with pytest.raises(RuntimeError, match="counter broke"):
-        upload_workflow.import_statement_transactions_job(
+        run_statement_import_job(
+            core_conn,
             statement_id,
             account_id,
             "credit_card",
@@ -482,7 +546,8 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(core_conn, monke
 
     raw_csv = "Date,Description,Amount\n2026-01-02,Retry Shop,12.34\n"
     with pytest.raises(RuntimeError, match="counter broke"):
-        upload_workflow.import_statement_transactions_job(
+        run_statement_import_job(
+            core_conn,
             statement_id,
             account_id,
             "credit_card",
@@ -511,7 +576,8 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(core_conn, monke
         {"p0": statement_id},
     ).fetchone()
 
-    message = upload_workflow.import_statement_transactions_job(
+    message = run_statement_import_job(
+        core_conn,
         statement_id,
         account_id,
         "credit_card",
@@ -541,6 +607,121 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(core_conn, monke
     assert "Added 1 transactions" in message
     assert [tuple(row) for row in rows] == [("Retry Shop", 12.34)]
     assert tuple(completed_statement) == ("completed", None, 1, 0, 0)
+
+
+def test_import_statement_job_noops_when_attempt_is_already_claimed(core_conn):
+    """Verify duplicate workers cannot rerun a completed statement import attempt."""
+    account_id, statement_id = create_statement(core_conn, "duplicate-claim.csv")
+    raw_csv = "Date,Description,Amount\n2026-01-02,Claimed Shop,12.34\n"
+    import_token = queue_statement_import_attempt(core_conn, statement_id)
+
+    first_message = upload_workflow.import_statement_transactions_job(
+        statement_id,
+        account_id,
+        "credit_card",
+        "csv",
+        raw_csv,
+        import_token,
+    )
+    second_message = upload_workflow.import_statement_transactions_job(
+        statement_id,
+        account_id,
+        "credit_card",
+        "csv",
+        raw_csv,
+        import_token,
+    )
+
+    transaction_count = (
+        core_conn.execute(
+            text("""
+        SELECT COUNT(*) AS count
+        FROM transactions
+        WHERE statement_id = :p0
+        """),
+            {"p0": statement_id},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
+    statement = core_conn.execute(
+        text("""
+        SELECT import_status, imported_count
+        FROM statements
+        WHERE id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+
+    assert "Added 1 transactions" in first_message
+    assert second_message == "Statement import was already claimed by another attempt."
+    assert transaction_count == 1
+    assert tuple(statement) == ("completed", 1)
+
+
+def test_statement_import_queue_claim_prevents_duplicate_retry_reprocess(core_conn):
+    """Verify only one retry/reprocess submission can queue a statement."""
+    account_id, statement_id = create_statement(core_conn, "retry-reprocess-race.csv")
+    core_conn.execute(
+        text("""
+        UPDATE statements
+        SET raw_text = 'Date,Description,Amount\n2026-01-02,RACE SHOP,12.34',
+            import_status = 'completed',
+            imported_count = 1
+        WHERE id = :p0
+        """),
+        {"p0": statement_id},
+    )
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            statement_id,
+            account_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            fingerprint
+        )
+        VALUES (:p0, :p1, '2026-01-01', 'OLD RACE SHOP', 5.00, 'UNKNOWN', 'retry-reprocess-race-old')
+        """),
+        {"p0": statement_id, "p1": account_id},
+    )
+    core_conn.commit()
+    retry_token = new_statement_import_token()
+    reprocess_token = new_statement_import_token()
+
+    retry_queued = reset_statement_import_state(core_conn, statement_id, retry_token)
+    reprocess_queued = reset_statement_import_state(core_conn, statement_id, reprocess_token)
+    if reprocess_queued:
+        core_conn.execute(text("DELETE FROM transactions WHERE statement_id = :p0"), {"p0": statement_id})
+    core_conn.commit()
+
+    transaction_count = (
+        core_conn.execute(
+            text("""
+        SELECT COUNT(*) AS count
+        FROM transactions
+        WHERE statement_id = :p0
+        """),
+            {"p0": statement_id},
+        )
+        .fetchone()
+        ._mapping["count"]
+    )
+    statement = core_conn.execute(
+        text("""
+        SELECT import_status, import_token
+        FROM statements
+        WHERE id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+
+    assert retry_queued is True
+    assert reprocess_queued is False
+    assert transaction_count == 1
+    assert tuple(statement) == ("queued", retry_token)
 
 
 def test_multi_account_retry_keeps_account_scoped_deduplication(core_conn, monkeypatch):
@@ -574,21 +755,24 @@ def test_multi_account_retry_keeps_account_scoped_deduplication(core_conn, monke
     raw_csv = "Date,Description,Amount\n2026-01-03,Shared Retry Merchant,45.67\n"
 
     with pytest.raises(RuntimeError, match="account A counter broke"):
-        upload_workflow.import_statement_transactions_job(
+        run_statement_import_job(
+            core_conn,
             statement_a_id,
             account_a_id,
             "credit_card",
             "csv",
             raw_csv,
         )
-    upload_workflow.import_statement_transactions_job(
+    run_statement_import_job(
+        core_conn,
         statement_a_id,
         account_a_id,
         "credit_card",
         "csv",
         raw_csv,
     )
-    upload_workflow.import_statement_transactions_job(
+    run_statement_import_job(
+        core_conn,
         statement_b_id,
         account_b_id,
         "credit_card",

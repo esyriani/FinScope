@@ -25,7 +25,7 @@ def test_rules_service_mutations_support_core_connections(app, core_conn):
     core_conn.commit()
 
     with db_core_transaction() as conn:
-        keyword = create_rule_from_form(
+        created_rule_id, keyword = create_rule_from_form(
             conn,
             MultiDict(
                 [
@@ -44,6 +44,7 @@ def test_rules_service_mutations_support_core_connections(app, core_conn):
             .with_only_columns(category_rules_table.c.id)
             .where(category_rules_table.c.keyword == "METRO GROCERY")
         ).scalar_one()
+        assert created_rule_id == rule_id
         update_rule_from_form(
             conn,
             rule_id,

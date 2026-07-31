@@ -89,6 +89,46 @@ def test_review_apply_route_queues_group_job(client, core_conn, monkeypatch):
     assert submitted.undo_args == (submitted.args[0],)
 
 
+def test_review_apply_route_returns_ajax_refresh_metadata(client, core_conn, monkeypatch):
+    """Verify AJAX review submissions expose the refresh and job status URLs."""
+    insert_review_transaction(core_conn)
+    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
+
+    response = client.post(
+        "/review/apply",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "next": "/review?merchant=Metro",
+            "merchant_key": "METRO GROCERY",
+            "category": "Food",
+            "create_rule": "0",
+        },
+        headers={"X-Requested-With": "fetch"},
+    )
+
+    assert response.status_code == 200
+    assert response.json == {
+        "ok": True,
+        "refresh_url": "/review?merchant=Metro",
+        "job_status_url": "/review/jobs/reviewjob123.json",
+    }
+    assert submitted_jobs.single().label == "Review METRO GROCERY as Food"
+
+
+def test_review_job_status_route_returns_minimal_status(client, monkeypatch):
+    """Verify the review page can poll its own submitted background job status."""
+    monkeypatch.setattr(
+        review_controller,
+        "get_background_job",
+        lambda job_id: {"id": job_id, "status": "completed"},
+    )
+
+    response = client.get("/review/jobs/reviewjob123.json", headers={"X-Requested-With": "fetch"})
+
+    assert response.status_code == 200
+    assert response.json == {"ok": True, "status": "completed"}
+
+
 def test_review_apply_route_queues_single_transaction_job(client, core_conn, monkeypatch):
     """Verify review route can queue a job for one transaction in a group."""
     tx_id = insert_review_transaction(core_conn)

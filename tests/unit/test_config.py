@@ -3,26 +3,52 @@
 from pathlib import Path
 
 from finance_app.core import config as config_module
-from finance_app.core.constants import PROJECT_DIR
+from finance_app.core.constants import BASE_DIR, PROJECT_DIR
 from finance_app.database.engine import create_database_engine
 
 
-def test_default_config_files_live_at_project_root():
-    """Verify default config files are resolved from the repository root."""
-    project_dir = Path(PROJECT_DIR)
+def test_default_config_files_live_in_application_package():
+    """Verify default config files are resolved from the application package."""
+    app_dir = Path(BASE_DIR)
 
-    assert config_module.CONFIG_PATH == project_dir / "config.ini"
-    assert config_module.EXAMPLE_CONFIG_PATH == project_dir / "config.example.ini"
+    assert config_module.CONFIG_PATH == app_dir / "config.ini"
+    assert config_module.EXAMPLE_CONFIG_PATH == app_dir / "config.example.ini"
+    assert config_module.EXAMPLE_CONFIG_PATH.exists()
 
 
 def test_relative_config_paths_resolve_from_project_root():
     """Resolve config file paths relative to the repository root."""
-    assert config_module.resolve_path("runtime/finescope.db") == Path(PROJECT_DIR) / "runtime" / "finescope.db"
+    assert config_module.resolve_path("runtime/finscope.db") == Path(PROJECT_DIR) / "runtime" / "finscope.db"
+
+
+def test_missing_local_config_uses_default_runtime_database(monkeypatch, tmp_path):
+    """Load the documented default SQLite path from the app sample config."""
+    monkeypatch.delenv("FINANCE_DATABASE_URL", raising=False)
+    monkeypatch.delenv("FINANCE_DB_PATH", raising=False)
+
+    settings = config_module.load_settings(tmp_path / "missing.ini")
+
+    assert settings.database_path == Path(PROJECT_DIR) / "runtime" / "finscope.db"
+    assert settings.database_url == config_module.sqlite_database_url(settings.database_path)
+
+
+def test_config_database_path_resolves_relative_to_config_file(monkeypatch, tmp_path):
+    """Resolve config-sourced SQLite paths from the config file directory."""
+    monkeypatch.delenv("FINANCE_DATABASE_URL", raising=False)
+    monkeypatch.delenv("FINANCE_DB_PATH", raising=False)
+    config_dir = tmp_path / "src" / "finance_app"
+    config_dir.mkdir(parents=True)
+    config_path = config_dir / "config.ini"
+    config_path.write_text("[database]\npath = ../../runtime/finscope.db\n", encoding="utf-8")
+
+    settings = config_module.load_settings(config_path)
+
+    assert settings.database_path == (config_dir / "../../runtime/finscope.db").resolve()
 
 
 def test_database_url_defaults_to_sqlite_path(monkeypatch, tmp_path):
     """Load a SQLite URL derived from the configured database path."""
-    database_path = tmp_path / "finance.db"
+    database_path = tmp_path / "finscope.db"
     monkeypatch.delenv("FINANCE_DATABASE_URL", raising=False)
     monkeypatch.setenv("FINANCE_DB_PATH", str(database_path))
 
@@ -34,7 +60,7 @@ def test_database_url_defaults_to_sqlite_path(monkeypatch, tmp_path):
 
 def test_sqlite_database_url_sets_database_path(monkeypatch, tmp_path):
     """Use a SQLite URL as the source of the filesystem database path."""
-    database_path = tmp_path / "finance url.db"
+    database_path = tmp_path / "finscope url.db"
     database_url = config_module.sqlite_database_url(database_path)
     monkeypatch.setenv("FINANCE_DATABASE_URL", database_url)
 
@@ -83,6 +109,8 @@ def test_setting_defaults_include_runtime_settings_seed_values(monkeypatch, tmp_
     monkeypatch.setenv("FINANCE_DEFAULT_THEME_MODE", "light")
     monkeypatch.setenv("FINANCE_DEFAULT_UI_LANGUAGE", "fr-CA")
     monkeypatch.setenv("FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT", "9")
+    monkeypatch.setenv("FINANCE_DEFAULT_DASHBOARD_TOP_DRIVER_LIMIT", "8")
+    monkeypatch.setenv("FINANCE_DEFAULT_PINNED_REPORT_LIMIT", "6")
     monkeypatch.setenv("FINANCE_DEFAULT_MERCHANT_SUGGESTION_LIMIT", "6")
     monkeypatch.setenv("FINANCE_DEFAULT_LLM_REVIEW_THRESHOLD", "0.62")
     monkeypatch.setenv("FINANCE_DEFAULT_TRANSACTION_AI_RERUN_ENABLED", "false")
@@ -98,6 +126,8 @@ def test_setting_defaults_include_runtime_settings_seed_values(monkeypatch, tmp_
     assert settings.default_theme_mode == "light"
     assert settings.default_ui_language == "fr"
     assert settings.default_comparison_insight_card_limit == 9
+    assert settings.default_dashboard_top_driver_limit == 8
+    assert settings.default_pinned_report_limit == 6
     assert settings.default_merchant_suggestion_limit == 6
     assert settings.default_llm_review_threshold == 0.62
     assert settings.default_transaction_ai_rerun_enabled is False
@@ -113,11 +143,19 @@ def test_invalid_integer_settings_fall_back_without_import_crash(monkeypatch, tm
     """Verify malformed integer config values do not crash settings loading."""
     monkeypatch.setenv("FINANCE_MAX_UPLOAD_MB", "not-an-int")
     monkeypatch.setenv("FINANCE_PORT", "70000")
+    monkeypatch.setenv("FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT", "20")
+    monkeypatch.setenv("FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT", "20")
+    monkeypatch.setenv("FINANCE_DEFAULT_DASHBOARD_TOP_DRIVER_LIMIT", "20")
+    monkeypatch.setenv("FINANCE_DEFAULT_PINNED_REPORT_LIMIT", "20")
 
     settings = config_module.load_settings(tmp_path / "missing.ini")
 
     assert settings.max_upload_mb == 16
     assert settings.server_port == 5000
+    assert settings.default_comparison_insight_card_limit == 12
+    assert settings.default_home_top_category_limit == 12
+    assert settings.default_dashboard_top_driver_limit == 12
+    assert settings.default_pinned_report_limit == 12
 
 
 def test_invalid_float_settings_fall_back_without_import_crash(monkeypatch, tmp_path):

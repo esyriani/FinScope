@@ -3,6 +3,8 @@
 Counts tokens for the final chat-message payload assembled by the categories
 prompt builders. The estimator prefers tiktoken when installed and falls back
 to a conservative character-based estimate so previews can degrade gracefully.
+Constants in this module are local OpenAI chat-estimation heuristics, not
+authoritative model capability metadata.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -17,7 +19,7 @@ FALLBACK_CHARS_PER_TOKEN = 4
 FALLBACK_ENCODING_NAME = "character_approximation"
 OPENAI_BASE_ENCODING = "o200k_base"
 AI_TOKEN_ESTIMATE_CONFIRMED_FIELD = "ai_token_estimate_confirmed"
-AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE = "Review the token estimate before running AI."
+AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE = "Review the estimated AI usage before continuing."
 TIKTOKEN_MISSING_WARNING = "tiktoken is not installed; using an approximate estimate."
 TIKTOKEN_ENCODING_UNAVAILABLE_WARNING = "tiktoken encoding is unavailable; using an approximate estimate."
 

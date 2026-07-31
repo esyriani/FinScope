@@ -1,6 +1,6 @@
 """Tests for dashboard presenter behavior."""
 
-from finance_app.modules.dashboard.presenter import build_merchant_aggregates, build_quick_view_options
+from finance_app.modules.dashboard.presenter import build_classification_scope_options, build_quick_view_options
 
 
 def test_build_quick_view_options_hides_zero_count_buttons():
@@ -22,18 +22,19 @@ def test_build_quick_view_options_hides_zero_count_buttons():
     ]
 
 
-def test_build_merchant_aggregates_normalizes_transaction_descriptions():
-    """Verify merchant aggregates normalize transaction descriptions."""
-    rows = [
+def test_build_classification_scope_options_keeps_dashboard_financial_scopes():
+    """Verify Dashboard classification scope excludes reliability action filters."""
+    options = build_classification_scope_options(
+        "all",
         {
-            "description": "AMZN MKTP CA*ABCD1234",
-            "amount": 12.34,
-            "category": "Shopping",
-        }
+            "categorized_count": 2,
+            "needs_review_count": 1,
+            "unknown_count": 1,
+            "all_count": 3,
+        },
+    )
+
+    assert [(option["value"], option["label"], option["count"], option["active"]) for option in options] == [
+        ("categorized", "Categorized", 2, False),
+        ("all", "All", 3, True),
     ]
-
-    aggregates = build_merchant_aggregates(rows)
-
-    assert "AMZN MKTP" in aggregates
-    assert aggregates["AMZN MKTP"]["transaction_count"] == 1
-    assert aggregates["AMZN MKTP"]["total"] == 12.34

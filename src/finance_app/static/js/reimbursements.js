@@ -52,7 +52,7 @@
         }
         form.dataset.reimbursementMatchReady = "true";
 
-        const reimbursementRemaining = parseAmount(form.dataset.reimbursementRemaining);
+        const matchRemaining = parseAmount(form.dataset.matchRemaining || form.dataset.reimbursementRemaining);
         const total = form.querySelector("[data-match-total]");
         const remaining = form.querySelector("[data-match-remaining]");
         const error = form.querySelector("[data-match-error]");
@@ -72,7 +72,7 @@
                 }
             });
 
-            const remainingAfterMatch = reimbursementRemaining - selectedTotal;
+            const remainingAfterMatch = matchRemaining - selectedTotal;
             const exceedsRemaining = remainingAfterMatch < -0.005;
 
             if (total) {

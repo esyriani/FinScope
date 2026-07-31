@@ -2,12 +2,14 @@
 
 import re
 from collections.abc import Iterable
-from typing import Any
+from decimal import Decimal
+from typing import Any, cast
 
 from sqlalchemy import and_, case, func, insert, or_, select, update
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 from sqlalchemy.exc import ProgrammingError as SqlAlchemyProgrammingError
 
+from finance_app.core.category_sql import category_label_expression
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTIONS,
@@ -15,7 +17,7 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_MANUAL,
     UNKNOWN_CATEGORY,
 )
-from finance_app.core.money import money_to_float
+from finance_app.core.money import MoneyValue, quantize_money
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     categories as categories_table,
@@ -26,6 +28,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     merchants as merchants_table,
 )
+from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
@@ -49,6 +52,11 @@ CATEGORY_TABLE_MISSING_MARKERS = (
 )
 
 
+def normalize_rule_amount(value: object | None) -> Decimal | None:
+    """Return a fixed-scale optional rule amount for persistence and lookup."""
+    return quantize_money(cast(MoneyValue | None, value))
+
+
 def save_category_rule(
     conn: Any,
     keyword: object,
@@ -70,6 +78,8 @@ def save_category_rule(
     merchant_id = normalize_optional_merchant_id(merchant_id)
     account_id = normalize_optional_account_id(account_id)
     direction = normalize_rule_direction(direction)
+    amount_min = normalize_rule_amount(amount_min)
+    amount_max = normalize_rule_amount(amount_max)
     category_id = resolve_category_id(conn, category)
     rule_select = existing_rule_select(
         keyword,
@@ -160,6 +170,8 @@ def existing_rule_select(
     """Return the unique-key select for one category rule scope."""
     account_id = normalize_optional_account_id(account_id)
     direction = normalize_rule_direction(direction)
+    amount_min = normalize_rule_amount(amount_min)
+    amount_max = normalize_rule_amount(amount_max)
     scope_condition = (
         category_rules_table.c.merchant_id == merchant_id
         if merchant_id is not None
@@ -314,7 +326,7 @@ def create_category(conn: Any, name: object) -> str | None:
     if not category:
         return None
 
-    category_select = select(categories_table.c.id).where(categories_table.c.name == category)
+    category_select = select(categories_table.c.id).where(categories_table.c.name_key == normalize_name_key(category))
     existing = conn.execute(category_select).fetchone()
     if existing is None:
         insert_or_select_unique_row(
@@ -337,19 +349,13 @@ def resolve_category_id(conn: Any, category: object) -> int | None:
 
     row = (
         conn.execute(
-            select(categories_table.c.id, categories_table.c.name).where(categories_table.c.name == category_name)
+            select(categories_table.c.id).where(categories_table.c.name_key == normalize_name_key(category_name))
         )
         .mappings()
         .fetchone()
     )
     if row is not None:
         return row["id"]
-
-    normalized_name = category_name.casefold()
-    rows = conn.execute(select(categories_table.c.id, categories_table.c.name)).mappings().fetchall()
-    for row in rows:
-        if row["name"].casefold() == normalized_name:
-            return row["id"]
 
     return None
 
@@ -367,7 +373,9 @@ def rename_category(conn: Any, old_name: object, new_name: object) -> str | None
 
     old_row = (
         conn.execute(
-            select(categories_table.c.id, categories_table.c.builtin_key).where(categories_table.c.name == old_category)
+            select(categories_table.c.id, categories_table.c.builtin_key).where(
+                categories_table.c.name_key == normalize_name_key(old_category)
+            )
         )
         .mappings()
         .fetchone()
@@ -378,7 +386,11 @@ def rename_category(conn: Any, old_name: object, new_name: object) -> str | None
         return None
 
     existing = (
-        conn.execute(select(categories_table.c.id).where(categories_table.c.name == new_category)).mappings().fetchone()
+        conn.execute(
+            select(categories_table.c.id).where(categories_table.c.name_key == normalize_name_key(new_category))
+        )
+        .mappings()
+        .fetchone()
     )
     if existing and existing["id"] != old_row["id"]:
         return None
@@ -404,7 +416,7 @@ def get_category_rules(conn: Any | None = None) -> list[dict[str, Any]]:
                 category_rules_table.c.merchant_id,
                 merchants_table.c.merchant_key.label("merchant_name"),
                 category_rules_table.c.keyword,
-                category_rules_table.c.category,
+                category_label_expression(category_rules_table, UNKNOWN_CATEGORY).label("category"),
                 category_rules_table.c.category_id,
                 category_rules_table.c.amount_min,
                 category_rules_table.c.amount_max,
@@ -447,9 +459,9 @@ def get_category_rules(conn: Any | None = None) -> list[dict[str, Any]]:
     tags_by_rule_id = get_rule_tags_by_rule_id(conn, [rule["id"] for rule in rules])
     for rule in rules:
         if rule["amount_min"] is not None:
-            rule["amount_min"] = money_to_float(rule["amount_min"])
+            rule["amount_min"] = quantize_money(rule["amount_min"])
         if rule["amount_max"] is not None:
-            rule["amount_max"] = money_to_float(rule["amount_max"])
+            rule["amount_max"] = quantize_money(rule["amount_max"])
         rule["tags"] = tags_by_rule_id.get(rule["id"], [])
     return rules
 

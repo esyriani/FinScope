@@ -5,6 +5,7 @@ from typing import Any, TypedDict
 
 from sqlalchemy import String, and_, case, cast, false, func, or_, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
@@ -17,6 +18,7 @@ from finance_app.core.constants import (
 )
 from finance_app.core.periods import (
     DEFAULT_DATE_PERIOD,
+    PERIOD_CUSTOM,
     DatePeriod,
     normalize_date_period,
     parse_iso_date,
@@ -136,6 +138,10 @@ def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilte
         ignored = IGNORED_FILTER_ACTIVE
 
     period = normalize_date_period(query_value(args, "period", DEFAULT_DATE_PERIOD).strip())
+    date_from = parse_iso_date(query_value(args, "date_from")) if period == PERIOD_CUSTOM else ""
+    date_to = parse_iso_date(query_value(args, "date_to")) if period == PERIOD_CUSTOM else ""
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
 
     review = query_value(args, "review").strip()
     if review not in REVIEW_FILTERS:
@@ -154,8 +160,8 @@ def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilte
         "amount_type": amount_type,
         "merchant": query_value(args, "merchant").strip(),
         "merchant_key": canonicalize_merchant_key(query_value(args, "merchant_key"), conn=conn),
-        "date_from": parse_iso_date(query_value(args, "date_from")),
-        "date_to": parse_iso_date(query_value(args, "date_to")),
+        "date_from": date_from,
+        "date_to": date_to,
         "ignored": ignored,
         "period": period,
         "sort": query_value(args, "sort", "date").strip(),
@@ -171,7 +177,7 @@ def transaction_sort(filters: TransactionFilters | Mapping[str, Any], unknown_ca
         TRANSACTION_SORT_ACCOUNT: func.coalesce(accounts_table.c.name, "Personal"),
         TRANSACTION_SORT_DESCRIPTION: transactions_table.c.description,
         TRANSACTION_SORT_AMOUNT: transactions_table.c.amount,
-        TRANSACTION_SORT_CATEGORY: func.coalesce(transactions_table.c.category, unknown_category),
+        TRANSACTION_SORT_CATEGORY: transaction_category_label_expression(unknown_category),
         TRANSACTION_SORT_REVIEW: case(
             (transactions_table.c.needs_review == 1, 2),
             (transactions_table.c.reviewed_at.is_(None), 1),
@@ -188,7 +194,7 @@ def build_transaction_core_filters(
     conn: object | None = None,
 ) -> CoreFilters:
     """Build transaction SQLAlchemy Core filters."""
-    category_value = func.coalesce(transactions_table.c.category, unknown_category)
+    category_value = transaction_category_label_expression(unknown_category)
     core_filters = CoreFilters()
 
     start_date = period_start_date(filters["period"])
@@ -270,7 +276,7 @@ def search_condition(search: object, unknown_category: str) -> Any | None:
 
     terms = [term for term in text.split() if term]
     account_name = func.coalesce(accounts_table.c.name, "Personal")
-    category_value = func.coalesce(transactions_table.c.category, unknown_category)
+    category_value = transaction_category_label_expression(unknown_category)
     review_state = case(
         (transactions_table.c.needs_review == 1, "needs review"),
         (transactions_table.c.reviewed_at.is_not(None), "verified"),

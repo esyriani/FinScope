@@ -5,6 +5,7 @@ import logging
 import re
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from threading import local
 from typing import Any
 
@@ -16,7 +17,7 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_AUTOMATIC,
     UNKNOWN_CATEGORY,
 )
-from finance_app.core.money import MoneyValue, optional_money_to_float
+from finance_app.core.money import MoneyValue, optional_money_to_decimal
 from finance_app.modules.categories.decision import (
     MEDIUM_CONFIDENCE_THRESHOLD,
     FinalCategoryDecision,
@@ -115,7 +116,7 @@ def pair_llm_results(
     yield from zip(unknown_items, llm_results)
 
 
-def automatic_rule_amount_bounds(amount: MoneyValue | None) -> tuple[float | None, float | None]:
+def automatic_rule_amount_bounds(amount: MoneyValue | None) -> tuple[Decimal | None, Decimal | None]:
     """Return signed amount bounds for an automatically created rule.
 
     Automatic categorization deduplicates candidate transactions by merchant and
@@ -125,14 +126,13 @@ def automatic_rule_amount_bounds(amount: MoneyValue | None) -> tuple[float | Non
     if amount is None:
         return None, None
 
-    try:
-        value = float(amount)
-    except (TypeError, ValueError):
+    value = optional_money_to_decimal(amount)
+    if value is None:
         return None, None
 
     if value < 0:
-        return None, 0
-    return 0, None
+        return None, Decimal("0.00")
+    return Decimal("0.00"), None
 
 
 def save_automatic_category_rule(
@@ -164,7 +164,7 @@ def save_automatic_category_rule(
 
 def automatic_rule_direction(amount: MoneyValue | None) -> str:
     """Return the signed direction constraint for an automatic LLM rule."""
-    amount = optional_money_to_float(amount)
+    amount = optional_money_to_decimal(amount)
     if amount is None:
         return CATEGORY_RULE_DIRECTION_ANY
     return CATEGORY_RULE_DIRECTION_CREDIT if amount < 0 else CATEGORY_RULE_DIRECTION_DEBIT

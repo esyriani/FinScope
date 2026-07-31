@@ -5,8 +5,9 @@ from typing import Any
 
 from sqlalchemy import delete, func, select, union_all, update
 
-from finance_app.core.constants import CATEGORY_RULE_SOURCE_AUTOMATIC, CATEGORY_RULE_SOURCE_MANUAL
-from finance_app.core.money import money_to_float
+from finance_app.core.category_sql import category_label_expression
+from finance_app.core.constants import CATEGORY_RULE_SOURCE_AUTOMATIC, CATEGORY_RULE_SOURCE_MANUAL, UNKNOWN_CATEGORY
+from finance_app.core.money import quantize_money
 from finance_app.database.tables import (
     category_rules as category_rules_table,
 )
@@ -32,8 +33,8 @@ from finance_app.modules.categories.taxonomy import (
 from finance_app.modules.rules.forms import parse_amount_bounds, parse_rule_account_id, parse_rule_direction
 
 
-def create_rule_from_form(conn: Any, form: Any) -> str:
-    """Create rule from form."""
+def create_rule_from_form(conn: Any, form: Any) -> tuple[int, str]:
+    """Create a manual rule from form data and return its id and keyword."""
     tag_options = get_tag_options(conn)
     keyword = normalize_merchant_description(form.get("keyword", ""))
     category = normalize_category(form.get("category", ""), get_category_options(conn))
@@ -48,7 +49,7 @@ def create_rule_from_form(conn: Any, form: Any) -> str:
     if not keyword or not category:
         raise ValueError("Keyword and category are required.")
 
-    save_category_rule(
+    rule_id = save_category_rule(
         conn,
         keyword,
         category,
@@ -60,7 +61,9 @@ def create_rule_from_form(conn: Any, form: Any) -> str:
         account_id=account_id,
         direction=direction,
     )
-    return keyword
+    if rule_id is None:
+        raise ValueError("Rule could not be saved.")
+    return int(rule_id), keyword
 
 
 def preview_rule_from_form(conn: Any, form: Any) -> dict[str, Any]:
@@ -251,7 +254,7 @@ def get_rule_for_apply(conn: Any, rule_id: int) -> dict[str, Any] | None:
                 category_rules_table.c.account_id,
                 category_rules_table.c.merchant_id,
                 category_rules_table.c.keyword,
-                category_rules_table.c.category,
+                category_label_expression(category_rules_table, UNKNOWN_CATEGORY).label("category"),
                 category_rules_table.c.category_id,
                 category_rules_table.c.amount_min,
                 category_rules_table.c.amount_max,
@@ -267,9 +270,9 @@ def get_rule_for_apply(conn: Any, rule_id: int) -> dict[str, Any] | None:
 
     rule = dict(row)
     if rule["amount_min"] is not None:
-        rule["amount_min"] = money_to_float(rule["amount_min"])
+        rule["amount_min"] = quantize_money(rule["amount_min"])
     if rule["amount_max"] is not None:
-        rule["amount_max"] = money_to_float(rule["amount_max"])
+        rule["amount_max"] = quantize_money(rule["amount_max"])
     rule["tags"] = get_rule_tags_by_rule_id(conn, [rule["id"]]).get(rule["id"], [])
     return rule
 

@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import and_, case, func, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.reporting import (
     cashflow_amount_expression,
     income_amount_expression,
@@ -77,7 +78,7 @@ def build_category_conditions(
     if merchant_condition is not None:
         conditions.append(merchant_condition)
     if selected_categories:
-        conditions.append(func.coalesce(transactions_table.c.category, unknown_category).in_(selected_categories))
+        conditions.append(transaction_category_label_expression(unknown_category).in_(selected_categories))
 
     tag_condition = transaction_tag_condition(selected_tags)
     if tag_condition is not None:
@@ -157,7 +158,7 @@ def fetch_category_comparison(
 ) -> list[Any]:
     """Fetch category comparison totals."""
     year = transaction_year()
-    category = func.coalesce(transactions_table.c.category, unknown_category)
+    category = transaction_category_label_expression(unknown_category)
     amount = func.coalesce(func.sum(analysis_amount_expression(analysis_mode)), 0)
     return (
         conn.execute(
@@ -240,7 +241,7 @@ def fetch_period_category_analysis(
     include_transfer_credits: bool = False,
 ) -> list[Any]:
     """Fetch period category totals for the selected analysis mode."""
-    category = func.coalesce(transactions_table.c.category, unknown_category)
+    category = transaction_category_label_expression(unknown_category)
     return (
         conn.execute(
             select(
@@ -279,7 +280,7 @@ def fetch_period_merchant_transactions(
                 merchants_table.c.merchant_key.label("merchant_name"),
                 merchants_table.c.merchant_key.label("merchant_key"),
                 analysis_amount_expression(analysis_mode).label("amount"),
-                func.coalesce(transactions_table.c.category, unknown_category).label("category"),
+                transaction_category_label_expression(unknown_category).label("category"),
             )
             .select_from(
                 transactions_table.outerjoin(
@@ -311,7 +312,7 @@ def fetch_historical_monthly_category_analysis(
     """Fetch monthly category totals before a comparison period."""
     year = transaction_year()
     month = transaction_month()
-    category = func.coalesce(transactions_table.c.category, unknown_category)
+    category = transaction_category_label_expression(unknown_category)
     return (
         conn.execute(
             select(
@@ -355,7 +356,7 @@ def fetch_historical_monthly_merchant_transactions(
                 merchants_table.c.merchant_key.label("merchant_name"),
                 merchants_table.c.merchant_key.label("merchant_key"),
                 analysis_amount_expression(analysis_mode).label("amount"),
-                func.coalesce(transactions_table.c.category, unknown_category).label("category"),
+                transaction_category_label_expression(unknown_category).label("category"),
             )
             .select_from(
                 transactions_table.outerjoin(

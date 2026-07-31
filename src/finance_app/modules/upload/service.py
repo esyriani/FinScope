@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     ACCOUNT_TYPES,
@@ -82,6 +83,7 @@ def build_upload_context(args: Any) -> dict[str, Any]:
         page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
         confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
         statement_types = get_statement_type_options(conn)
+        unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
         accounts = (
             conn.execute(
                 select(
@@ -112,7 +114,7 @@ def build_upload_context(args: Any) -> dict[str, Any]:
             .where(
                 transactions_table.c.statement_id == statements_table.c.id,
                 transactions_table.c.ignored == 0,
-                (transactions_table.c.category.is_(None) | (transactions_table.c.category == UNKNOWN_CATEGORY)),
+                transaction_category_label_expression(unknown_category) == unknown_category,
             )
             .scalar_subquery()
         )
@@ -246,7 +248,7 @@ def ai_token_estimate_result(scope: str, transaction_count: int, estimate: Mappi
         "scope": scope,
         "transaction_count": transaction_count,
         "message": (
-            "No LLM request would be sent for this action." if request_count == 0 else "AI token estimate ready."
+            "No AI request would be sent for this action." if request_count == 0 else "AI usage estimate ready."
         ),
         "estimate": dict(estimate),
     }
@@ -439,18 +441,18 @@ def interac_preview_records(
 
     if direction in {INTERAC_DIRECTION_SENT, INTERAC_DIRECTION_RECEIVED}:
         date_col = sent_date_col or deposited_date_col or find_column(header_map, DATE_COLUMNS)
-        counterparty_col = (
+        merchant_col = (
             recipient_col or received_from_col or find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
         )
     elif sent_date_col and recipient_col:
         date_col = sent_date_col
-        counterparty_col = recipient_col
+        merchant_col = recipient_col
     elif deposited_date_col and received_from_col:
         date_col = deposited_date_col
-        counterparty_col = received_from_col
+        merchant_col = received_from_col
     else:
         date_col = find_column(header_map, DATE_COLUMNS)
-        counterparty_col = find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
+        merchant_col = find_column(header_map, DESCRIPTION_COLUMNS | {"counterparty"})
 
     records: list[dict[str, Any]] = []
     for row in rows[1:]:
@@ -459,7 +461,7 @@ def interac_preview_records(
         records.append(
             {
                 "raw_date": record.get(date_col or ""),
-                "description": record.get(counterparty_col or ""),
+                "description": record.get(merchant_col or ""),
                 "raw_amount": record.get(amount_col) if amount_col else None,
                 "method": record.get(method_col) if method_col else None,
                 "status": record.get(status_col) if status_col else None,

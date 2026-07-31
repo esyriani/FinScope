@@ -2,6 +2,7 @@
 
 import csv
 import io
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
@@ -24,8 +25,9 @@ from finance_app.modules.rules.import_export import (
 
 def test_parse_amount_bounds_normalizes_optional_values():
     """Verify that rule form amount bounds parse, round, and sort values."""
-    assert parse_amount_bounds("20,255", "10") == (10.00, 20.25)
-    assert parse_amount_bounds("", "$15.499") == (None, 15.50)
+    assert parse_amount_bounds("20,255", "10") == (Decimal("10.00"), Decimal("20.26"))
+    assert parse_amount_bounds("", "$15.499") == (None, Decimal("15.50"))
+    assert parse_amount_bounds("2.675", "") == (Decimal("2.68"), None)
     assert amount_bounds_label(10, 20) == " from 10.00 to 20.00"
     assert amount_bounds_label(None, 20) == " up to 20.00"
 
@@ -54,8 +56,8 @@ def test_parse_rules_csv_normalizes_headers_tags_and_amount_range():
             "merchant_name": "",
             "category": "Utilities",
             "tags": ["Tax", "Government"],
-            "amount_min": 10.0,
-            "amount_max": 25.0,
+            "amount_min": Decimal("10.00"),
+            "amount_max": Decimal("25.00"),
             "direction": "any",
             "source": "manual",
             "created_at": "2026-01-02T00:00:00Z",

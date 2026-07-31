@@ -4,23 +4,31 @@ from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 
-from finance_app.core.constants import REIMBURSEMENT_CATEGORY, TRANSACTION_KIND_EXPENSE
+from finance_app.core.category_sql import transaction_category_label_expression
+from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
+from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import reimbursement_expense_completions as expense_completions_table
 from finance_app.database.tables import tags as tags_table
 from finance_app.database.tables import transaction_tags as transaction_tags_table
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.builtins import BUILTIN_CATEGORY_REIMBURSEMENT
-
-REIMBURSABLE_TAG = "Reimbursable"
+from finance_app.modules.categories.builtins import (
+    BUILTIN_CATEGORY_REIMBURSEMENT,
+    BUILTIN_TAG_REIMBURSABLE,
+    builtin_category_name_for_key,
+)
+from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 
 
 def reimbursement_category_clause(transaction_table: Any, category_table: Any) -> Any:
     """Return a predicate for rows categorized as reimbursement credits."""
     return or_(
         category_table.c.builtin_key == BUILTIN_CATEGORY_REIMBURSEMENT,
-        transaction_table.c.category == REIMBURSEMENT_CATEGORY,
+        and_(
+            transaction_table.c.category_id.is_(None),
+            transaction_table.c.category == builtin_category_name_for_key(BUILTIN_CATEGORY_REIMBURSEMENT),
+        ),
     )
 
 
@@ -58,7 +66,7 @@ def fetch_reimbursement_transactions(conn: Any) -> list[dict[str, Any]]:
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(None).label("category"),
                 transactions_table.c.transaction_kind,
                 func.coalesce(allocated.c.allocated, 0).label("allocated"),
             )
@@ -85,7 +93,7 @@ def fetch_reimbursement_transactions(conn: Any) -> list[dict[str, Any]]:
 
 
 def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
-    """Fetch expense transactions that are reimbursable or already allocated."""
+    """Fetch expense transactions that are reimbursable, matched, or completed."""
     allocated = expense_allocation_totals()
     has_reimbursable_tag = (
         select(1)
@@ -97,7 +105,10 @@ def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
         )
         .where(
             transaction_tags_table.c.transaction_id == transactions_table.c.id,
-            tags_table.c.name == REIMBURSABLE_TAG,
+            or_(
+                tags_table.c.builtin_key == BUILTIN_TAG_REIMBURSABLE,
+                tags_table.c.name == REIMBURSABLE_TAG,
+            ),
         )
         .correlate(transactions_table)
         .exists()
@@ -123,17 +134,24 @@ def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
-                transactions_table.c.category,
+                transaction_category_label_expression(None).label("category"),
                 transactions_table.c.transaction_kind,
+                accounts_table.c.name.label("account_name"),
                 func.coalesce(allocated.c.allocated, 0).label("allocated"),
+                has_reimbursable_tag.label("has_reimbursable_tag"),
                 expense_completions_table.c.id.label("completion_id"),
                 expense_completions_table.c.created_at.label("completed_at"),
             )
             .select_from(
                 transactions_table.outerjoin(
+                    accounts_table,
+                    accounts_table.c.id == transactions_table.c.account_id,
+                )
+                .outerjoin(
                     allocated,
                     allocated.c.transaction_id == transactions_table.c.id,
-                ).outerjoin(
+                )
+                .outerjoin(
                     expense_completions_table,
                     expense_completions_table.c.expense_transaction_id == transactions_table.c.id,
                 )
@@ -170,7 +188,7 @@ def fetch_reimbursement_allocations(conn: Any) -> list[dict[str, Any]]:
                 expense_tx.c.tx_date.label("expense_date"),
                 expense_tx.c.description.label("expense_description"),
                 expense_tx.c.amount.label("expense_amount"),
-                expense_tx.c.category.label("expense_category"),
+                transaction_category_label_expression(None, transaction_table=expense_tx).label("expense_category"),
             )
             .select_from(
                 reimbursement_allocations_table.join(

@@ -179,11 +179,147 @@ function setupAutoShowModals(root = document) {
     });
 }
 
+const financeCollapsePanelHeaderInteractiveSelector = [
+    "a",
+    "button",
+    "input",
+    "select",
+    "textarea",
+    "label",
+    "summary",
+    "[role='button']",
+    "[data-bs-toggle]",
+].join(", ");
+
+const financeCollapsePanelHeadingSelector = "[data-filter-panel-heading-toggle], [data-collapse-panel-heading-toggle]";
+const financeCollapsePanelHeaderSelector = "[data-filter-panel-header-toggle], [data-collapse-panel-header-toggle]";
+
+function financeCollapseTargetForToggle(toggle) {
+    const targetSelector =
+        toggle.dataset.collapsePanelTarget ||
+        toggle.dataset.filterPanelTarget ||
+        toggle.getAttribute("data-bs-target") ||
+        "";
+    return targetSelector ? document.querySelector(targetSelector) : null;
+}
+
+function financeCollapsePanelHeadingToggles(target) {
+    if (!target?.id) return [];
+    return Array.from(document.querySelectorAll(financeCollapsePanelHeadingSelector)).filter(
+        (heading) => heading.getAttribute("aria-controls") === target.id
+    );
+}
+
+function financeSetCollapsePanelHeadingExpanded(target, expanded) {
+    financeCollapsePanelHeadingToggles(target).forEach((heading) => {
+        heading.setAttribute("aria-expanded", expanded ? "true" : "false");
+    });
+}
+
+function financeToggleCollapsePanelTarget(target) {
+    if (!target) return;
+
+    if (window.bootstrap?.Collapse) {
+        window.bootstrap.Collapse.getOrCreateInstance(target, { toggle: false }).toggle();
+        return;
+    }
+
+    target.classList.toggle("show");
+    financeSetCollapsePanelHeadingExpanded(target, target.classList.contains("show"));
+}
+
+function setupCoreCollapsePanelStateSync(target) {
+    if (!target || target.dataset.collapsePanelStateReady === "true") {
+        return;
+    }
+
+    target.dataset.collapsePanelStateReady = "true";
+    financeSetCollapsePanelHeadingExpanded(target, target.classList.contains("show"));
+    target.addEventListener("shown.bs.collapse", () => financeSetCollapsePanelHeadingExpanded(target, true));
+    target.addEventListener("hidden.bs.collapse", () => financeSetCollapsePanelHeadingExpanded(target, false));
+}
+
+function setupCoreFilterPanelHeaderToggles(root = document) {
+    root.querySelectorAll(financeCollapsePanelHeaderSelector).forEach((header) => {
+        if (header.dataset.collapsePanelHeaderReady === "true") {
+            return;
+        }
+
+        const target = financeCollapseTargetForToggle(header);
+        if (!target) return;
+        setupCoreCollapsePanelStateSync(target);
+
+        header.dataset.collapsePanelHeaderReady = "true";
+        header.addEventListener("click", (event) => {
+            const headingToggle = event.target.closest(financeCollapsePanelHeadingSelector);
+            const interactiveElement = event.target.closest(financeCollapsePanelHeaderInteractiveSelector);
+            if (interactiveElement && !headingToggle?.contains(interactiveElement)) {
+                return;
+            }
+
+            financeToggleCollapsePanelTarget(target);
+        });
+    });
+
+    root.querySelectorAll(financeCollapsePanelHeadingSelector).forEach((heading) => {
+        if (heading.dataset.collapsePanelHeadingReady === "true") {
+            return;
+        }
+
+        const target = financeCollapseTargetForToggle(heading);
+        if (!target) return;
+        setupCoreCollapsePanelStateSync(target);
+
+        heading.dataset.collapsePanelHeadingReady = "true";
+        heading.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") {
+                return;
+            }
+
+            event.preventDefault();
+            financeToggleCollapsePanelTarget(target);
+        });
+    });
+}
+
+function setupCoreCollapseToggleLabels(root = document) {
+    root.querySelectorAll("[data-collapse-label-toggle]").forEach((button) => {
+        if (button.dataset.collapseLabelReady === "true") {
+            return;
+        }
+
+        button.dataset.collapseLabelReady = "true";
+        const targetSelector = button.getAttribute("data-bs-target") || button.getAttribute("href");
+        const target = targetSelector ? document.querySelector(targetSelector) : null;
+        const icon = button.querySelector("[data-collapse-toggle-icon]");
+        const label = button.querySelector("[data-collapse-toggle-label]");
+        const showLabel = button.dataset.showLabel || "Show";
+        const hideLabel = button.dataset.hideLabel || "Hide";
+
+        if (!target || !label) {
+            return;
+        }
+
+        target.addEventListener("show.bs.collapse", () => {
+            label.textContent = hideLabel;
+            icon?.classList.replace("bi-chevron-down", "bi-chevron-up");
+        });
+        target.addEventListener("hide.bs.collapse", () => {
+            label.textContent = showLabel;
+            icon?.classList.replace("bi-chevron-up", "bi-chevron-down");
+        });
+    });
+}
+
 window.financeApp.registerInitializer("core.tooltips", setupTooltips);
 window.financeApp.registerInitializer("core.auto-show-modals", setupAutoShowModals);
+window.financeApp.registerInitializer("core.filter-panel-header-toggles", setupCoreFilterPanelHeaderToggles);
+window.financeApp.registerInitializer("core.collapse-toggle-labels", setupCoreCollapseToggleLabels);
 
 setupTooltips();
 setupAutoShowModals();
+setupCoreFilterPanelHeaderToggles();
+setupCoreCollapseToggleLabels();
 
 function escapeHtml(value) {
     return String(value ?? "")

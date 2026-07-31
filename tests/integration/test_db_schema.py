@@ -1,7 +1,8 @@
 """Tests for Core database schema behavior."""
 
 import pytest
-from sqlalchemy import CheckConstraint, create_engine, insert, inspect, select, text
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, create_engine, insert, inspect, select, text
+from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import IntegrityError
 
 from finance_app.core.constants import (
@@ -41,13 +42,22 @@ from finance_app.database.tables import (
     merchants as merchants_table,
 )
 from finance_app.database.tables import (
+    pinned_reports as pinned_reports_table,
+)
+from finance_app.database.tables import (
     recurring_patterns as recurring_patterns_table,
+)
+from finance_app.database.tables import (
+    reimbursement_allocations as reimbursement_allocations_table,
 )
 from finance_app.database.tables import (
     reimbursement_expense_completions as reimbursement_expense_completions_table,
 )
 from finance_app.database.tables import (
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
+    tags as tags_table,
 )
 from finance_app.database.tables import (
     transactions as transactions_table,
@@ -123,6 +133,43 @@ def create_legacy_statements_table_without_date_order(conn):
             """))
 
 
+def create_current_schema_engine():
+    """Create an in-memory database with the current Core schema."""
+    engine = create_engine("sqlite://")
+    metadata.create_all(engine)
+    return engine
+
+
+class ReflectedConstraintInspector:
+    """Provide selected reflected schema details for validation-helper tests."""
+
+    def __init__(self, *, checks=(), foreign_keys=()):
+        self.checks = list(checks)
+        self.foreign_keys = list(foreign_keys)
+
+    def get_check_constraints(self, table_name):
+        """Return configured reflected check constraints."""
+        del table_name
+        return self.checks
+
+    def get_foreign_keys(self, table_name):
+        """Return configured reflected foreign keys."""
+        del table_name
+        return self.foreign_keys
+
+
+def replace_table(engine, table_name, create_sql, *, indexes=()):
+    """Replace one current table with caller-supplied DDL for validation tests."""
+    with engine.connect() as conn:
+        conn.execute(text("PRAGMA foreign_keys=OFF"))
+        conn.execute(text(f"DROP TABLE {table_name}"))
+        conn.execute(text(create_sql))
+        for index_sql in indexes:
+            conn.execute(text(index_sql))
+        conn.execute(text("PRAGMA foreign_keys=ON"))
+        conn.commit()
+
+
 def assert_table_uses_allowed_values(table_name, column_name, values):
     """Verify a constrained table column derives its CHECK values from constants."""
     constraints = {
@@ -131,6 +178,43 @@ def assert_table_uses_allowed_values(table_name, column_name, values):
         if isinstance(constraint, CheckConstraint)
     }
     assert allowed_values_check_sql(column_name, values) in constraints
+
+
+def reflected_mysql_check_constraints(table):
+    """Return MySQL-style reflected check rows from Core metadata."""
+    dialect = mysql.dialect()
+    constraints = []
+    for constraint in table.constraints:
+        if not isinstance(constraint, CheckConstraint):
+            continue
+        sqltext = connection_module.compile_sql(constraint.sqltext, dialect)
+        sqltext = sqltext.replace(" != ", " <> ").replace(", ", ",")
+        constraints.append(
+            {
+                "name": dialect.identifier_preparer.format_constraint(constraint),
+                "sqltext": f"({sqltext})",
+            }
+        )
+    return constraints
+
+
+def reflected_mysql_foreign_keys(table):
+    """Return MySQL-style reflected foreign-key rows from Core metadata."""
+    dialect = mysql.dialect()
+    foreign_keys = []
+    for constraint in table.constraints:
+        if not isinstance(constraint, ForeignKeyConstraint):
+            continue
+        foreign_keys.append(
+            {
+                "name": dialect.identifier_preparer.format_constraint(constraint),
+                "constrained_columns": [element.parent.name for element in constraint.elements],
+                "referred_table": constraint.elements[0].column.table.name,
+                "referred_columns": [element.column.name for element in constraint.elements],
+                "options": {"ondelete": constraint.elements[0].ondelete},
+            }
+        )
+    return foreign_keys
 
 
 def test_core_schema_has_no_retired_tables(schema_conn):
@@ -205,6 +289,28 @@ def test_users_enforce_single_owner_role(schema_conn):
     )
 
 
+def test_visible_names_enforce_normalized_uniqueness(schema_conn):
+    """Verify user-visible names are unique after lower-case trimming."""
+    cases = (
+        (accounts_table, {"name": "Schema Visa"}, {"name": " schema visa "}),
+        (
+            statement_types_table,
+            {"name": "Schema card import"},
+            {"name": " schema CARD import "},
+        ),
+        (categories_table, {"name": "Schema Food"}, {"name": " schema food "}),
+        (tags_table, {"name": "Schema Audit"}, {"name": " schema audit "}),
+    )
+
+    for table, first_values, duplicate_values in cases:
+        schema_conn.execute(insert(table).values(**first_values))
+        schema_conn.commit()
+
+        with pytest.raises(IntegrityError):
+            schema_conn.execute(insert(table).values(**duplicate_values))
+        schema_conn.rollback()
+
+
 def test_init_core_db_rejects_legacy_statements_table_without_date_order():
     """Verify startup refuses an outdated schema instead of patching it."""
     engine = create_engine("sqlite://")
@@ -231,13 +337,353 @@ def test_init_core_db_rejects_retired_schema_tables():
         engine.dispose()
 
 
+def test_schema_validation_accepts_mysql_reflected_check_sql_and_truncated_names():
+    """Verify MySQL/MariaDB reflection spelling does not create false schema errors."""
+    issues = {}
+    dialect = mysql.dialect()
+    inspector = ReflectedConstraintInspector(
+        checks=reflected_mysql_check_constraints(recurring_patterns_table),
+    )
+
+    connection_module.validate_check_constraints(
+        issues,
+        inspector,
+        dialect,
+        recurring_patterns_table.name,
+        recurring_patterns_table,
+    )
+
+    assert issues == {}
+
+
+def test_schema_validation_accepts_mysql_reflected_foreign_key_truncation():
+    """Verify MySQL-reflected truncated foreign-key names match Core metadata."""
+    issues = {}
+    dialect = mysql.dialect()
+    inspector = ReflectedConstraintInspector(
+        foreign_keys=reflected_mysql_foreign_keys(reimbursement_allocations_table),
+    )
+
+    connection_module.validate_foreign_keys(
+        issues,
+        inspector,
+        dialect,
+        reimbursement_allocations_table.name,
+        reimbursement_allocations_table,
+    )
+
+    assert issues == {}
+
+
+def test_schema_validation_normalizes_mysql_generated_columns_and_defaults():
+    """Verify generated SQL and timestamp defaults compare across MySQL reflection."""
+    assert connection_module.sql_fragments_match("lower(trim(name))", "(lcase(trim(`name`)))")
+    assert connection_module.sql_fragments_match(
+        "short_title IS NULL OR length(trim(short_title)) <= 30",
+        "`short_title` is null or octet_length(trim(`short_title`)) <= 30",
+    )
+    assert connection_module.normalize_default(text("CURRENT_TIMESTAMP")) == connection_module.normalize_default(
+        "current_timestamp()"
+    )
+
+
+def test_init_core_db_rejects_column_compatible_schema_missing_unique_constraints():
+    """Verify startup rejects an existing schema missing deduplication uniqueness."""
+    engine = create_current_schema_engine()
+    try:
+        replace_table(
+            engine,
+            "transactions",
+            """
+            CREATE TABLE transactions (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                statement_id INTEGER,
+                account_id INTEGER,
+                merchant_id INTEGER,
+                tx_date VARCHAR(10) NOT NULL,
+                description VARCHAR(512) NOT NULL,
+                amount NUMERIC(14, 2) NOT NULL,
+                category VARCHAR(255),
+                category_id INTEGER,
+                needs_review INTEGER NOT NULL DEFAULT 0,
+                category_source VARCHAR(32) NOT NULL DEFAULT 'unknown',
+                category_confidence FLOAT,
+                category_rule_id INTEGER,
+                category_metadata TEXT,
+                categorized_at VARCHAR(32),
+                reviewed_at VARCHAR(32),
+                ignored INTEGER NOT NULL DEFAULT 0,
+                transaction_kind VARCHAR(32) NOT NULL DEFAULT 'expense',
+                fingerprint VARCHAR(255) NOT NULL,
+                created_at VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_transactions_statement_id_statements
+                    FOREIGN KEY(statement_id) REFERENCES statements (id),
+                CONSTRAINT fk_transactions_account_id_accounts
+                    FOREIGN KEY(account_id) REFERENCES accounts (id),
+                CONSTRAINT fk_transactions_merchant_id_merchants
+                    FOREIGN KEY(merchant_id) REFERENCES merchants (id) ON DELETE SET NULL,
+                CONSTRAINT fk_transactions_category_id_categories
+                    FOREIGN KEY(category_id) REFERENCES categories (id) ON DELETE SET NULL,
+                CONSTRAINT fk_transactions_category_rule_id_category_rules
+                    FOREIGN KEY(category_rule_id) REFERENCES category_rules (id) ON DELETE SET NULL,
+                CONSTRAINT ck_transactions_transactions_description_non_empty
+                    CHECK (trim(description) != ''),
+                CONSTRAINT ck_transactions_transactions_needs_review_bool
+                    CHECK (needs_review IN (0, 1)),
+                CONSTRAINT ck_transactions_transactions_ignored_bool
+                    CHECK (ignored IN (0, 1)),
+                CONSTRAINT ck_transactions_transactions_transaction_kind_allowed
+                    CHECK (transaction_kind IN ('expense', 'income', 'payment', 'refund', 'transfer')),
+                CONSTRAINT ck_transactions_transactions_category_source_allowed
+                    CHECK (category_source IN ('ai', 'history', 'manual', 'rule', 'unknown')),
+                CONSTRAINT ck_transactions_transactions_category_confidence_probability
+                    CHECK (
+                        category_confidence IS NULL
+                        OR (category_confidence >= 0 AND category_confidence <= 1)
+                    )
+            )
+            """,
+        )
+
+        with pytest.raises(RuntimeError, match="transactions.uq_transactions_fingerprint"):
+            connection_module.init_core_db(engine)
+    finally:
+        engine.dispose()
+
+
+def test_init_core_db_rejects_column_compatible_schema_missing_check_constraints():
+    """Verify startup rejects an existing schema missing allocation guards."""
+    engine = create_current_schema_engine()
+    try:
+        replace_table(
+            engine,
+            "reimbursement_allocations",
+            """
+            CREATE TABLE reimbursement_allocations (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                reimbursement_transaction_id INTEGER NOT NULL,
+                expense_transaction_id INTEGER NOT NULL,
+                amount NUMERIC(14, 2) NOT NULL,
+                created_at VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_reimbursement_allocations_pair
+                    UNIQUE (reimbursement_transaction_id, expense_transaction_id),
+                CONSTRAINT fk_reimbursement_allocations_reimbursement_transaction_id_transactions
+                    FOREIGN KEY(reimbursement_transaction_id) REFERENCES transactions (id) ON DELETE CASCADE,
+                CONSTRAINT fk_reimbursement_allocations_expense_transaction_id_transactions
+                    FOREIGN KEY(expense_transaction_id) REFERENCES transactions (id) ON DELETE CASCADE
+            )
+            """,
+            indexes=(
+                """
+                CREATE INDEX idx_reimbursement_allocations_reimbursement
+                ON reimbursement_allocations (reimbursement_transaction_id)
+                """,
+                """
+                CREATE INDEX idx_reimbursement_allocations_expense
+                ON reimbursement_allocations (expense_transaction_id)
+                """,
+            ),
+        )
+
+        with pytest.raises(RuntimeError, match="reimbursement_allocations_amount_positive"):
+            connection_module.init_core_db(engine)
+    finally:
+        engine.dispose()
+
+
+def test_init_core_db_rejects_foreign_keys_with_wrong_delete_behavior():
+    """Verify startup rejects an existing schema missing required FK cascades."""
+    engine = create_current_schema_engine()
+    try:
+        replace_table(
+            engine,
+            "reimbursement_expense_completions",
+            """
+            CREATE TABLE reimbursement_expense_completions (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                expense_transaction_id INTEGER NOT NULL,
+                created_at VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_reimbursement_expense_completions_expense UNIQUE (expense_transaction_id),
+                CONSTRAINT fk_reimbursement_expense_completions_expense_transaction_id_transactions FOREIGN KEY(expense_transaction_id) REFERENCES transactions (id)
+            )
+            """,
+            indexes=(
+                """
+                CREATE INDEX idx_reimbursement_expense_completions_expense
+                ON reimbursement_expense_completions (expense_transaction_id)
+                """,
+            ),
+        )
+
+        with pytest.raises(RuntimeError, match="foreign key mismatches"):
+            connection_module.init_core_db(engine)
+    finally:
+        engine.dispose()
+
+
+def test_init_core_db_rejects_missing_generated_columns():
+    """Verify startup rejects ordinary columns where generated keys are required."""
+    engine = create_current_schema_engine()
+    try:
+        replace_table(
+            engine,
+            "users",
+            """
+            CREATE TABLE users (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                username VARCHAR(150) NOT NULL,
+                username_key VARCHAR(150),
+                display_name VARCHAR(150) NOT NULL,
+                password_hash TEXT NOT NULL,
+                role VARCHAR(32) NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                owner_role_key INTEGER GENERATED ALWAYS AS (
+                    CASE WHEN role = 'owner' THEN 1 ELSE NULL END
+                ) STORED,
+                must_change_password INTEGER NOT NULL DEFAULT 0,
+                created_at VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at VARCHAR(32) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_login_at VARCHAR(32),
+                failed_login_count INTEGER NOT NULL DEFAULT 0,
+                locked_until VARCHAR(32),
+                CONSTRAINT uq_users_username UNIQUE (username),
+                CONSTRAINT uq_users_username_key UNIQUE (username_key),
+                CONSTRAINT uq_users_single_owner UNIQUE (owner_role_key),
+                CONSTRAINT ck_users_users_username_non_empty CHECK (trim(username) != ''),
+                CONSTRAINT ck_users_users_display_name_non_empty CHECK (trim(display_name) != ''),
+                CONSTRAINT ck_users_users_role_allowed CHECK (role IN ('editor', 'owner', 'viewer')),
+                CONSTRAINT ck_users_users_is_active_bool CHECK (is_active IN (0, 1)),
+                CONSTRAINT ck_users_users_must_change_password_bool CHECK (must_change_password IN (0, 1)),
+                CONSTRAINT ck_users_users_failed_login_count_non_negative CHECK (failed_login_count >= 0)
+            )
+            """,
+            indexes=(
+                "CREATE INDEX idx_users_role_active ON users (role, is_active)",
+                "CREATE INDEX idx_users_locked_until ON users (locked_until)",
+            ),
+        )
+
+        with pytest.raises(RuntimeError, match="users.username_key generated expression"):
+            connection_module.init_core_db(engine)
+    finally:
+        engine.dispose()
+
+
+def test_init_core_db_rejects_missing_explicit_indexes():
+    """Verify startup rejects an existing schema missing current query indexes."""
+    engine = create_current_schema_engine()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("DROP INDEX idx_transactions_date"))
+
+        with pytest.raises(RuntimeError, match="transactions.idx_transactions_date"):
+            connection_module.init_core_db(engine)
+    finally:
+        engine.dispose()
+
+
 def test_core_schema_creates_category_tag_tables(schema_conn):
     """Verify Core metadata creates taxonomy and merchant identity tables."""
     tables = set(inspect(schema_conn).get_table_names())
 
     assert {"tags", "transaction_tags", "category_rule_tags"}.issubset(tables)
+    assert "builtin_key" in column_names(schema_conn, "tags")
     assert "merchants" in tables
     assert "merchant_aliases" not in tables
+
+
+def test_core_schema_creates_user_owned_pinned_reports(schema_conn):
+    """Verify pinned report views are owned rows with bounded display metadata."""
+    tables = set(inspect(schema_conn).get_table_names())
+    columns = column_names(schema_conn, "pinned_reports")
+    foreign_keys = foreign_key_triplets(schema_conn, "pinned_reports")
+
+    assert "pinned_reports" in tables
+    assert {
+        "user_id",
+        "report_type",
+        "target_kind",
+        "target_category_id",
+        "target_tag_id",
+        "target_account_id",
+        "target_merchant_id",
+        "period",
+        "date_from",
+        "date_to",
+        "measure",
+        "basis",
+        "account_filter_id",
+        "merchant_filter_id",
+        "merchant_query",
+        "classification_scope",
+        "category_filters",
+        "tag_filters",
+        "fingerprint",
+        "sort_order",
+        "short_title",
+        "created_at",
+    }.issubset(columns)
+    assert ("user_id", "users", "id") in foreign_keys
+    assert ("target_category_id", "categories", "id") in foreign_keys
+    assert ("target_tag_id", "tags", "id") in foreign_keys
+    assert ("target_account_id", "accounts", "id") in foreign_keys
+    assert ("target_merchant_id", "merchants", "id") in foreign_keys
+
+    schema_conn.execute(
+        insert(users_table).values(
+            username="PinOwner",
+            display_name="Pin owner",
+            password_hash="hash",
+            role=USER_ROLE_OWNER,
+        )
+    )
+    user_id = schema_conn.execute(select(users_table.c.id).where(users_table.c.username == "PinOwner")).scalar_one()
+    schema_conn.execute(
+        insert(pinned_reports_table).values(
+            user_id=user_id,
+            report_type="overview",
+            period="year_to_date",
+            measure="spending",
+            basis="cash_flow",
+            classification_scope="categorized",
+            fingerprint="schema-pin",
+            sort_order=0,
+        )
+    )
+    schema_conn.commit()
+
+    with pytest.raises(IntegrityError):
+        schema_conn.execute(
+            insert(pinned_reports_table).values(
+                user_id=user_id,
+                report_type="overview",
+                period="year_to_date",
+                measure="spending",
+                basis="cash_flow",
+                classification_scope="categorized",
+                fingerprint="schema-pin",
+                sort_order=1,
+            )
+        )
+    schema_conn.rollback()
+
+    with pytest.raises(IntegrityError):
+        schema_conn.execute(
+            insert(pinned_reports_table).values(
+                user_id=user_id,
+                report_type="overview",
+                period="year_to_date",
+                measure="spending",
+                basis="cash_flow",
+                classification_scope="categorized",
+                fingerprint="schema-pin-title",
+                sort_order=0,
+                short_title="x" * 31,
+            )
+        )
+    schema_conn.rollback()
 
 
 def test_core_schema_text_constraints_match_shared_constants(schema_conn):
@@ -276,6 +722,7 @@ def test_core_schema_tracks_statement_import_state(schema_conn):
         "import_finished_at",
         "interac_direction",
         "date_order",
+        "import_token",
         "imported_count",
         "skipped_count",
         "ignored_count",
@@ -521,14 +968,15 @@ def test_recurring_patterns_enforce_merchant_type_uniqueness(schema_conn):
 
 def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
     """Verify category rename preserves stable IDs and updates cached labels."""
-    income_id = category_id(schema_conn, "Income")
+    schema_conn.execute(insert(categories_table).values(name="Custom income"))
+    income_id = category_id(schema_conn, "Custom income")
     schema_conn.execute(
         insert(transactions_table).values(
             tx_date="2026-01-01",
             description="PAYROLL",
             amount=-100,
             category_id=income_id,
-            category="Income",
+            category="Custom income",
             fingerprint="tx-income",
         )
     )
@@ -536,11 +984,11 @@ def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
         insert(category_rules_table).values(
             keyword="PAYROLL",
             category_id=income_id,
-            category="Income",
+            category="Custom income",
         )
     )
 
-    assert rename_category(schema_conn, "Income", "Earnings") == "Earnings"
+    assert rename_category(schema_conn, "Custom income", "Earnings") == "Earnings"
 
     category = (
         schema_conn.execute(
@@ -574,6 +1022,8 @@ def test_rename_category_preserves_stable_id_and_refreshes_cache(schema_conn):
 
 def test_builtin_categories_are_seeded_and_protected(schema_conn):
     """Verify built-in categories use stable keys and cannot be renamed."""
+    income_id = category_id(schema_conn, "Income")
+    rental_id = category_id(schema_conn, "Rental")
     unknown_id = category_id(schema_conn, "UNKNOWN")
     reimbursement_id = category_id(schema_conn, "Reimbursement")
     transfers_id = category_id(schema_conn, "Transfers")
@@ -585,13 +1035,30 @@ def test_builtin_categories_are_seeded_and_protected(schema_conn):
                 categories_table.c.id,
                 categories_table.c.name,
                 categories_table.c.builtin_key,
-            ).where(categories_table.c.id.in_((unknown_id, reimbursement_id, transfers_id)))
+            ).where(categories_table.c.id.in_((income_id, rental_id, unknown_id, reimbursement_id, transfers_id)))
         ).mappings()
     }
+    assert rows["Income"]["builtin_key"] == "income"
+    assert rows["Rental"]["builtin_key"] == "rental"
     assert rows["UNKNOWN"]["builtin_key"] == "unknown"
     assert rows["Reimbursement"]["builtin_key"] == "reimbursement"
     assert rows["Transfers"]["builtin_key"] == "transfers"
+    assert rename_category(schema_conn, "Income", "Earnings") is None
+    assert rename_category(schema_conn, "Rental", "Rental property") is None
     assert rename_category(schema_conn, "UNKNOWN", "UNCATEGORIZED") is None
     assert rename_category(schema_conn, "Reimbursement", "Repayments") is None
     assert rename_category(schema_conn, "Transfers", "Balance movement") is None
     assert get_unknown_category(schema_conn) == "UNKNOWN"
+
+
+def test_builtin_tags_are_seeded_with_stable_keys(schema_conn):
+    """Verify built-in tags use stable keys."""
+    rows = {
+        row["name"]: row["builtin_key"]
+        for row in schema_conn.execute(
+            select(tags_table.c.name, tags_table.c.builtin_key).where(tags_table.c.builtin_key.is_not(None))
+        ).mappings()
+    }
+
+    assert rows["Reimbursable"] == "reimbursable"
+    assert rows["Tax"] == "tax"

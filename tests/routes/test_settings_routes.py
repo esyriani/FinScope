@@ -27,6 +27,8 @@ def settings_form_data(conn, **overrides):
         "comparison_max_years": "3",
         "comparison_insight_card_limit": "5",
         "home_top_category_limit": "7",
+        "dashboard_top_driver_limit": "6",
+        "pinned_report_limit": "4",
         "merchant_table_limit": "11",
         "merchant_suggestion_limit": "4",
         "rule_preview_limit": "9",
@@ -82,7 +84,14 @@ def test_settings_page_uses_dark_theme_by_default(client):
     assert_has_element(response, "input", attrs={"id": "theme_mode_dark", "checked": True})
     assert_has_element(response, "input", attrs={"id": "confirm_ai_token_usage_enabled", "checked": True})
     assert_has_element(response, "input", attrs={"id": "comparison_insight_card_limit"})
+    assert_has_element(response, "input", attrs={"id": "comparison_insight_card_limit", "max": "12"})
+    assert_has_element(response, "input", attrs={"id": "home_top_category_limit", "max": "12"})
+    assert_has_element(response, "input", attrs={"id": "dashboard_top_driver_limit", "value": "5"})
+    assert_has_element(response, "input", attrs={"id": "dashboard_top_driver_limit", "max": "12"})
+    assert_has_element(response, "input", attrs={"id": "pinned_report_limit", "value": "4"})
+    assert_has_element(response, "input", attrs={"id": "pinned_report_limit", "max": "12"})
     assert_has_element(response, "input", attrs={"id": "merchant_suggestion_limit", "value": "5"})
+    assert_visible_text(response, "Limits", "Merchant comparison table limit")
     assert "auto_llm_categorization_enabled" not in response.get_data(as_text=True)
 
 
@@ -115,6 +124,8 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert owner_settings["comparison_max_years"] == "3"
     assert owner_settings["comparison_insight_card_limit"] == "5"
     assert owner_settings["home_top_category_limit"] == "7"
+    assert owner_settings["dashboard_top_driver_limit"] == "6"
+    assert owner_settings["pinned_report_limit"] == "4"
     assert owner_settings["merchant_table_limit"] == "11"
     assert owner_settings["merchant_suggestion_limit"] == "4"
     assert owner_settings["rule_preview_limit"] == "9"
@@ -161,6 +172,22 @@ def test_settings_post_rejects_invalid_numeric_values_without_partial_save(clien
     assert_visible_text(response, "Comparison default years must be at least 2.")
     assert get_all_settings(core_conn)["theme_mode"] == original_settings["theme_mode"]
     assert get_all_settings(core_conn)["default_table_page_size"] == original_settings["default_table_page_size"]
+    assert user_settings(core_conn) == original_user_settings
+
+
+def test_settings_post_rejects_overlarge_compact_limits(client, core_conn):
+    """Verify compact preview limits stay bounded."""
+    original_user_settings = user_settings(core_conn)
+    form = settings_form_data(core_conn, dashboard_top_driver_limit="13")
+
+    response = client.post(
+        "/settings",
+        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Dashboard top driver limit must be at most 12.")
     assert user_settings(core_conn) == original_user_settings
 
 
@@ -269,6 +296,8 @@ def test_viewer_can_only_save_own_general_settings(app, core_conn):
     assert viewer_settings["theme_mode"] == "light"
     assert viewer_settings["ui_language"] == "fr"
     assert viewer_settings["comparison_insight_card_limit"] == "5"
+    assert viewer_settings["dashboard_top_driver_limit"] == "6"
+    assert viewer_settings["pinned_report_limit"] == "4"
     assert viewer_settings["merchant_suggestion_limit"] == "4"
     assert global_settings["openai_model"] == original_global_settings["openai_model"]
     assert (

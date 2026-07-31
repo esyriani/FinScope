@@ -53,6 +53,7 @@ def test_upload_route_submits_background_import_job(client, core_conn, monkeypat
             statements.extension,
             statements.date_order,
             statements.import_status,
+            statements.import_token,
             accounts.id AS account_id,
             accounts.name AS account_name,
             statement_types.parser_type
@@ -81,6 +82,7 @@ def test_upload_route_submits_background_import_job(client, core_conn, monkeypat
         "bank_account",
         "csv",
         raw_csv.decode("utf-8"),
+        statement._mapping["import_token"],
     )
     assert submitted["undo_handler"] is upload_controller.undo_statement_upload_job
     assert submitted["undo_args"][0] == statement._mapping["id"]
@@ -353,7 +355,7 @@ def test_retry_statement_import_route_queues_existing_statement(client, core_con
 
     statement = core_conn.execute(
         text("""
-        SELECT import_status, import_error, imported_count
+        SELECT import_status, import_error, imported_count, import_token
         FROM statements
         WHERE id = :p0
         """),
@@ -361,7 +363,7 @@ def test_retry_statement_import_route_queues_existing_statement(client, core_con
     ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Retry queued.")
-    assert tuple(statement) == ("queued", None, 0)
+    assert tuple(statement)[:3] == ("queued", None, 0)
     assert len(submitted_jobs) == 1
     assert submitted_jobs[0]["label"] == "Retry import retry.csv"
     assert submitted_jobs[0]["func"] is upload_controller.import_statement_transactions_job
@@ -371,6 +373,7 @@ def test_retry_statement_import_route_queues_existing_statement(client, core_con
         "bank_account",
         "csv",
         "Date,Description,Amount\n2026-01-02,RETRY SHOP,12.34\n",
+        statement._mapping["import_token"],
     )
     assert submitted_jobs[0]["undo_handler"] is upload_controller.undo_statement_upload_job
     assert submitted_jobs[0]["undo_args"][0] == statement_id
@@ -438,7 +441,7 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
     )
     statement = core_conn.execute(
         text("""
-        SELECT import_status, imported_count
+        SELECT import_status, imported_count, import_token
         FROM statements
         WHERE id = :p0
         """),
@@ -447,7 +450,7 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
     assert response.status_code == 200
     assert_visible_text(response, "Reprocess queued.")
     assert transaction_count == 0
-    assert tuple(statement) == ("queued", 0)
+    assert tuple(statement)[:2] == ("queued", 0)
     assert submitted_jobs[0][0] == "Reprocess reprocess.csv"
     assert submitted_jobs[0][2] == (
         statement_id,
@@ -455,6 +458,7 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
         "bank_account",
         "csv",
         "Date,Description,Amount\n2026-01-02,REPROCESS SHOP,12.34\n",
+        statement._mapping["import_token"],
     )
     assert submitted_jobs[0][5]["interac_direction"] == "auto"
     assert submitted_jobs[0][5]["date_order"] == "auto"

@@ -1,6 +1,7 @@
 """Helpers for recurring."""
 
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, insert, select, update
@@ -9,7 +10,7 @@ from finance_app.core.constants import (
     RECURRING_USER_STATUS_DETECTED,
     RECURRING_USER_STATUSES,
 )
-from finance_app.core.money import rounded_money_float
+from finance_app.core.money import parse_money_text, rounded_money_float
 from finance_app.database.tables import recurring_patterns as recurring_patterns_table
 from finance_app.modules.merchants.repository import (
     find_merchant_by_id,
@@ -135,7 +136,7 @@ def upsert_recurring_pattern(
         minimum=1,
         maximum=31,
     )
-    typical_amount = normalize_optional_float(
+    typical_amount = normalize_optional_money(
         values.get("typical_amount", current.get("typical_amount")),
         minimum=0,
     )
@@ -143,7 +144,7 @@ def upsert_recurring_pattern(
         values.get("date_tolerance_days", current.get("date_tolerance_days")),
         minimum=0,
     )
-    amount_tolerance = normalize_optional_float(
+    amount_tolerance = normalize_optional_money(
         values.get("amount_tolerance", current.get("amount_tolerance")),
         minimum=0,
     )
@@ -252,14 +253,16 @@ def normalize_optional_int(value: object, minimum: int | None = None, maximum: i
     return parsed
 
 
-def normalize_optional_float(value: object, minimum: float | None = None) -> float | None:
-    """Normalize optional float."""
+def normalize_optional_money(value: object, minimum: Decimal | int | None = None) -> Decimal | None:
+    """Normalize optional persisted money values."""
     if value in (None, ""):
         return None
     try:
-        parsed = float(str(value))
+        parsed = parse_money_text(value)
     except (TypeError, ValueError):
+        return None
+    if parsed is None:
         return None
     if minimum is not None and parsed < minimum:
         return None
-    return round(parsed, 2)
+    return parsed

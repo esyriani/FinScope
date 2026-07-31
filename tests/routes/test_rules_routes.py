@@ -10,6 +10,7 @@ from tests.support.html import (
     assert_has_element,
     assert_input,
     assert_link,
+    assert_no_asset_reference,
     assert_no_element,
     assert_not_visible_text,
     assert_option,
@@ -50,12 +51,13 @@ def test_rules_create_route_persists_rule_and_tags(client, core_conn):
         """)).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Rule saved for: METRO GROCERY")
+    assert_visible_text(response, "Historical transactions were not changed.", "Review apply", "Rule detail")
     assert tuple(rule[1:]) == ("METRO GROCERY", "Food", 10.0, 20.0, "manual")
     assert get_rule_tags_by_rule_id(core_conn, [rule._mapping["id"]])[rule._mapping["id"]] == ["Tax"]
 
 
-def test_rules_create_route_requires_preview_confirmation(client, core_conn):
-    """Verify direct rule creation is blocked until preview confirmation."""
+def test_rules_create_route_allows_direct_save_without_preview_confirmation(client, core_conn):
+    """Verify direct rule creation stores the rule without audit preview."""
     response = client.post(
         "/rules/create",
         data={
@@ -68,8 +70,8 @@ def test_rules_create_route_requires_preview_confirmation(client, core_conn):
     rule = core_conn.execute(text("SELECT id FROM category_rules WHERE keyword = 'METRO GROCERY'")).fetchone()
 
     assert response.status_code == 200
-    assert_visible_text(response, "Preview creation before saving a rule.")
-    assert rule is None
+    assert_visible_text(response, "Rule saved for: METRO GROCERY", "Historical transactions were not changed.")
+    assert rule is not None
 
 
 def test_rules_route_renders_automatic_source_badge(client, core_conn):
@@ -102,18 +104,25 @@ def test_rules_route_formats_created_timestamp(client, core_conn):
     assert created_at not in body
 
 
-def test_rules_route_links_to_rule_audit(client):
+def test_rules_route_links_to_rule_audit(client, core_conn):
     """Verify the rules page links bulk actions through the audit page."""
+    insert_rule(core_conn, keyword="EXPORT PAGE", category="Food")
+
     response = client.get("/rules")
 
     assert response.status_code == 200
-    assert_link(response, "/rules/audit", text="Rule audit")
+    assert_link(response, "/rules/audit", text="Rule health check")
+    assert_link(response, "/rules/export.csv", text="Export rules")
     assert_form(response, "/rules/audit/preview")
-    assert_has_element(response, "a", attrs={"data-busy-message": "Loading rule audit..."})
-    assert_has_element(response, "form", attrs={"data-busy-message": "Preparing rule audit preview..."})
+    assert_has_element(response, "a", attrs={"data-busy-message": "Loading rule health check..."})
+    assert_has_element(response, "form", attrs={"data-busy-message": "Preparing rule health check preview..."})
+    assert_has_element(response, "table", attrs={"data-rules-table": True, "data-no-export": True})
+    assert_no_asset_reference(response, "js/exports.js")
+    assert_no_asset_reference(response, "css/exports.css")
+    assert_form(response, "/rules/create")
     assert_input(response, name="action", value="apply_all_rules")
     assert_input(response, name="action", value="create_rule")
-    assert_visible_text(response, "Preview apply all", "Preview import", "Preview create")
+    assert_visible_text(response, "Preview apply all", "Preview import", "Review impact", "Save rule")
 
 
 def test_rules_route_uses_direct_delete_for_unapplied_rules(client, core_conn):
@@ -164,7 +173,7 @@ def test_rules_route_renders_scope_selector_for_merchant_bound_rule(client, core
     response = client.get("/rules")
 
     assert response.status_code == 200
-    assert_visible_text(response, "Match scope", "Merchant only", "Fuzzy keyword", "COSTCO RENEWAL")
+    assert_visible_text(response, "Match scope", "Merchant only", "Approximate keyword", "COSTCO RENEWAL")
 
 
 def test_rules_modals_render_category_and_tag_description_tooltips(client):
@@ -317,12 +326,13 @@ def test_rules_update_route_replaces_rule_values_and_tags(client, core_conn):
     rule = rule_by_id(core_conn, rule_id)
     assert response.status_code == 200
     assert_visible_text(response, "Rule updated.")
+    assert_visible_text(response, "Historical transactions were not changed.", "Review apply", "Rule detail")
     assert tuple(rule[1:]) == ("HYDRO QUEBEC", "Utilities", 25.0, 50.0, "manual", 0)
     assert get_rule_tags_by_rule_id(core_conn, [rule_id])[rule_id] == ["Government", "Tax"]
 
 
-def test_rules_update_route_requires_preview_confirmation(client, core_conn):
-    """Verify direct rule updates are blocked until preview confirmation."""
+def test_rules_update_route_allows_direct_save_without_preview_confirmation(client, core_conn):
+    """Verify direct rule updates save without audit preview."""
     rule_id = insert_rule(core_conn, keyword="OLD STORE", category="Food")
 
     response = client.post(
@@ -337,8 +347,8 @@ def test_rules_update_route_requires_preview_confirmation(client, core_conn):
 
     rule = rule_by_id(core_conn, rule_id)
     assert response.status_code == 200
-    assert_visible_text(response, "Preview changes before updating a rule.")
-    assert tuple(rule[1:]) == ("OLD STORE", "Food", None, None, "manual", 0)
+    assert_visible_text(response, "Rule updated.", "Historical transactions were not changed.")
+    assert tuple(rule[1:]) == ("HYDRO QUEBEC", "Utilities", None, None, "manual", 0)
 
 
 def test_rules_update_route_can_change_merchant_bound_rule_to_fuzzy(client, core_conn):

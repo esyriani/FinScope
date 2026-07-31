@@ -4,6 +4,7 @@ from typing import Any
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
+from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 from werkzeug.datastructures import FileStorage
 
 from finance_app.background.runner import submit_background_job
@@ -36,6 +37,8 @@ from finance_app.modules.upload import workflow as upload_workflow
 from finance_app.modules.upload.repository import (
     create_uploaded_statement,
     delete_statement_transactions,
+    new_statement_import_token,
+    reset_statement_import_state,
     statement_by_checksum,
     statement_extension,
     statement_import_row,
@@ -92,17 +95,7 @@ def handle_statement_upload() -> ResponseReturnValue:
         existing = statement_by_checksum(conn, checksum)
 
         if existing:
-            flash(
-                gettext(
-                    (
-                        "This statement was already uploaded as {filename} on {uploaded_at} "
-                        "({status}). Use Retry import or Reprocess from Uploaded statements."
-                    ),
-                    filename=existing["filename"],
-                    uploaded_at=existing["uploaded_at"],
-                    status=existing["import_status"],
-                )
-            )
+            flash_duplicate_statement(existing)
             return redirect(url_for("upload.upload"))
 
         extension = get_file_extension(filename)
@@ -134,18 +127,30 @@ def handle_statement_upload() -> ResponseReturnValue:
             account_type=account_type,
             paid_from_account_name=paid_from_value,
         )
-        statement_id = create_uploaded_statement(
-            conn,
-            account["id"],
-            statement_type["id"],
-            filename,
-            checksum,
-            extension,
-            interac_direction,
-            date_order,
-            raw_text,
-        )
-        upload_workflow.reset_statement_import_state(conn, statement_id)
+        try:
+            with conn.begin_nested():
+                statement_id = create_uploaded_statement(
+                    conn,
+                    account["id"],
+                    statement_type["id"],
+                    filename,
+                    checksum,
+                    extension,
+                    interac_direction,
+                    date_order,
+                    raw_text,
+                )
+        except SqlAlchemyIntegrityError:
+            existing = statement_by_checksum(conn, checksum)
+            if existing is None:
+                raise
+            flash_duplicate_statement(existing)
+            return redirect(url_for("upload.upload"))
+
+        import_token = new_statement_import_token()
+        if not reset_statement_import_state(conn, statement_id, import_token):
+            flash(gettext("This statement import is already queued or running."))
+            return redirect(url_for("upload.upload"))
 
     job_id = submit_statement_import_job(
         statement_id,
@@ -155,13 +160,14 @@ def handle_statement_upload() -> ResponseReturnValue:
         extension,
         raw_text,
         filename,
+        import_token,
         interac_direction=interac_direction,
         date_order=date_order,
     )
 
     flash(
         gettext(
-            "Statement queued for background import and categorization. Track progress on the Jobs page. Job: {job_id}",
+            "Statement queued for background import and categorization. Track progress on the Processing page. Job: {job_id}",
             job_id=job_id[:8],
         )
     )
@@ -234,6 +240,21 @@ def preview_error(message: str, status_code: int = 400) -> ResponseReturnValue:
     return jsonify({"ok": False, "message": message}), status_code
 
 
+def flash_duplicate_statement(statement: Any) -> None:
+    """Show the standard duplicate statement upload message."""
+    flash(
+        gettext(
+            (
+                "This statement was already uploaded as {filename} on {uploaded_at} "
+                "({status}). Use Retry import or Reprocess from Uploaded statements."
+            ),
+            filename=statement["filename"],
+            uploaded_at=statement["uploaded_at"],
+            status=statement["import_status"],
+        )
+    )
+
+
 @upload_bp.route("/upload/<int:statement_id>/retry", methods=["POST"])
 @permission_required(PERMISSION_IMPORT_STATEMENTS)
 def retry_statement_import(statement_id: int) -> ResponseReturnValue:
@@ -277,9 +298,9 @@ def categorize_statement_unknowns(statement_id: int) -> ResponseReturnValue:
     flash(
         gettext(
             (
-                "AI categorization queued for {count} unknown transaction. Track progress on the Jobs page. Job: {job_id}"
+                "AI categorization queued for {count} unknown transaction. Track progress on the Processing page. Job: {job_id}"
                 if unknown_count == 1
-                else "AI categorization queued for {count} unknown transactions. Track progress on the Jobs page. Job: {job_id}"
+                else "AI categorization queued for {count} unknown transactions. Track progress on the Processing page. Job: {job_id}"
             ),
             count=unknown_count,
             job_id=job_id[:8],
@@ -342,11 +363,15 @@ def queue_existing_statement_import(statement_id: int, reprocess: bool = False) 
             flash(gettext("This statement has no stored text to import."))
             return redirect(next_url)
 
+        extension = statement_extension(statement)
+        import_token = new_statement_import_token()
+        queued = reset_statement_import_state(conn, statement_id, import_token)
+        if not queued:
+            flash(gettext("This statement import is already queued or running."))
+            return redirect(next_url)
+
         if reprocess:
             delete_statement_transactions(conn, statement_id)
-
-        extension = statement_extension(statement)
-        upload_workflow.reset_statement_import_state(conn, statement_id)
 
     job_id = submit_statement_import_job(
         statement_id,
@@ -356,13 +381,14 @@ def queue_existing_statement_import(statement_id: int, reprocess: bool = False) 
         extension,
         raw_text,
         statement["filename"],
+        import_token,
         label_prefix="Reprocess" if reprocess else "Retry import",
         interac_direction=statement["interac_direction"],
         date_order=statement["date_order"],
     )
     flash(
         gettext(
-            "{action} queued. Track progress on the Jobs page. Job: {job_id}",
+            "{action} queued. Track progress on the Processing page. Job: {job_id}",
             action=gettext("Reprocess" if reprocess else "Retry"),
             job_id=job_id[:8],
         )
@@ -378,6 +404,7 @@ def submit_statement_import_job(
     extension: str,
     raw_text: str,
     filename: str,
+    import_token: str,
     label_prefix: str = "Import",
     interac_direction: str = INTERAC_DIRECTION_AUTO,
     date_order: str = DATE_ORDER_AUTO,
@@ -394,6 +421,7 @@ def submit_statement_import_job(
         parser_type,
         extension,
         raw_text,
+        import_token,
         import_mode=import_mode,
         interac_direction=interac_direction,
         date_order=date_order,

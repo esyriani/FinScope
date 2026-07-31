@@ -24,11 +24,37 @@ EXPECTED_TABLE_COLUMNS = {
         "locked_until",
     ],
     "user_settings": ["user_id", "key", "value", "updated_at"],
+    "pinned_reports": [
+        "id",
+        "user_id",
+        "report_type",
+        "target_kind",
+        "target_category_id",
+        "target_tag_id",
+        "target_account_id",
+        "target_merchant_id",
+        "period",
+        "date_from",
+        "date_to",
+        "measure",
+        "basis",
+        "account_filter_id",
+        "merchant_filter_id",
+        "merchant_query",
+        "classification_scope",
+        "category_filters",
+        "tag_filters",
+        "fingerprint",
+        "sort_order",
+        "short_title",
+        "created_at",
+    ],
     "audit_log": ["id", "user_id", "username", "action", "details", "ip_address", "created_at"],
-    "accounts": ["id", "name", "account_type", "paid_from_account_id"],
+    "accounts": ["id", "name", "name_key", "account_type", "paid_from_account_id"],
     "statement_types": [
         "id",
         "name",
+        "name_key",
         "parser_type",
         "import_mode",
         "default_account_type",
@@ -46,6 +72,7 @@ EXPECTED_TABLE_COLUMNS = {
         "date_order",
         "raw_text",
         "import_status",
+        "import_token",
         "import_error",
         "import_started_at",
         "import_finished_at",
@@ -55,7 +82,7 @@ EXPECTED_TABLE_COLUMNS = {
         "llm_candidate_count",
         "uploaded_at",
     ],
-    "categories": ["id", "name", "builtin_key", "description", "instruction", "created_at"],
+    "categories": ["id", "name", "name_key", "builtin_key", "description", "instruction", "created_at"],
     "merchants": [
         "id",
         "merchant_key",
@@ -117,7 +144,7 @@ EXPECTED_TABLE_COLUMNS = {
         "created_at",
         "updated_at",
     ],
-    "tags": ["id", "name", "description", "instruction", "color", "created_at"],
+    "tags": ["id", "name", "name_key", "builtin_key", "description", "instruction", "color", "created_at"],
     "transaction_tags": ["transaction_id", "tag_id", "source", "rule_id", "assigned_at"],
     "reimbursement_allocations": [
         "id",
@@ -148,6 +175,8 @@ EXPECTED_EXPLICIT_INDEXES = {
     "idx_category_rules_merchant",
     "idx_category_rules_source_approval",
     "idx_merchants_key",
+    "idx_pinned_reports_user_order",
+    "idx_pinned_reports_user_type",
     "idx_recurring_patterns_status",
     "idx_reimbursement_allocations_expense",
     "idx_reimbursement_allocations_reimbursement",
@@ -187,8 +216,19 @@ EXPECTED_UNIQUE_CONSTRAINTS = {
         "uq_users_username_key": ["username_key"],
         "uq_users_single_owner": ["owner_role_key"],
     },
+    "accounts": {
+        "uq_accounts_name_key": ["name_key"],
+    },
+    "statement_types": {
+        "uq_statement_types_name_key": ["name_key"],
+    },
     "categories": {
+        "uq_categories_name_key": ["name_key"],
         "uq_categories_builtin_key": ["builtin_key"],
+    },
+    "tags": {
+        "uq_tags_name_key": ["name_key"],
+        "uq_tags_builtin_key": ["builtin_key"],
     },
     "category_rules": {
         "uq_category_rules_keyword_amount": [
@@ -217,6 +257,9 @@ EXPECTED_UNIQUE_CONSTRAINTS = {
     },
     "reimbursement_expense_completions": {
         "uq_reimbursement_expense_completions_expense": ["expense_transaction_id"],
+    },
+    "pinned_reports": {
+        "uq_pinned_reports_user_fingerprint": ["user_id", "fingerprint"],
     },
 }
 
@@ -290,9 +333,12 @@ def test_core_metadata_uses_fixed_scale_numeric_for_money_columns():
 def test_core_metadata_uses_typed_date_and_timestamp_columns():
     """Verify date and timestamp metadata uses SQLAlchemy type decorators."""
     date_columns = [
+        metadata.tables["pinned_reports"].c.date_from,
+        metadata.tables["pinned_reports"].c.date_to,
         metadata.tables["transactions"].c.tx_date,
     ]
     timestamp_columns = [
+        metadata.tables["pinned_reports"].c.created_at,
         metadata.tables["statement_types"].c.created_at,
         metadata.tables["categories"].c.created_at,
         metadata.tables["merchants"].c.created_at,
@@ -356,6 +402,9 @@ def test_core_metadata_compiles_portable_uniqueness_for_mysql_and_postgresql():
         assert "keyword_scope_key" in normalized
         assert "amount_min_key" in normalized
         assert "amount_max_key" in normalized
+        assert "name_key" in normalized
+        assert "uq_categories_name_key" in normalized
+        assert "uq_tags_name_key" in normalized
         assert "idx_recurring_patterns_merchant_type" not in normalized
         assert "idx_category_rules_keyword_amount_unique" not in normalized
         assert "idx_category_rules_merchant_amount_unique" not in normalized

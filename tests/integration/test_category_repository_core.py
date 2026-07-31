@@ -1,5 +1,7 @@
 """SQLAlchemy Core tests for category repository helpers."""
 
+from decimal import Decimal
+
 from sqlalchemy import insert, select
 
 from finance_app.core.constants import CATEGORY_RULE_SOURCE_AUTOMATIC
@@ -112,6 +114,41 @@ def test_category_repository_category_helpers_support_core_connections(app, core
     )
     assert category["name"] == "Pet supplies"
     assert "Pet supplies" in get_category_options()
+
+
+def test_category_rule_amounts_are_quantized_at_repository_boundary(core_conn):
+    """Verify rule persistence stores and returns fixed-scale Decimal bounds."""
+    rule_id = save_category_rule(
+        core_conn,
+        "ROUNDING STORE",
+        "Food",
+        amount_min="2.675",
+        amount_max="3.335",
+    )
+    core_conn.commit()
+
+    persisted = core_conn.execute(
+        select(category_rules_table.c.amount_min, category_rules_table.c.amount_max).where(
+            category_rules_table.c.id == rule_id
+        )
+    ).fetchone()
+    rule = next(rule for rule in get_category_rules(core_conn) if rule["id"] == rule_id)
+
+    assert tuple(persisted) == (Decimal("2.68"), Decimal("3.34"))
+    assert rule["amount_min"] == Decimal("2.68")
+    assert rule["amount_max"] == Decimal("3.34")
+
+
+def test_category_repository_resolves_by_database_name_key(app, core_conn):
+    """Resolve and rename categories through the generated normalized name key."""
+    del app
+
+    with db_core_transaction() as conn:
+        assert create_category(conn, "Case Study") == "Case Study"
+        category_id = resolve_category_id(conn, " case study ")
+        assert category_id == resolve_category_id(conn, "CASE STUDY")
+        assert rename_category(conn, "case study", "Case Studies") == "Case Studies"
+        assert resolve_category_id(conn, " case STUDIES ") == category_id
 
 
 def test_category_rename_updates_manual_rule_and_rule_applied_rows(app, core_conn):

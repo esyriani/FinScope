@@ -6,10 +6,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from finance_app.core.constants import PROJECT_DIR
+from finance_app.core.constants import BASE_DIR, PROJECT_DIR
+from finance_app.core.setting_limits import (
+    COMPARISON_INSIGHT_CARD_LIMIT_MAX,
+    DASHBOARD_TOP_DRIVER_LIMIT_MAX,
+    HOME_TOP_CATEGORY_LIMIT_MAX,
+    PINNED_REPORT_LIMIT_MAX,
+)
 
-CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(PROJECT_DIR) / "config.ini"))
-EXAMPLE_CONFIG_PATH = Path(PROJECT_DIR) / "config.example.ini"
+CONFIG_PATH = Path(os.environ.get("FINANCE_CONFIG_FILE", Path(BASE_DIR) / "config.ini"))
+EXAMPLE_CONFIG_PATH = Path(BASE_DIR) / "config.example.ini"
 DEVELOPMENT_SECRET_KEY = "dev-secret-key"
 LOCAL_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
@@ -39,6 +45,8 @@ class AppSettings:
     default_comparison_max_years: int
     default_comparison_insight_card_limit: int
     default_home_top_category_limit: int
+    default_dashboard_top_driver_limit: int
+    default_pinned_report_limit: int
     default_merchant_table_limit: int
     default_merchant_suggestion_limit: int
     default_rule_preview_limit: int
@@ -63,19 +71,25 @@ class AppSettings:
 
 def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
     """Load settings."""
+    config_path = Path(config_path)
     parser = ConfigParser()
     parser.read(EXAMPLE_CONFIG_PATH, encoding="utf-8")
     parser.read(config_path, encoding="utf-8")
 
+    database_path_env = os.environ.get("FINANCE_DB_PATH")
     database_path_setting = env(
         "FINANCE_DB_PATH",
-        parser.get("database", "path", fallback="finance.db"),
+        parser.get("database", "path", fallback="runtime/finscope.db"),
     )
     database_url = env(
         "FINANCE_DATABASE_URL",
         parser.get("database", "url", fallback=""),
     )
-    database_path = sqlite_path_from_database_url(database_url) or resolve_path(database_path_setting)
+    database_path_base = None if database_path_env is not None else config_path_base_dir(config_path)
+    database_path = sqlite_path_from_database_url(database_url) or resolve_path(
+        database_path_setting,
+        base_dir=database_path_base,
+    )
     database_url = database_url.strip() or sqlite_database_url(database_path)
 
     allowed_extensions = {
@@ -97,7 +111,7 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
     locale = env("FINANCE_LOCALE", parser.get("app", "locale", fallback="en_CA"))
 
     return AppSettings(
-        config_path=Path(config_path),
+        config_path=config_path,
         secret_key=secret_key,
         timezone=env("FINANCE_TIMEZONE", parser.get("app", "timezone", fallback="America/Toronto")),
         locale=locale,
@@ -135,19 +149,45 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
             ),
             2,
         ),
-        default_comparison_insight_card_limit=parse_positive_int(
-            env(
-                "FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT",
-                parser.get("setting_defaults", "comparison_insight_card_limit", fallback="7"),
+        default_comparison_insight_card_limit=min(
+            COMPARISON_INSIGHT_CARD_LIMIT_MAX,
+            parse_positive_int(
+                env(
+                    "FINANCE_DEFAULT_COMPARISON_INSIGHT_CARD_LIMIT",
+                    parser.get("setting_defaults", "comparison_insight_card_limit", fallback="7"),
+                ),
+                7,
             ),
-            7,
         ),
-        default_home_top_category_limit=parse_positive_int(
-            env(
-                "FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT",
-                parser.get("setting_defaults", "home_top_category_limit", fallback="5"),
+        default_home_top_category_limit=min(
+            HOME_TOP_CATEGORY_LIMIT_MAX,
+            parse_positive_int(
+                env(
+                    "FINANCE_DEFAULT_HOME_TOP_CATEGORY_LIMIT",
+                    parser.get("setting_defaults", "home_top_category_limit", fallback="5"),
+                ),
+                5,
             ),
-            5,
+        ),
+        default_dashboard_top_driver_limit=min(
+            DASHBOARD_TOP_DRIVER_LIMIT_MAX,
+            parse_positive_int(
+                env(
+                    "FINANCE_DEFAULT_DASHBOARD_TOP_DRIVER_LIMIT",
+                    parser.get("setting_defaults", "dashboard_top_driver_limit", fallback="5"),
+                ),
+                5,
+            ),
+        ),
+        default_pinned_report_limit=min(
+            PINNED_REPORT_LIMIT_MAX,
+            parse_positive_int(
+                env(
+                    "FINANCE_DEFAULT_PINNED_REPORT_LIMIT",
+                    parser.get("setting_defaults", "pinned_report_limit", fallback="4"),
+                ),
+                4,
+            ),
         ),
         default_merchant_table_limit=parse_positive_int(
             env(
@@ -370,14 +410,20 @@ def parse_non_negative_float(value: object, fallback: float) -> float:
     return parsed if parsed >= 0 else fallback
 
 
-def resolve_path(value: str | Path) -> Path:
-    """Resolve a filesystem path relative to the project root."""
+def config_path_base_dir(config_path: Path) -> Path:
+    """Return the base directory for paths read from app config files."""
+    return config_path.parent if config_path.exists() else EXAMPLE_CONFIG_PATH.parent
+
+
+def resolve_path(value: str | Path, base_dir: str | Path | None = None) -> Path:
+    """Resolve a filesystem path relative to a base directory or project root."""
     path = Path(value).expanduser()
 
     if path.is_absolute():
-        return path
+        return path.resolve()
 
-    return Path(PROJECT_DIR) / path
+    root = Path(base_dir) if base_dir is not None else Path(PROJECT_DIR)
+    return (root / path).resolve()
 
 
 settings = load_settings()
