@@ -39,7 +39,7 @@ def test_parse_amount_bounds_rejects_invalid_numbers():
 
 
 def test_parse_rules_csv_normalizes_headers_tags_and_amount_range():
-    """Verify that imported rule CSV rows accept legacy-style column names."""
+    """Verify that imported rule CSV rows accept alternate column names."""
     raw_text = "\n".join(
         [
             "Merchant,Category,Rule Tags,Amount,Source,Created",
@@ -299,7 +299,7 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
     """Verify override import replaces rules, clears refs, and can be undone."""
     original_rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
-        VALUES ('OLD STORE', 'Utilities', 'manual')
+        VALUES ('EXISTING STORE', 'Utilities', 'manual')
         """)).lastrowid
     tx_id = core_conn.execute(
         text("""
@@ -311,7 +311,7 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
             category_rule_id,
             fingerprint
         )
-        VALUES ('2026-01-02', 'OLD STORE', 12.34, 'Utilities', :p0, 'override-ref')
+        VALUES ('2026-01-02', 'EXISTING STORE', 12.34, 'Utilities', :p0, 'override-ref')
         """),
         {"p0": original_rule_id},
     ).lastrowid
@@ -358,7 +358,7 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
         text("SELECT category_rule_id FROM transactions WHERE id = :p0"), {"p0": tx_id}
     ).fetchone()
     assert undo_message == ("Restored 1 rule from before import. " "Restored rule references on 1 transaction.")
-    assert [tuple(row) for row in restored_rules] == [(original_rule_id, "OLD STORE", "Utilities")]
+    assert [tuple(row) for row in restored_rules] == [(original_rule_id, "EXISTING STORE", "Utilities")]
     assert restored_tx._mapping["category_rule_id"] == original_rule_id
 
 
@@ -366,7 +366,7 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
     """Verify override-mode import preview reports replacement impact only."""
     first_rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
-        VALUES ('OLD STORE', 'Utilities', 'manual')
+        VALUES ('EXISTING STORE', 'Utilities', 'manual')
         """)).lastrowid
     core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
@@ -382,7 +382,7 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
             category_rule_id,
             fingerprint
         )
-        VALUES ('2026-01-02', 'OLD STORE', 12.34, 'Utilities', :p0, 'preview-override-ref')
+        VALUES ('2026-01-02', 'EXISTING STORE', 12.34, 'Utilities', :p0, 'preview-override-ref')
         """),
         {"p0": first_rule_id},
     ).lastrowid
@@ -411,7 +411,7 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
     assert preview.replaced_rules == 2
     assert preview.cleared_transaction_rule_refs == 1
     assert len(preview.proposed_rules) == 1
-    assert [row["keyword"] for row in rules_after_preview] == ["OLD STORE", "OTHER STORE"]
+    assert [row["keyword"] for row in rules_after_preview] == ["EXISTING STORE", "OTHER STORE"]
     assert tx_after_preview._mapping["category_rule_id"] == first_rule_id
 
 
@@ -419,7 +419,7 @@ def test_undo_rules_override_import_rejects_changed_rules(core_conn):
     """Verify override undo refuses to discard rule edits made after import."""
     core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
-        VALUES ('OLD STORE', 'Utilities', 'manual')
+        VALUES ('EXISTING STORE', 'Utilities', 'manual')
         """))
     core_conn.commit()
     undo_state = {}
@@ -444,7 +444,7 @@ def test_undo_rules_override_import_rejects_imported_rule_references(core_conn):
     """Verify override undo refuses when transactions now reference imported rules."""
     core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
-        VALUES ('OLD STORE', 'Utilities', 'manual')
+        VALUES ('EXISTING STORE', 'Utilities', 'manual')
         """))
     tx_id = core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)

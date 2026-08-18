@@ -172,7 +172,7 @@ def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(clie
         "Date,Description,Amount\n2026-01-03,Smoke Grocery #777,45.67\n",
     )
 
-    transactions_page = client.get("/transactions?period=all&category=Food")
+    transactions_page = client.get("/transactions?period=all&categories=Food")
     body = transactions_page.get_data(as_text=True)
 
     assert rule_response.status_code == 200

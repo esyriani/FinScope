@@ -683,7 +683,7 @@ def test_statement_import_queue_claim_prevents_duplicate_retry_reprocess(core_co
             category,
             fingerprint
         )
-        VALUES (:p0, :p1, '2026-01-01', 'OLD RACE SHOP', 5.00, 'UNKNOWN', 'retry-reprocess-race-old')
+        VALUES (:p0, :p1, '2026-01-01', 'REPLACED RACE SHOP', 5.00, 'UNKNOWN', 'retry-reprocess-race-existing')
         """),
         {"p0": statement_id, "p1": account_id},
     )

@@ -101,8 +101,8 @@ def pair_llm_results(
     llm_results: Sequence[Any],
 ) -> Iterator[tuple[MutableMapping[str, Any], Any]]:
     """Pair LLM results with the transactions they describe."""
-    # New prompts include request_id, but keep positional pairing as a fallback
-    # so older or malformed responses can still be interpreted conservatively.
+    # Prompts include request_id; positional pairing keeps malformed responses
+    # conservative when the identifier is missing.
     if llm_results and all(isinstance(result, dict) and "request_id" in result for result in llm_results):
         results_by_id = {
             str(result.get("request_id")): result for result in llm_results if result.get("request_id") is not None

@@ -495,7 +495,7 @@ def test_merchant_behavior_candidates_detect_new_merchant():
 def test_merchant_behavior_candidates_detect_dropped_merchant():
     """Verify a prior-only merchant creates a missing merchant behavior card."""
     merchant_rows = [
-        period_money_row("merchant", "OLD SUBSCRIPTION", 0.0, 120.0),
+        period_money_row("merchant", "PAUSED SUBSCRIPTION", 0.0, 120.0),
     ]
 
     insights = merchant_behavior_insight_candidates(merchant_rows)
@@ -503,8 +503,8 @@ def test_merchant_behavior_candidates_detect_dropped_merchant():
     assert [insight["insight_type"] for insight in insights] == ["merchant_dropped"]
     assert public_fields(insights[0]) == {
         "label": "Missing merchant activity",
-        "value": "OLD SUBSCRIPTION: missing this period",
-        "detail": "OLD SUBSCRIPTION had 120.00 $ in prior-period spending and is missing from the current period.",
+        "value": "PAUSED SUBSCRIPTION: missing this period",
+        "detail": "PAUSED SUBSCRIPTION had 120.00 $ in prior-period spending and is missing from the current period.",
         "visual": "aggregate",
         "group": "merchants",
         "tone": "success",
@@ -514,7 +514,7 @@ def test_merchant_behavior_candidates_detect_dropped_merchant():
         "badge": "Missing",
     }
     assert insights[0]["stat_items"] == [
-        {"label": "Merchant", "value": "OLD SUBSCRIPTION"},
+        {"label": "Merchant", "value": "PAUSED SUBSCRIPTION"},
         {"label": "Current", "value": "0.00 $"},
         {"label": "Prior", "value": "120.00 $"},
     ]

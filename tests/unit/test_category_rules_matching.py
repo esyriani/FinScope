@@ -72,7 +72,7 @@ def test_rule_amount_matching_uses_decimal_cent_boundaries():
 
 
 def test_score_category_rule_matches_returns_all_matches_and_preserves_winner():
-    """Verify all matching rules are exposed while the legacy winner is unchanged."""
+    """Verify all matching rules are exposed while the selected winner is unchanged."""
     rules = [
         category_rule(1, "METRO", tags=["Tax"]),
         category_rule(2, "METRO GROCERY", amount_min=10, amount_max=20, tags=["Shared"]),
@@ -80,13 +80,13 @@ def test_score_category_rule_matches_returns_all_matches_and_preserves_winner():
 
     matches = score_category_rule_matches("METRO GROCERY", 12.34, rules)
     winner = score_category_rule_match("METRO GROCERY", 12.34, rules)
-    legacy_rule = match_category_rule("METRO GROCERY", 12.34, rules)
+    matched_rule = match_category_rule("METRO GROCERY", 12.34, rules)
 
     assert [match.rule["id"] for match in matches] == [1, 2]
     assert matches[0].category == "Food"
     assert matches[1].tags == ("Shared",)
     assert winner.rule["id"] == 2
-    assert legacy_rule["id"] == 2
+    assert matched_rule["id"] == 2
     assert winner.specificity == rule_specificity(winner.rule)
 
 

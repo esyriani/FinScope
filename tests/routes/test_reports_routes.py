@@ -6,7 +6,7 @@ import zipfile
 from decimal import Decimal
 from urllib.parse import quote_plus
 
-from sqlalchemy import select, text
+from sqlalchemy import insert, select, text
 from tests.support.context_services import seed_entity_report_data, seed_reporting_data
 from tests.support.html import (
     assert_asset_reference,
@@ -93,10 +93,15 @@ def test_reports_overview_route_renders_read_only_analysis(client, core_conn):
 
 def test_reports_overview_csv_export_uses_active_filters_and_sanitizes_formulas(client, core_conn):
     """Verify Reports CSV exports filtered overview rows and neutralize spreadsheet formulas."""
-    core_conn.execute(text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES ('2026-04-02', 'Formula Store', 12.34, '=Injected', 'manual', 'reports-export-formula')
-        """))
+    result = core_conn.execute(insert(categories_table).values(name="=Injected"))
+    formula_category_id = result.inserted_primary_key[0]
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+        VALUES ('2026-04-02', 'Formula Store', 12.34, '=Injected', :category_id, 'manual', 'reports-export-formula')
+        """),
+        {"category_id": formula_category_id},
+    )
     core_conn.commit()
 
     response = client.get("/reports/export.csv?period=custom&date_from=2026-04-01&date_to=2026-04-30")

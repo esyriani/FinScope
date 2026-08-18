@@ -12,7 +12,7 @@ from finance_app.database.tables import tags as tags_table
 
 
 def test_taxonomy_admin_routes_are_registered_and_rules_category_routes_are_removed(app):
-    """Verify taxonomy admin routes are registered and legacy rules category routes are absent."""
+    """Verify taxonomy admin routes are registered and rule category routes are absent."""
     routes = {str(rule.rule) for rule in app.url_map.iter_rules()}
 
     assert "/taxonomy" in routes

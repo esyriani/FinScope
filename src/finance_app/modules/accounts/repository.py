@@ -7,7 +7,7 @@ Core connections bound to the application metadata.
 
 from typing import Any
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert, select
 from sqlalchemy.engine import Connection as CoreConnection
 
 from finance_app.core.constants import ACCOUNT_TYPE_CHECKING, ACCOUNT_TYPES
@@ -28,60 +28,13 @@ def normalize_account_type(value: object) -> str:
     return text if text in ACCOUNT_TYPES else ACCOUNT_TYPE_CHECKING
 
 
-def get_or_create_account(
-    conn: CoreConnection,
-    name: object,
-    account_type: object = ACCOUNT_TYPE_CHECKING,
-    paid_from_account_name: object | None = None,
-) -> Any:
-    """Return an account row, creating or updating role metadata as needed.
+def normalize_account_name(value: object) -> str:
+    """Return the persisted account display name for submitted input."""
+    return str(value or "").strip() or "Personal"
 
-    Args:
-        conn: Open SQLAlchemy Core connection. The caller owns transaction
-            commit or rollback.
-        name: Account display name. Blank values become ``Personal``.
-        account_type: Desired persisted account role.
-        paid_from_account_name: Optional funding account name for credit cards.
 
-    Returns:
-        A mapping row with ``id``, ``name``, ``account_type``, and
-        ``paid_from_account_id``.
-    """
-    require_core_connection(conn)
-
-    account_name = str(name or "").strip() or "Personal"
-    account_key = normalize_name_key(account_name)
-    normalized_account_type = normalize_account_type(account_type)
-    paid_from_id = None
-    update_paid_from = paid_from_account_name is not None
-    paid_from_name = str(paid_from_account_name or "").strip() if update_paid_from else ""
-
-    if paid_from_name and normalize_name_key(paid_from_name) != account_key:
-        paid_from_account = get_or_create_account(
-            conn,
-            paid_from_name,
-            account_type=ACCOUNT_TYPE_CHECKING,
-        )
-        paid_from_id = paid_from_account["id"]
-
-    account_id_select = select(accounts_table.c.id).where(accounts_table.c.name_key == account_key)
-    existing = conn.execute(account_id_select).mappings().fetchone()
-    if existing is None:
-        insert_or_select_unique_row(
-            conn,
-            insert(accounts_table).values(
-                name=account_name,
-                account_type=normalized_account_type,
-                paid_from_account_id=paid_from_id,
-            ),
-            account_id_select,
-        )
-
-    values: dict[str, object] = {"account_type": normalized_account_type}
-    if update_paid_from:
-        values["paid_from_account_id"] = paid_from_id
-
-    conn.execute(update(accounts_table).where(accounts_table.c.name_key == account_key).values(**values))
+def account_row_by_name_key(conn: CoreConnection, account_key: str) -> Any:
+    """Return an account row by generated normalized name key."""
     return (
         conn.execute(
             select(
@@ -94,3 +47,61 @@ def get_or_create_account(
         .mappings()
         .fetchone()
     )
+
+
+def find_account_by_name(conn: CoreConnection, name: object) -> Any:
+    """Return an existing account row by normalized display name."""
+    require_core_connection(conn)
+    return account_row_by_name_key(conn, normalize_name_key(normalize_account_name(name)))
+
+
+def get_or_create_account(
+    conn: CoreConnection,
+    name: object,
+    account_type: object = ACCOUNT_TYPE_CHECKING,
+    paid_from_account_name: object | None = None,
+) -> Any:
+    """Return an account row, creating one when no matching name key exists.
+
+    Args:
+        conn: Open SQLAlchemy Core connection. The caller owns transaction
+            commit or rollback.
+        name: Account display name. Blank values become ``Personal``.
+        account_type: Persisted account role for newly created rows.
+        paid_from_account_name: Optional funding account name for credit cards.
+
+    Returns:
+        A mapping row with ``id``, ``name``, ``account_type``, and
+        ``paid_from_account_id``.
+    """
+    require_core_connection(conn)
+
+    account_name = normalize_account_name(name)
+    account_key = normalize_name_key(account_name)
+    existing = account_row_by_name_key(conn, account_key)
+    if existing is not None:
+        return existing
+
+    normalized_account_type = normalize_account_type(account_type)
+    paid_from_id = None
+    paid_from_name = str(paid_from_account_name or "").strip() if paid_from_account_name is not None else ""
+
+    if paid_from_name and normalize_name_key(paid_from_name) != account_key:
+        paid_from_account = get_or_create_account(
+            conn,
+            paid_from_name,
+            account_type=ACCOUNT_TYPE_CHECKING,
+        )
+        paid_from_id = paid_from_account["id"]
+
+    account_id_select = select(accounts_table.c.id).where(accounts_table.c.name_key == account_key)
+    insert_or_select_unique_row(
+        conn,
+        insert(accounts_table).values(
+            name=account_name,
+            account_type=normalized_account_type,
+            paid_from_account_id=paid_from_id,
+        ),
+        account_id_select,
+    )
+    return account_row_by_name_key(conn, account_key)

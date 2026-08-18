@@ -78,7 +78,7 @@ def build_home_context() -> Any:
     The Home page is a lightweight operational read model. It keeps financial
     pulse metrics scoped to the current year while attention and activity items
     use active records across the ledger so unresolved work does not disappear
-    merely because it is older than the current reporting period.
+    merely because it belongs to an earlier reporting period.
     """
     with db_core_transaction() as conn:
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY

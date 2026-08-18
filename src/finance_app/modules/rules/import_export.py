@@ -130,7 +130,7 @@ def export_rules_csv(conn: Any = None) -> str:
 
 
 def format_export_amount(value: MoneyValue | None) -> str:
-    """Return the legacy CSV amount representation for optional rule bounds."""
+    """Return the CSV amount text for optional rule bounds."""
     return "" if value is None else str(money_to_float(value))
 
 
@@ -468,7 +468,7 @@ def undo_rules_override_import(undo_state: Mapping[str, Any]) -> str:
     with db_core_transaction() as conn:
         current_rules = snapshot_category_rules(conn)
         # Override undo is intentionally strict: if rule state changed after
-        # import, restoring the old snapshot would discard later user edits.
+        # import, restoring the prior snapshot would discard later user edits.
         if not rule_snapshots_equal(current_rules, after_rules):
             raise ValueError("Cannot undo this rules import because rules changed after the import job.")
 

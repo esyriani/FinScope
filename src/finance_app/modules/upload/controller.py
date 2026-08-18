@@ -18,7 +18,8 @@ from finance_app.core.constants import (
 )
 from finance_app.core.i18n import gettext
 from finance_app.database.engine import db_core_transaction
-from finance_app.modules.accounts.repository import get_or_create_account, normalize_account_type
+from finance_app.database.tables import normalize_name_key
+from finance_app.modules.accounts.repository import find_account_by_name, get_or_create_account, normalize_account_type
 from finance_app.modules.auth.permissions import PERMISSION_IMPORT_STATEMENTS, permission_required
 from finance_app.modules.categories.llm_token_confirmation import ai_token_estimate_confirmed
 from finance_app.modules.categories.llm_token_presenter import localize_token_estimate_result
@@ -120,15 +121,27 @@ def handle_statement_upload() -> ResponseReturnValue:
         account_type = normalize_account_type(
             request.form.get("account_type") or statement_type["default_account_type"]
         )
+        if account_upload_metadata_conflicts(conn, account_name, account_type, paid_from_account_name):
+            flash(
+                gettext(
+                    (
+                        'Account "{account}" already exists with different reporting settings. '
+                        "Use the existing settings or choose a different account name."
+                    ),
+                    account=account_name,
+                )
+            )
+            return redirect(url_for("upload.upload"))
+
         paid_from_value = (paid_from_account_name or None) if account_type == ACCOUNT_TYPE_CREDIT_CARD else ""
-        account = get_or_create_account(
-            conn,
-            account_name,
-            account_type=account_type,
-            paid_from_account_name=paid_from_value,
-        )
         try:
             with conn.begin_nested():
+                account = get_or_create_account(
+                    conn,
+                    account_name,
+                    account_type=account_type,
+                    paid_from_account_name=paid_from_value,
+                )
                 statement_id = create_uploaded_statement(
                     conn,
                     account["id"],
@@ -172,6 +185,33 @@ def handle_statement_upload() -> ResponseReturnValue:
         )
     )
     return redirect(url_for("upload.upload"))
+
+
+def account_upload_metadata_conflicts(
+    conn: Any,
+    account_name: str,
+    account_type: str,
+    paid_from_account_name: str,
+) -> bool:
+    """Return whether upload metadata conflicts with an existing account row."""
+    existing_account = find_account_by_name(conn, account_name)
+    if existing_account is None:
+        return False
+
+    if existing_account["account_type"] != account_type:
+        return True
+
+    if account_type != ACCOUNT_TYPE_CREDIT_CARD or not paid_from_account_name:
+        return False
+
+    if normalize_name_key(paid_from_account_name) == normalize_name_key(account_name):
+        return existing_account["paid_from_account_id"] is not None
+
+    paid_from_account = find_account_by_name(conn, paid_from_account_name)
+    if paid_from_account is None:
+        return True
+
+    return existing_account["paid_from_account_id"] != paid_from_account["id"]
 
 
 @upload_bp.route("/upload/preview", methods=["POST"])

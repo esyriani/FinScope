@@ -10,6 +10,7 @@ from tests.support.jobs import capture_background_jobs
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.upload import controller as upload_controller
 
 
@@ -36,6 +37,116 @@ def test_upload_route_rejects_missing_file_without_statement_insert(client, core
     statement_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM statements")).fetchone()._mapping["count"]
     assert response.status_code == 200
     assert_visible_text(response, "Please choose a statement file.")
+    assert statement_count == 0
+
+
+def test_upload_route_rejects_existing_account_role_mismatch(client, core_conn):
+    """Verify uploads cannot silently rewrite an existing account role."""
+    account_id = core_conn.execute(text("""
+        INSERT INTO accounts (name, account_type)
+        VALUES ('Travel card', 'credit_card')
+        """)).lastrowid
+    statement_type_id = core_conn.execute(text("""
+        SELECT id
+        FROM statement_types
+        WHERE active = 1
+        ORDER BY id
+        LIMIT 1
+        """)).fetchone()._mapping["id"]
+    core_conn.commit()
+
+    response = client.post(
+        "/upload",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": " travel CARD ",
+            "account_type": "checking",
+            "statement_type_id": str(statement_type_id),
+            "statement": (io.BytesIO(b"Date,Description,Amount\n2026-01-02,Cafe,4.56\n"), "travel.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    account = (
+        core_conn.execute(
+            text("SELECT account_type, paid_from_account_id FROM accounts WHERE id = :account_id"),
+            {"account_id": account_id},
+        )
+        .fetchone()
+        ._mapping
+    )
+    statement_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM statements")).fetchone()._mapping["count"]
+
+    assert response.status_code == 200
+    assert_visible_text(
+        response,
+        'Account "travel CARD" already exists with different reporting settings. '
+        "Use the existing settings or choose a different account name.",
+    )
+    assert account["account_type"] == "credit_card"
+    assert account["paid_from_account_id"] is None
+    assert statement_count == 0
+
+
+def test_upload_route_rejects_existing_account_funding_mismatch(client, core_conn):
+    """Verify uploads cannot silently rewrite a credit-card funding account."""
+    main_checking_id = core_conn.execute(text("""
+        INSERT INTO accounts (name, account_type)
+        VALUES ('Main checking', 'checking')
+        """)).lastrowid
+    core_conn.execute(text("""
+        INSERT INTO accounts (name, account_type)
+        VALUES ('Other checking', 'checking')
+        """))
+    card_id = core_conn.execute(
+        text("""
+        INSERT INTO accounts (name, account_type, paid_from_account_id)
+        VALUES ('Travel card', 'credit_card', :paid_from_account_id)
+        """),
+        {"paid_from_account_id": main_checking_id},
+    ).lastrowid
+    statement_type_id = core_conn.execute(text("""
+        SELECT id
+        FROM statement_types
+        WHERE parser_type = 'credit_card'
+        ORDER BY id
+        LIMIT 1
+        """)).fetchone()._mapping["id"]
+    core_conn.commit()
+
+    response = client.post(
+        "/upload",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(client),
+            "account_name": "Travel card",
+            "account_type": "credit_card",
+            "paid_from_account_name": "Other checking",
+            "statement_type_id": str(statement_type_id),
+            "statement": (io.BytesIO(b"Date,Description,Amount\n2026-01-02,Cafe,4.56\n"), "travel.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    card = (
+        core_conn.execute(
+            text("SELECT account_type, paid_from_account_id FROM accounts WHERE id = :card_id"),
+            {"card_id": card_id},
+        )
+        .fetchone()
+        ._mapping
+    )
+    statement_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM statements")).fetchone()._mapping["count"]
+
+    assert response.status_code == 200
+    assert_visible_text(
+        response,
+        'Account "Travel card" already exists with different reporting settings. '
+        "Use the existing settings or choose a different account name.",
+    )
+    assert card["account_type"] == "credit_card"
+    assert card["paid_from_account_id"] == main_checking_id
     assert statement_count == 0
 
 
@@ -94,9 +205,10 @@ def test_upload_route_renders_statement_detail_modal(client, core_conn):
             description,
             amount,
             category,
+            category_id,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, 'Food', :p5)
+        VALUES (:p0, :p1, :p2, :p3, :p4, 'Food', :category_id, :p5)
         """),
         [
             {
@@ -105,6 +217,7 @@ def test_upload_route_renders_statement_detail_modal(client, core_conn):
                 "p2": "2026-01-02",
                 "p3": "Corner store",
                 "p4": 12.34,
+                "category_id": resolve_category_id(core_conn, "Food"),
                 "p5": "statement-detail-1",
             },
             {
@@ -113,6 +226,7 @@ def test_upload_route_renders_statement_detail_modal(client, core_conn):
                 "p2": "2026-01-03",
                 "p3": "Cafe",
                 "p4": 4.56,
+                "category_id": resolve_category_id(core_conn, "Food"),
                 "p5": "statement-detail-2",
             },
         ],
@@ -538,15 +652,23 @@ def test_upload_route_handles_racing_duplicate_statement_checksum(client, core_c
         "/upload",
         data={
             CSRF_FIELD_NAME: set_csrf_token(client),
-            "account_name": "Personal",
+            "account_name": "Race duplicate account",
+            "account_type": "credit_card",
+            "paid_from_account_name": "Race duplicate checking",
             "statement_type_id": str(statement_type_id),
             "statement": (io.BytesIO(b"Date,Description,Amount\n"), "duplicate.csv"),
         },
         content_type="multipart/form-data",
         follow_redirects=True,
     )
+    account_count = core_conn.execute(text("""
+                SELECT COUNT(*) AS count
+                FROM accounts
+                WHERE name IN ('Race duplicate account', 'Race duplicate checking')
+                """)).fetchone()._mapping["count"]
 
     assert response.status_code == 200
     assert lookups["count"] == 2
     assert len(submitted_jobs) == 0
+    assert account_count == 0
     assert_visible_text(response, "This statement was already uploaded as race.csv on 2026-05-11T12:00:00Z")

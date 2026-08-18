@@ -301,7 +301,7 @@ def test_owner_user_management_and_last_owner_guard(client, core_conn):
 
 
 def test_owner_can_hand_off_ownership_to_active_user(client, core_conn):
-    """Verify ownership hand-off promotes one user and demotes the old owner."""
+    """Verify ownership hand-off promotes one user and demotes the previous owner."""
     create_response = client.post(
         "/admin/users/create",
         data={

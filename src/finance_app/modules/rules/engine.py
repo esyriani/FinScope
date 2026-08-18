@@ -425,7 +425,7 @@ def apply_all_rules_to_transactions(conn: Any, capture_undo: bool = False) -> An
             category_id=state.category_id,
         )
         if capture_undo:
-            undo_changes.append(TransactionCategoryChange(row["id"], old_state, new_state).to_undo_dict())
+            undo_changes.append(TransactionCategoryChange(row["id"], old_state, new_state).to_undo_record())
 
         update_transaction_state(conn, row["id"], state, transaction_kind)
         set_transaction_tags(

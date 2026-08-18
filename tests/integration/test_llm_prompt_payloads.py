@@ -136,6 +136,7 @@ def test_build_llm_prompt_minimizes_evidence_and_keeps_compact_candidate_taxonom
     transaction = payload["transactions"][0]
     payload_text = json.dumps(payload)
 
+    assert "examples" not in payload
     assert [row["name"] for row in payload["taxonomy"]["categories"]] == ["Food", "UNKNOWN", "Utilities"]
     assert [row["name"] for row in payload["taxonomy"]["tags"]] == ["Government", "Tax"]
     assert transaction["amount_direction"] == "debit"

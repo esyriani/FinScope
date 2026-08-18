@@ -39,7 +39,7 @@ class NormalizedMerchant:
 
     @property
     def cleaned_key(self) -> str:
-        """Return the deterministic merchant key for legacy callers."""
+        """Return the deterministic merchant key."""
         return self.merchant_key
 
 

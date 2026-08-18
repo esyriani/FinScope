@@ -263,7 +263,7 @@ def test_rules_route_filters_by_category(client, core_conn):
     insert_rule(core_conn, keyword="METRO FOOD", category="Food")
     insert_rule(core_conn, keyword="HYDRO UTILITIES", category="Utilities")
 
-    response = client.get("/rules?category=Utilities")
+    response = client.get("/rules?categories=Utilities")
 
     assert response.status_code == 200
     assert_visible_text(response, "HYDRO UTILITIES")
@@ -307,7 +307,7 @@ def test_rules_create_route_rejects_invalid_form(client, core_conn):
 
 def test_rules_update_route_replaces_rule_values_and_tags(client, core_conn):
     """Verify that the update route changes rule fields and associated tags."""
-    rule_id = insert_rule(core_conn, keyword="OLD STORE", category="Food")
+    rule_id = insert_rule(core_conn, keyword="EXISTING STORE", category="Food")
 
     response = client.post(
         f"/rules/{rule_id}/update",
@@ -333,7 +333,7 @@ def test_rules_update_route_replaces_rule_values_and_tags(client, core_conn):
 
 def test_rules_update_route_allows_direct_save_without_preview_confirmation(client, core_conn):
     """Verify direct rule updates save without audit preview."""
-    rule_id = insert_rule(core_conn, keyword="OLD STORE", category="Food")
+    rule_id = insert_rule(core_conn, keyword="EXISTING STORE", category="Food")
 
     response = client.post(
         f"/rules/{rule_id}/update",

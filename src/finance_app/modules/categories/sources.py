@@ -40,8 +40,7 @@ class CategoryAssignmentMetadata:
     """Represent persisted metadata for a transaction category assignment.
 
     The fields mirror the `transactions` category metadata columns. Use
-    `to_dict()` at repository or legacy workflow boundaries that still expect
-    mapping-style payloads.
+    `to_dict()` when persisting assignment metadata through repository helpers.
     """
 
     category_source: str
@@ -98,9 +97,8 @@ class TransactionCategoryState:
 class TransactionCategorySnapshot:
     """Represent category state before or after a workflow change.
 
-    Snapshots are used internally while building undo records. The background
-    job runner still receives plain dictionaries so undo payloads remain
-    compatible with existing routes and tests.
+    Snapshots are used internally while building undo records for background
+    workflow results.
     """
 
     category: str | None
@@ -154,8 +152,8 @@ class TransactionCategoryChange:
     old_state: TransactionCategorySnapshot
     new_state: TransactionCategorySnapshot
 
-    def to_undo_dict(self) -> dict[str, Any]:
-        """Return this change in the legacy background-job undo payload shape."""
+    def to_undo_record(self) -> dict[str, Any]:
+        """Return this change as a background-job undo record."""
         return {
             "transaction_id": self.transaction_id,
             **self.old_state.prefixed_dict("old"),
@@ -172,8 +170,7 @@ def category_metadata_json(metadata: object) -> str | None:
     """Return deterministic JSON text for persisted categorization evidence.
 
     Callers may pass a mapping/list payload or an already serialized JSON
-    string. Empty values are stored as NULL so legacy transactions remain
-    compact.
+    string. Empty values are stored as NULL.
     """
     if metadata is None:
         return None

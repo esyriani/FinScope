@@ -69,8 +69,8 @@ def test_evidence_decision_source_uses_controlled_values():
     assert evidence_decision_source() == DECISION_SOURCE_UNKNOWN
 
 
-def test_normalize_decision_source_maps_legacy_values():
-    """Verify old metadata values normalize to current audit source names."""
+def test_normalize_decision_source_maps_source_aliases():
+    """Verify metadata source aliases normalize to current audit source names."""
     assert normalize_decision_source("ai") == DECISION_SOURCE_LLM
     assert normalize_decision_source("history") == DECISION_SOURCE_SIMILAR_TRANSACTIONS
     assert normalize_decision_source("historical") == DECISION_SOURCE_SIMILAR_TRANSACTIONS

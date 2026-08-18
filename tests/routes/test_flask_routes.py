@@ -18,6 +18,7 @@ from tests.support.html import (
     visible_html,
 )
 
+from finance_app.modules.categories.repository import create_category, resolve_category_id
 from finance_app.modules.comparison import service as comparison_service
 from finance_app.modules.home import service as home_service
 
@@ -29,6 +30,17 @@ class FixedDate(real_date):
     def today(cls):
         """Return a deterministic current date."""
         return cls(2026, 5, 11)
+
+
+def route_transaction_params(conn, rows, columns):
+    """Return route-test transaction params with canonical category IDs."""
+    params = []
+    for row in rows:
+        values = dict(zip(columns, row))
+        create_category(conn, values["category"])
+        values["category_id"] = resolve_category_id(conn, values["category"])
+        params.append(values)
+    return params
 
 
 def test_navigation_pages_render_distinct_browser_titles(client):
@@ -331,33 +343,19 @@ def test_comparison_route_renders_complete_unknown_warning(client, core_conn, mo
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     core_conn.execute(
         text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
-        """),
-        [
-            {
-                "p0": "2026-04-02",
-                "p1": "Unknown Prior",
-                "p2": 40.00,
-                "p3": "UNKNOWN",
-                "p4": "route-comparison-unknown-prior",
-            },
-            {"p0": "2026-04-03", "p1": "Prior Grocery", "p2": 60.00, "p3": "Food", "p4": "route-comparison-food-prior"},
-            {
-                "p0": "2026-05-02",
-                "p1": "Unknown Current",
-                "p2": 70.00,
-                "p3": "UNKNOWN",
-                "p4": "route-comparison-unknown-current",
-            },
-            {
-                "p0": "2026-05-03",
-                "p1": "Current Grocery",
-                "p2": 30.00,
-                "p3": "Food",
-                "p4": "route-comparison-food-current",
-            },
-        ],
+            INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+            VALUES (:tx_date, :description, :amount, :category, :category_id, 'rule', :fingerprint)
+            """),
+        route_transaction_params(
+            core_conn,
+            [
+                ("2026-04-02", "Unknown Prior", 40.00, "UNKNOWN", "route-comparison-unknown-prior"),
+                ("2026-04-03", "Prior Grocery", 60.00, "Food", "route-comparison-food-prior"),
+                ("2026-05-02", "Unknown Current", 70.00, "UNKNOWN", "route-comparison-unknown-current"),
+                ("2026-05-03", "Current Grocery", 30.00, "Food", "route-comparison-food-current"),
+            ],
+            ("tx_date", "description", "amount", "category", "fingerprint"),
+        ),
     )
     core_conn.commit()
 
@@ -390,10 +388,10 @@ def test_home_route_renders_quick_insight_cards(client, core_conn, monkeypatch):
     ]
     core_conn.execute(
         text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+        VALUES (:tx_date, :description, :amount, :category, :category_id, 'rule', :fingerprint)
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+        route_transaction_params(core_conn, rows, ("tx_date", "description", "amount", "category", "fingerprint")),
     )
     core_conn.commit()
 
@@ -428,10 +426,10 @@ def test_home_quick_insights_escape_user_data(client, core_conn, monkeypatch):
     ]
     core_conn.execute(
         text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+        VALUES (:tx_date, :description, :amount, :category, :category_id, 'rule', :fingerprint)
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+        route_transaction_params(core_conn, rows, ("tx_date", "description", "amount", "category", "fingerprint")),
     )
     core_conn.commit()
 
@@ -648,10 +646,10 @@ def test_comparison_route_renders_ranked_anomaly_insights(client, core_conn, mon
     ]
     core_conn.execute(
         text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+        VALUES (:tx_date, :description, :amount, :category, :category_id, 'rule', :fingerprint)
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+        route_transaction_params(core_conn, rows, ("tx_date", "description", "amount", "category", "fingerprint")),
     )
     core_conn.commit()
 

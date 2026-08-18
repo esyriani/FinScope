@@ -1690,6 +1690,7 @@
   "{count} unknown": "{count} inconnues",
   "AI categorization queued for {count} unknown transaction. Track progress on the Jobs page. Job: {job_id}": "Cat\u00e9gorisation par IA mise en file pour {count} transaction inconnue. Suivez la progression sur la page T\u00e2ches. T\u00e2che : {job_id}",
   "AI categorization queued for {count} unknown transactions. Track progress on the Jobs page. Job: {job_id}": "Cat\u00e9gorisation par IA mise en file pour {count} transactions inconnues. Suivez la progression sur la page T\u00e2ches. T\u00e2che : {job_id}",
+  "Account \"{account}\" already exists with different reporting settings. Use the existing settings or choose a different account name.": "Le compte \"{account}\" existe d\u00e9j\u00e0 avec des param\u00e8tres de rapport diff\u00e9rents. Utilisez les param\u00e8tres existants ou choisissez un autre nom de compte.",
   "Choose a CSV file to import.": "Choisissez un fichier CSV \u00e0 importer.",
   "Choose whether to add new rules or override existing rules.": "Choisissez s'il faut ajouter de nouvelles r\u00e8gles ou remplacer les r\u00e8gles existantes.",
   "No unknown transactions need AI categorization for this statement.": "Aucune transaction inconnue ne n\u00e9cessite une cat\u00e9gorisation par IA pour ce relev\u00e9.",

@@ -238,7 +238,7 @@ def dashboard_category_label_expression(unknown_category: str) -> Any:
 
 
 def dashboard_category_join_condition(unknown_category: str) -> Any:
-    """Return the category join condition with legacy cached-label fallback."""
+    """Return the category join condition for dashboard rows."""
     del unknown_category
     return transaction_category_join_condition()
 
@@ -359,12 +359,46 @@ def fetch_top_spending_categories(
     return fetch_spending_category_totals(conn, filters, unknown_category)[:limit]
 
 
-def fetch_spending_merchant_totals(conn: Any, filters: Sequence[Any]) -> list[dict[str, Any]]:
+def fetch_spending_merchant_totals(
+    conn: Any,
+    filters: Sequence[Any],
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
     """Fetch reportable spending totals by merchant identity for dashboard previews."""
+    rows = (
+        fetch_limited_spending_merchant_total_rows(conn, filters, limit)
+        if limit is not None
+        else fetch_spending_merchant_total_rows(conn, filters)
+    )
+    aggregates: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        identity = merchant_identity_from_row(row, conn=conn)
+        key = str(identity["key"])
+        aggregate = aggregates.setdefault(
+            key,
+            {
+                "label": identity["name"],
+                "merchant_key": identity["name"],
+                "merchant_id": identity["id"],
+                "spending": Decimal("0"),
+                "transaction_count": 0,
+            },
+        )
+        aggregate["spending"] += money_to_decimal(row["spending"])
+        aggregate["transaction_count"] += int(row["transaction_count"] or 0)
+
+    return sorted(
+        aggregates.values(),
+        key=lambda row: (-money_to_decimal(row["spending"]), str(row["label"])),
+    )
+
+
+def fetch_spending_merchant_total_rows(conn: Any, filters: Sequence[Any]) -> list[Any]:
+    """Fetch SQL merchant spending groups before fallback identity merging."""
     fallback_description = merchant_fallback_description_expression()
     spending_amount = spending_impact_amount_expression()
     spending_total = func.coalesce(func.sum(spending_amount), 0)
-    rows = (
+    return (
         conn.execute(
             select(
                 fallback_description.label("description"),
@@ -391,27 +425,66 @@ def fetch_spending_merchant_totals(conn: Any, filters: Sequence[Any]) -> list[di
         .mappings()
         .fetchall()
     )
-    aggregates: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        identity = merchant_identity_from_row(row, conn=conn)
-        key = str(identity["key"])
-        aggregate = aggregates.setdefault(
-            key,
-            {
-                "label": identity["name"],
-                "merchant_key": identity["name"],
-                "merchant_id": identity["id"],
-                "spending": Decimal("0"),
-                "transaction_count": 0,
-            },
-        )
-        aggregate["spending"] += money_to_decimal(row["spending"])
-        aggregate["transaction_count"] += int(row["transaction_count"] or 0)
 
-    return sorted(
-        aggregates.values(),
-        key=lambda row: (-money_to_decimal(row["spending"]), str(row["label"])),
+
+def fetch_limited_spending_merchant_total_rows(
+    conn: Any,
+    filters: Sequence[Any],
+    limit: int,
+) -> list[Any]:
+    """Fetch bounded durable merchant groups plus fallback groups for top previews."""
+    if limit <= 0:
+        return []
+
+    fallback_description = merchant_fallback_description_expression()
+    spending_amount = spending_impact_amount_expression()
+    spending_total = func.coalesce(func.sum(spending_amount), 0)
+    base_columns = (
+        fallback_description.label("description"),
+        transactions_table.c.merchant_id,
+        merchants_table.c.merchant_key.label("merchant_name"),
+        merchants_table.c.merchant_key.label("merchant_key"),
+        spending_total.label("spending"),
+        func.count().label("transaction_count"),
     )
+    base_from = transactions_table.outerjoin(
+        merchants_table,
+        merchants_table.c.id == transactions_table.c.merchant_id,
+    )
+    id_rows = (
+        conn.execute(
+            select(*base_columns)
+            .select_from(base_from)
+            .where(
+                non_transfer_clause(),
+                spending_impact_clause(),
+                transactions_table.c.merchant_id.is_not(None),
+                *filters,
+            )
+            .group_by(transactions_table.c.merchant_id, merchants_table.c.merchant_key, fallback_description)
+            .order_by(spending_total.desc(), merchants_table.c.merchant_key, fallback_description)
+            .limit(limit)
+        )
+        .mappings()
+        .fetchall()
+    )
+    fallback_rows = (
+        conn.execute(
+            select(*base_columns)
+            .select_from(base_from)
+            .where(
+                non_transfer_clause(),
+                spending_impact_clause(),
+                transactions_table.c.merchant_id.is_(None),
+                *filters,
+            )
+            .group_by(transactions_table.c.merchant_id, merchants_table.c.merchant_key, fallback_description)
+            .order_by(spending_total.desc(), merchants_table.c.merchant_key, fallback_description)
+        )
+        .mappings()
+        .fetchall()
+    )
+    return [*id_rows, *fallback_rows]
 
 
 def fetch_top_spending_merchants(
@@ -420,7 +493,7 @@ def fetch_top_spending_merchants(
     limit: int = 5,
 ) -> list[dict[str, Any]]:
     """Fetch the top spending merchants for the dashboard pulse."""
-    return fetch_spending_merchant_totals(conn, filters)[:limit]
+    return fetch_spending_merchant_totals(conn, filters, limit=limit)[:limit]
 
 
 def fetch_top_spending_changes(

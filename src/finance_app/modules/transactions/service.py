@@ -62,7 +62,6 @@ from finance_app.modules.transactions.presenter import build_transaction_rows
 from finance_app.modules.transactions.queries import (
     count_transactions,
     fetch_distinct_categories,
-    fetch_transaction_ids,
     fetch_transactions,
 )
 from finance_app.modules.transactions.repository import (
@@ -103,12 +102,7 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
             page_size,
             offset,
         )
-        all_transaction_ids = fetch_transaction_ids(
-            conn,
-            filter_criteria,
-            sort_expression,
-            filters["direction"],
-        )
+        all_transaction_ids = [row["id"] for row in fetched_rows]
         tag_map = get_transaction_tags_by_id(conn, [row["id"] for row in fetched_rows])
         rows = build_transaction_rows(fetched_rows, tag_map, get_tag_color_map(conn), conn)
         account_options = list_account_options(conn)

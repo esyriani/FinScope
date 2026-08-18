@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import and_, case, exists, func, or_, select, true
+from sqlalchemy import and_, case, exists, func, select, true
 
 from finance_app.core.category_sql import transaction_category_join_condition, transaction_category_label_expression
 from finance_app.core.money import money_to_decimal
@@ -88,7 +88,7 @@ def category_label_expression(unknown_category: str) -> Any:
 
 
 def category_lookup_join_condition(unknown_category: str) -> Any:
-    """Return the category join condition with legacy cached-label fallback."""
+    """Return the category join condition for report rows."""
     del unknown_category
     return transaction_category_join_condition()
 
@@ -96,14 +96,8 @@ def category_lookup_join_condition(unknown_category: str) -> Any:
 def taxonomy_target_condition(target: TaxonomyReportTarget, unknown_category: str) -> Any:
     """Return the transaction predicate for a category or tag report target."""
     if target.kind == TAXONOMY_TARGET_CATEGORY:
-        category_label = category_label_expression(unknown_category)
-        return or_(
-            transactions_table.c.category_id == target.id,
-            and_(
-                transactions_table.c.category_id.is_(None),
-                func.lower(func.trim(category_label)) == target.name.casefold(),
-            ),
-        )
+        del unknown_category
+        return transactions_table.c.category_id == target.id
     if target.kind == TAXONOMY_TARGET_TAG:
         return exists(
             select(1).where(

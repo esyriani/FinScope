@@ -10,6 +10,7 @@ from finance_app.modules.calendar import parsing as calendar_parsing
 from finance_app.modules.calendar import presenter as calendar_presenter
 from finance_app.modules.calendar import recurrence as calendar_recurrence
 from finance_app.modules.calendar import service as calendar_service
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.recurring import service as recurring_service
@@ -49,14 +50,18 @@ def seed_calendar_transactions(conn):
             description,
             amount,
             category,
+            category_id,
             ignored,
             transaction_kind,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7)
+        VALUES (:p0, :p1, :p2, :p3, :p4, :category_id, :p5, :p6, :p7)
         """),
         [
-            dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"), row))
+            {
+                **dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"), row)),
+                "category_id": resolve_category_id(conn, row[4]),
+            }
             for row in [
                 (account_id, tx_date, description, amount, category, ignored, transaction_kind, fingerprint)
                 for tx_date, description, amount, category, ignored, transaction_kind, fingerprint in rows
@@ -88,12 +93,22 @@ def seed_calendar_transactions(conn):
             description,
             amount,
             category,
+            category_id,
             transaction_kind,
             fingerprint
         )
-        VALUES (:p0, '2026-05-07', 'Savings transfer', 500.00, 'Transfers', 'transfer', 'calendar-transfer')
+        VALUES (
+            :p0,
+            '2026-05-07',
+            'Savings transfer',
+            500.00,
+            'Transfers',
+            :category_id,
+            'transfer',
+            'calendar-transfer'
+        )
         """),
-        {"p0": account_id},
+        {"p0": account_id, "category_id": resolve_category_id(conn, "Transfers")},
     )
     conn.commit()
     return account_id

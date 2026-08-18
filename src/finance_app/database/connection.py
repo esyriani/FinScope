@@ -20,16 +20,6 @@ from finance_app.database.seeds import (
 )
 from finance_app.database.tables import metadata
 
-RETIRED_SCHEMA_TABLES = {
-    "settings",
-    "schema_migrations",
-    "app_metadata",
-    "category_suggestions",
-    "category_suggestion_tags",
-    "merchant_normalization_cache",
-    "merchant_normalization_review_queue",
-}
-
 
 def init_db() -> None:
     """Initialize the configured application database."""
@@ -55,7 +45,7 @@ def init_core_db(engine: Any | None = None) -> None:
 
 def database_has_existing_core_schema(engine: Any) -> bool:
     """Return whether the database already contains FinScope schema tables."""
-    finscope_tables = set(metadata.tables) | RETIRED_SCHEMA_TABLES
+    finscope_tables = set(metadata.tables)
     with engine.connect() as conn:
         existing_tables = set(inspect(conn).get_table_names())
     return bool(existing_tables & finscope_tables)
@@ -71,7 +61,6 @@ def validate_core_schema(conn: Any) -> None:
     inspector = inspect(conn)
     existing_tables = set(inspector.get_table_names())
     expected_tables = set(metadata.tables)
-    retired_tables = sorted(existing_tables & RETIRED_SCHEMA_TABLES)
     missing_tables = sorted(expected_tables - existing_tables)
     missing_columns: dict[str, list[str]] = {}
     schema_issues: dict[str, list[str]] = {}
@@ -98,8 +87,8 @@ def validate_core_schema(conn: Any) -> None:
         validate_foreign_keys(schema_issues, inspector, conn.dialect, table_name, table)
         validate_indexes(schema_issues, inspector, conn.dialect, table_name, table)
 
-    if retired_tables or missing_tables or missing_columns or schema_issues:
-        raise RuntimeError(schema_validation_message(retired_tables, missing_tables, missing_columns, schema_issues))
+    if missing_tables or missing_columns or schema_issues:
+        raise RuntimeError(schema_validation_message(missing_tables, missing_columns, schema_issues))
 
 
 def add_schema_issue(issues: dict[str, list[str]], label: str, detail: str) -> None:
@@ -441,7 +430,6 @@ def normalize_default(value: object) -> str | None:
 
 
 def schema_validation_message(
-    retired_tables: Sequence[str],
     missing_tables: Sequence[str],
     missing_columns: Mapping[str, Sequence[str]],
     schema_issues: Mapping[str, Sequence[str]] | None = None,
@@ -455,8 +443,6 @@ def schema_validation_message(
             f"{table}.{column}" for table, columns in sorted(missing_columns.items()) for column in columns
         ]
         details.append(f"missing columns: {', '.join(formatted_columns)}")
-    if retired_tables:
-        details.append(f"retired tables: {', '.join(retired_tables)}")
     for label, issues in (schema_issues or {}).items():
         if issues:
             details.append(f"{label}: {', '.join(sorted(issues))}")

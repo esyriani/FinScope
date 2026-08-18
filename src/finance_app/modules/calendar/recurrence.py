@@ -210,8 +210,7 @@ def recurring_pattern_metadata_for_group(
     """Return matching recurring metadata for a merchant/type group.
 
     Merchant-bound metadata wins when a durable merchant exists. Keyword-fuzzy
-    metadata remains a fallback so older or intentionally fuzzy patterns still
-    influence recurrence rows after merchant identities are introduced.
+    metadata remains a fallback for patterns that intentionally stay text based.
     """
     tx_type = group["type"]
     candidates: list[tuple[str, str]] = []

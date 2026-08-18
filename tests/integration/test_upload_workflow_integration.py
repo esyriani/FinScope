@@ -407,7 +407,7 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
             category,
             fingerprint
         )
-        VALUES (:p0, :p1, '2026-01-01', 'OLD SHOP', 5.00, 'UNKNOWN', 'reprocess-old')
+        VALUES (:p0, :p1, '2026-01-01', 'REPLACED SHOP', 5.00, 'UNKNOWN', 'reprocess-existing')
         """),
         {"p0": statement_id, "p1": account_id},
     )

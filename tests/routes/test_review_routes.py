@@ -12,6 +12,7 @@ from tests.support.jobs import capture_background_jobs
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.modules.categories.repository import create_category, resolve_category_id
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.review import controller as review_controller
 from finance_app.modules.review.service import apply_review_group_job, undo_review_group_job
@@ -27,6 +28,7 @@ def insert_review_transaction(
     tags=None,
 ):
     """Insert a transaction that can be reviewed."""
+    create_category(conn, category)
     tx_id = conn.execute(
         text("""
         INSERT INTO transactions (
@@ -34,14 +36,22 @@ def insert_review_transaction(
             description,
             amount,
             category,
+            category_id,
             category_source,
             category_confidence,
             needs_review,
             fingerprint
         )
-        VALUES ('2026-01-02', :p0, 12.34, :p1, :p2, :p3, 1, :p4)
+        VALUES ('2026-01-02', :p0, 12.34, :p1, :category_id, :p2, :p3, 1, :p4)
         """),
-        {"p0": description, "p1": category, "p2": source, "p3": confidence, "p4": fingerprint},
+        {
+            "p0": description,
+            "p1": category,
+            "category_id": resolve_category_id(conn, category),
+            "p2": source,
+            "p3": confidence,
+            "p4": fingerprint,
+        },
     ).lastrowid
     if tags:
         set_transaction_tags(conn, tx_id, tags, source=source)

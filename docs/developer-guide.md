@@ -79,7 +79,7 @@ files use [constraints.txt](../constraints.txt) to install the tested dependency
 resolution. `package-lock.json` pins the npm formatter and linting dependencies:
 Prettier, ESLint, Stylelint, and their shared configs.
 
-Python packaging and declared dependencies are configured in [pyproject.toml](../pyproject.toml). Runtime dependencies live in `[project].dependencies`; development tools live in the `dev` optional dependency extra. [requirements.txt](../requirements.txt) is a non-editable pip compatibility wrapper for normal installs, and [requirements-dev.txt](../requirements-dev.txt) is an editable wrapper for contributor installs. Do not duplicate Python dependency names in requirements files.
+Python packaging and declared dependencies are configured in [pyproject.toml](../pyproject.toml). Runtime dependencies live in `[project].dependencies`; development tools live in the `dev` optional dependency extra. [requirements.txt](../requirements.txt) is a non-editable pip install wrapper for normal installs, and [requirements-dev.txt](../requirements-dev.txt) is an editable wrapper for contributor installs. Do not duplicate Python dependency names in requirements files.
 
 Contributors can also install the development extra directly with the same constraints:
 

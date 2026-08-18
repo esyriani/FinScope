@@ -9,6 +9,7 @@ from sqlalchemy import select, text
 from finance_app.core.constants import ACCOUNT_TYPE_CREDIT_CARD, TRANSACTION_KIND_EXPENSE, TRANSACTION_KIND_INCOME
 from finance_app.database.tables import merchants as merchants_table
 from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.categories.repository import create_category, resolve_category_id
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 
 
@@ -19,6 +20,17 @@ class FixedDate(real_date):
     def today(cls):
         """Return a deterministic current date."""
         return cls(2026, 5, 9)
+
+
+def transaction_seed_params(conn, rows, columns):
+    """Return transaction seed parameter dictionaries with canonical category IDs."""
+    params = []
+    for row in rows:
+        values = dict(zip(columns, row))
+        create_category(conn, values["category"])
+        values["category_id"] = resolve_category_id(conn, values["category"])
+        params.append(values)
+    return params
 
 
 def seed_reporting_data(conn):
@@ -63,15 +75,41 @@ def seed_reporting_data(conn):
             description,
             amount,
             category,
+            category_id,
             needs_review,
             category_source,
             ignored,
             transaction_kind,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8)
+        VALUES (
+            :tx_date,
+            :description,
+            :amount,
+            :category,
+            :category_id,
+            :needs_review,
+            :category_source,
+            :ignored,
+            :transaction_kind,
+            :fingerprint
+        )
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"), row)) for row in rows],
+        transaction_seed_params(
+            conn,
+            rows,
+            (
+                "tx_date",
+                "description",
+                "amount",
+                "category",
+                "needs_review",
+                "category_source",
+                "ignored",
+                "transaction_kind",
+                "fingerprint",
+            ),
+        ),
     )
     tag_assignments = (
         ("seed-2025-may-food", ["Tax"]),
@@ -101,38 +139,64 @@ def seed_reporting_data(conn):
             description,
             amount,
             category,
+            category_id,
             needs_review,
             category_source,
             ignored,
             transaction_kind,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8)
+        VALUES (
+            :tx_date,
+            :description,
+            :amount,
+            :category,
+            :category_id,
+            :needs_review,
+            :category_source,
+            :ignored,
+            :transaction_kind,
+            :fingerprint
+        )
         """),
-        [
-            {
-                "p0": "2026-01-08",
-                "p1": "Savings transfer",
-                "p2": 500.00,
-                "p3": "Transfers",
-                "p4": 0,
-                "p5": "rule",
-                "p6": 0,
-                "p7": "transfer",
-                "p8": "seed-2026-transfer-jan",
-            },
-            {
-                "p0": "2026-05-05",
-                "p1": "Card payment",
-                "p2": 700.00,
-                "p3": "Transfers",
-                "p4": 0,
-                "p5": "rule",
-                "p6": 0,
-                "p7": "payment",
-                "p8": "seed-2026-transfer-may",
-            },
-        ],
+        transaction_seed_params(
+            conn,
+            [
+                (
+                    "2026-01-08",
+                    "Savings transfer",
+                    500.00,
+                    "Transfers",
+                    0,
+                    "rule",
+                    0,
+                    "transfer",
+                    "seed-2026-transfer-jan",
+                ),
+                (
+                    "2026-05-05",
+                    "Card payment",
+                    700.00,
+                    "Transfers",
+                    0,
+                    "rule",
+                    0,
+                    "payment",
+                    "seed-2026-transfer-may",
+                ),
+            ],
+            (
+                "tx_date",
+                "description",
+                "amount",
+                "category",
+                "needs_review",
+                "category_source",
+                "ignored",
+                "transaction_kind",
+                "fingerprint",
+            ),
+        ),
     )
     conn.execute(text("""
         UPDATE user_settings
@@ -250,10 +314,13 @@ def merchant_totals(context):
 
 def seed_dashboard_spending_only(conn):
     """Seed a dashboard range with spending but no income."""
-    conn.execute(text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES ('2026-06-01', 'Coffee Stand', 25.00, 'Food', 'rule', 'dashboard-spending-only')
-        """))
+    conn.execute(
+        text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+        VALUES ('2026-06-01', 'Coffee Stand', 25.00, 'Food', :category_id, 'rule', 'dashboard-spending-only')
+        """),
+        {"category_id": resolve_category_id(conn, "Food")},
+    )
     conn.commit()
 
 
@@ -270,13 +337,21 @@ def seed_dashboard_unknown_only(conn):
             description,
             amount,
             category,
+            category_id,
             needs_review,
             category_source,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, 'UNKNOWN', 1, 'unknown', :p3)
+        VALUES (:tx_date, :description, :amount, 'UNKNOWN', :category_id, 1, 'unknown', :fingerprint)
         """),
-        [dict(zip(("p0", "p1", "p2", "p3"), row)) for row in rows],
+        transaction_seed_params(
+            conn,
+            [
+                (tx_date, description, amount, "UNKNOWN", fingerprint)
+                for tx_date, description, amount, fingerprint in rows
+            ],
+            ("tx_date", "description", "amount", "category", "fingerprint"),
+        ),
     )
     conn.commit()
 
@@ -295,13 +370,18 @@ def seed_dashboard_review_queue_data(conn):
             description,
             amount,
             category,
+            category_id,
             needs_review,
             category_source,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)
+        VALUES (:tx_date, :description, :amount, :category, :category_id, :needs_review, :category_source, :fingerprint)
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6"), row)) for row in rows],
+        transaction_seed_params(
+            conn,
+            rows,
+            ("tx_date", "description", "amount", "category", "needs_review", "category_source", "fingerprint"),
+        ),
     )
     conn.commit()
 
@@ -326,15 +406,31 @@ def seed_reimbursable_dashboard_data(conn):
             description,
             amount,
             category,
+            category_id,
             transaction_kind,
             needs_review,
             category_source,
             ignored,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, 0, 'manual', 0, :p5)
+        VALUES (
+            :tx_date,
+            :description,
+            :amount,
+            :category,
+            :category_id,
+            :transaction_kind,
+            0,
+            'manual',
+            0,
+            :fingerprint
+        )
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5"), row)) for row in rows],
+        transaction_seed_params(
+            conn,
+            rows,
+            ("tx_date", "description", "amount", "category", "transaction_kind", "fingerprint"),
+        ),
     )
     for fingerprint in ("dashboard-reimbursable-expense", "dashboard-reimbursable-credit"):
         transaction_id = (
@@ -382,15 +478,31 @@ def seed_reimbursable_comparison_data(conn):
             description,
             amount,
             category,
+            category_id,
             transaction_kind,
             needs_review,
             category_source,
             ignored,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, 0, 'manual', 0, :p5)
+        VALUES (
+            :tx_date,
+            :description,
+            :amount,
+            :category,
+            :category_id,
+            :transaction_kind,
+            0,
+            'manual',
+            0,
+            :fingerprint
+        )
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4", "p5"), row)) for row in rows],
+        transaction_seed_params(
+            conn,
+            rows,
+            ("tx_date", "description", "amount", "category", "transaction_kind", "fingerprint"),
+        ),
     )
     for fingerprint in (
         "comparison-reimbursable-prior-expense",
@@ -425,10 +537,10 @@ def seed_dashboard_period_delta_data(conn):
     ]
     conn.execute(
         text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+        VALUES (:tx_date, :description, :amount, :category, :category_id, 'rule', :fingerprint)
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+        transaction_seed_params(conn, rows, ("tx_date", "description", "amount", "category", "fingerprint")),
     )
     conn.commit()
 
@@ -443,9 +555,9 @@ def seed_comparison_unknown_warning_data(conn):
     ]
     conn.execute(
         text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+        VALUES (:tx_date, :description, :amount, :category, :category_id, 'rule', :fingerprint)
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+        transaction_seed_params(conn, rows, ("tx_date", "description", "amount", "category", "fingerprint")),
     )
     conn.commit()

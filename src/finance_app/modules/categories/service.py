@@ -15,11 +15,7 @@ from finance_app.modules.categories.llm import (
     sanitize_openai_error,
 )
 from finance_app.modules.categories.llm_estimation import estimate_llm_categorization_tokens
-from finance_app.modules.categories.llm_prompts import (
-    build_llm_messages,
-    build_rule_examples,
-    taxonomy_prompt_line,
-)
+from finance_app.modules.categories.llm_prompts import build_llm_messages
 from finance_app.modules.categories.llm_tokens import (
     DEFAULT_EXPECTED_OUTPUT_TOKENS,
     LlmTokenEstimate,
@@ -81,7 +77,6 @@ __all__ = [
     "build_llm_messages",
     "build_llm_prompt",
     "build_llm_system_prompt",
-    "build_rule_examples",
     "categorize_transactions",
     "classify_unknowns_with_llm",
     "clean_category_name",
@@ -112,5 +107,4 @@ __all__ = [
     "score_category_rule_match",
     "score_category_rule_matches",
     "select_winning_rule_match",
-    "taxonomy_prompt_line",
 ]

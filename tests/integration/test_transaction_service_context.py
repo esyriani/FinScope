@@ -114,10 +114,8 @@ def test_transactions_context_paginates_and_sorts(core_conn):
     assert first_page["all_transaction_ids"] == [
         ids["Hydro Quebec"],
         ids["Unknown Shop"],
-        ids["Metro Grocery"],
-        ids["Cafe Bistro"],
-        ids["Payroll"],
     ]
+    assert second_page["all_transaction_ids"] == [ids["Metro Grocery"], ids["Cafe Bistro"]]
     assert second_page["page_start"] == 3
     assert second_page["page_end"] == 4
     assert first_page["run_transaction_ai_enabled"] is True

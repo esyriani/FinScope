@@ -118,7 +118,7 @@ def test_jobs_page_paginates_and_renders_public_job_data(client, core_conn):
           AND user_id = (SELECT id FROM users WHERE username = 'owner')
         """))
     core_conn.commit()
-    oldest_job_id = complete_job("Oldest job", result="old")
+    earliest_job_id = complete_job("Earliest job", result="previous")
     complete_job("Middle job", result="middle")
     complete_job("Newest job", result="new")
 
@@ -127,11 +127,11 @@ def test_jobs_page_paginates_and_renders_public_job_data(client, core_conn):
 
     assert response.status_code == 200
     assert "Showing 3-3 of 3 jobs" in body
-    assert "Oldest job" in body
-    assert "old" in body
-    oldest_created_at = runner.get_background_job(oldest_job_id)["created_at"]
-    assert format_datetime(oldest_created_at) in body
-    assert oldest_created_at not in body
+    assert "Earliest job" in body
+    assert "previous" in body
+    earliest_created_at = runner.get_background_job(earliest_job_id)["created_at"]
+    assert format_datetime(earliest_created_at) in body
+    assert earliest_created_at not in body
     assert "Newest job" not in body
     assert "Middle job" not in body
 

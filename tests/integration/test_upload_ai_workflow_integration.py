@@ -15,6 +15,7 @@ from tests.support.upload import (
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names
 from finance_app.modules.upload import workflow as upload_workflow
 
@@ -159,12 +160,13 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             description,
             amount,
             category,
+            category_id,
             needs_review,
             fingerprint
         )
-        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'llm-unknown')
+        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', :category_id, 1, 'llm-unknown')
         """),
-        {"p0": statement_id},
+        {"p0": statement_id, "category_id": resolve_category_id(core_conn, "UNKNOWN")},
     ).lastrowid
     known_id = core_conn.execute(
         text("""
@@ -174,12 +176,13 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             description,
             amount,
             category,
+            category_id,
             needs_review,
             fingerprint
         )
-        VALUES (:p0, '2026-01-03', 'KNOWN SHOP', 50.00, 'Utilities', 0, 'llm-known')
+        VALUES (:p0, '2026-01-03', 'KNOWN SHOP', 50.00, 'Utilities', :category_id, 0, 'llm-known')
         """),
-        {"p0": statement_id},
+        {"p0": statement_id, "category_id": resolve_category_id(core_conn, "Utilities")},
     ).lastrowid
     ignored_id = core_conn.execute(
         text("""
@@ -189,13 +192,14 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             description,
             amount,
             category,
+            category_id,
             needs_review,
             ignored,
             fingerprint
         )
-        VALUES (:p0, '2026-01-04', 'IGNORED SHOP', 25.00, 'UNKNOWN', 1, 1, 'llm-ignored')
+        VALUES (:p0, '2026-01-04', 'IGNORED SHOP', 25.00, 'UNKNOWN', :category_id, 1, 1, 'llm-ignored')
         """),
-        {"p0": statement_id},
+        {"p0": statement_id, "category_id": resolve_category_id(core_conn, "UNKNOWN")},
     ).lastrowid
     core_conn.commit()
 

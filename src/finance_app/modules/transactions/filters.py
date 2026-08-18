@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from typing import Any, TypedDict
 
-from sqlalchemy import String, and_, case, cast, false, func, or_, select
+from sqlalchemy import String, and_, case, cast, false, func, or_
 
 from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
@@ -38,15 +38,11 @@ from finance_app.database.tables import (
     accounts as accounts_table,
 )
 from finance_app.database.tables import (
-    merchants as merchants_table,
-)
-from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.accounts.filters import account_filter_condition, parse_account_id
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 from finance_app.modules.merchants.normalization import canonicalize_merchant_key
-from finance_app.modules.merchants.repository import merchant_identity_from_row
 from finance_app.modules.merchants.sql_filters import (
     description_matches_any_candidate,
     escape_like_token,
@@ -107,9 +103,6 @@ class TransactionFilters(TypedDict):
 def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilters:
     """Parse transaction filters."""
     selected_categories = [value.strip() for value in query_values(args, "categories") if value.strip()]
-    legacy_category = query_value(args, "category").strip()
-    if legacy_category and legacy_category not in selected_categories:
-        selected_categories.append(legacy_category)
     selected_tags = [value.strip() for value in query_values(args, "tags") if value.strip()]
     filter_mode = query_value(args, "filter_mode", FILTER_MODE_INCLUDE).strip()
     if filter_mode not in FILTER_MODES:
@@ -149,7 +142,7 @@ def parse_transaction_filters(args: QueryArgs, conn: object) -> TransactionFilte
 
     return {
         "search": query_value(args, "search").strip(),
-        "category": legacy_category,
+        "category": selected_categories[0] if len(selected_categories) == 1 else "",
         "selected_categories": selected_categories,
         "selected_tags": selected_tags,
         "account_id": parse_account_id(query_value(args, "account_id")),
@@ -313,43 +306,17 @@ def merchant_key_condition(conn: object | None, merchant_key: str) -> Any:
     if conn is None:
         return false()
 
-    transaction_ids = matching_transaction_ids_for_merchant_key(conn, merchant_key)
-    if not transaction_ids:
-        return false()
-    return transactions_table.c.id.in_(transaction_ids)
-
-
-def matching_transaction_ids_for_merchant_key(conn: Any, merchant_key: str) -> list[int]:
-    """Return transaction ids whose resolved merchant name matches a key."""
     merchant_ids, description_candidates = merchant_identity_candidates(conn, merchant_key)
-    candidate_conditions = []
+    conditions: list[Any] = []
     if merchant_ids:
-        candidate_conditions.append(transactions_table.c.merchant_id.in_(merchant_ids))
-    candidate_conditions.append(
-        description_matches_any_candidate(transactions_table.c.description, description_candidates)
-    )
+        conditions.append(transactions_table.c.merchant_id.in_(merchant_ids))
 
-    rows = (
-        conn.execute(
-            select(
-                transactions_table.c.id,
-                transactions_table.c.description,
-                transactions_table.c.merchant_id,
-                merchants_table.c.merchant_key.label("merchant_name"),
-                merchants_table.c.merchant_key.label("merchant_key"),
-            )
-            .select_from(
-                transactions_table.outerjoin(
-                    merchants_table,
-                    merchants_table.c.id == transactions_table.c.merchant_id,
-                )
-            )
-            .where(or_(*candidate_conditions))
-        )
-        .mappings()
-        .fetchall()
+    fallback_condition = and_(
+        transactions_table.c.merchant_id.is_(None),
+        description_matches_any_candidate(transactions_table.c.description, description_candidates),
     )
-    return [row["id"] for row in rows if merchant_identity_from_row(row, conn=conn)["name"] == merchant_key]
+    conditions.append(fallback_condition)
+    return or_(*conditions) if conditions else false()
 
 
 def category_source_value(source: str) -> str:

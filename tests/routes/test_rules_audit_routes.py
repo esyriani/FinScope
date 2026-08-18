@@ -1,6 +1,6 @@
 """Route tests for the rules audit feature."""
 
-from sqlalchemy import text
+from sqlalchemy import insert, text
 from tests.support.database import insert_rule
 from tests.support.html import (
     assert_form,
@@ -22,7 +22,24 @@ from tests.support.rules import (
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
+
+
+def insert_audit_transactions(conn, rows):
+    """Insert audit test transactions with canonical category IDs."""
+    values = []
+    for row in rows:
+        transaction = {
+            "needs_review": 0,
+            "category_source": "manual",
+            "category_rule_id": None,
+            **row,
+        }
+        transaction["category_id"] = resolve_category_id(conn, transaction["category"])
+        values.append(transaction)
+    conn.execute(insert(transactions_table), values)
 
 
 def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
@@ -32,18 +49,19 @@ def test_rules_audit_route_renders_summary_and_findings(client, core_conn):
     insert_rule(core_conn, keyword="UNUSED SHOP", category="Food")
     insert_rule(core_conn, keyword="AI SUGGESTED SHOP", category="Food", source="automatic")
     insert_rule(core_conn, keyword="AI APPROVED SHOP", category="Food", source="automatic", ai_approved=1)
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Grocery #123', 14.25, 'Food', 'rule',
-            :p0, 0, 'audit-route-match'
-        )
-        """),
-        {"p0": specific_rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Grocery #123",
+                "amount": 14.25,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": specific_rule_id,
+                "fingerprint": "audit-route-match",
+            }
+        ],
     )
     core_conn.commit()
 
@@ -118,15 +136,25 @@ def test_rules_audit_route_paginates_and_sorts_overlap_table(client, core_conn):
     insert_rule(core_conn, keyword="CAFE TAX", category="Utilities")
     insert_rule(core_conn, keyword="METRO", category="Food")
     insert_rule(core_conn, keyword="METRO GROCERY", category="Utilities")
-    core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            needs_review, fingerprint
-        )
-        VALUES
-            ('2026-01-02', 'Cafe Tax Membership', 8.50, 'Food', 'manual', 0, 'audit-page-cafe'),
-            ('2026-01-03', 'Metro Grocery #123', 14.25, 'Food', 'manual', 0, 'audit-page-metro')
-        """))
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Cafe Tax Membership",
+                "amount": 8.50,
+                "category": "Food",
+                "fingerprint": "audit-page-cafe",
+            },
+            {
+                "tx_date": "2026-01-03",
+                "description": "Metro Grocery #123",
+                "amount": 14.25,
+                "category": "Food",
+                "fingerprint": "audit-page-metro",
+            },
+        ],
+    )
     core_conn.commit()
 
     response = client.get("/rules/audit?overlap_sort=rule_a&overlap_direction=asc&overlap_page=2")
@@ -158,15 +186,25 @@ def test_rules_audit_route_filters_overlap_findings(client, core_conn):
     insert_rule(core_conn, keyword="METRO", category="Food")
     insert_rule(core_conn, keyword="METRO GROCERY", category="Utilities")
     insert_rule(core_conn, keyword="UNUSED AUDIT", category="Utilities")
-    core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            needs_review, fingerprint
-        )
-        VALUES
-            ('2026-01-02', 'Cafe Tax Membership', 8.50, 'Food', 'manual', 0, 'audit-filter-cafe'),
-            ('2026-01-03', 'Metro Grocery #123', 14.25, 'Food', 'manual', 0, 'audit-filter-metro')
-        """))
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Cafe Tax Membership",
+                "amount": 8.50,
+                "category": "Food",
+                "fingerprint": "audit-filter-cafe",
+            },
+            {
+                "tx_date": "2026-01-03",
+                "description": "Metro Grocery #123",
+                "amount": 14.25,
+                "category": "Food",
+                "fingerprint": "audit-filter-metro",
+            },
+        ],
+    )
     core_conn.commit()
 
     response = client.get("/rules/audit?overlap_filter=tag_difference")
@@ -222,22 +260,32 @@ def test_rules_audit_route_limits_historical_transactions(client, core_conn):
     """Verify the audit route uses the configured historical transaction cap."""
     set_rule_audit_transaction_limit(core_conn, 1)
     insert_rule(core_conn, keyword="METRO", category="Food")
-    core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            needs_review, fingerprint
-        )
-        VALUES
-            ('2026-01-02', 'Metro Pharmacy old', 8.50, 'Food', 'manual', 0, 'audit-limit-old'),
-            ('2026-01-03', 'Metro Pharmacy new', 14.25, 'Food', 'manual', 0, 'audit-limit-new')
-        """))
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Pharmacy earlier",
+                "amount": 8.50,
+                "category": "Food",
+                "fingerprint": "audit-limit-earlier",
+            },
+            {
+                "tx_date": "2026-01-03",
+                "description": "Metro Pharmacy new",
+                "amount": 14.25,
+                "category": "Food",
+                "fingerprint": "audit-limit-new",
+            },
+        ],
+    )
     core_conn.commit()
 
     response = client.get("/rules/audit")
 
     assert response.status_code == 200
     assert_visible_text(response, "Audit is limited to recent transactions.")
-    assert_not_visible_text(response, "Metro Pharmacy old")
+    assert_not_visible_text(response, "Metro Pharmacy earlier")
 
 
 def test_rules_audit_overlap_route_renders_shared_transactions(client, core_conn):
@@ -250,18 +298,19 @@ def test_rules_audit_overlap_route_renders_shared_transactions(client, core_conn
         source="automatic",
         ai_approved=1,
     )
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Grocery #123', 14.25, 'Food', 'rule',
-            :p0, 0, 'audit-overlap-detail'
-        )
-        """),
-        {"p0": broad_rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Grocery #123",
+                "amount": 14.25,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": broad_rule_id,
+                "fingerprint": "audit-overlap-detail",
+            }
+        ],
     )
     core_conn.commit()
 
@@ -307,17 +356,28 @@ def test_rules_audit_overlap_route_paginates_and_sorts_shared_transactions(clien
     set_default_table_page_size(core_conn, 1)
     broad_rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
     specific_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Utilities")
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES
-            ('2026-01-02', 'Metro Grocery A', 14.25, 'Food', 'rule', :p0, 0, 'audit-overlap-page-a'),
-            ('2026-01-03', 'Metro Grocery Z', 16.25, 'Food', 'rule', :p1, 0, 'audit-overlap-page-z')
-        """),
-        {"p0": broad_rule_id, "p1": broad_rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Grocery A",
+                "amount": 14.25,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": broad_rule_id,
+                "fingerprint": "audit-overlap-page-a",
+            },
+            {
+                "tx_date": "2026-01-03",
+                "description": "Metro Grocery Z",
+                "amount": 16.25,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": broad_rule_id,
+                "fingerprint": "audit-overlap-page-z",
+            },
+        ],
     )
     core_conn.commit()
 
@@ -345,18 +405,19 @@ def test_rules_audit_route_renders_specificity_warnings(client, core_conn):
     """Verify the audit page shows broad winners over more constrained rules."""
     broad_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Food")
     specific_rule_id = insert_rule(core_conn, keyword="METRO", category="Utilities", amount_min=10)
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Grocery', 12.34, 'Food', 'rule',
-            :p0, 0, 'audit-route-specificity'
-        )
-        """),
-        {"p0": broad_rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Grocery",
+                "amount": 12.34,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": broad_rule_id,
+                "fingerprint": "audit-route-specificity",
+            }
+        ],
     )
     core_conn.commit()
 
@@ -380,18 +441,19 @@ def test_rules_audit_preview_route_renders_remove_rule_impact(client, core_conn)
     specific_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Utilities")
     set_rule_tags(core_conn, broad_rule_id, ["Grocery"])
     set_rule_tags(core_conn, specific_rule_id, ["Tax"])
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Grocery #123', 12.34, 'Utilities', 'rule',
-            :p0, 0, 'audit-route-preview'
-        )
-        """),
-        {"p0": specific_rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Grocery #123",
+                "amount": 12.34,
+                "category": "Utilities",
+                "category_source": "rule",
+                "category_rule_id": specific_rule_id,
+                "fingerprint": "audit-route-preview",
+            }
+        ],
     )
     core_conn.commit()
 
@@ -456,18 +518,19 @@ def test_rules_audit_preview_route_renders_no_material_change_state(client, core
     specific_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Food")
     set_rule_tags(core_conn, broad_rule_id, ["Tax"])
     set_rule_tags(core_conn, specific_rule_id, ["Tax"])
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Grocery #123', 12.34, 'Food', 'rule',
-            :p0, 0, 'audit-route-preview-no-material'
-        )
-        """),
-        {"p0": specific_rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Grocery #123",
+                "amount": 12.34,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": specific_rule_id,
+                "fingerprint": "audit-route-preview-no-material",
+            }
+        ],
     )
     core_conn.commit()
 
@@ -491,16 +554,20 @@ def test_rules_audit_preview_route_renders_no_material_change_state(client, core
 
 def test_rules_audit_preview_route_renders_create_rule_impact(client, core_conn):
     """Verify create preview renders a confirm form without mutating rules."""
-    core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Pharmacy', 8.50, 'UNKNOWN', 'unknown',
-            1, 'audit-route-preview-create'
-        )
-        """))
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Pharmacy",
+                "amount": 8.50,
+                "category": "UNKNOWN",
+                "category_source": "unknown",
+                "needs_review": 1,
+                "fingerprint": "audit-route-preview-create",
+            }
+        ],
+    )
     core_conn.commit()
 
     response = client.post(
@@ -553,18 +620,19 @@ def test_rules_audit_preview_route_renders_edit_rule_impact(client, core_conn):
     """Verify edit preview renders a confirm form without mutating the rule."""
     rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
     set_rule_tags(core_conn, rule_id, ["Grocery"])
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Pharmacy', 12.34, 'Food', 'rule',
-            :p0, 0, 'audit-route-preview-edit'
-        )
-        """),
-        {"p0": rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Pharmacy",
+                "amount": 12.34,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": rule_id,
+                "fingerprint": "audit-route-preview-edit",
+            }
+        ],
     )
     core_conn.commit()
 
@@ -603,16 +671,20 @@ def test_rules_audit_preview_route_renders_edit_rule_impact(client, core_conn):
 def test_rules_audit_preview_route_renders_apply_all_impact(client, core_conn):
     """Verify the audit preview route supports apply-all impact without a rule ID."""
     rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
-    core_conn.execute(text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Pharmacy', 8.50, 'UNKNOWN', 'unknown',
-            1, 'audit-route-preview-apply-all'
-        )
-        """))
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Pharmacy",
+                "amount": 8.50,
+                "category": "UNKNOWN",
+                "category_source": "unknown",
+                "needs_review": 1,
+                "fingerprint": "audit-route-preview-apply-all",
+            }
+        ],
+    )
     core_conn.commit()
 
     response = client.post(
@@ -641,17 +713,28 @@ def test_rules_audit_preview_route_marks_impact_tables_paginated_and_sortable(cl
     set_default_table_page_size(core_conn, 1)
     rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
     set_rule_tags(core_conn, rule_id, ["Grocery"])
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES
-            ('2026-01-02', 'Metro Pharmacy B', 12.34, 'Food', 'rule', :p0, 0, 'audit-preview-table-b'),
-            ('2026-01-03', 'Metro Pharmacy A', 8.50, 'Food', 'rule', :p1, 0, 'audit-preview-table-a')
-        """),
-        {"p0": rule_id, "p1": rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Pharmacy B",
+                "amount": 12.34,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": rule_id,
+                "fingerprint": "audit-preview-table-b",
+            },
+            {
+                "tx_date": "2026-01-03",
+                "description": "Metro Pharmacy A",
+                "amount": 8.50,
+                "category": "Food",
+                "category_source": "rule",
+                "category_rule_id": rule_id,
+                "fingerprint": "audit-preview-table-a",
+            },
+        ],
     )
     core_conn.commit()
 
@@ -683,18 +766,19 @@ def test_rules_audit_rule_route_renders_rule_diagnostics(client, core_conn):
     set_default_table_page_size(core_conn, 1)
     broad_rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
     specific_rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Utilities")
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Grocery #123', 14.25, 'Utilities', 'rule',
-            :p0, 0, 'audit-rule-detail'
-        )
-        """),
-        {"p0": specific_rule_id},
+    insert_audit_transactions(
+        core_conn,
+        [
+            {
+                "tx_date": "2026-01-02",
+                "description": "Metro Grocery #123",
+                "amount": 14.25,
+                "category": "Utilities",
+                "category_source": "rule",
+                "category_rule_id": specific_rule_id,
+                "fingerprint": "audit-rule-detail",
+            }
+        ],
     )
     core_conn.commit()
 

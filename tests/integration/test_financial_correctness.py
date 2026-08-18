@@ -15,6 +15,7 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_PAYMENT,
     TRANSACTION_KIND_REFUND,
 )
+from finance_app.modules.categories.repository import create_category, resolve_category_id
 from finance_app.modules.comparison import service as comparison_service
 from finance_app.modules.dashboard.service import build_dashboard_context
 from finance_app.modules.reimbursements.service import create_reimbursement_allocation
@@ -48,6 +49,7 @@ def insert_financial_transaction(
     ignored=0,
 ):
     """Insert one report transaction for analytics assertions."""
+    create_category(conn, category)
     result = conn.execute(
         text("""
         INSERT INTO transactions (
@@ -55,19 +57,21 @@ def insert_financial_transaction(
             description,
             amount,
             category,
+            category_id,
             needs_review,
             category_source,
             ignored,
             transaction_kind,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, 0, 'manual', :p4, :p5, :p6)
+        VALUES (:p0, :p1, :p2, :p3, :category_id, 0, 'manual', :p4, :p5, :p6)
         """),
         {
             "p0": tx_date,
             "p1": description,
             "p2": amount,
             "p3": category,
+            "category_id": resolve_category_id(conn, category),
             "p4": ignored,
             "p5": transaction_kind,
             "p6": fingerprint,

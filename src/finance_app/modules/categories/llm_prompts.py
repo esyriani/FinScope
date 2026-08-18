@@ -156,13 +156,6 @@ def render_prompt_text(text: object, context: Mapping[str, str]) -> str:
     return Template(str(text)).safe_substitute(context)
 
 
-def taxonomy_prompt_line(row: Mapping[str, Any]) -> str:
-    """Render a taxonomy row as a compact prompt line for compatibility callers."""
-    detail = row["instruction"] or row["description"]
-    label = f"ID {row.get('id')}: {row['name']}"
-    return f"- {label}: {detail}" if detail else f"- {label}"
-
-
 def build_llm_messages(
     unknown_items: Sequence[Mapping[str, Any]],
     rules: Sequence[Mapping[str, Any]],
@@ -215,7 +208,6 @@ def build_llm_prompt(
     tag_options = tag_options or []
     category_rows = category_rows or []
     tag_rows = tag_rows or []
-    examples = build_rule_examples(rules, category_options)
     category_rows_by_name = {row["name"]: row for row in category_rows}
     tag_rows_by_name = {row["name"]: row for row in tag_rows}
     manual_rules = [
@@ -246,7 +238,6 @@ def build_llm_prompt(
             "categories": taxonomy_payload_rows(category_options, category_rows),
             "tags": taxonomy_payload_rows(tag_options, tag_rows),
         },
-        "examples": examples,
         "current_manual_rules": manual_rules,
         "rule_matching": (
             "Manual rules match by normalized keyword containment. "
@@ -434,12 +425,3 @@ def taxonomy_payload_rows(names: Sequence[str], taxonomy_rows: Sequence[Mapping[
             }
         )
     return payload
-
-
-def build_rule_examples(rules: Sequence[Mapping[str, Any]], category_options: Sequence[str]) -> dict[str, Any]:
-    """Return the legacy prompt examples payload for supported rule sources.
-
-    Manual rules are sent through `current_manual_rules`, so this compatibility
-    payload remains intentionally empty.
-    """
-    return {}

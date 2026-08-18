@@ -169,7 +169,7 @@ def test_statement_parser_type_validation_defaults_unknown_values(core_conn):
 
 
 def test_unknown_category_is_fixed_and_protected(core_conn):
-    """Verify legacy settings cannot rename the built-in Unknown category."""
+    """Verify settings cannot rename the built-in Unknown category."""
     unknown_id = core_conn.execute(text("""
         SELECT id, builtin_key
         FROM categories

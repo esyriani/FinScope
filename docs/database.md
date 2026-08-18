@@ -78,7 +78,7 @@ Defines the statement parsers available on the settings and upload pages.
 - `parser_type`: Parser behavior to use for uploads. Valid values are `credit_card`, `bank_account`, and `interac_etransfer`.
 - `import_mode`: Import behavior. `ledger` creates transaction rows; `enrichment` updates existing rows without adding duplicate ledger activity.
 - `default_account_type`: Account role selected by default when a user uploads this statement type.
-- `active`: Soft-delete flag so old statement types can be hidden without losing historical references.
+- `active`: Soft-delete flag so inactive statement types can be hidden without losing historical references.
 - `created_at`: Creation timestamp for auditing and ordering.
 
 #### `users`
@@ -140,24 +140,9 @@ Tracks every uploaded statement and its import status.
 
 #### `merchants`
 
-Stores stable merchant identities separately from raw statement descriptions.
+Stores deterministic merchant identities separately from raw statement descriptions.
 
-- `canonical_key`: Unique normalized merchant key used for matching and deduplication.
-- `system_name`: System-derived merchant name before user overrides.
-- `display_name`: Current user-facing merchant name.
-- `display_name_source`: Tracks whether the display name came from the system or a user edit.
-- `active`: Soft-delete flag for hiding merchants without breaking references.
-- `created_at` and `updated_at`: Lifecycle timestamps.
-
-#### `merchant_aliases`
-
-Maps cleaned statement variants to canonical merchants.
-
-- `merchant_id`: Parent merchant. Aliases are deleted when the merchant is deleted.
-- `alias_key`: Unique normalized alias key.
-- `raw_example`: Representative raw statement text for the alias.
-- `source`: Origin of the alias, such as import, rule, fallback, or user input.
-- `confidence`: Alias confidence: `high`, `medium`, or `low`.
+- `merchant_key`: Unique normalized merchant key derived from imported statement descriptions or explicit merchant-bound rules. This is the durable user-visible merchant label used for matching, grouping, filters, and reports.
 - `created_at` and `updated_at`: Lifecycle timestamps.
 
 #### `categories`
@@ -181,8 +166,8 @@ Stores imported ledger rows and their categorization state.
 - `tx_date`: Transaction date from the source statement.
 - `description`: Transaction display description. This normally starts as the raw statement description, but enrichment imports can replace generic bank text with a clearer merchant.
 - `amount`: Signed transaction amount.
-- `category`: Cached category name retained for older query paths.
-- `category_id`: Stable category reference used for renames and relationships.
+- `category`: Cached display/import category name. It is synchronized by write paths but is not the canonical query identity.
+- `category_id`: Stable category reference used for reports, filters, renames, and relationships.
 - `needs_review`: Marks rows that need manual category review.
 - `category_source`: Origin of the category: `unknown`, `rule`, `history`, `ai`, or `manual`.
 - `category_confidence`: Confidence score for automatic categories from rules, historical matches, or AI.
@@ -234,8 +219,8 @@ Stores manual or automatic rules used to categorize transactions.
 - `account_id`: Optional account scope. When present, the rule only applies to transactions from that account.
 - `merchant_id`: Optional exact merchant scope. When null, the rule matches by normalized keyword.
 - `keyword`: Text or normalized keyword used by broad matching.
-- `category`: Cached category name retained for older query paths.
-- `category_id`: Stable category assigned by the rule.
+- `category`: Cached display/import category name. It is synchronized by write paths but is not the canonical query identity.
+- `category_id`: Stable category assigned by the rule and used for rule listing, usage, and export queries.
 - `amount_min` and `amount_max`: Optional amount range constraints.
 - `direction`: Optional signed direction constraint: `any`, `debit`, or `credit`.
 - `keyword_scope_key`, `account_id_key`, `amount_min_key`, and `amount_max_key`: Generated columns used only by database constraints to enforce portable duplicate-rule prevention when merchant scope, account scope, or amount bounds are null.
@@ -291,9 +276,9 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 
 ### Relationship notes
 
-- Merchant identity is modeled separately from imported transaction descriptions. `transactions.description` stores the display text, `transactions.merchant_id` links rows to `merchants`, and `merchant_aliases` maps cleaned statement variants to the stable merchant row.
-- Category names are still cached in `transactions.category` and `category_rules.category`, while `category_id` is the stable key for renames. Application write paths keep the text cache and foreign key synchronized.
-- Built-in category and tag behavior is keyed by `builtin_key`. Reporting and workflow predicates should resolve built-in semantics through those keys, with cached category or tag names used only as compatibility fallbacks for denormalized rows.
+- Merchant identity is modeled separately from imported transaction descriptions. `transactions.description` stores display text, while `transactions.merchant_id` links rows to `merchants` when a durable merchant is known. Rows without a merchant ID use deterministic description normalization as a fallback grouping and filtering key.
+- Category names are still cached in `transactions.category` and `category_rules.category` for display and import snapshots, while `category_id` is the stable query identity. Application write paths keep the text cache and foreign key synchronized.
+- Built-in category and tag behavior is keyed by `builtin_key`. Reporting and workflow predicates should resolve built-in semantics through those keys, not through editable cached names.
 - Tags use many-to-many join tables so both transactions and category rules can share the same tag definitions. Built-in tags use stable keys so workflows such as reimbursements and future tax review can depend on semantics rather than editable display labels.
 - Saved report pins are normalized in `pinned_reports` rather than embedded in `user_settings` so duplicate prevention, ownership, ordering, and target cleanup can be enforced through database constraints.
 - Reimbursement allocations are explicit links rather than category rewrites. This keeps reimbursable spending visible in its natural category while allowing reports and monitoring pages to compute reimbursed and pending amounts from the allocation table. Reimbursement expense completions close policy-limited or otherwise settled expenses for monitoring only; they do not add reimbursement money or alter analytics offsets.

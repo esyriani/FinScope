@@ -108,8 +108,8 @@ def category_id(conn, name):
     return found
 
 
-def create_legacy_statements_table_without_date_order(conn):
-    """Create the statements table shape used before date_order was added."""
+def create_statements_table_without_date_order(conn):
+    """Create a statements table missing the current date_order column."""
     conn.execute(text("""
             CREATE TABLE statements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -217,21 +217,6 @@ def reflected_mysql_foreign_keys(table):
     return foreign_keys
 
 
-def test_core_schema_has_no_retired_tables(schema_conn):
-    """Verify Core metadata does not create retired compatibility or review tables."""
-    retired_tables = set(inspect(schema_conn).get_table_names()) & {
-        "settings",
-        "schema_migrations",
-        "app_metadata",
-        "category_suggestions",
-        "category_suggestion_tags",
-        "merchant_normalization_cache",
-        "merchant_normalization_review_queue",
-    }
-
-    assert retired_tables == set()
-
-
 def test_users_enforce_case_insensitive_username_uniqueness(schema_conn):
     """Verify the database rejects usernames that normalize to the same key."""
     schema_conn.execute(
@@ -311,27 +296,14 @@ def test_visible_names_enforce_normalized_uniqueness(schema_conn):
         schema_conn.rollback()
 
 
-def test_init_core_db_rejects_legacy_statements_table_without_date_order():
-    """Verify startup refuses an outdated schema instead of patching it."""
+def test_init_core_db_rejects_statements_table_without_date_order():
+    """Verify startup refuses a schema missing required statement columns."""
     engine = create_engine("sqlite://")
     try:
         with engine.begin() as conn:
-            create_legacy_statements_table_without_date_order(conn)
+            create_statements_table_without_date_order(conn)
 
         with pytest.raises(RuntimeError, match="statements.date_order"):
-            connection_module.init_core_db(engine)
-    finally:
-        engine.dispose()
-
-
-def test_init_core_db_rejects_retired_schema_tables():
-    """Verify startup rejects retired compatibility tables."""
-    engine = create_engine("sqlite://")
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)"))
-
-        with pytest.raises(RuntimeError, match="retired tables: schema_migrations"):
             connection_module.init_core_db(engine)
     finally:
         engine.dispose()

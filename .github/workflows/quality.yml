@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Lint, type-check, and test
+  checks:
+    name: Format, lint, and type-check
     runs-on: windows-latest
     timeout-minutes: 20
 
@@ -70,5 +70,51 @@ jobs:
       - name: Lint frontend assets
         run: npm run lint:frontend
 
+  tests:
+    name: Tests (${{ matrix.layer }})
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - layer: unit
+            marker: unit
+          - layer: integration
+            marker: integration
+          - layer: route
+            marker: route
+          - layer: smoke
+            marker: smoke
+
+    env:
+      CI: "true"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints.txt
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Check Python dependencies
+        run: python -m pip check
+
       - name: Run tests
-        run: python -B -m pytest
+        run: python -B -m pytest -m "${{ matrix.marker }}" --durations=20
