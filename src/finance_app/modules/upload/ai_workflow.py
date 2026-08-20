@@ -5,7 +5,7 @@ unknown-transaction AI categorization. Statement import execution stays in
 ``upload.workflow`` and calls these helpers when AI follow-up work is needed.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -19,13 +19,17 @@ from finance_app.background.runner import (
     update_background_job_progress,
 )
 from finance_app.core.category_sql import transaction_category_label_expression
+from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories import llm as llm_module
+from finance_app.modules.categories.llm_workflow import (
+    prepare_transaction_llm_categorization,
+    request_prepared_transaction_llm_categorization,
+)
 from finance_app.modules.categories.repository import resolve_category_id
-from finance_app.modules.categories.service import categorize_transactions
 from finance_app.modules.categories.sources import CATEGORY_SOURCE_UNKNOWN, category_metadata_json
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.settings.runtime import confirm_ai_token_usage_enabled, get_unknown_category
@@ -324,24 +328,42 @@ def categorize_unknown_transaction_rows(
     transaction_categorizer: Any = None,
 ) -> tuple[int, dict[str, int], dict[str, Any]]:
     """Categorize and persist one batch of unknown transaction rows."""
-    transaction_categorizer = transaction_categorizer or categorize_transactions
     llm_module.clear_llm_request_status()
+    transactions: list[MutableMapping[str, Any]] = [
+        {
+            "id": row["id"],
+            "account_id": row["account_id"],
+            "tx_date": row["tx_date"],
+            "merchant_id": row["merchant_id"],
+            "description": row["description"],
+            "amount": row["amount"],
+            "category": row["category"] or UNKNOWN_CATEGORY,
+            "transaction_kind": row["transaction_kind"],
+        }
+        for row in rows
+    ]
+
+    if transaction_categorizer is None:
+        prepared = prepare_transaction_llm_categorization(transactions)
+        outcome = request_prepared_transaction_llm_categorization(prepared)
+        unknown_category = prepared.unknown_category
+    else:
+        with db_core_transaction() as conn:
+            unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
+            categorized = transaction_categorizer(transactions, conn=conn, use_llm=True)
+        prepared = None
+        outcome = None
+        transactions = list(categorized)
+
     with db_core_transaction() as conn:
-        unknown_category = get_unknown_category(conn)
-        transactions = [
-            {
-                "id": row["id"],
-                "account_id": row["account_id"],
-                "tx_date": row["tx_date"],
-                "merchant_id": row["merchant_id"],
-                "description": row["description"],
-                "amount": row["amount"],
-                "category": row["category"] or unknown_category,
-                "transaction_kind": row["transaction_kind"],
-            }
-            for row in rows
-        ]
-        categorized = transaction_categorizer(transactions, conn=conn, use_llm=True)
+        if prepared is not None and outcome is not None:
+            llm_module.apply_llm_categorization_outcome(
+                conn,
+                transactions,
+                outcome,
+                unknown_category,
+            )
+        categorized = transactions
         batch_report = ai_batch_report(categorized, llm_module.last_llm_request_status())
         updated_count = 0
         source_counts: dict[str, int] = {}

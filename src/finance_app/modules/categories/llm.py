@@ -4,18 +4,11 @@ import json
 import logging
 from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal
 from threading import local
 from typing import Any
 
 from finance_app.core.config import settings
-from finance_app.core.constants import (
-    CATEGORY_RULE_DIRECTION_ANY,
-    CATEGORY_RULE_DIRECTION_CREDIT,
-    CATEGORY_RULE_DIRECTION_DEBIT,
-    CATEGORY_RULE_SOURCE_AUTOMATIC,
-)
-from finance_app.core.money import MoneyValue, optional_money_to_decimal
+from finance_app.database.engine import CORE_DB_TRANSACTION_DEPTH_KEY
 from finance_app.modules.categories.decision import (
     FinalCategoryDecision,
 )
@@ -42,6 +35,7 @@ from finance_app.modules.categories.llm_results import (
     sanitize_openai_error,
     unknown_llm_result,
 )
+from finance_app.modules.categories.llm_rules import save_automatic_category_rule
 from finance_app.modules.categories.llm_taxonomy import (
     prepare_llm_candidate_taxonomies,
     taxonomy_ids_for_names,
@@ -49,7 +43,6 @@ from finance_app.modules.categories.llm_taxonomy import (
 from finance_app.modules.categories.repository import (
     get_category_options,
     resolve_category_id,
-    save_category_rule,
 )
 from finance_app.modules.categories.rules_matching import merchant_category_cache_key
 from finance_app.modules.categories.sources import CATEGORY_SOURCE_AI, category_assignment
@@ -58,7 +51,6 @@ from finance_app.modules.categories.taxonomy import (
     get_tag_options,
     get_tag_rows,
 )
-from finance_app.modules.merchants.normalization import normalize_merchant_description
 from finance_app.modules.settings.runtime import get_float_setting, get_setting
 
 logger = logging.getLogger(__name__)
@@ -80,6 +72,14 @@ class LlmCategorizationRequestContext:
     review_threshold: float
     verify_threshold: float
     openai_model: str
+
+
+@dataclass(frozen=True)
+class LlmCategorizationOutcome:
+    """Validated LLM results ready to apply in a database write phase."""
+
+    accepted: dict[Any, dict[str, Any]]
+    result_count: int = 0
 
 
 def clear_llm_request_status() -> None:
@@ -121,60 +121,6 @@ def pair_llm_results(
         return
 
     yield from zip(unknown_items, llm_results)
-
-
-def automatic_rule_amount_bounds(amount: MoneyValue | None) -> tuple[Decimal | None, Decimal | None]:
-    """Return signed amount bounds for an automatically created rule.
-
-    Automatic categorization deduplicates candidate transactions by merchant and
-    amount direction. Persisting the same direction boundary on the generated
-    rule keeps future rule matches aligned with that decision scope.
-    """
-    if amount is None:
-        return None, None
-
-    value = optional_money_to_decimal(amount)
-    if value is None:
-        return None, None
-
-    if value < 0:
-        return None, Decimal("0.00")
-    return Decimal("0.00"), None
-
-
-def save_automatic_category_rule(
-    conn: Any,
-    transaction: Mapping[str, Any],
-    category: str,
-    tags: Sequence[str],
-) -> int | None:
-    """Persist an accepted no-review LLM categorization as an automatic rule."""
-    keyword = normalize_merchant_description(transaction.get("merchant_key") or transaction.get("description") or "")
-    if not keyword:
-        return None
-
-    amount_min, amount_max = automatic_rule_amount_bounds(transaction.get("amount"))
-    return save_category_rule(
-        conn,
-        keyword,
-        category,
-        source=CATEGORY_RULE_SOURCE_AUTOMATIC,
-        amount_min=amount_min,
-        amount_max=amount_max,
-        tags=tags,
-        merchant_id=transaction.get("merchant_id"),
-        account_id=transaction.get("account_id"),
-        direction=automatic_rule_direction(transaction.get("amount")),
-        protect_user_rule=True,
-    )
-
-
-def automatic_rule_direction(amount: MoneyValue | None) -> str:
-    """Return the signed direction constraint for an automatic LLM rule."""
-    amount = optional_money_to_decimal(amount)
-    if amount is None:
-        return CATEGORY_RULE_DIRECTION_ANY
-    return CATEGORY_RULE_DIRECTION_CREDIT if amount < 0 else CATEGORY_RULE_DIRECTION_DEBIT
 
 
 def prepare_llm_categorization_request_context(
@@ -271,8 +217,6 @@ def classify_unknowns_with_llm(
     ``prepare_candidate_taxonomies`` and ``batch_size`` provide the same
     explicit injection points for candidate-taxonomy setup and batching.
     """
-    request_categories = request_categories or request_llm_categories
-    batch_size = batch_size or LLM_BATCH_SIZE
     context = prepare_llm_categorization_request_context(
         conn,
         transactions,
@@ -282,166 +226,234 @@ def classify_unknowns_with_llm(
     if context is None:
         return
 
+    require_released_transaction_for_default_provider(conn, request_categories)
+    outcome = request_llm_categorization_outcome(
+        context,
+        rules,
+        unknown_category,
+        request_categories=request_categories,
+        batch_size=batch_size,
+    )
+    apply_llm_categorization_outcome(
+        conn,
+        transactions,
+        outcome,
+        unknown_category,
+        save_automatic_rules=save_automatic_rules,
+    )
+
+
+def require_released_transaction_for_default_provider(conn: Any, request_categories: Any = None) -> None:
+    """Reject default provider calls while a database transaction is active."""
+    if request_categories is not None:
+        return
+
+    in_transaction = bool(getattr(conn, "in_transaction", lambda: False)())
+    logical_depth = int(getattr(conn, "info", {}).get(CORE_DB_TRANSACTION_DEPTH_KEY, 0) or 0)
+    if in_transaction or logical_depth:
+        raise RuntimeError(
+            "Default LLM categorization requests must use the split prepare/request/apply workflow "
+            "so provider calls run outside database transactions."
+        )
+
+
+def request_llm_categorization_outcome(
+    context: LlmCategorizationRequestContext,
+    rules: Sequence[Mapping[str, Any]],
+    unknown_category: str,
+    request_categories: Any = None,
+    batch_size: int | None = None,
+) -> LlmCategorizationOutcome:
+    """Request and validate LLM categorization results without database writes."""
+    request_categories = request_categories or request_llm_categories
+    batch_size = batch_size or LLM_BATCH_SIZE
     accepted: dict[Any, dict[str, Any]] = {}
     llm_result_count = 0
 
-    for unknown_chunk in chunked(context.unknown_items, batch_size):
-        llm_results = request_categories(
-            unknown_chunk,
-            rules,
-            context.category_options,
-            context.tag_options,
-            context.category_rows,
-            context.tag_rows,
-            context.openai_model,
-            context.verify_threshold,
-            context.review_threshold,
-        )
-        llm_result_count += len(llm_results)
+    try:
+        for unknown_chunk in chunked(context.unknown_items, batch_size):
+            llm_results = request_categories(
+                unknown_chunk,
+                rules,
+                context.category_options,
+                context.tag_options,
+                context.category_rows,
+                context.tag_rows,
+                context.openai_model,
+                context.verify_threshold,
+                context.review_threshold,
+            )
+            llm_result_count += len(llm_results)
 
-        if not llm_results:
-            logger.info("LLM categorization returned no results for one chunk; continuing with later chunks.")
+            if not llm_results:
+                logger.info("LLM categorization returned no results for one chunk; continuing with later chunks.")
+                for tx in unknown_chunk:
+                    cache_key = merchant_category_cache_key(
+                        tx["merchant_key"],
+                        tx.get("amount"),
+                        tx.get("merchant_id"),
+                    )
+                    accepted[cache_key] = unknown_llm_result(
+                        tx,
+                        unknown_category,
+                        failure_reason="llm_no_results",
+                    )
+                continue
+
+            if llm_results and len(llm_results) != len(unknown_chunk):
+                logger.warning(
+                    "OpenAI categorization returned %s results for %s requested items.",
+                    len(llm_results),
+                    len(unknown_chunk),
+                )
+
+            paired_cache_keys: set[Any] = set()
+            for tx, result in pair_llm_results(unknown_chunk, llm_results):
+                if not isinstance(result, dict):
+                    logger.warning("OpenAI categorization returned a non-object result.")
+                    continue
+                cache_key = merchant_category_cache_key(
+                    tx["merchant_key"],
+                    tx.get("amount"),
+                    tx.get("merchant_id"),
+                )
+                paired_cache_keys.add(cache_key)
+                accepted[cache_key] = validated_llm_result(
+                    tx,
+                    result,
+                    context,
+                    unknown_category,
+                )
             for tx in unknown_chunk:
                 cache_key = merchant_category_cache_key(
                     tx["merchant_key"],
                     tx.get("amount"),
                     tx.get("merchant_id"),
                 )
-                accepted[cache_key] = unknown_llm_result(
-                    tx,
-                    unknown_category,
-                    failure_reason="llm_no_results",
-                )
-            continue
-
-        if llm_results and len(llm_results) != len(unknown_chunk):
-            logger.warning(
-                "OpenAI categorization returned %s results for %s requested items.",
-                len(llm_results),
-                len(unknown_chunk),
-            )
-
-        paired_cache_keys: set[Any] = set()
-        for tx, result in pair_llm_results(unknown_chunk, llm_results):
-            if not isinstance(result, dict):
-                logger.warning("OpenAI categorization returned a non-object result.")
-                continue
-            merchant_key = tx["merchant_key"]
-            cache_key = merchant_category_cache_key(merchant_key, tx.get("amount"), tx.get("merchant_id"))
-            paired_cache_keys.add(cache_key)
-            candidate_categories = tx.get("llm_candidate_categories") or context.category_options
-            candidate_tags = tx.get("llm_candidate_tags") or context.tag_options
-            candidate_category_ids = taxonomy_ids_for_names(context.category_rows, candidate_categories)
-            candidate_tag_ids = taxonomy_ids_for_names(context.tag_rows, candidate_tags)
-            category, category_id, category_id_is_valid = parse_llm_category_id(
-                result.get("category_id"),
-                context.category_rows,
-                unknown_category,
-            )
-            confidence = parse_confidence(result.get("confidence"))
-            confidence_is_valid = 0 <= confidence <= 1
-            if not confidence_is_valid:
-                confidence = 0.0
-            tags, tag_ids, invalid_tag_ids, tag_ids_payload_is_valid = parse_llm_tag_ids(
-                result.get("tag_ids"),
-                context.tag_rows,
-            )
-            category_outside_candidate_taxonomy = (
-                category_id_is_valid and category_id is not None and category_id not in set(candidate_category_ids)
-            )
-            tag_ids_outside_candidate_taxonomy = [tag_id for tag_id in tag_ids if tag_id not in set(candidate_tag_ids)]
-            tag_drop = filtered_llm_tags_for_validity(
-                tags,
-                tag_ids,
-            )
-            final_confidence = (
-                llm_final_confidence(tx, category, confidence, result)
-                if category_id_is_valid and confidence_is_valid
-                else 0.0
-            )
-            decision = apply_llm_review_policy(
-                category,
-                tag_drop["tags"],
-                final_confidence,
-                unknown_category,
-                context.review_threshold,
-                context.verify_threshold,
-            )
-            if llm_result_needs_forced_review(
-                decision,
-                category_outside_candidate_taxonomy,
-                tag_ids_outside_candidate_taxonomy,
-                invalid_tag_ids,
-                tag_ids_payload_is_valid,
-                tag_drop["dropped_outside_candidate_tag_ids"],
-            ):
-                decision = FinalCategoryDecision(
-                    category=decision.category,
-                    tags=decision.tags,
-                    confidence=decision.confidence,
-                    needs_review=1,
-                    proposed_category=decision.proposed_category,
-                    proposed_confidence=decision.proposed_confidence,
-                    assigned_unknown=decision.assigned_unknown,
-                )
-
-            if (
-                decision.category != unknown_category
-                and decision.confidence is not None
-                and decision.confidence >= context.confidence_threshold
-            ):
-                rule_id = (
-                    save_automatic_category_rule(conn, tx, decision.category, decision.tags)
-                    if save_automatic_rules and not decision.needs_review
-                    else None
-                )
-            else:
-                rule_id = None
-            accepted[cache_key] = {
-                "category": decision.category,
-                "confidence": decision.confidence,
-                "needs_review": bool(decision.needs_review),
-                "tags": list(decision.tags),
-                "rule_id": rule_id,
-                "metadata": llm_category_metadata(
-                    tx,
-                    result,
-                    decision,
-                    confidence,
-                    final_confidence,
-                    rule_id,
-                    category_id=category_id,
-                    tag_ids=tag_drop["tag_ids"],
-                    candidate_category_ids=candidate_category_ids,
-                    candidate_tag_ids=candidate_tag_ids,
-                    category_outside_candidate_taxonomy=category_outside_candidate_taxonomy,
-                    tag_ids_outside_candidate_taxonomy=tag_ids_outside_candidate_taxonomy,
-                    dropped_invalid_tag_ids=invalid_tag_ids,
-                    dropped_tag_ids_outside_candidate_taxonomy=tag_drop["dropped_outside_candidate_tag_ids"],
-                    tag_ids_payload_is_valid=tag_ids_payload_is_valid,
-                    failure_reason=llm_failure_reason(
-                        category,
+                if cache_key not in paired_cache_keys:
+                    accepted[cache_key] = unknown_llm_result(
+                        tx,
                         unknown_category,
-                        category_id_is_valid,
-                        confidence_is_valid,
-                        decision,
-                    ),
-                ),
-            }
-        for tx in unknown_chunk:
-            cache_key = merchant_category_cache_key(
-                tx["merchant_key"],
-                tx.get("amount"),
-                tx.get("merchant_id"),
-            )
-            if cache_key not in paired_cache_keys:
-                accepted[cache_key] = unknown_llm_result(
-                    tx,
-                    unknown_category,
-                    failure_reason="llm_missing_result",
-                )
+                        failure_reason="llm_missing_result",
+                    )
+    finally:
+        cleanup_llm_candidate_taxonomies(context.unknown_items)
+
     logger.info("LLM categorization returned %s result(s).", llm_result_count)
-    cleanup_llm_candidate_taxonomies(context.unknown_items)
+    return LlmCategorizationOutcome(accepted=accepted, result_count=llm_result_count)
+
+
+def validated_llm_result(
+    tx: MutableMapping[str, Any],
+    result: Mapping[str, Any],
+    context: LlmCategorizationRequestContext,
+    unknown_category: str,
+) -> dict[str, Any]:
+    """Return a validated, database-write-free LLM result for one transaction."""
+    candidate_categories = tx.get("llm_candidate_categories") or context.category_options
+    candidate_tags = tx.get("llm_candidate_tags") or context.tag_options
+    candidate_category_ids = taxonomy_ids_for_names(context.category_rows, candidate_categories)
+    candidate_tag_ids = taxonomy_ids_for_names(context.tag_rows, candidate_tags)
+    category, category_id, category_id_is_valid = parse_llm_category_id(
+        result.get("category_id"),
+        context.category_rows,
+        unknown_category,
+    )
+    confidence = parse_confidence(result.get("confidence"))
+    confidence_is_valid = 0 <= confidence <= 1
+    if not confidence_is_valid:
+        confidence = 0.0
+    tags, tag_ids, invalid_tag_ids, tag_ids_payload_is_valid = parse_llm_tag_ids(
+        result.get("tag_ids"),
+        context.tag_rows,
+    )
+    category_outside_candidate_taxonomy = (
+        category_id_is_valid and category_id is not None and category_id not in set(candidate_category_ids)
+    )
+    tag_ids_outside_candidate_taxonomy = [tag_id for tag_id in tag_ids if tag_id not in set(candidate_tag_ids)]
+    tag_drop = filtered_llm_tags_for_validity(
+        tags,
+        tag_ids,
+    )
+    final_confidence = (
+        llm_final_confidence(tx, category, confidence, result) if category_id_is_valid and confidence_is_valid else 0.0
+    )
+    decision = apply_llm_review_policy(
+        category,
+        tag_drop["tags"],
+        final_confidence,
+        unknown_category,
+        context.review_threshold,
+        context.verify_threshold,
+    )
+    if llm_result_needs_forced_review(
+        decision,
+        category_outside_candidate_taxonomy,
+        tag_ids_outside_candidate_taxonomy,
+        invalid_tag_ids,
+        tag_ids_payload_is_valid,
+        tag_drop["dropped_outside_candidate_tag_ids"],
+    ):
+        decision = FinalCategoryDecision(
+            category=decision.category,
+            tags=decision.tags,
+            confidence=decision.confidence,
+            needs_review=1,
+            proposed_category=decision.proposed_category,
+            proposed_confidence=decision.proposed_confidence,
+            assigned_unknown=decision.assigned_unknown,
+        )
+
+    automatic_rule_candidate = (
+        decision.category != unknown_category
+        and decision.confidence is not None
+        and decision.confidence >= context.confidence_threshold
+        and not decision.needs_review
+    )
+    return {
+        "category": decision.category,
+        "confidence": decision.confidence,
+        "needs_review": bool(decision.needs_review),
+        "tags": list(decision.tags),
+        "rule_id": None,
+        "automatic_rule_candidate": automatic_rule_candidate,
+        "automatic_rule_checked": False,
+        "metadata": llm_category_metadata(
+            tx,
+            result,
+            decision,
+            confidence,
+            final_confidence,
+            None,
+            category_id=category_id,
+            tag_ids=tag_drop["tag_ids"],
+            candidate_category_ids=candidate_category_ids,
+            candidate_tag_ids=candidate_tag_ids,
+            category_outside_candidate_taxonomy=category_outside_candidate_taxonomy,
+            tag_ids_outside_candidate_taxonomy=tag_ids_outside_candidate_taxonomy,
+            dropped_invalid_tag_ids=invalid_tag_ids,
+            dropped_tag_ids_outside_candidate_taxonomy=tag_drop["dropped_outside_candidate_tag_ids"],
+            tag_ids_payload_is_valid=tag_ids_payload_is_valid,
+            failure_reason=llm_failure_reason(
+                category,
+                unknown_category,
+                category_id_is_valid,
+                confidence_is_valid,
+                decision,
+            ),
+        ),
+    }
+
+
+def apply_llm_categorization_outcome(
+    conn: Any,
+    transactions: Sequence[MutableMapping[str, Any]],
+    outcome: LlmCategorizationOutcome,
+    unknown_category: str,
+    save_automatic_rules: bool = True,
+) -> None:
+    """Apply validated LLM results inside the caller's database write phase."""
+    accepted = outcome.accepted
     if not accepted:
         return
 
@@ -455,6 +467,12 @@ def classify_unknowns_with_llm(
         )
         if tx.get("category") == unknown_category and cache_key in accepted:
             accepted_result = accepted[cache_key]
+            rule_id = automatic_rule_id_for_result(
+                conn,
+                tx,
+                accepted_result,
+                save_automatic_rules=save_automatic_rules,
+            )
             tx["category"] = accepted_result["category"]
             tx["category_id"] = resolve_category_id(conn, accepted_result["category"])
             tx["tags"] = accepted_result["tags"]
@@ -465,10 +483,36 @@ def classify_unknowns_with_llm(
                     unknown_category,
                     CATEGORY_SOURCE_AI,
                     confidence=accepted_result["confidence"],
-                    rule_id=accepted_result["rule_id"],
+                    rule_id=rule_id,
                     metadata=accepted_result["metadata"],
                 ).to_dict()
             )
+
+
+def automatic_rule_id_for_result(
+    conn: Any,
+    transaction: Mapping[str, Any],
+    accepted_result: MutableMapping[str, Any],
+    save_automatic_rules: bool,
+) -> int | None:
+    """Return or create the automatic rule ID for an accepted LLM result."""
+    if accepted_result.get("automatic_rule_checked"):
+        return accepted_result.get("rule_id")
+
+    rule_id = None
+    if save_automatic_rules and accepted_result.get("automatic_rule_candidate"):
+        rule_id = save_automatic_category_rule(
+            conn,
+            transaction,
+            accepted_result["category"],
+            accepted_result["tags"],
+        )
+    accepted_result["rule_id"] = rule_id
+    accepted_result["automatic_rule_checked"] = True
+    metadata = accepted_result.get("metadata")
+    if isinstance(metadata, dict):
+        metadata["category_rule_id"] = rule_id
+    return rule_id
 
 
 def request_llm_categories(

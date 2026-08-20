@@ -1,6 +1,6 @@
 """Tests for category taxonomy behavior."""
 
-from unittest.mock import patch
+from unittest.mock import Mock
 
 from sqlalchemy import delete, func, select, text
 
@@ -15,6 +15,7 @@ from finance_app.database.taxonomy import seed_category_taxonomy
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.service import (
     classify_unknowns_with_llm,
+    get_builtin_category_names,
     get_category_options,
     get_category_rules,
     normalize_category,
@@ -72,18 +73,18 @@ def test_core_constants_do_not_define_taxonomy():
     assert not hasattr(constants, "ALLOWED_CATEGORIES")
 
 
-def test_category_options_seed_empty_db_from_taxonomy_file(core_conn):
-    """Verify category options seed an empty taxonomy through Core writes."""
+def test_category_option_reads_do_not_seed_empty_taxonomy(core_conn):
+    """Verify category option readers stay pure when taxonomy rows are missing."""
     core_conn.execute(delete(tags_table))
     core_conn.execute(delete(categories_table))
 
     category_options = get_category_options(core_conn)
+    builtin_categories = get_builtin_category_names(core_conn)
 
-    assert "Income" in category_options
-    assert "UNKNOWN" in category_options
-    assert "Reimbursement" in category_options
-    assert "Transfers" in category_options
-    assert core_conn.execute(select(func.count()).select_from(categories_table)).scalar_one() > 1
+    assert category_options == ["UNKNOWN"]
+    assert "Income" in builtin_categories
+    assert "UNKNOWN" in builtin_categories
+    assert core_conn.execute(select(func.count()).select_from(categories_table)).scalar_one() == 0
 
 
 def test_taxonomy_options_sort_user_values_before_builtins(core_conn):
@@ -139,8 +140,8 @@ def test_rules_persist_tags(core_conn):
     assert rule["tags"] == ["Government", "Tax"]
 
 
-def test_llm_fallback_path_initializes_taxonomy_options(core_conn):
-    """Verify llm fallback path initializes taxonomy options."""
+def test_llm_fallback_path_uses_seeded_taxonomy_options(core_conn):
+    """Verify llm fallback path uses explicit taxonomy seed setup."""
     core_conn.execute(delete(tags_table))
     core_conn.execute(delete(categories_table))
     seed_category_taxonomy(core_conn)
@@ -153,8 +154,14 @@ def test_llm_fallback_path_initializes_taxonomy_options(core_conn):
         }
     ]
 
-    with patch("finance_app.modules.categories.service.request_llm_categories", return_value=[]) as request_llm:
-        classify_unknowns_with_llm(core_conn, transactions, [], "UNKNOWN")
+    request_llm = Mock(return_value=[])
+    classify_unknowns_with_llm(
+        core_conn,
+        transactions,
+        [],
+        "UNKNOWN",
+        request_categories=request_llm,
+    )
 
     assert transactions[0]["category"] == "UNKNOWN"
     assert request_llm.called

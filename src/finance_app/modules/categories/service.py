@@ -61,7 +61,8 @@ def classify_unknowns_with_llm(
 
     ``save_automatic_rules`` controls whether no-review AI decisions should
     also create future matching rules. ``request_categories`` can inject an LLM
-    requester without replacing module globals.
+    requester without replacing module globals. When omitted, the lower-level
+    adapter uses the guarded default provider boundary.
     """
     return _llm.classify_unknowns_with_llm(
         conn,
@@ -69,7 +70,7 @@ def classify_unknowns_with_llm(
         rules,
         unknown_category,
         save_automatic_rules=save_automatic_rules,
-        request_categories=request_categories or request_llm_categories,
+        request_categories=request_categories,
     )
 
 

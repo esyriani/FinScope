@@ -1,9 +1,11 @@
 """Integration tests for upload AI workflow handoffs."""
 
 import json
+from contextlib import contextmanager
 
 from sqlalchemy import text
 from tests.support.database import set_owner_setting
+from tests.support.llm import result_payload
 from tests.support.upload import (
     assert_llm_progress_log_entries,
     assert_llm_progress_updates,
@@ -15,6 +17,8 @@ from tests.support.upload import (
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.database.engine import db_core_transaction
+from finance_app.modules.categories import llm_workflow as category_llm_workflow
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names
 from finance_app.modules.upload import ai_workflow as upload_ai_workflow
@@ -252,6 +256,94 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
     assert get_transaction_tag_names(core_conn, unknown_id) == ["Tax"]
     assert known._mapping["category"] == "Utilities"
     assert ignored._mapping["category"] == "UNKNOWN"
+
+
+def test_categorize_unknown_transaction_rows_requests_ai_outside_database_transaction(app, core_conn, monkeypatch):
+    """Verify the provider request runs between short database phases."""
+    del app
+    account_id, statement_id = create_account_statement(core_conn, "llm-transaction-boundary.csv")
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            statement_id,
+            account_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            category_id,
+            needs_review,
+            fingerprint
+        )
+        VALUES (:p0, :p1, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', :category_id, 1, 'llm-boundary')
+        """),
+        {
+            "p0": statement_id,
+            "p1": account_id,
+            "category_id": resolve_category_id(core_conn, "UNKNOWN"),
+        },
+    )
+    core_conn.commit()
+    rows = upload_ai_workflow.unknown_transaction_rows(core_conn, "UNKNOWN", statement_id=statement_id, limit=1)
+    active_transactions = 0
+    observed_active_transactions = []
+
+    @contextmanager
+    def tracked_transaction(*args, **kwargs):
+        """Record logical app transactions around the provider boundary."""
+        nonlocal active_transactions
+        with db_core_transaction(*args, **kwargs) as conn:
+            active_transactions += 1
+            try:
+                yield conn
+            finally:
+                active_transactions -= 1
+
+    def request_for_test(
+        unknown_chunk,
+        requested_rules,
+        category_options,
+        tag_options,
+        category_rows,
+        tag_rows,
+        openai_model,
+        verify_threshold,
+        review_threshold,
+    ):
+        """Return one accepted result and capture transaction state."""
+        del requested_rules, category_options, tag_options, openai_model, verify_threshold, review_threshold
+        observed_active_transactions.append(active_transactions)
+        upload_ai_workflow.llm_module.record_llm_request_status(
+            "ok",
+            requested_count=len(unknown_chunk),
+            result_count=1,
+        )
+        return [
+            result_payload(
+                category_rows,
+                tag_rows,
+                unknown_chunk[0]["llm_request_id"],
+                "Food",
+                0.96,
+                tags=[],
+                needs_review=False,
+            )
+        ]
+
+    monkeypatch.setattr(category_llm_workflow, "db_core_transaction", tracked_transaction)
+    monkeypatch.setattr(upload_ai_workflow, "db_core_transaction", tracked_transaction)
+    monkeypatch.setattr(upload_ai_workflow.llm_module, "request_llm_categories", request_for_test)
+
+    updated_count, source_counts, report = upload_ai_workflow.categorize_unknown_transaction_rows(rows)
+
+    row = core_conn.execute(
+        text("SELECT category, category_source FROM transactions WHERE fingerprint = 'llm-boundary'")
+    ).fetchone()
+    assert observed_active_transactions == [0]
+    assert updated_count == 1
+    assert source_counts == {"ai": 1}
+    assert report["request_status"]["status"] == "ok"
+    assert tuple(row) == ("Food", "ai")
 
 
 def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_metadata(app, core_conn):

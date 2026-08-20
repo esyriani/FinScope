@@ -22,7 +22,6 @@ from finance_app.core.setting_limits import (
     PINNED_REPORT_LIMIT_MAX,
 )
 from finance_app.database.engine import db_core_transaction
-from finance_app.database.seeds import seed_runtime_settings_defaults
 from finance_app.modules.auth.permissions import PERMISSION_MANAGE_GLOBAL_SETTINGS, current_user_can
 from finance_app.modules.settings.forms import (
     clean_openai_model,
@@ -40,11 +39,10 @@ from finance_app.modules.settings.openai_model_validation import (
 from finance_app.modules.settings.runtime import (
     confirm_ai_token_usage_enabled,
     get_all_settings,
-    get_statement_type_options,
-    sync_statement_types,
     upsert_setting,
     upsert_user_setting,
 )
+from finance_app.modules.statements.types import get_statement_type_options, sync_statement_types
 
 GENERAL_SETTING_SAVE_KEYS = GENERAL_SETTING_KEYS
 
@@ -74,7 +72,6 @@ def build_settings_context() -> dict[str, Any]:
     """Build settings context."""
     can_manage_global_settings = current_user_can(PERMISSION_MANAGE_GLOBAL_SETTINGS)
     with db_core_transaction() as conn:
-        seed_runtime_settings_defaults(conn)
         current = get_all_settings(conn)
         statement_types = get_statement_type_options(conn) if can_manage_global_settings else []
         confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
@@ -178,7 +175,6 @@ def save_settings_from_form(form: Any) -> None:
     global_values = parse_global_settings_form(form, app_settings) if can_manage_global_settings else {}
 
     with db_core_transaction() as conn:
-        seed_runtime_settings_defaults(conn)
         for key in GENERAL_SETTING_SAVE_KEYS:
             upsert_user_setting(conn, current_user.id, key, str(general_values[key]))
 

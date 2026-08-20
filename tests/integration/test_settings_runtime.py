@@ -18,17 +18,18 @@ from finance_app.modules.settings.runtime import (
     get_float_setting,
     get_int_setting,
     get_setting,
-    get_setting_with_fallback,
+    get_unknown_category,
+    upsert_setting,
+    upsert_user_setting,
+)
+from finance_app.modules.statements.types import (
     get_statement_type_by_id,
     get_statement_type_by_parser_type,
     get_statement_type_options,
-    get_unknown_category,
     normalize_default_account_type,
     normalize_statement_import_mode,
     normalize_statement_parser_type,
     sync_statement_types,
-    upsert_setting,
-    upsert_user_setting,
 )
 
 
@@ -66,7 +67,6 @@ def test_runtime_settings_helpers_support_core_connections(app, core_conn):
 
     active = {row["name"]: row["parser_type"] for row in get_statement_type_options(core_conn)}
     assert get_all_settings(core_conn)["theme_mode"] == "light"
-    assert get_setting_with_fallback("theme_mode", "dark") == "light"
     assert get_unknown_category(core_conn) == "UNKNOWN"
     assert active == {
         "Core bank account": "bank_account",

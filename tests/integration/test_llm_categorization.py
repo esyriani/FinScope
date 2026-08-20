@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from sqlalchemy import text
 from tests.support.database import set_owner_setting
 from tests.support.llm import (
@@ -184,6 +185,14 @@ def test_estimate_llm_categorization_tokens_uses_final_prompt_batches(core_conn)
     assert estimate["max_batch_input_tokens"] == estimate["input_tokens"]
     assert estimate["tokenizer_available"] is True
     assert estimate["batches"][0]["request_count"] == 1
+
+
+def test_default_llm_provider_requires_split_transaction_boundary(core_conn):
+    """Verify the default provider cannot run inside an active DB transaction."""
+    transactions = [unknown_transaction("Metro Grocery", "METRO", 12.34)]
+
+    with pytest.raises(RuntimeError, match="split prepare/request/apply workflow"):
+        llm.classify_unknowns_with_llm(core_conn, transactions, [], "UNKNOWN")
 
 
 def test_classify_unknowns_with_llm_can_skip_automatic_rule_creation(core_conn):

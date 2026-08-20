@@ -19,7 +19,7 @@ from finance_app.modules.dashboard.queries import fetch_spending_merchant_totals
 from finance_app.modules.recurring.queries import fetch_month_transactions
 from finance_app.modules.reports.queries import fetch_category_breakdown, fetch_merchant_breakdown
 from finance_app.modules.review.queries import review_candidate_rows
-from finance_app.modules.rules.engine import rule_sql_candidate_condition
+from finance_app.modules.rules.queries import rule_sql_candidate_condition
 from finance_app.modules.transactions.filters import (
     build_transaction_core_filters,
     parse_transaction_filters,

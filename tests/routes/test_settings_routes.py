@@ -9,7 +9,8 @@ from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.auth.service import hash_password, utc_now
 from finance_app.modules.settings import service as settings_service
-from finance_app.modules.settings.runtime import get_all_settings, get_statement_type_options, get_unknown_category
+from finance_app.modules.settings.runtime import get_all_settings, get_unknown_category
+from finance_app.modules.statements.types import get_statement_type_options
 
 
 def login_session(client, user_id):

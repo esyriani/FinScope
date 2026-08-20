@@ -1,6 +1,7 @@
 """Transaction categorization workflow helpers."""
 
-from collections.abc import Iterable, Mapping, MutableMapping
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from finance_app.core.constants import UNKNOWN_CATEGORY
@@ -40,6 +41,14 @@ from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.settings.runtime import get_unknown_category
 
 
+@dataclass(frozen=True)
+class CategorizationEvidenceContext:
+    """Database-backed context produced by the rule/history categorization pass."""
+
+    unknown_category: str
+    rules: Sequence[Mapping[str, Any]]
+
+
 def categorize_transactions(
     transactions: list[MutableMapping[str, Any]],
     conn: Any | None = None,
@@ -56,6 +65,31 @@ def categorize_transactions(
         with db_core_transaction() as owned_conn:
             return categorize_transactions(transactions, conn=owned_conn, use_llm=use_llm)
 
+    context = categorize_transactions_from_evidence(
+        transactions,
+        conn,
+        prefer_llm_fallback=use_llm,
+    )
+
+    if use_llm and any(tx.get("category") == context.unknown_category for tx in transactions):
+        classify_unknowns_with_llm(conn, transactions, context.rules, context.unknown_category)
+
+    resolve_transaction_category_ids(conn, transactions)
+    return transactions
+
+
+def categorize_transactions_from_evidence(
+    transactions: list[MutableMapping[str, Any]],
+    conn: Any,
+    prefer_llm_fallback: bool = True,
+) -> CategorizationEvidenceContext:
+    """Apply rule and historical evidence without contacting the LLM provider.
+
+    ``prefer_llm_fallback`` preserves the existing LLM-enabled evidence policy:
+    useful but medium-confidence rules remain unresolved so the later provider
+    phase can arbitrate them. Callers can then release the database transaction
+    before making any external request.
+    """
     unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
     category_options = get_category_options(conn)
     rules = get_category_rules(conn)
@@ -85,7 +119,7 @@ def categorize_transactions(
             scored_rule,
             category_options,
             unknown_category,
-            use_llm=use_llm,
+            use_llm=prefer_llm_fallback,
         )
         state.apply_to(tx)
 
@@ -103,13 +137,13 @@ def categorize_transactions(
         if categorized:
             categorized.apply_to(tx)
 
-    if use_llm and any(tx.get("category") == unknown_category for tx in transactions):
-        classify_unknowns_with_llm(conn, transactions, rules, unknown_category)
+    return CategorizationEvidenceContext(unknown_category=unknown_category, rules=rules)
 
+
+def resolve_transaction_category_ids(conn: Any, transactions: Iterable[MutableMapping[str, Any]]) -> None:
+    """Resolve category IDs for all categorized transaction payloads."""
     for tx in transactions:
         tx["category_id"] = resolve_category_id(conn, tx.get("category"))
-
-    return transactions
 
 
 def category_state_from_evidence(

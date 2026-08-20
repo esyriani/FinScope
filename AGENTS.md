@@ -122,6 +122,17 @@ Current architecture boundaries to preserve:
 - External provider boundaries must be injectable. LLM categorization and
   settings model validation should depend on passed request/client/provider
   collaborators or small adapters, never route-level direct network calls.
+- Default LLM categorization requests must use the split
+  prepare/request/apply workflow in `src/finance_app/modules/categories/llm_workflow.py`.
+  Prepare rule/history and prompt context in a short transaction, release the
+  database connection while the provider request runs, then apply validated
+  results and persistence updates in a short caller-owned write transaction.
+  Do not call the default provider through `classify_unknowns_with_llm()` or
+  `categorize_transactions(..., use_llm=True)` inside `db_core_transaction()`.
+- Statement import type configuration lives in
+  `src/finance_app/modules/statements/types.py`. Settings may edit those rows
+  and Upload may read them, but `modules/settings/runtime.py` should stay
+  focused on user and owner-managed runtime setting resolution.
 - Large modules should be split along existing domain seams before adding more
   branches. Preserve and extend `tests/unit/test_module_size.py` when a split is
   meant to keep a module reviewable.
@@ -153,6 +164,15 @@ metadata and one specialization point, not every report, route, and template.
   `src/finance_app/database/taxonomy.py` from the neutral metadata in
   `src/finance_app/core/builtin_taxonomy.py`. Do not make database seeding import
   feature services.
+- Request-time read helpers must not silently create seed-owned data. Category
+  option readers, settings page context builders, template context helpers, and
+  JSON read paths should return explicit fallbacks or surface initialization
+  errors rather than seeding runtime settings, statement types, or built-in
+  taxonomy rows.
+- Runtime settings readers should receive a caller-owned SQLAlchemy Core
+  connection or be accessed through an explicit request-scoped context provider.
+  Do not add low-level settings convenience helpers that open their own database
+  connection and hide transaction ownership from the caller.
 - Prefer database constraints for invariants that must survive concurrency:
   uniqueness, ownership, generated normalized keys, foreign keys, enum-like
   checks, non-empty values, and nullable uniqueness helpers.

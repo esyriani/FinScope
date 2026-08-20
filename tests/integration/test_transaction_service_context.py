@@ -19,6 +19,7 @@ from finance_app.database.tables import (
     users as users_table,
 )
 from finance_app.modules.categories.repository import resolve_category_id
+from finance_app.modules.categories.rules_matching import merchant_category_cache_key
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,
@@ -446,10 +447,8 @@ def test_recategorize_selected_transactions_job_updates_selected_rows(core_conn,
     ).inserted_primary_key[0]
     core_conn.commit()
 
-    def categorize_for_test(transactions, conn, use_llm=True):
+    def prepare_for_test(transactions):
         """Return deterministic categorization for the selected batch."""
-        del conn
-        assert use_llm is True
         assert [tx["id"] for tx in transactions] == [target_id, other_id]
         transactions[0].update(
             {
@@ -477,9 +476,13 @@ def test_recategorize_selected_transactions_job_updates_selected_rows(core_conn,
                 "reviewed_at": None,
             }
         )
-        return transactions
+        return transactions_service.PreparedTransactionLlmCategorization(
+            unknown_category="UNKNOWN",
+            rules=[],
+            request_context=None,
+        )
 
-    monkeypatch.setattr(transactions_service, "categorize_transactions", categorize_for_test)
+    monkeypatch.setattr(transactions_service, "prepare_transaction_llm_categorization", prepare_for_test)
 
     message = transactions_service.recategorize_selected_transactions_job([target_id, other_id])
 
@@ -525,37 +528,36 @@ def test_suggest_transaction_ai_category_does_not_update_rows(core_conn, monkeyp
             ).inserted_primary_key[0]
         )
     core_conn.commit()
-    captured = {}
 
-    def classify_for_test(conn, transactions, rules, unknown_category, save_automatic_rules=True):
+    def request_for_test(prepared):
         """Return a deterministic one-row LLM decision."""
-        del rules, unknown_category
-        captured["save_automatic_rules"] = save_automatic_rules
+        tx = prepared.request_context.unknown_items[0]
         transactions_service.llm_module.record_llm_request_status("ok", requested_count=1, result_count=1)
-        transactions[0].update(
-            {
-                "category": "Entertainment",
-                "category_id": resolve_category_id(conn, "Entertainment"),
-                "tags": ["Service"],
-                "needs_review": 0,
-                "category_source": "ai",
-                "category_confidence": 0.96,
-                "category_rule_id": None,
-                "category_metadata": {
-                    "decision_source": "llm",
-                    "final_category": "Entertainment",
-                    "final_tags": ["Service"],
-                    "final_confidence": 0.96,
-                    "llm_confidence": 0.96,
-                    "llm_reason": "TVA Sports is a streaming sports service.",
-                    "review_required": False,
-                },
-                "categorized_at": "2026-05-04T12:00:00Z",
-                "reviewed_at": None,
-            }
+        return transactions_service.llm_module.LlmCategorizationOutcome(
+            accepted={
+                merchant_category_cache_key(tx["merchant_key"], tx.get("amount"), tx.get("merchant_id")): {
+                    "category": "Entertainment",
+                    "tags": ["Service"],
+                    "needs_review": 0,
+                    "confidence": 0.96,
+                    "rule_id": None,
+                    "automatic_rule_candidate": True,
+                    "automatic_rule_checked": False,
+                    "metadata": {
+                        "decision_source": "llm",
+                        "final_category": "Entertainment",
+                        "final_tags": ["Service"],
+                        "final_confidence": 0.96,
+                        "llm_confidence": 0.96,
+                        "llm_reason": "TVA Sports is a streaming sports service.",
+                        "review_required": False,
+                    },
+                }
+            },
+            result_count=1,
         )
 
-    monkeypatch.setattr(transactions_service, "classify_unknowns_with_llm", classify_for_test)
+    monkeypatch.setattr(transactions_service, "request_prepared_transaction_llm_categorization", request_for_test)
 
     result = transactions_service.suggest_transaction_ai_category(ids[0])
 
@@ -577,7 +579,6 @@ def test_suggest_transaction_ai_category_does_not_update_rows(core_conn, monkeyp
     ).scalar_one()
     rule_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM category_rules")).fetchone()._mapping["count"]
 
-    assert captured["save_automatic_rules"] is False
     assert result["ok"] is True
     assert result["applied"] is False
     assert result["can_apply"] is True
@@ -619,34 +620,35 @@ def test_apply_transaction_ai_suggestion_updates_selected_row(core_conn, monkeyp
         )
     core_conn.commit()
 
-    def classify_for_test(conn, transactions, rules, unknown_category, save_automatic_rules=True):
+    def request_for_test(prepared):
         """Return a deterministic one-row LLM decision."""
-        del rules, unknown_category, save_automatic_rules
+        tx = prepared.request_context.unknown_items[0]
         transactions_service.llm_module.record_llm_request_status("ok", requested_count=1, result_count=1)
-        transactions[0].update(
-            {
-                "category": "Entertainment",
-                "category_id": resolve_category_id(conn, "Entertainment"),
-                "tags": ["Service"],
-                "needs_review": 1,
-                "category_source": "ai",
-                "category_confidence": 0.84,
-                "category_rule_id": None,
-                "category_metadata": {
-                    "decision_source": "llm",
-                    "final_category": "Entertainment",
-                    "final_tags": ["Service"],
-                    "final_confidence": 0.84,
-                    "llm_confidence": 0.84,
-                    "llm_reason": "TVA Sports is a streaming sports service.",
-                    "review_required": True,
-                },
-                "categorized_at": "2026-05-04T12:00:00Z",
-                "reviewed_at": None,
-            }
+        return transactions_service.llm_module.LlmCategorizationOutcome(
+            accepted={
+                merchant_category_cache_key(tx["merchant_key"], tx.get("amount"), tx.get("merchant_id")): {
+                    "category": "Entertainment",
+                    "tags": ["Service"],
+                    "needs_review": 1,
+                    "confidence": 0.84,
+                    "rule_id": None,
+                    "automatic_rule_candidate": False,
+                    "automatic_rule_checked": False,
+                    "metadata": {
+                        "decision_source": "llm",
+                        "final_category": "Entertainment",
+                        "final_tags": ["Service"],
+                        "final_confidence": 0.84,
+                        "llm_confidence": 0.84,
+                        "llm_reason": "TVA Sports is a streaming sports service.",
+                        "review_required": True,
+                    },
+                }
+            },
+            result_count=1,
         )
 
-    monkeypatch.setattr(transactions_service, "classify_unknowns_with_llm", classify_for_test)
+    monkeypatch.setattr(transactions_service, "request_prepared_transaction_llm_categorization", request_for_test)
     suggestion = transactions_service.suggest_transaction_ai_category(ids[0])
 
     result = transactions_service.apply_transaction_ai_suggestion(ids[0], suggestion)

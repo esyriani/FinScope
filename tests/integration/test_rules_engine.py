@@ -20,8 +20,8 @@ from finance_app.database.tables import (
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names, set_rule_tags
 from finance_app.modules.merchants.repository import get_or_create_merchant, get_or_create_merchant_for_description
-from finance_app.modules.rules import engine as rules_engine
-from finance_app.modules.rules.engine import (
+from finance_app.modules.rules import workflow as rules_workflow
+from finance_app.modules.rules.workflow import (
     apply_all_rules_job,
     apply_all_rules_to_transactions,
     apply_single_rule_to_transactions,
@@ -354,7 +354,7 @@ def test_apply_all_rules_job_rolls_back_when_late_tag_write_fails(app, core_conn
         del conn, transaction_id, tag_names, source, rule_id
         raise RuntimeError("tag write failed")
 
-    monkeypatch.setattr(rules_engine, "set_transaction_tags", fail_tag_write)
+    monkeypatch.setattr(rules_workflow, "set_transaction_tags", fail_tag_write)
 
     with pytest.raises(RuntimeError, match="tag write failed"):
         apply_all_rules_job({})
