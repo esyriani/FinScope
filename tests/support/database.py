@@ -49,12 +49,12 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     users as users_table,
 )
+from finance_app.database.taxonomy import upsert_tag_metadata
 from finance_app.modules.auth import repository as auth_repository
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import (
     set_rule_tags,
     set_transaction_tags,
-    upsert_tag_metadata,
 )
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_description
 

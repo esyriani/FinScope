@@ -4,7 +4,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from flask import request, url_for
 
-from finance_app.modules.transactions.constants import TRANSACTION_SORT_DATE
+from finance_app.core.periods import PERIOD_CUSTOM
+from finance_app.modules.transactions.constants import IGNORED_FILTER_ACTIVE, TRANSACTION_SORT_DATE
 
 
 def transactions_url(**overrides: object) -> str:
@@ -20,6 +21,27 @@ def transactions_url(**overrides: object) -> str:
 
     encoded_query = urlencode(query, doseq=True)
     return url_for("transactions.transactions") + (f"?{encoded_query}" if encoded_query else "")
+
+
+def transactions_date_range_url(
+    date_from: str,
+    date_to: str,
+    account_id: int | None = None,
+    merchant_search: str = "",
+) -> str:
+    """Build a transactions URL for an inclusive date range."""
+    params: dict[str, object] = {
+        "period": PERIOD_CUSTOM,
+        "date_from": date_from,
+        "date_to": date_to,
+        "ignored": IGNORED_FILTER_ACTIVE,
+    }
+    if account_id:
+        params["account_id"] = account_id
+    if merchant_search:
+        params["search"] = merchant_search
+    query = urlencode(params)
+    return f"{url_for('transactions.transactions')}?{query}"
 
 
 def transactions_sort_url(sort_name: str, current_sort: str, current_direction: str) -> str:

@@ -64,7 +64,7 @@ Advanced settings are owner-only but still saved on the owner's user account:
 - Recurrence detection defaults.
 - Statement import type configuration.
 
-Backend services enforce these permissions. Hidden UI controls are not the security boundary. Non-request jobs and scripts resolve settings through the active owner account when no request user is available.
+Backend services enforce these permissions. Hidden UI controls are not the security boundary. Owner-only settings resolve through the active owner account for request, background, and script workflows, while General settings stay personal to the current user.
 
 ## Database tables
 

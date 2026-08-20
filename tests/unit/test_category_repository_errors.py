@@ -7,9 +7,9 @@ database states and do not hide schema or programming defects.
 import pytest
 from sqlalchemy.exc import OperationalError
 
+from finance_app.core.builtin_taxonomy import builtin_category_names
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.modules.categories import repository
-from finance_app.modules.categories.builtins import builtin_category_names
 
 
 def operational_error(message):

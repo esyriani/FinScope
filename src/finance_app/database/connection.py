@@ -13,6 +13,7 @@ from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, Numeric, St
 from sqlalchemy.types import Date, DateTime, Float, Integer, TypeDecorator
 
 from finance_app.database.engine import get_database_engine
+from finance_app.database.runtime_repair import repair_startup_runtime_state
 from finance_app.database.seeds import (
     seed_category_taxonomy_defaults,
     seed_runtime_settings_defaults,
@@ -41,6 +42,7 @@ def init_core_db(engine: Any | None = None) -> None:
         seed_runtime_settings_defaults(conn)
         seed_statement_type_defaults(conn)
         seed_category_taxonomy_defaults(conn)
+        repair_startup_runtime_state(conn)
 
 
 def database_has_existing_core_schema(engine: Any) -> bool:

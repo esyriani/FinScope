@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import and_, false, or_, select, update
 
+from finance_app.core.builtin_taxonomy import is_income_category_name
 from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
@@ -20,7 +21,6 @@ from finance_app.core.filters import format_money
 from finance_app.core.money import MoneyValue, money_to_decimal, money_to_float, rounded_money_decimal
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.builtins import is_income_category_name
 from finance_app.modules.categories.decision import DECISION_SOURCE_RULE
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.service import (

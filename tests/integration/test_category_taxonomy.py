@@ -11,6 +11,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     tags as tags_table,
 )
+from finance_app.database.taxonomy import seed_category_taxonomy
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.service import (
     classify_unknowns_with_llm,
@@ -22,7 +23,6 @@ from finance_app.modules.categories.service import (
 from finance_app.modules.categories.taxonomy import (
     get_tag_option_rows,
     get_tag_options,
-    seed_category_taxonomy,
 )
 from finance_app.modules.taxonomy_admin.service import fetch_category_rows, fetch_tag_rows
 

@@ -15,6 +15,10 @@ from finance_app.core.constants import (
     RECURRING_PATTERN_TYPES,
     RECURRING_USER_STATUSES,
     STATEMENT_IMPORT_MODES,
+    STATEMENT_IMPORT_STATUS_COMPLETED,
+    STATEMENT_IMPORT_STATUS_FAILED,
+    STATEMENT_IMPORT_STATUS_QUEUED,
+    STATEMENT_IMPORT_STATUS_RUNNING,
     STATEMENT_IMPORT_STATUSES,
     STATEMENT_TYPE_PARSER_TYPES,
     TRANSACTION_KINDS,
@@ -24,6 +28,7 @@ from finance_app.core.constants import (
     USER_ROLES,
 )
 from finance_app.database import connection as connection_module
+from finance_app.database.runtime_repair import INTERRUPTED_STATEMENT_IMPORT_ERROR
 from finance_app.database.seeds import seed_category_taxonomy_defaults
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -55,6 +60,9 @@ from finance_app.database.tables import (
 )
 from finance_app.database.tables import (
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
+    statements as statements_table,
 )
 from finance_app.database.tables import (
     tags as tags_table,
@@ -307,6 +315,82 @@ def test_init_core_db_rejects_statements_table_without_date_order():
             connection_module.init_core_db(engine)
     finally:
         engine.dispose()
+
+
+def test_init_core_db_marks_interrupted_statement_imports_failed():
+    """Verify startup makes orphaned in-memory statement imports retryable."""
+    engine = create_engine("sqlite://")
+    try:
+        connection_module.init_core_db(engine)
+        with engine.begin() as conn:
+            statement_type_id = conn.execute(
+                select(statement_types_table.c.id).order_by(statement_types_table.c.id).limit(1)
+            ).scalar_one()
+            conn.execute(
+                insert(statements_table),
+                [
+                    {
+                        "statement_type_id": statement_type_id,
+                        "filename": "restart-queued.csv",
+                        "checksum": "restart-queued",
+                        "raw_text": "",
+                        "import_status": STATEMENT_IMPORT_STATUS_QUEUED,
+                        "import_token": "queued-token",
+                        "import_started_at": None,
+                        "import_finished_at": None,
+                    },
+                    {
+                        "statement_type_id": statement_type_id,
+                        "filename": "restart-running.csv",
+                        "checksum": "restart-running",
+                        "raw_text": "",
+                        "import_status": STATEMENT_IMPORT_STATUS_RUNNING,
+                        "import_token": "running-token",
+                        "import_started_at": "2026-05-01T12:00:00Z",
+                        "import_finished_at": None,
+                    },
+                    {
+                        "statement_type_id": statement_type_id,
+                        "filename": "restart-completed.csv",
+                        "checksum": "restart-completed",
+                        "raw_text": "",
+                        "import_status": STATEMENT_IMPORT_STATUS_COMPLETED,
+                        "import_token": None,
+                        "import_started_at": "2026-05-01T12:30:00Z",
+                        "import_finished_at": "2026-05-01T13:00:00Z",
+                    },
+                ],
+            )
+
+        connection_module.init_core_db(engine)
+        with engine.connect() as conn:
+            rows = (
+                conn.execute(
+                    select(
+                        statements_table.c.filename,
+                        statements_table.c.import_status,
+                        statements_table.c.import_error,
+                        statements_table.c.import_finished_at,
+                    ).order_by(statements_table.c.filename)
+                )
+                .mappings()
+                .all()
+            )
+    finally:
+        engine.dispose()
+
+    completed, queued, running = rows
+    assert completed["filename"] == "restart-completed.csv"
+    assert completed["import_status"] == STATEMENT_IMPORT_STATUS_COMPLETED
+    assert completed["import_error"] is None
+    assert queued["filename"] == "restart-queued.csv"
+    assert queued["import_status"] == STATEMENT_IMPORT_STATUS_FAILED
+    assert queued["import_error"] == INTERRUPTED_STATEMENT_IMPORT_ERROR
+    assert queued["import_finished_at"] is not None
+    assert running["filename"] == "restart-running.csv"
+    assert running["import_status"] == STATEMENT_IMPORT_STATUS_FAILED
+    assert running["import_error"] == INTERRUPTED_STATEMENT_IMPORT_ERROR
+    assert running["import_finished_at"] is not None
 
 
 def test_schema_validation_accepts_mysql_reflected_check_sql_and_truncated_names():

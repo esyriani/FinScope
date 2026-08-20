@@ -37,6 +37,12 @@ Not every module needs every file. Small modules can stay compact, but new behav
 
 Controllers should parse HTTP inputs, call the logic layer, and return redirects or rendered templates. Services and workflows should own business decisions. Query and repository helpers should own SQL details.
 
+Shared domain catalogs that must be used by both low-level SQL helpers and feature modules live under [src/finance_app/core/](../src/finance_app/core/). Startup seed orchestration lives under [src/finance_app/database/](../src/finance_app/database/) and must not import feature modules from [src/finance_app/modules/](../src/finance_app/modules/).
+
+Shared analytics contracts such as quick-view values, report measures, cash-flow summaries, data-quality summaries, and generic cleaned-query URL helpers live under [src/finance_app/core/](../src/finance_app/core/). Dashboard and Reports can reuse those contracts, but neither feature should import the other's presenter, constants, or service modules for shared analytics behavior.
+
+Recurring activity detection, source queries, and recurring activity view models are owned by [src/finance_app/modules/recurring/](../src/finance_app/modules/recurring/). Calendar and Home pages can consume that read model, but recurring workflows should not depend on calendar service internals.
+
 ## User interface text
 
 User-facing static text should go through `finance_app.core.i18n` using English source text as the message id. Templates use the global `_()` helper, Python routes can use `gettext()`, and browser-side scripts use `window.financeTranslate()`.

@@ -72,9 +72,9 @@ def user_settings(conn, username="owner"):
     return {row["key"]: row["value"] for row in rows}
 
 
-def test_settings_page_uses_dark_theme_by_default(client):
+def test_settings_page_uses_dark_theme_by_default(owner_client):
     """Verify the settings page renders with safe defaults for a new database."""
-    response = client.get("/settings")
+    response = owner_client.get("/settings")
 
     assert response.status_code == 200
     assert_has_element(response, "html", attrs={"data-bs-theme": "dark"})
@@ -95,7 +95,7 @@ def test_settings_page_uses_dark_theme_by_default(client):
     assert "auto_llm_categorization_enabled" not in response.get_data(as_text=True)
 
 
-def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_types(client, core_conn):
+def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_types(owner_client, core_conn):
     """Verify that settings POST persists runtime settings and statement type edits."""
     active_types = get_statement_type_options(core_conn)
     keep_type = active_types[0]
@@ -106,9 +106,9 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
         statement_type_parser_types=["bank_account", "credit_card"],
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 
@@ -156,15 +156,15 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     )
 
 
-def test_settings_post_rejects_invalid_numeric_values_without_partial_save(client, core_conn):
+def test_settings_post_rejects_invalid_numeric_values_without_partial_save(owner_client, core_conn):
     """Verify invalid numeric settings flash errors and do not persist partial changes."""
     original_settings = get_all_settings(core_conn)
     original_user_settings = user_settings(core_conn)
     form = settings_form_data(core_conn, comparison_max_years="1")
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 
@@ -175,14 +175,14 @@ def test_settings_post_rejects_invalid_numeric_values_without_partial_save(clien
     assert user_settings(core_conn) == original_user_settings
 
 
-def test_settings_post_rejects_overlarge_compact_limits(client, core_conn):
+def test_settings_post_rejects_overlarge_compact_limits(owner_client, core_conn):
     """Verify compact preview limits stay bounded."""
     original_user_settings = user_settings(core_conn)
     form = settings_form_data(core_conn, dashboard_top_driver_limit="13")
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 
@@ -191,13 +191,13 @@ def test_settings_post_rejects_overlarge_compact_limits(client, core_conn):
     assert user_settings(core_conn) == original_user_settings
 
 
-def test_settings_post_ignores_unknown_category_override(client, core_conn):
+def test_settings_post_ignores_unknown_category_override(owner_client, core_conn):
     """Verify Unknown remains a fixed built-in category outside runtime settings."""
     form = settings_form_data(core_conn, unknown_category="UNCATEGORIZED", theme_mode="light")
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 
@@ -207,14 +207,14 @@ def test_settings_post_ignores_unknown_category_override(client, core_conn):
     assert user_settings(core_conn)["theme_mode"] == "light"
 
 
-def test_settings_post_can_disable_single_transaction_ai_button(client, core_conn):
+def test_settings_post_can_disable_single_transaction_ai_button(owner_client, core_conn):
     """Verify the owner can hide the transaction AI suggestion action."""
     form = settings_form_data(core_conn)
     form.pop("transaction_ai_rerun_enabled")
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 
@@ -222,14 +222,14 @@ def test_settings_post_can_disable_single_transaction_ai_button(client, core_con
     assert get_all_settings(core_conn)["transaction_ai_rerun_enabled"] == "0"
 
 
-def test_settings_post_can_disable_ai_token_confirmation(client, core_conn):
+def test_settings_post_can_disable_ai_token_confirmation(owner_client, core_conn):
     """Verify the owner can turn off the token-confirmation step for AI actions."""
     form = settings_form_data(core_conn)
     form.pop("confirm_ai_token_usage_enabled")
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 
@@ -237,13 +237,13 @@ def test_settings_post_can_disable_ai_token_confirmation(client, core_conn):
     assert get_all_settings(core_conn)["confirm_ai_token_usage_enabled"] == "0"
 
 
-def test_settings_post_saves_ui_language_and_renders_french(client, core_conn):
+def test_settings_post_saves_ui_language_and_renders_french(owner_client, core_conn):
     """Verify the UI language setting localizes shared and settings labels."""
     form = settings_form_data(core_conn, ui_language="fr")
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 
@@ -306,7 +306,7 @@ def test_viewer_can_only_save_own_general_settings(app, core_conn):
     assert validate_response.status_code == 403
 
 
-def test_settings_post_rejects_duplicate_statement_type_names(client, core_conn):
+def test_settings_post_rejects_duplicate_statement_type_names(owner_client, core_conn):
     """Verify that statement type sync validation is surfaced by the route."""
     active_types = get_statement_type_options(core_conn)
     form = settings_form_data(
@@ -316,9 +316,9 @@ def test_settings_post_rejects_duplicate_statement_type_names(client, core_conn)
         statement_type_parser_types=["bank_account", "credit_card"],
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 
@@ -326,7 +326,7 @@ def test_settings_post_rejects_duplicate_statement_type_names(client, core_conn)
     assert_visible_text(response, "Statement type names must be unique.")
 
 
-def test_settings_post_rolls_back_when_statement_type_sync_fails(client, core_conn, monkeypatch):
+def test_settings_post_rolls_back_when_statement_type_sync_fails(owner_client, core_conn, monkeypatch):
     """Verify late settings-save failures do not persist earlier setting writes."""
     original_settings = get_all_settings(core_conn)
     original_user_settings = user_settings(core_conn)
@@ -339,9 +339,9 @@ def test_settings_post_rolls_back_when_statement_type_sync_fails(client, core_co
 
     monkeypatch.setattr(settings_service, "sync_statement_types", fail_statement_sync)
 
-    response = client.post(
+    response = owner_client.post(
         "/settings",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), **form},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), **form},
         follow_redirects=True,
     )
 

@@ -9,6 +9,7 @@ from tests.support.web import set_csrf_token
 from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.core.filters import format_datetime
+from finance_app.modules.jobs import service as jobs_service
 
 
 class CapturingExecutor:
@@ -45,11 +46,11 @@ def complete_job(label="Completed job", result="done", undo_handler=None):
     return job_id
 
 
-def test_job_status_json_returns_public_job(client):
+def test_job_status_json_returns_public_job(owner_client):
     """Verify that the JSON status route returns the public job snapshot."""
     job_id = complete_job("JSON job", result="json result", undo_handler=lambda: "undone")
 
-    response = client.get(f"/jobs/{job_id}.json")
+    response = owner_client.get(f"/jobs/{job_id}.json")
 
     assert response.status_code == 200
     assert response.get_json() == {
@@ -78,15 +79,15 @@ def test_job_status_json_returns_public_job(client):
     }
 
 
-def test_job_status_json_returns_404_for_missing_job(client):
+def test_job_status_json_returns_404_for_missing_job(owner_client):
     """Verify that missing jobs return a JSON 404 response."""
-    response = client.get("/jobs/missing.json")
+    response = owner_client.get("/jobs/missing.json")
 
     assert response.status_code == 404
     assert response.get_json() == {"error": "Job not found."}
 
 
-def test_job_status_json_formats_progress_log_timestamps(client):
+def test_job_status_json_formats_progress_log_timestamps(owner_client):
     """Verify JSON job progress logs include locale-ready timestamp labels."""
     job_id = runner.submit_background_job(
         "AI JSON log job",
@@ -100,7 +101,7 @@ def test_job_status_json_formats_progress_log_timestamps(client):
     )
     timestamp = runner.get_background_job(job_id)["progress_log"][0]["timestamp"]
 
-    response = client.get(f"/jobs/{job_id}.json")
+    response = owner_client.get(f"/jobs/{job_id}.json")
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -109,7 +110,7 @@ def test_job_status_json_formats_progress_log_timestamps(client):
     assert "T" not in payload["progress_log"][0]["timestamp_label"]
 
 
-def test_jobs_page_paginates_and_renders_public_job_data(client, core_conn):
+def test_jobs_page_paginates_and_renders_public_job_data(owner_client, core_conn):
     """Verify that the jobs page renders paginated newest-first job rows."""
     core_conn.execute(text("""
         UPDATE user_settings
@@ -122,7 +123,7 @@ def test_jobs_page_paginates_and_renders_public_job_data(client, core_conn):
     complete_job("Middle job", result="middle")
     complete_job("Newest job", result="new")
 
-    response = client.get("/jobs?page=2")
+    response = owner_client.get("/jobs?page=2")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -136,9 +137,9 @@ def test_jobs_page_paginates_and_renders_public_job_data(client, core_conn):
     assert "Middle job" not in body
 
 
-def test_jobs_page_renders_ai_estimate_hook_by_default(client):
+def test_jobs_page_renders_ai_estimate_hook_by_default(owner_client):
     """Verify the Run AI form opens the AI usage estimate modal by default."""
-    response = client.get("/jobs")
+    response = owner_client.get("/jobs")
 
     assert response.status_code == 200
     assert_has_element(
@@ -151,17 +152,17 @@ def test_jobs_page_renders_ai_estimate_hook_by_default(client):
     )
 
 
-def test_jobs_page_omits_ai_estimate_hook_when_token_confirmation_disabled(client, core_conn):
+def test_jobs_page_omits_ai_estimate_hook_when_token_confirmation_disabled(owner_client, core_conn):
     """Verify disabling token confirmation removes browser estimate hooks."""
     set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
 
-    response = client.get("/jobs")
+    response = owner_client.get("/jobs")
 
     assert response.status_code == 200
     assert_no_element(response, "form", attrs={"data-ai-token-estimate-url": True})
 
 
-def test_jobs_page_renders_expandable_progress_for_running_ai_job(client):
+def test_jobs_page_renders_expandable_progress_for_running_ai_job(owner_client):
     """Verify running AI jobs expose an expandable progress row."""
     job_id = runner.submit_background_job(
         "AI progress job",
@@ -182,7 +183,7 @@ def test_jobs_page_renders_expandable_progress_for_running_ai_job(client):
         job_id=job_id,
     )
 
-    response = client.get("/jobs")
+    response = owner_client.get("/jobs")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -198,7 +199,7 @@ def test_jobs_page_renders_expandable_progress_for_running_ai_job(client):
     assert "Starting batch 1-10 of 10." in body
 
 
-def test_jobs_page_keeps_ai_progress_log_available_after_completion(client):
+def test_jobs_page_keeps_ai_progress_log_available_after_completion(owner_client):
     """Verify completed AI jobs still expose their collapsible progress log."""
     job_id = runner.submit_background_job(
         "Completed AI log job",
@@ -218,7 +219,7 @@ def test_jobs_page_keeps_ai_progress_log_available_after_completion(client):
         result="1 automatically categorized.",
     )
 
-    response = client.get("/jobs")
+    response = owner_client.get("/jobs")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -227,11 +228,11 @@ def test_jobs_page_keeps_ai_progress_log_available_after_completion(client):
     assert "AI categorization completed: 1 automatically categorized." in body
 
 
-def test_jobs_page_renders_ajax_auto_refresh_controls(client):
+def test_jobs_page_renders_ajax_auto_refresh_controls(owner_client):
     """Verify the jobs page exposes AJAX refresh controls with a countdown."""
     complete_job("Auto refresh job", result="done")
 
-    response = client.get("/jobs?page=1")
+    response = owner_client.get("/jobs?page=1")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -243,7 +244,7 @@ def test_jobs_page_renders_ajax_auto_refresh_controls(client):
     assert "Refresh (10)" in body
 
 
-def test_undo_job_post_runs_undo_and_flashes_result(client):
+def test_undo_job_post_runs_undo_and_flashes_result(owner_client):
     """Verify that undo POST calls the runner and shows the undo result."""
     undo_calls = []
     job_id = complete_job(
@@ -252,10 +253,10 @@ def test_undo_job_post_runs_undo_and_flashes_result(client):
         undo_handler=lambda: undo_calls.append("called") or "Undo route complete.",
     )
 
-    response = client.post(
+    response = owner_client.post(
         f"/jobs/{job_id}/undo",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "next": "/jobs?page=1",
         },
         follow_redirects=True,
@@ -268,7 +269,7 @@ def test_undo_job_post_runs_undo_and_flashes_result(client):
     assert runner.get_background_job(job_id)["undo_status"] == "undone"
 
 
-def test_undo_job_post_handles_runner_error_cases(client):
+def test_undo_job_post_handles_runner_error_cases(owner_client):
     """Verify that undo POST flashes user-facing errors for failure paths."""
     no_undo_job_id = complete_job("No undo route job", result="done")
     failing_job_id = complete_job(
@@ -276,19 +277,19 @@ def test_undo_job_post_handles_runner_error_cases(client):
         result="done",
         undo_handler=lambda: (_ for _ in ()).throw(RuntimeError("cannot undo")),
     )
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
 
-    missing_response = client.post(
+    missing_response = owner_client.post(
         "/jobs/missing/undo",
         data={CSRF_FIELD_NAME: token},
         follow_redirects=True,
     )
-    unavailable_response = client.post(
+    unavailable_response = owner_client.post(
         f"/jobs/{no_undo_job_id}/undo",
         data={CSRF_FIELD_NAME: token},
         follow_redirects=True,
     )
-    failing_response = client.post(
+    failing_response = owner_client.post(
         f"/jobs/{failing_job_id}/undo",
         data={CSRF_FIELD_NAME: token},
         follow_redirects=True,
@@ -299,14 +300,14 @@ def test_undo_job_post_handles_runner_error_cases(client):
     assert "Could not undo job: RuntimeError: cannot undo" in failing_response.get_data(as_text=True)
 
 
-def test_cancel_job_post_marks_queued_job_cancelled(client):
+def test_cancel_job_post_marks_queued_job_cancelled(owner_client):
     """Verify cancel POST cancels a queued job and flashes the result."""
     job_id = runner.submit_background_job("Cancel route job", lambda: "placeholder")
 
-    response = client.post(
+    response = owner_client.post(
         f"/jobs/{job_id}/cancel",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "next": "/jobs",
         },
         follow_redirects=True,
@@ -317,7 +318,7 @@ def test_cancel_job_post_marks_queued_job_cancelled(client):
     assert runner.get_background_job(job_id)["status"] == "cancelled"
 
 
-def test_categorize_all_unknowns_queues_ai_job(client, core_conn, monkeypatch):
+def test_categorize_all_unknowns_queues_ai_job(owner_client, core_conn, monkeypatch):
     """Verify the Jobs page can queue AI categorization for all unknown rows."""
     core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
@@ -331,14 +332,12 @@ def test_categorize_all_unknowns_queues_ai_job(client, core_conn, monkeypatch):
         submitted.append("queued")
         return "aijob12345"
 
-    from finance_app.modules.jobs import controller as jobs_controller
+    monkeypatch.setattr(jobs_service.upload_ai_workflow, "queue_all_unknown_llm_categorization", queue_for_test)
 
-    monkeypatch.setattr(jobs_controller.upload_workflow, "queue_all_unknown_llm_categorization", queue_for_test)
-
-    response = client.post(
+    response = owner_client.post(
         "/jobs/ai/categorize-unknowns",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "next": "/jobs",
             "ai_token_estimate_confirmed": "1",
         },
@@ -350,7 +349,7 @@ def test_categorize_all_unknowns_queues_ai_job(client, core_conn, monkeypatch):
     assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
 
 
-def test_categorize_all_unknowns_requires_token_estimate_confirmation(client, core_conn, monkeypatch):
+def test_categorize_all_unknowns_requires_token_estimate_confirmation(owner_client, core_conn, monkeypatch):
     """Verify AI categorization is not queued without estimate confirmation."""
     core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
@@ -364,13 +363,11 @@ def test_categorize_all_unknowns_requires_token_estimate_confirmation(client, co
         submitted.append("queued")
         return "aijob12345"
 
-    from finance_app.modules.jobs import controller as jobs_controller
+    monkeypatch.setattr(jobs_service.upload_ai_workflow, "queue_all_unknown_llm_categorization", queue_for_test)
 
-    monkeypatch.setattr(jobs_controller.upload_workflow, "queue_all_unknown_llm_categorization", queue_for_test)
-
-    response = client.post(
+    response = owner_client.post(
         "/jobs/ai/categorize-unknowns",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/jobs"},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), "next": "/jobs"},
         follow_redirects=True,
     )
 
@@ -379,7 +376,7 @@ def test_categorize_all_unknowns_requires_token_estimate_confirmation(client, co
     assert "Review the estimated AI usage before continuing." in response.get_data(as_text=True)
 
 
-def test_categorize_all_unknowns_runs_without_confirmation_when_setting_disabled(client, core_conn, monkeypatch):
+def test_categorize_all_unknowns_runs_without_confirmation_when_setting_disabled(owner_client, core_conn, monkeypatch):
     """Verify all-unknown AI can queue without confirmation when the setting is off."""
     core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
@@ -394,13 +391,11 @@ def test_categorize_all_unknowns_runs_without_confirmation_when_setting_disabled
         submitted.append("queued")
         return "aijob12345"
 
-    from finance_app.modules.jobs import controller as jobs_controller
+    monkeypatch.setattr(jobs_service.upload_ai_workflow, "queue_all_unknown_llm_categorization", queue_for_test)
 
-    monkeypatch.setattr(jobs_controller.upload_workflow, "queue_all_unknown_llm_categorization", queue_for_test)
-
-    response = client.post(
+    response = owner_client.post(
         "/jobs/ai/categorize-unknowns",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/jobs"},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), "next": "/jobs"},
         follow_redirects=True,
     )
 
@@ -409,13 +404,11 @@ def test_categorize_all_unknowns_runs_without_confirmation_when_setting_disabled
     assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
 
 
-def test_estimate_categorize_all_unknowns_returns_json(client, monkeypatch):
+def test_estimate_categorize_all_unknowns_returns_json(owner_client, monkeypatch):
     """Verify the all-unknown AI estimate route returns JSON."""
-    from finance_app.modules.jobs import controller as jobs_controller
-
-    monkeypatch.setattr(jobs_controller.upload_workflow, "count_unknown_transactions", lambda conn: 3)
+    monkeypatch.setattr(jobs_service.upload_ai_workflow, "count_unknown_transactions", lambda conn: 3)
     monkeypatch.setattr(
-        jobs_controller.upload_service,
+        jobs_service.upload_service,
         "estimate_all_unknown_llm_categorization",
         lambda: {
             "ok": True,
@@ -424,9 +417,9 @@ def test_estimate_categorize_all_unknowns_returns_json(client, monkeypatch):
         },
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/jobs/ai/categorize-unknowns/estimate",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
     )
 
     assert response.status_code == 200
@@ -434,14 +427,14 @@ def test_estimate_categorize_all_unknowns_returns_json(client, monkeypatch):
     assert response.get_json()["message"] == "AI usage estimate ready."
 
 
-def test_cancel_queued_ai_jobs_route_clears_only_ai_queue(client):
+def test_cancel_queued_ai_jobs_route_clears_only_ai_queue(owner_client):
     """Verify queued AI jobs can be cleared without cancelling main-queue jobs."""
     main_job = runner.submit_background_job("Main job", lambda: "main")
     ai_job = runner.submit_background_job("AI job", lambda: "ai", queue=runner.AI_JOB_QUEUE)
 
-    response = client.post(
+    response = owner_client.post(
         "/jobs/ai/cancel-queued",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/jobs"},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), "next": "/jobs"},
         follow_redirects=True,
     )
 

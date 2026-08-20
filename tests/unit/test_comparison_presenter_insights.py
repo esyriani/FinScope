@@ -2,13 +2,10 @@
 
 from decimal import Decimal
 
-from finance_app.modules.comparison.presenter import (
-    build_period_insights,
-    merchant_behavior_insight_candidates,
-    robust_anomaly_insight_candidates,
-    select_ranked_insight_candidates,
-    spending_mix_shift_candidate,
-)
+from finance_app.modules.comparison.anomaly_insights import robust_anomaly_insight_candidates
+from finance_app.modules.comparison.insight_scoring import select_ranked_insight_candidates
+from finance_app.modules.comparison.insights import build_period_insights, spending_mix_shift_candidate
+from finance_app.modules.comparison.merchant_insights import merchant_behavior_insight_candidates
 
 
 def public_fields(insight):

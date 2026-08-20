@@ -1,9 +1,9 @@
-"""Tests for calendar recurring-transaction inference."""
+"""Tests for recurring transaction inference."""
 
 from datetime import date
 from decimal import Decimal
 
-from finance_app.modules.calendar.recurrence import (
+from finance_app.modules.recurring.recurrence import (
     classify_recurring_match,
     infer_recurring_items,
     missed_recurring_cycles,

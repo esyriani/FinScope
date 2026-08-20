@@ -25,6 +25,7 @@ from finance_app.modules.categories.service import (
     classify_unknowns_with_llm,
     estimate_llm_categorization_tokens,
     get_category_options,
+    normalize_category,
     save_category_rule,
 )
 from finance_app.modules.categories.sources import (
@@ -37,10 +38,12 @@ from finance_app.modules.categories.taxonomy import (
     get_category_description_map,
     get_tag_color_map,
     get_tag_option_rows,
+    get_tag_options,
     get_transaction_tag_names,
     get_transaction_tags_by_id,
+    normalize_tag_names,
 )
-from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword
+from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword, parse_amount_bounds
 from finance_app.modules.settings.runtime import (
     confirm_ai_token_usage_enabled,
     get_bool_setting,
@@ -66,10 +69,14 @@ from finance_app.modules.transactions.queries import (
 )
 from finance_app.modules.transactions.repository import (
     apply_ai_category_update,
+    assign_manual_category,
     get_transaction_for_ai_categorization,
+    get_transaction_for_category_update,
     get_transactions_for_recategorization,
+    mark_transaction_verified,
     mark_transactions_verified,
     normalized_transaction_ids,
+    set_transaction_ignored,
     set_transactions_ignored,
     update_recategorized_transaction,
 )
@@ -154,6 +161,79 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "run_transaction_ai_enabled": run_transaction_ai_enabled,
         "confirm_ai_token_usage_enabled": confirm_ai_token_usage,
     }
+
+
+def update_transaction_category_from_form(transaction_id: int, form: Any) -> dict[str, Any]:
+    """Apply a manual category update submitted for one transaction."""
+    with db_core_transaction() as conn:
+        category_options = get_category_options(conn)
+        tag_options = get_tag_options(conn)
+        new_category = normalize_category(form.get("category", ""), category_options)
+        tag_names = normalize_tag_names(form.getlist("tags"), tag_options)
+
+        if not new_category:
+            return {"message": "Category cannot be empty."}
+
+        tx = get_transaction_for_category_update(conn, transaction_id)
+        if tx is None:
+            return {"message": "Transaction not found."}
+
+        description = tx["description"].strip()
+        rule_action = form.get("rule_action", "transaction_only")
+        merchant_key = ""
+        amount_min = None
+        amount_max = None
+
+        if rule_action == "save":
+            merchant_key = normalize_rule_keyword(form.get("keyword", ""), description)
+            amount_min, amount_max = parse_amount_bounds(
+                form.get("amount_min", ""),
+                form.get("amount_max", ""),
+            )
+            if not merchant_key:
+                return {"message": "Rule keyword is required when saving a rule."}
+
+        result = assign_manual_category(
+            conn,
+            transaction_id,
+            new_category,
+            tag_names=tag_names,
+            rule_keyword=merchant_key if rule_action == "save" else None,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            rule_merchant_id=tx["merchant_id"] if rule_action == "save" else None,
+        )
+
+        if not result.updated:
+            return {"message": "Transaction not found."}
+
+        if rule_action == "save":
+            return {
+                "message": (
+                    "Category updated. Rule saved for: {keyword}{amount_bounds}"
+                    if result.transaction_changed
+                    else "Rule saved for: {keyword}{amount_bounds}"
+                ),
+                "params": {
+                    "keyword": merchant_key,
+                    "amount_bounds": amount_bounds_label(amount_min, amount_max),
+                },
+            }
+        if result.transaction_changed:
+            return {"message": "Category updated for this transaction only."}
+        return {"message": "No transaction changes to save."}
+
+
+def verify_transaction_by_id(transaction_id: int) -> bool:
+    """Mark one transaction as manually verified and return whether it changed."""
+    with db_core_transaction() as conn:
+        return mark_transaction_verified(conn, transaction_id)
+
+
+def set_transaction_ignored_by_id(transaction_id: int, ignored: int) -> bool:
+    """Update one transaction ignored flag and return whether it changed."""
+    with db_core_transaction() as conn:
+        return set_transaction_ignored(conn, transaction_id, ignored)
 
 
 def approve_selected_transactions(transaction_ids: Iterable[object] | None) -> int:

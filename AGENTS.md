@@ -65,6 +65,8 @@ Common responsibilities:
 - `repository.py`: write-side persistence helpers and transaction-aware
   mutations.
 - `urls.py`: URL/query-string construction shared by controllers and presenters.
+- `client_i18n.py`: browser-facing message ids owned by the feature's static
+  scripts.
 
 Not every module needs every file. Small features can stay compact, but do not
 let a controller or service grow by mixing form parsing, SQL, business rules,
@@ -74,6 +76,55 @@ to scan, split by responsibility before adding more branches.
 Avoid import cycles. Shared constants, permissions, runtime settings, and helper
 functions should live in neutral modules rather than relying on delayed imports
 inside functions.
+
+Current architecture boundaries to preserve:
+
+- `src/finance_app/core/` and `src/finance_app/database/` are foundation
+  packages. They must not import `finance_app.modules.*`. Put neutral domain
+  semantics in `core` and database-specific SQL/seed orchestration in
+  `database`.
+- The Flask app factory in `src/finance_app/__init__.py` should stay focused on
+  app construction, security cookie configuration, registration of the database,
+  auth, filters, assets, CSRF, client-i18n catalogs, and blueprints. Do not add
+  feature-owned database work or seeding to app-factory context processors.
+- Request-wide UI template context belongs in `src/finance_app/runtime_context.py`.
+  Load database-backed UI settings and built-in category exclusions once per
+  request, cache them on `g`, and keep template context processors as dictionary
+  assembly. Template rendering must not seed taxonomy or open feature-owned
+  transactions.
+- Runtime setting key ownership lives in `src/finance_app/core/runtime_settings.py`.
+  Personal UI preferences such as `theme_mode`, `ui_language`, and table/page
+  limits are read for the active user. Owner-managed application behavior such
+  as AI model/thresholds, token confirmation, AI rerun behavior, and recurrence
+  detection settings must be read through owner/global runtime-setting helpers.
+- Built-in taxonomy product semantics live in
+  `src/finance_app/core/builtin_taxonomy.py`. Database taxonomy seeding and
+  upserts live in `src/finance_app/database/taxonomy.py`. Feature code should
+  ask the taxonomy metadata/behavior boundary instead of hard-coding category or
+  tag labels.
+- Shared dashboard/report analytics concepts belong in neutral helpers such as
+  `src/finance_app/core/analytics.py`, `src/finance_app/core/reporting.py`, and
+  `src/finance_app/core/urls.py`. Do not reintroduce direct dashboard-to-reports
+  or reports-to-dashboard imports.
+- Recurring activity is owned by the recurring feature. Keep recurrence
+  detection, recurring activity queries, parsing, activity context construction,
+  and recurring presentation helpers under `src/finance_app/modules/recurring/`.
+  Calendar and Home may consume the recurring read model, but recurring should
+  not depend on calendar internals.
+- Controllers should not open `db_core_transaction()` or own multi-step business
+  workflows. Route modules collect HTTP inputs and handle Flask concerns;
+  services/workflows own validation decisions, transaction scopes, persistence
+  orchestration, and reusable result objects.
+- Background jobs are intentionally process-local and in memory. Any durable
+  domain status that points at background work must have a startup/runtime
+  reconciliation path. Statement import recovery belongs with the database
+  startup repair and upload/background workflow boundary, not route-only checks.
+- External provider boundaries must be injectable. LLM categorization and
+  settings model validation should depend on passed request/client/provider
+  collaborators or small adapters, never route-level direct network calls.
+- Large modules should be split along existing domain seams before adding more
+  branches. Preserve and extend `tests/unit/test_module_size.py` when a split is
+  meant to keep a module reviewable.
 
 Special taxonomy behavior should have one clear specialization boundary. Code
 that needs to know whether something is income, a transfer, reimbursable,
@@ -94,6 +145,14 @@ metadata and one specialization point, not every report, route, and template.
 - Empty databases are created from Core metadata. Existing databases are
   validated against the current schema. Do not add versioned migrations for this
   repo's current development data.
+- Database initialization validates the current schema, seeds runtime settings,
+  statement types, and built-in taxonomy defaults, then repairs persisted
+  runtime state that cannot survive process-local workers. Keep this startup
+  repair explicit in `src/finance_app/database/runtime_repair.py`.
+- Built-in taxonomy persistence should be seeded through
+  `src/finance_app/database/taxonomy.py` from the neutral metadata in
+  `src/finance_app/core/builtin_taxonomy.py`. Do not make database seeding import
+  feature services.
 - Prefer database constraints for invariants that must survive concurrency:
   uniqueness, ownership, generated normalized keys, foreign keys, enum-like
   checks, non-empty values, and nullable uniqueness helpers.
@@ -166,6 +225,13 @@ Testing expectations:
   create production test seams for it.
 - Keep smoke tests broad and light. They should prove a workflow reaches a
   useful outcome, not duplicate route and integration assertions.
+- Keep static architecture tests current when boundaries move. In particular,
+  `tests/unit/test_import_boundaries.py` guards low-level package imports,
+  controller transaction ownership, recurring/calendar ownership, dashboard and
+  reports independence, and app-factory render-time dependencies.
+- Keep module-size tests current when splitting or growing historically large
+  files. Prefer a focused split plus a durable size/boundary test over moving
+  complexity into a different oversized module.
 
 Documentation-only or editorial-only changes do not require a full test run, but
 the final response must say that tests were not run and why.
@@ -234,7 +300,11 @@ the final response must say that tests were not run and why.
 - English source strings are the canonical message ids.
 - Python user-facing strings must use `gettext()` or the template `_()` helper.
 - Browser-facing strings must use `window.financeTranslate()` and be listed in
-  `CLIENT_TRANSLATION_MESSAGES`.
+  the appropriate client-i18n catalog. Shared browser messages live in
+  `src/finance_app/core/client_i18n.py`; feature-owned browser messages live in
+  `src/finance_app/modules/<feature>/client_i18n.py`; the aggregate registration
+  lives in `src/finance_app/modules/client_i18n.py`. Do not add feature-specific
+  browser messages to the Flask app factory.
 - Add or update French translations in `src/finance_app/translations/fr.json`
   for all new user-facing text.
 - Keep `src/finance_app/translations/fr.json` ASCII-only. Encode French
@@ -244,7 +314,9 @@ the final response must say that tests were not run and why.
 - Do not translate user data: merchant names, account names, category names,
   tag names, statement filenames, uploaded statement contents, and transaction
   descriptions remain user data.
-- In the vocabulary, never user computer-technical terms for user-facing interface. For example, use "categories & tags" instead of "taxonomy", use "processing" instead of "jobs", use "AI" instead of LLM or model.
+- In user-facing vocabulary, avoid computer-technical terms. For example, use
+  "categories & tags" instead of "taxonomy", "processing" instead of "jobs",
+  and "AI" instead of LLM or model.
 
 ## Security and privacy
 
@@ -259,6 +331,9 @@ the final response must say that tests were not run and why.
   transaction examples to external providers.
 - Optional provider integrations must be injectable so tests use fakes and the
   global network guard remains effective.
+- Provider availability checks, including OpenAI model validation in Settings,
+  must use an adapter or injected client factory and return typed outcomes.
+  Route-facing services should not construct provider clients directly.
 
 ## Documentation and comments
 

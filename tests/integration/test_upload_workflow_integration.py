@@ -8,11 +8,11 @@ from tests.support.upload import create_account_statement, first_statement_type_
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.modules.upload import controller as upload_controller
+from finance_app.modules.upload import service as upload_service
 from finance_app.modules.upload import workflow as upload_workflow
 
 
-def test_upload_route_submits_background_import_job(client, core_conn, monkeypatch):
+def test_upload_route_submits_background_import_job(owner_client, core_conn, monkeypatch):
     """Verify that a valid upload stores the statement and queues the import job."""
     submitted_jobs = []
 
@@ -31,13 +31,13 @@ def test_upload_route_submits_background_import_job(client, core_conn, monkeypat
         )
         return "abc12345job"
 
-    monkeypatch.setattr(upload_controller, "submit_background_job", capture_job)
+    monkeypatch.setattr(upload_service, "submit_background_job", capture_job)
     raw_csv = b"Date,Description,Amount\n2026-01-02,UNKNOWN SHOP,12.34\n"
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(first_statement_type_id(core_conn)),
             "statement": (io.BytesIO(raw_csv), "statement.csv"),
@@ -75,7 +75,7 @@ def test_upload_route_submits_background_import_job(client, core_conn, monkeypat
 
     submitted = submitted_jobs[0]
     assert submitted["label"] == "Import statement.csv"
-    assert submitted["func"] is upload_controller.import_statement_transactions_job
+    assert submitted["func"] is upload_workflow.import_statement_transactions_job
     assert submitted["args"] == (
         statement._mapping["id"],
         statement._mapping["account_id"],
@@ -84,21 +84,21 @@ def test_upload_route_submits_background_import_job(client, core_conn, monkeypat
         raw_csv.decode("utf-8"),
         statement._mapping["import_token"],
     )
-    assert submitted["undo_handler"] is upload_controller.undo_statement_upload_job
+    assert submitted["undo_handler"] is upload_workflow.undo_statement_upload_job
     assert submitted["undo_args"][0] == statement._mapping["id"]
     assert submitted["undo_args"][1] is submitted["kwargs"]["undo_state"]
     assert submitted["kwargs"]["interac_direction"] == "auto"
     assert submitted["kwargs"]["date_order"] == "auto"
 
 
-def test_upload_preview_detects_month_first_slash_dates(client, core_conn):
+def test_upload_preview_detects_month_first_slash_dates(owner_client, core_conn):
     """Verify the preview parses unambiguous month-first CSV dates correctly."""
     raw_csv = b"05/18/2026,DISNEY PLUS,9.19,,4463.99\n" b"05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64\n"
 
-    response = client.post(
+    response = owner_client.post(
         "/upload/preview",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(first_statement_type_id(core_conn)),
             "statement": (io.BytesIO(raw_csv), "preview-month-first.csv"),
@@ -119,14 +119,14 @@ def test_upload_preview_detects_month_first_slash_dates(client, core_conn):
     }
 
 
-def test_upload_preview_requires_choice_for_ambiguous_slash_dates(client, core_conn):
+def test_upload_preview_requires_choice_for_ambiguous_slash_dates(owner_client, core_conn):
     """Verify ambiguous slash-only statements ask for an explicit date order."""
     raw_csv = b"05/12/2026,AMZN Mktp CA*PF2WC4HM3,134.56,,3922.64\n"
 
-    response = client.post(
+    response = owner_client.post(
         "/upload/preview",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(first_statement_type_id(core_conn)),
             "statement": (io.BytesIO(raw_csv), "preview-ambiguous.csv"),
@@ -151,15 +151,15 @@ def test_upload_preview_requires_choice_for_ambiguous_slash_dates(client, core_c
     }
 
 
-def test_upload_preview_prioritizes_ambiguous_date_samples(client, core_conn):
+def test_upload_preview_prioritizes_ambiguous_date_samples(owner_client, core_conn):
     """Verify preview samples show ambiguous date rows when available."""
     clear_rows = "\n".join(f"12/{day}/2025,CLEAR SAMPLE {day},1.00,," for day in range(13, 25))
     raw_csv = f"{clear_rows}\n05/12/2026,AMBIGUOUS SAMPLE,2.00,,\n".encode()
 
-    response = client.post(
+    response = owner_client.post(
         "/upload/preview",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(first_statement_type_id(core_conn)),
             "statement": (io.BytesIO(raw_csv), "preview-ambiguous-sample.csv"),
@@ -177,18 +177,18 @@ def test_upload_preview_prioritizes_ambiguous_date_samples(client, core_conn):
     assert preview["preview_rows"][0]["day_first_date"] == "2026-12-05"
 
 
-def test_upload_route_requires_date_order_for_ambiguous_slash_dates(client, core_conn, monkeypatch):
+def test_upload_route_requires_date_order_for_ambiguous_slash_dates(owner_client, core_conn, monkeypatch):
     """Verify final uploads cannot bypass date-order confirmation."""
     monkeypatch.setattr(
-        upload_controller,
+        upload_service,
         "submit_background_job",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Ambiguous upload should not queue")),
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(first_statement_type_id(core_conn)),
             "statement": (
@@ -210,7 +210,7 @@ def test_upload_route_requires_date_order_for_ambiguous_slash_dates(client, core
     assert statement_count == 0
 
 
-def test_upload_route_stores_date_order_override(client, core_conn, monkeypatch):
+def test_upload_route_stores_date_order_override(owner_client, core_conn, monkeypatch):
     """Verify confirmed date-order choices are persisted and passed to import jobs."""
     submitted_jobs = []
 
@@ -219,12 +219,12 @@ def test_upload_route_stores_date_order_override(client, core_conn, monkeypatch)
         submitted_jobs.append({"label": label, "func": func, "args": args, "kwargs": kwargs})
         return "dateorderjob123"
 
-    monkeypatch.setattr(upload_controller, "submit_background_job", capture_job)
+    monkeypatch.setattr(upload_service, "submit_background_job", capture_job)
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(first_statement_type_id(core_conn)),
             "date_order": "month_first",
@@ -247,18 +247,18 @@ def test_upload_route_stores_date_order_override(client, core_conn, monkeypatch)
     assert submitted_jobs[0]["kwargs"]["date_order"] == "month_first"
 
 
-def test_upload_route_rejects_pdf_files(client, core_conn, monkeypatch):
+def test_upload_route_rejects_pdf_files(owner_client, core_conn, monkeypatch):
     """Verify statement uploads reject PDF files before creating a statement."""
     monkeypatch.setattr(
-        upload_controller,
+        upload_service,
         "submit_background_job",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("PDF should not queue")),
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(first_statement_type_id(core_conn)),
             "statement": (io.BytesIO(b"%PDF-1.4"), "statement.pdf"),
@@ -278,7 +278,7 @@ def test_upload_route_rejects_pdf_files(client, core_conn, monkeypatch):
     assert statement_count == 0
 
 
-def test_upload_route_stores_interac_direction_override(client, core_conn, monkeypatch):
+def test_upload_route_stores_interac_direction_override(owner_client, core_conn, monkeypatch):
     """Verify Interac direction override is persisted and passed to the import job."""
     submitted_jobs = []
 
@@ -287,13 +287,13 @@ def test_upload_route_stores_interac_direction_override(client, core_conn, monke
         submitted_jobs.append({"args": args, "kwargs": kwargs})
         return "interacjob123"
 
-    monkeypatch.setattr(upload_controller, "submit_background_job", capture_job)
+    monkeypatch.setattr(upload_service, "submit_background_job", capture_job)
     raw_csv = b"Date,Name,Amount,Status\n2026-05-08,Alex Buyer,$125.00,Autodeposited\n"
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(statement_type_id(core_conn, "interac_etransfer")),
             "interac_direction": "received",
@@ -314,7 +314,7 @@ def test_upload_route_stores_interac_direction_override(client, core_conn, monke
     assert submitted_jobs[0]["kwargs"]["interac_direction"] == "received"
 
 
-def test_retry_statement_import_route_queues_existing_statement(client, core_conn, monkeypatch):
+def test_retry_statement_import_route_queues_existing_statement(owner_client, core_conn, monkeypatch):
     """Verify retry queues import work from stored statement text."""
     account_id, statement_id = create_account_statement(core_conn, "retry.csv")
     core_conn.execute(
@@ -345,11 +345,11 @@ def test_retry_statement_import_route_queues_existing_statement(client, core_con
         )
         return "retry-job-id"
 
-    monkeypatch.setattr(upload_controller, "submit_background_job", capture_job)
+    monkeypatch.setattr(upload_service, "submit_background_job", capture_job)
 
-    response = client.post(
+    response = owner_client.post(
         f"/upload/{statement_id}/retry",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
 
@@ -366,7 +366,7 @@ def test_retry_statement_import_route_queues_existing_statement(client, core_con
     assert tuple(statement)[:3] == ("queued", None, 0)
     assert len(submitted_jobs) == 1
     assert submitted_jobs[0]["label"] == "Retry import retry.csv"
-    assert submitted_jobs[0]["func"] is upload_controller.import_statement_transactions_job
+    assert submitted_jobs[0]["func"] is upload_workflow.import_statement_transactions_job
     assert submitted_jobs[0]["args"] == (
         statement_id,
         account_id,
@@ -375,14 +375,14 @@ def test_retry_statement_import_route_queues_existing_statement(client, core_con
         "Date,Description,Amount\n2026-01-02,RETRY SHOP,12.34\n",
         statement._mapping["import_token"],
     )
-    assert submitted_jobs[0]["undo_handler"] is upload_controller.undo_statement_upload_job
+    assert submitted_jobs[0]["undo_handler"] is upload_workflow.undo_statement_upload_job
     assert submitted_jobs[0]["undo_args"][0] == statement_id
     assert submitted_jobs[0]["undo_args"][1] is submitted_jobs[0]["kwargs"]["undo_state"]
     assert submitted_jobs[0]["kwargs"]["interac_direction"] == "auto"
     assert submitted_jobs[0]["kwargs"]["date_order"] == "auto"
 
 
-def test_reprocess_statement_import_route_removes_statement_transactions(client, core_conn, monkeypatch):
+def test_reprocess_statement_import_route_removes_statement_transactions(owner_client, core_conn, monkeypatch):
     """Verify reprocess clears statement transactions before queueing import work."""
     account_id, statement_id = create_account_statement(core_conn, "reprocess.csv")
     core_conn.execute(
@@ -414,16 +414,16 @@ def test_reprocess_statement_import_route_removes_statement_transactions(client,
     core_conn.commit()
     submitted_jobs = []
     monkeypatch.setattr(
-        upload_controller,
+        upload_service,
         "submit_background_job",
         lambda label, func, *args, undo_handler=None, undo_args=None, **kwargs: (
             submitted_jobs.append((label, func, args, undo_handler, undo_args, kwargs)) or "reprocess-job-id"
         ),
     )
 
-    response = client.post(
+    response = owner_client.post(
         f"/upload/{statement_id}/reprocess",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
 

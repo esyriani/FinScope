@@ -11,10 +11,10 @@ from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.repository import resolve_category_id
-from finance_app.modules.upload import controller as upload_controller
+from finance_app.modules.upload import service as upload_service
 
 
-def test_upload_route_rejects_missing_file_without_statement_insert(client, core_conn):
+def test_upload_route_rejects_missing_file_without_statement_insert(owner_client, core_conn):
     """Verify that upload validation exits before creating a statement row."""
     statement_type_id = core_conn.execute(text("""
         SELECT id
@@ -24,10 +24,10 @@ def test_upload_route_rejects_missing_file_without_statement_insert(client, core
         LIMIT 1
         """)).fetchone()._mapping["id"]
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(statement_type_id),
         },
@@ -40,7 +40,7 @@ def test_upload_route_rejects_missing_file_without_statement_insert(client, core
     assert statement_count == 0
 
 
-def test_upload_route_rejects_existing_account_role_mismatch(client, core_conn):
+def test_upload_route_rejects_existing_account_role_mismatch(owner_client, core_conn):
     """Verify uploads cannot silently rewrite an existing account role."""
     account_id = core_conn.execute(text("""
         INSERT INTO accounts (name, account_type)
@@ -55,10 +55,10 @@ def test_upload_route_rejects_existing_account_role_mismatch(client, core_conn):
         """)).fetchone()._mapping["id"]
     core_conn.commit()
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": " travel CARD ",
             "account_type": "checking",
             "statement_type_id": str(statement_type_id),
@@ -89,7 +89,7 @@ def test_upload_route_rejects_existing_account_role_mismatch(client, core_conn):
     assert statement_count == 0
 
 
-def test_upload_route_rejects_existing_account_funding_mismatch(client, core_conn):
+def test_upload_route_rejects_existing_account_funding_mismatch(owner_client, core_conn):
     """Verify uploads cannot silently rewrite a credit-card funding account."""
     main_checking_id = core_conn.execute(text("""
         INSERT INTO accounts (name, account_type)
@@ -115,10 +115,10 @@ def test_upload_route_rejects_existing_account_funding_mismatch(client, core_con
         """)).fetchone()._mapping["id"]
     core_conn.commit()
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Travel card",
             "account_type": "credit_card",
             "paid_from_account_name": "Other checking",
@@ -150,7 +150,7 @@ def test_upload_route_rejects_existing_account_funding_mismatch(client, core_con
     assert statement_count == 0
 
 
-def test_upload_route_renders_statement_detail_modal(client, core_conn):
+def test_upload_route_renders_statement_detail_modal(owner_client, core_conn):
     """Verify uploaded statement rows open processed details by double-click target."""
     paid_from_account_id = core_conn.execute(text("""
         INSERT INTO accounts (name, account_type)
@@ -233,7 +233,7 @@ def test_upload_route_renders_statement_detail_modal(client, core_conn):
     )
     core_conn.commit()
 
-    response = client.get("/upload")
+    response = owner_client.get("/upload")
 
     assert response.status_code == 200
     assert_markup(
@@ -308,9 +308,9 @@ def test_upload_route_renders_statement_detail_modal(client, core_conn):
     )
 
 
-def test_upload_preview_table_is_not_exportable(client):
+def test_upload_preview_table_is_not_exportable(owner_client):
     """Verify transient upload previews do not get CSV or Excel export controls."""
-    response = client.get("/upload")
+    response = owner_client.get("/upload")
 
     assert response.status_code == 200
     assert_has_element(
@@ -320,7 +320,7 @@ def test_upload_preview_table_is_not_exportable(client):
     )
 
 
-def test_upload_route_renders_interac_import_guidance(client, core_conn):
+def test_upload_route_renders_interac_import_guidance(owner_client, core_conn):
     """Verify Interac uploads explain ordering and skipped or ignored rows."""
     account_id = core_conn.execute(text("""
         INSERT INTO accounts (name, account_type)
@@ -357,7 +357,7 @@ def test_upload_route_renders_interac_import_guidance(client, core_conn):
     )
     core_conn.commit()
 
-    response = client.get("/upload")
+    response = owner_client.get("/upload")
 
     assert response.status_code == 200
     assert_visible_text(
@@ -369,7 +369,7 @@ def test_upload_route_renders_interac_import_guidance(client, core_conn):
     )
 
 
-def test_estimate_categorize_statement_unknowns_returns_json(client, core_conn, monkeypatch):
+def test_estimate_categorize_statement_unknowns_returns_json(owner_client, core_conn, monkeypatch):
     """Verify the statement AI estimate route returns JSON."""
     statement_type_id = core_conn.execute(text("""
         SELECT id
@@ -403,11 +403,9 @@ def test_estimate_categorize_statement_unknowns_returns_json(client, core_conn, 
     ).lastrowid
     core_conn.commit()
 
-    from finance_app.modules.upload import controller as upload_controller
-
-    monkeypatch.setattr(upload_controller.upload_workflow, "count_statement_unknown_transactions", lambda conn, sid: 2)
+    monkeypatch.setattr(upload_service.upload_workflow, "count_statement_unknown_transactions", lambda conn, sid: 2)
     monkeypatch.setattr(
-        upload_controller,
+        upload_service,
         "estimate_statement_llm_categorization",
         lambda sid: {
             "ok": True,
@@ -416,9 +414,9 @@ def test_estimate_categorize_statement_unknowns_returns_json(client, core_conn, 
         },
     )
 
-    response = client.post(
+    response = owner_client.post(
         f"/upload/{statement_id}/categorize-unknowns/estimate",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
     )
 
     assert response.status_code == 200
@@ -426,7 +424,7 @@ def test_estimate_categorize_statement_unknowns_returns_json(client, core_conn, 
     assert response.get_json()["message"] == "AI usage estimate ready."
 
 
-def test_categorize_statement_unknowns_requires_token_estimate_confirmation(client, core_conn, monkeypatch):
+def test_categorize_statement_unknowns_requires_token_estimate_confirmation(owner_client, core_conn, monkeypatch):
     """Verify statement AI categorization does not queue without confirmation."""
     statement_type_id = core_conn.execute(text("""
         SELECT id
@@ -476,18 +474,16 @@ def test_categorize_statement_unknowns_requires_token_estimate_confirmation(clie
     core_conn.commit()
     submitted = []
 
-    from finance_app.modules.upload import controller as upload_controller
-
     def queue_for_test(queued_statement_id):
         """Capture accidental statement AI queue requests."""
         submitted.append(queued_statement_id)
         return "statementaijob123"
 
-    monkeypatch.setattr(upload_controller.upload_workflow, "queue_statement_llm_categorization", queue_for_test)
+    monkeypatch.setattr(upload_service.upload_workflow, "queue_statement_llm_categorization", queue_for_test)
 
-    response = client.post(
+    response = owner_client.post(
         f"/upload/{statement_id}/categorize-unknowns",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/upload"},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), "next": "/upload"},
         follow_redirects=True,
     )
 
@@ -497,7 +493,7 @@ def test_categorize_statement_unknowns_requires_token_estimate_confirmation(clie
 
 
 def test_categorize_statement_unknowns_runs_without_confirmation_when_setting_disabled(
-    client,
+    owner_client,
     core_conn,
     monkeypatch,
 ):
@@ -551,18 +547,16 @@ def test_categorize_statement_unknowns_runs_without_confirmation_when_setting_di
     set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
     submitted = []
 
-    from finance_app.modules.upload import controller as upload_controller
-
     def queue_for_test(queued_statement_id):
         """Capture the statement AI queue request."""
         submitted.append(queued_statement_id)
         return "statementaijob123"
 
-    monkeypatch.setattr(upload_controller.upload_workflow, "queue_statement_llm_categorization", queue_for_test)
+    monkeypatch.setattr(upload_service.upload_workflow, "queue_statement_llm_categorization", queue_for_test)
 
-    response = client.post(
+    response = owner_client.post(
         f"/upload/{statement_id}/categorize-unknowns",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "next": "/upload"},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), "next": "/upload"},
         follow_redirects=True,
     )
 
@@ -571,7 +565,7 @@ def test_categorize_statement_unknowns_runs_without_confirmation_when_setting_di
     assert_visible_text(response, "AI categorization queued for 1 unknown transaction.")
 
 
-def test_upload_route_rejects_duplicate_statement_checksum(client, core_conn, monkeypatch):
+def test_upload_route_rejects_duplicate_statement_checksum(owner_client, core_conn, monkeypatch):
     """Verify that duplicate uploads are rejected before queueing background work."""
     statement_type_id = core_conn.execute(text("""
         SELECT id
@@ -594,12 +588,12 @@ def test_upload_route_rejects_duplicate_statement_checksum(client, core_conn, mo
         {"p0": statement_type_id, "p1": "known-checksum"},
     )
     core_conn.commit()
-    monkeypatch.setattr("finance_app.modules.upload.controller.file_checksum", lambda uploaded_file: "known-checksum")
+    monkeypatch.setattr("finance_app.modules.upload.service.file_checksum", lambda uploaded_file: "known-checksum")
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Personal",
             "statement_type_id": str(statement_type_id),
             "statement": (io.BytesIO(b"Date,Description,Amount\n"), "duplicate.csv"),
@@ -614,7 +608,7 @@ def test_upload_route_rejects_duplicate_statement_checksum(client, core_conn, mo
     assert statement_count == 1
 
 
-def test_upload_route_handles_racing_duplicate_statement_checksum(client, core_conn, monkeypatch):
+def test_upload_route_handles_racing_duplicate_statement_checksum(owner_client, core_conn, monkeypatch):
     """Verify checksum insert conflicts return the controlled duplicate-upload outcome."""
     statement_type_id = core_conn.execute(text("""
         SELECT id
@@ -623,9 +617,9 @@ def test_upload_route_handles_racing_duplicate_statement_checksum(client, core_c
         ORDER BY id
         LIMIT 1
     """)).fetchone()._mapping["id"]
-    monkeypatch.setattr("finance_app.modules.upload.controller.file_checksum", lambda uploaded_file: "race-checksum")
+    monkeypatch.setattr("finance_app.modules.upload.service.file_checksum", lambda uploaded_file: "race-checksum")
     lookups = {"count": 0}
-    submitted_jobs = capture_background_jobs(monkeypatch, upload_controller)
+    submitted_jobs = capture_background_jobs(monkeypatch, upload_service)
 
     def racing_statement_lookup(conn, checksum):
         """Miss the pre-check, then find the row inserted by another request."""
@@ -645,13 +639,13 @@ def test_upload_route_handles_racing_duplicate_statement_checksum(client, core_c
         del args, kwargs
         raise SqlAlchemyIntegrityError("duplicate checksum", {}, Exception("unique checksum"))
 
-    monkeypatch.setattr(upload_controller, "statement_by_checksum", racing_statement_lookup)
-    monkeypatch.setattr(upload_controller, "create_uploaded_statement", duplicate_statement_insert)
+    monkeypatch.setattr(upload_service, "statement_by_checksum", racing_statement_lookup)
+    monkeypatch.setattr(upload_service, "create_uploaded_statement", duplicate_statement_insert)
 
-    response = client.post(
+    response = owner_client.post(
         "/upload",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_name": "Race duplicate account",
             "account_type": "credit_card",
             "paid_from_account_name": "Race duplicate checking",

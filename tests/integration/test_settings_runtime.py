@@ -1,12 +1,23 @@
 """Tests for runtime settings persistence helpers."""
 
 import pytest
+from flask_login import login_user  # type: ignore[import-untyped]
 from sqlalchemy import text
 
+from finance_app.core.constants import USER_ROLE_EDITOR
+from finance_app.core.runtime_settings import CONFIRM_AI_TOKEN_USAGE_SETTING_KEY
 from finance_app.database.engine import db_core_transaction
+from finance_app.database.seeds import seed_runtime_settings_defaults
+from finance_app.modules.auth import repository as auth_repository
+from finance_app.modules.auth.service import hash_password, load_login_user, utc_now
 from finance_app.modules.categories.service import rename_category
+from finance_app.modules.recurring.queries import get_recurrence_detection_settings
 from finance_app.modules.settings.runtime import (
     get_all_settings,
+    get_bool_setting,
+    get_float_setting,
+    get_int_setting,
+    get_setting,
     get_setting_with_fallback,
     get_statement_type_by_id,
     get_statement_type_by_parser_type,
@@ -15,9 +26,9 @@ from finance_app.modules.settings.runtime import (
     normalize_default_account_type,
     normalize_statement_import_mode,
     normalize_statement_parser_type,
-    seed_runtime_settings,
     sync_statement_types,
     upsert_setting,
+    upsert_user_setting,
 )
 
 
@@ -33,7 +44,7 @@ def test_runtime_settings_helpers_support_core_connections(app, core_conn):
     keep_row = active_rows[0]
 
     with db_core_transaction() as conn:
-        seed_runtime_settings(conn)
+        seed_runtime_settings_defaults(conn)
         upsert_setting(conn, "theme_mode", "light")
         sync_statement_types(
             conn,
@@ -61,6 +72,54 @@ def test_runtime_settings_helpers_support_core_connections(app, core_conn):
         "Core bank account": "bank_account",
         "Core rewards card": "credit_card",
     }
+
+
+def test_owner_managed_settings_resolve_from_owner_for_request_user(app, core_conn):
+    """Verify advanced settings ignore stale non-owner setting rows."""
+    owner = auth_repository.get_user_by_username(core_conn, "owner")
+    assert owner is not None
+    editor_id = auth_repository.insert_user(
+        core_conn,
+        "settings-editor",
+        hash_password("EditorPass123!"),
+        USER_ROLE_EDITOR,
+        must_change_password=False,
+        now=utc_now(),
+    )
+    seed_runtime_settings_defaults(core_conn)
+    upsert_user_setting(core_conn, owner["id"], "openai_model", "owner-model")
+    upsert_user_setting(core_conn, owner["id"], "llm_confidence_threshold", "0.88")
+    upsert_user_setting(core_conn, owner["id"], "transaction_ai_rerun_enabled", "0")
+    upsert_user_setting(core_conn, owner["id"], CONFIRM_AI_TOKEN_USAGE_SETTING_KEY, "1")
+    upsert_user_setting(core_conn, owner["id"], "recurrence_minimum_occurrences", "7")
+    upsert_user_setting(core_conn, owner["id"], "recurrence_amount_tolerance_percent", "0.33")
+    upsert_user_setting(core_conn, editor_id, "theme_mode", "light")
+    upsert_user_setting(core_conn, editor_id, "openai_model", "editor-model")
+    upsert_user_setting(core_conn, editor_id, "llm_confidence_threshold", "0.11")
+    upsert_user_setting(core_conn, editor_id, "transaction_ai_rerun_enabled", "1")
+    upsert_user_setting(core_conn, editor_id, CONFIRM_AI_TOKEN_USAGE_SETTING_KEY, "0")
+    upsert_user_setting(core_conn, editor_id, "recurrence_minimum_occurrences", "2")
+    upsert_user_setting(core_conn, editor_id, "recurrence_amount_tolerance_percent", "0.01")
+    core_conn.commit()
+
+    with app.test_request_context("/transactions"):
+        editor = load_login_user(editor_id)
+        assert editor is not None
+        login_user(editor)
+
+        settings = get_all_settings(core_conn)
+
+        assert get_setting(core_conn, "theme_mode") == "light"
+        assert settings["theme_mode"] == "light"
+        assert get_setting(core_conn, "openai_model") == "owner-model"
+        assert settings["openai_model"] == "owner-model"
+        assert get_float_setting(core_conn, "llm_confidence_threshold", 0.5) == 0.88
+        assert get_bool_setting(core_conn, "transaction_ai_rerun_enabled", True) is False
+        assert get_bool_setting(core_conn, CONFIRM_AI_TOKEN_USAGE_SETTING_KEY, False) is True
+        assert get_int_setting(core_conn, "recurrence_minimum_occurrences", 3) == 7
+        recurrence_settings = get_recurrence_detection_settings(core_conn)
+        assert recurrence_settings.minimum_occurrences == 7
+        assert recurrence_settings.amount_tolerance_percent == 0.33
 
 
 def test_sync_statement_types_updates_adds_and_inactivates_rows(core_conn):

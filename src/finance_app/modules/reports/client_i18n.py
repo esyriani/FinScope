@@ -1,0 +1,28 @@
+"""Browser translation messages for report and pinning scripts."""
+
+CLIENT_TRANSLATION_MESSAGES = (
+    "Actual",
+    "Category",
+    "Categories",
+    "Composition",
+    "Date",
+    "Description",
+    "Difference",
+    "Edit",
+    "Edit pins",
+    "Income and credits",
+    "Keep pinned",
+    "Next",
+    "Pinned",
+    "Pinned report limit reached.",
+    "Pinned reports could not be saved.",
+    "Pinned reports saved.",
+    "Previous",
+    "Report could not be pinned.",
+    "Report pinned.",
+    "Settings",
+    "Tag",
+    "Tags",
+    "Unpin report",
+    "Will be unpinned",
+)

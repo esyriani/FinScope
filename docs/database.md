@@ -98,7 +98,7 @@ Stores owner-managed user accounts for the single FinScope deployment.
 
 #### `user_settings`
 
-Stores runtime settings as user-bound key/value pairs. The composite key is `user_id` and `key`, values are stored as text, and the settings layer parses them into the expected numeric or text types. When no request user is available, background and service code resolves settings through the active owner account.
+Stores runtime settings as user-bound key/value pairs. The composite key is `user_id` and `key`, values are stored as text, and the settings layer parses them into the expected numeric or text types. General settings resolve through the current user when one is available; owner-only settings resolve through the active owner account for request, background, and script workflows.
 
 #### `pinned_reports`
 

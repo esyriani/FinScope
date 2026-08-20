@@ -1,4 +1,4 @@
-"""Recurring transaction inference helpers."""
+"""Recurring transaction inference helpers for the recurring feature."""
 
 from calendar import monthrange
 from collections.abc import Iterable, Mapping
@@ -10,11 +10,11 @@ from typing import Any
 
 from finance_app.core.money import MoneyValue, money_to_decimal, rounded_money_decimal, rounded_money_float
 from finance_app.modules.merchants.repository import merchant_identity_from_row
-from finance_app.modules.recurring.patterns import recurring_pattern_key
-from finance_app.modules.recurring.settings import RECURRENCE_DETECTION_DEFAULTS
+from finance_app.modules.transactions.urls import transactions_date_range_url
 
 from .parsing import month_number
-from .urls import transactions_url
+from .patterns import recurring_pattern_key
+from .settings import RECURRENCE_DETECTION_DEFAULTS
 
 
 def infer_recurring_items(
@@ -79,7 +79,7 @@ def infer_recurring_items(
                 "type": tx_type,
                 "category": row["category"],
                 "account_name": row["account_name"],
-                "url": transactions_url(
+                "url": transactions_date_range_url(
                     row["tx_date"],
                     row["tx_date"],
                     account_id=account_id,
@@ -89,7 +89,7 @@ def infer_recurring_items(
         )
 
     month_transactions_by_key: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
-    # Current-month transactions are pre-normalized by the calendar presenter,
+    # Current-month transactions are pre-normalized by the recurring presenter,
     # so matching can stay focused on date and amount tolerances.
     for transaction in month_transactions:
         month_transactions_by_key.setdefault(
@@ -190,7 +190,7 @@ def infer_recurring_items(
                     "match_details": match,
                     "amount_change": recurring_amount_change_details(typical_amount, match),
                     "occurrences": recent_recurring_occurrences(group["occurrences"]),
-                    "url": transactions_url(
+                    "url": transactions_date_range_url(
                         expected_date.isoformat(),
                         expected_date.isoformat(),
                         account_id=account_id,

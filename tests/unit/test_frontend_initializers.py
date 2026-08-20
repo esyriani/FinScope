@@ -375,7 +375,14 @@ def test_dynamic_user_rows_avoid_inner_html_builders():
 
 def test_client_translation_messages_cover_static_js_strings():
     """Verify direct browser translation strings are exposed to client i18n."""
-    from finance_app import CLIENT_TRANSLATION_MESSAGES
+    from finance_app.core.client_i18n import (
+        client_translation_messages,
+        register_core_client_translation_messages,
+    )
+    from finance_app.modules.client_i18n import register_module_client_translation_messages
+
+    register_core_client_translation_messages()
+    register_module_client_translation_messages()
 
     messages = {
         match.group(1)
@@ -383,7 +390,15 @@ def test_client_translation_messages_cover_static_js_strings():
         for match in CLIENT_TRANSLATION_RE.finditer(script_path.read_text(encoding="utf-8"))
     }
 
-    assert sorted(messages - set(CLIENT_TRANSLATION_MESSAGES)) == []
+    assert sorted(messages - set(client_translation_messages())) == []
+
+
+def test_app_factory_uses_client_translation_registry():
+    """Verify browser translation ownership stays out of the app factory."""
+    app_factory = (ROOT / "src" / "finance_app" / "__init__.py").read_text(encoding="utf-8")
+
+    assert "CLIENT_TRANSLATION_MESSAGES =" not in app_factory
+    assert "client_translation_messages()" in app_factory
 
 
 def test_base_navigation_uses_endpoint_links_and_active_state():

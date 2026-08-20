@@ -24,6 +24,7 @@ from finance_app.database.tables import (
     transactions as transactions_table,
 )
 from finance_app.modules.categories.repository import rename_category, resolve_category_id
+from finance_app.modules.upload import ai_workflow as upload_ai_workflow
 from finance_app.modules.upload import workflow as upload_workflow
 from finance_app.modules.upload.repository import new_statement_import_token, reset_statement_import_state
 
@@ -384,7 +385,7 @@ def test_upload_import_and_llm_update_rows_follow_category_rename(app, monkeypat
                 fingerprint="llm-identity-rename",
             )
         ).inserted_primary_key[0]
-        upload_workflow.update_unknown_transaction_category(
+        upload_ai_workflow.update_unknown_transaction_category(
             conn,
             {
                 "id": llm_tx_id,

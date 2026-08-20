@@ -10,13 +10,13 @@ from sqlalchemy import event, insert, select
 from tests.support.database import insert_transaction
 from werkzeug.datastructures import MultiDict
 
+from finance_app.core.analytics import REPORT_BASIS_CASH_FLOW
 from finance_app.database import engine as engine_module
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.calendar.queries import fetch_month_transactions
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.comparison.queries import fetch_period_summary
 from finance_app.modules.dashboard.queries import fetch_spending_merchant_totals, fetch_top_spending_merchants
-from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW
+from finance_app.modules.recurring.queries import fetch_month_transactions
 from finance_app.modules.reports.queries import fetch_category_breakdown, fetch_merchant_breakdown
 from finance_app.modules.review.queries import review_candidate_rows
 from finance_app.modules.rules.engine import rule_sql_candidate_condition

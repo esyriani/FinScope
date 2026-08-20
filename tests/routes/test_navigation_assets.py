@@ -38,17 +38,17 @@ from tests.support.html import (
         "/settings",
     ],
 )
-def test_primary_get_routes_render_successfully(client, path):
+def test_primary_get_routes_render_successfully(owner_client, path):
     """Verify that primary navigation routes render against an empty database."""
-    response = client.get(path)
+    response = owner_client.get(path)
 
     assert response.status_code == 200
     assert "<html" in response_html(response).lower()
 
 
-def test_base_template_uses_local_hashed_assets(client):
+def test_base_template_uses_local_hashed_assets(owner_client):
     """Verify that shared browser assets are served locally with content hashes."""
-    response = client.get("/")
+    response = owner_client.get("/")
 
     assert response.status_code == 200
     assert_no_asset_reference(response, "cdn.jsdelivr.net")
@@ -70,9 +70,9 @@ def test_base_template_uses_local_hashed_assets(client):
         "/static/js/reports-charts.js",
     ],
 )
-def test_static_javascript_assets_use_browser_valid_mimetype(client, path):
+def test_static_javascript_assets_use_browser_valid_mimetype(owner_client, path):
     """Verify local scripts are not served as plain text on Windows hosts."""
-    response = client.get(path)
+    response = owner_client.get(path)
 
     try:
         assert response.status_code == 200
@@ -81,9 +81,9 @@ def test_static_javascript_assets_use_browser_valid_mimetype(client, path):
         response.close()
 
 
-def test_base_template_keeps_feature_assets_page_scoped(client):
+def test_base_template_keeps_feature_assets_page_scoped(owner_client):
     """Verify the home page does not inherit feature assets from unrelated pages."""
-    response = client.get("/")
+    response = owner_client.get("/")
 
     assert response.status_code == 200
     for snippet in (
@@ -115,9 +115,9 @@ def test_base_template_keeps_feature_assets_page_scoped(client):
         assert_no_asset_reference(response, snippet)
 
 
-def test_dashboard_route_loads_dashboard_assets(client):
+def test_dashboard_route_loads_dashboard_assets(owner_client):
     """Verify dashboard-specific assets are declared by the dashboard page."""
-    response = client.get("/dashboard")
+    response = owner_client.get("/dashboard")
 
     assert response.status_code == 200
     for pattern in (
@@ -134,9 +134,9 @@ def test_dashboard_route_loads_dashboard_assets(client):
     assert_no_asset_reference(response, "js/tables.js")
 
 
-def test_reports_route_loads_reports_assets(client):
+def test_reports_route_loads_reports_assets(owner_client):
     """Verify Reports-specific assets are declared by the Reports shell."""
-    response = client.get("/reports")
+    response = owner_client.get("/reports")
 
     assert response.status_code == 200
     assert_asset_reference(response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
@@ -163,9 +163,9 @@ def test_reports_route_loads_reports_assets(client):
     )
 
 
-def test_base_navigation_shows_reports_as_single_link(client):
+def test_base_navigation_shows_reports_as_single_link(owner_client):
     """Verify Reports appears as a single top-level navigation link."""
-    response = client.get("/comparison")
+    response = owner_client.get("/comparison")
     body = response_html(response)
 
     assert response.status_code == 200
@@ -175,13 +175,13 @@ def test_base_navigation_shows_reports_as_single_link(client):
     assert 'aria-label="Reports sections"' not in body
 
 
-def test_tabbed_pages_load_shared_tab_stylesheet(client):
+def test_tabbed_pages_load_shared_tab_stylesheet(owner_client):
     """Verify tabbed pages opt into shared tab styles without loading them globally."""
-    comparison_response = client.get("/comparison")
-    reports_response = client.get("/reports")
-    recurring_response = client.get("/recurring")
-    settings_response = client.get("/settings")
-    taxonomy_response = client.get("/taxonomy")
+    comparison_response = owner_client.get("/comparison")
+    reports_response = owner_client.get("/reports")
+    recurring_response = owner_client.get("/recurring")
+    settings_response = owner_client.get("/settings")
+    taxonomy_response = owner_client.get("/taxonomy")
 
     assert comparison_response.status_code == 200
     assert reports_response.status_code == 200

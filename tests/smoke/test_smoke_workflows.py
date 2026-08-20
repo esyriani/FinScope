@@ -132,16 +132,16 @@ def transaction_count(conn, description):
     ).scalar_one()
 
 
-def test_smoke_csv_upload_creates_transaction_visible_in_list(client, core_conn):
+def test_smoke_csv_upload_creates_transaction_visible_in_list(owner_client, core_conn):
     """Upload a CSV through the app and verify the transaction list sees it."""
     response, job = post_csv_upload(
-        client,
+        owner_client,
         core_conn,
         "smoke-end-to-end.csv",
         "Date,Description,Amount\n2026-01-02,Smoke End To End Market,12.34\n",
     )
 
-    transactions_page = client.get("/transactions?period=all")
+    transactions_page = owner_client.get("/transactions?period=all")
     body = transactions_page.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -151,12 +151,12 @@ def test_smoke_csv_upload_creates_transaction_visible_in_list(client, core_conn)
     assert "Smoke End To End Market" in body
 
 
-def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(client, core_conn):
+def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(owner_client, core_conn):
     """Create a rule, upload a matching CSV, and verify import categorization."""
-    rule_response = client.post(
+    rule_response = owner_client.post(
         "/rules/create",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "confirm_preview": "1",
             "keyword": "Smoke Grocery",
             "category": "Food",
@@ -166,13 +166,13 @@ def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(clie
     )
 
     _, job = post_csv_upload(
-        client,
+        owner_client,
         core_conn,
         "smoke-rule-match.csv",
         "Date,Description,Amount\n2026-01-03,Smoke Grocery #777,45.67\n",
     )
 
-    transactions_page = client.get("/transactions?period=all&categories=Food")
+    transactions_page = owner_client.get("/transactions?period=all&categories=Food")
     body = transactions_page.get_data(as_text=True)
 
     assert rule_response.status_code == 200
@@ -182,19 +182,19 @@ def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(clie
     assert "Smoke Grocery #777" in body
 
 
-def test_smoke_upload_job_can_be_undone(client, core_conn):
+def test_smoke_upload_job_can_be_undone(owner_client, core_conn):
     """Upload through a background job, undo it through /jobs, and verify removal."""
     insert_rule(core_conn, "UNDO MARKET", "Food", tags=["Tax"])
     _, job = post_csv_upload(
-        client,
+        owner_client,
         core_conn,
         "smoke-undo.csv",
         "Date,Description,Amount\n2026-01-04,Undo Market,10.00\n",
     )
 
-    undo_response = client.post(
+    undo_response = owner_client.post(
         f"/jobs/{job['id']}/undo",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
 
@@ -203,7 +203,7 @@ def test_smoke_upload_job_can_be_undone(client, core_conn):
     assert transaction_count(core_conn, "Undo Market") == 0
 
 
-def test_smoke_dashboard_loads_with_seeded_data(client, core_conn):
+def test_smoke_dashboard_loads_with_seeded_data(owner_client, core_conn):
     """Load the dashboard with seeded data and verify the page reaches content."""
     insert_smoke_transaction(
         core_conn,
@@ -233,7 +233,7 @@ def test_smoke_dashboard_loads_with_seeded_data(client, core_conn):
         "2026-01-07",
     )
 
-    response = client.get("/dashboard?period=all")
+    response = owner_client.get("/dashboard?period=all")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -245,14 +245,14 @@ def test_smoke_dashboard_loads_with_seeded_data(client, core_conn):
     assert "Income and credits" in body
 
 
-def test_smoke_same_transaction_can_import_for_different_accounts(client, core_conn):
+def test_smoke_same_transaction_can_import_for_different_accounts(owner_client, core_conn):
     """Upload the same merchant for two accounts and verify both appear."""
     insert_rule(core_conn, "SHARED ACCOUNT MERCHANT", "Food")
     first_csv = "Date,Description,Amount\n2026-01-08,Shared Account Merchant,12.34\n"
     second_csv = "Date,Description,Amount\n" "2026-01-08,Shared Account Merchant,12.34\n" "not a date,ignored row,\n"
 
-    post_csv_upload(client, core_conn, "smoke-account-a.csv", first_csv, account_name="Account A")
-    post_csv_upload(client, core_conn, "smoke-account-b.csv", second_csv, account_name="Account B")
+    post_csv_upload(owner_client, core_conn, "smoke-account-a.csv", first_csv, account_name="Account A")
+    post_csv_upload(owner_client, core_conn, "smoke-account-b.csv", second_csv, account_name="Account B")
 
     rows = core_conn.execute(text("""
         SELECT accounts.name AS account_name, transactions.category
@@ -261,7 +261,7 @@ def test_smoke_same_transaction_can_import_for_different_accounts(client, core_c
         WHERE transactions.description = 'Shared Account Merchant'
         ORDER BY accounts.name
         """)).mappings().fetchall()
-    transactions_page = client.get("/transactions?period=all&search=Shared+Account+Merchant")
+    transactions_page = owner_client.get("/transactions?period=all&search=Shared+Account+Merchant")
     body = transactions_page.get_data(as_text=True)
 
     assert [(row["account_name"], row["category"]) for row in rows] == [

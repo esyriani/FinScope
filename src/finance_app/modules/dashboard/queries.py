@@ -6,6 +6,10 @@ from typing import Any
 
 from sqlalchemy import case, exists, func, or_, select
 
+from finance_app.core.builtin_taxonomy import (
+    BUILTIN_CATEGORY_TRANSFERS,
+    BUILTIN_CATEGORY_UNKNOWN,
+)
 from finance_app.core.category_sql import transaction_category_join_condition, transaction_category_label_expression
 from finance_app.core.money import money_to_decimal
 from finance_app.core.reporting import (
@@ -24,10 +28,6 @@ from finance_app.database.tables import (
 )
 from finance_app.database.tables import (
     transactions as transactions_table,
-)
-from finance_app.modules.categories.builtins import (
-    BUILTIN_CATEGORY_TRANSFERS,
-    BUILTIN_CATEGORY_UNKNOWN,
 )
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,

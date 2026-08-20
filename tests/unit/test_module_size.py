@@ -24,9 +24,29 @@ def function_line_count(relative_path, function_name):
 
 def test_refactored_modules_stay_below_review_size():
     """Keep formerly oversized modules from regrowing past reviewable size."""
+    assert source_line_count("src/finance_app/modules/categories/llm.py") <= 650
+    assert source_line_count("src/finance_app/modules/categories/llm_results.py") <= 400
+    assert source_line_count("src/finance_app/modules/comparison/anomaly_insights.py") <= 180
+    assert source_line_count("src/finance_app/modules/comparison/change_metrics.py") <= 120
+    assert source_line_count("src/finance_app/modules/comparison/insight_cards.py") <= 320
+    assert source_line_count("src/finance_app/modules/comparison/insight_scoring.py") <= 320
+    assert source_line_count("src/finance_app/modules/comparison/insights.py") <= 550
+    assert source_line_count("src/finance_app/modules/comparison/merchant_insights.py") <= 380
+    assert source_line_count("src/finance_app/modules/comparison/presenter.py") <= 500
+    assert source_line_count("src/finance_app/modules/home/insights.py") <= 320
+    assert source_line_count("src/finance_app/modules/home/service.py") <= 950
+    assert source_line_count("src/finance_app/modules/reports/export_presenter.py") <= 240
+    assert source_line_count("src/finance_app/modules/reports/presenter.py") <= 1100
+    assert source_line_count("src/finance_app/modules/reports/query_data.py") <= 600
+    assert source_line_count("src/finance_app/modules/reports/service.py") <= 450
+    assert source_line_count("src/finance_app/modules/reports/taxonomy_detail_presenter.py") <= 340
+    assert source_line_count("src/finance_app/modules/rules/audit.py") <= 760
     assert source_line_count("src/finance_app/modules/rules/audit_presenter.py") <= 600
-    assert source_line_count("src/finance_app/modules/upload/workflow.py") <= 1100
-    assert source_line_count("src/finance_app/modules/categories/llm.py") <= 950
+    assert source_line_count("src/finance_app/modules/rules/audit_preview.py") <= 260
+    assert source_line_count("src/finance_app/modules/rules/audit_preview_impacts.py") <= 460
+    assert source_line_count("src/finance_app/modules/rules/audit_preview_types.py") <= 80
+    assert source_line_count("src/finance_app/modules/upload/ai_workflow.py") <= 520
+    assert source_line_count("src/finance_app/modules/upload/workflow.py") <= 650
 
 
 def test_dashboard_context_builder_stays_as_orchestration():

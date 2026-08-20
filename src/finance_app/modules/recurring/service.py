@@ -10,18 +10,15 @@ from flask import url_for
 
 from finance_app.core.i18n import format_month_year, gettext, weekday_abbreviation_labels
 from finance_app.core.money import format_money_display
+from finance_app.database.engine import db_core_transaction
 from finance_app.modules.accounts.filters import parse_account_id
-from finance_app.modules.calendar.presenter import recurring_amount_change_cashflow_impact
-from finance_app.modules.calendar.service import (
-    build_recurring_activity_context,
-    build_recurring_activity_json,
-    clean_categories,
-    clean_tags,
-    default_month,
-    parse_month,
-    shift_month,
-)
 from finance_app.modules.merchants.filters import parse_merchant_id, parse_merchant_query
+
+from .activity import build_recurring_activity_context
+from .forms import parse_expected_day, recurring_pattern_payload
+from .parsing import clean_categories, clean_tags, default_month, parse_month, shift_month
+from .patterns import normalize_active, upsert_recurring_pattern
+from .presenter import build_recurring_activity_json, recurring_amount_change_cashflow_impact
 
 RECURRING_VIEWS = {"list", "calendar"}
 RECURRING_CALENDAR_VISIBLE_COUNT = 3
@@ -195,6 +192,60 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
         "recurring_calendar_legend": build_recurring_calendar_legend(recurring_items),
         "weekday_labels": weekday_abbreviation_labels(),
     }
+
+
+def confirm_recurring_pattern_action(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Confirm a recurring pattern from a submitted JSON payload."""
+    pattern = recurring_pattern_payload(payload)
+    with db_core_transaction() as conn:
+        upsert_recurring_pattern(
+            conn,
+            pattern["pattern_key"],
+            pattern["merchant"],
+            pattern["type"],
+            merchant_id=pattern["merchant_id"],
+            user_status="confirmed",
+            active=1,
+        )
+    return {"ok": True, "userStatus": "confirmed", "active": 1}
+
+
+def ignore_recurring_pattern_action(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Ignore a recurring pattern from a submitted JSON payload."""
+    pattern = recurring_pattern_payload(payload)
+    with db_core_transaction() as conn:
+        upsert_recurring_pattern(
+            conn,
+            pattern["pattern_key"],
+            pattern["merchant"],
+            pattern["type"],
+            merchant_id=pattern["merchant_id"],
+            user_status="ignored",
+            active=0,
+        )
+    return {"ok": True, "userStatus": "ignored", "active": 0}
+
+
+def edit_recurring_pattern_action(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Persist an edited recurring pattern from a submitted JSON payload."""
+    pattern = recurring_pattern_payload(payload)
+    expected_day = parse_expected_day(payload.get("expectedDate"))
+    with db_core_transaction() as conn:
+        upsert_recurring_pattern(
+            conn,
+            pattern["pattern_key"],
+            pattern["merchant"],
+            pattern["type"],
+            merchant_id=pattern["merchant_id"],
+            user_status="edited",
+            frequency=payload.get("frequency"),
+            expected_day=expected_day,
+            typical_amount=payload.get("typicalAmount"),
+            date_tolerance_days=payload.get("dateToleranceDays"),
+            amount_tolerance=payload.get("amountTolerance"),
+            active=payload.get("active", 1),
+        )
+    return {"ok": True, "userStatus": "edited", "active": normalize_active(payload.get("active", 1))}
 
 
 def parse_recurring_view(value: object) -> str:

@@ -9,6 +9,7 @@ from sqlalchemy import and_, case, func, insert, or_, select, update
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 from sqlalchemy.exc import ProgrammingError as SqlAlchemyProgrammingError
 
+from finance_app.core.builtin_taxonomy import builtin_category_names as fallback_builtin_category_names
 from finance_app.core.category_sql import category_label_expression
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
@@ -32,11 +33,10 @@ from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
+from finance_app.database.taxonomy import seed_category_taxonomy
 from finance_app.database.upsert import insert_or_select_unique_row
-from finance_app.modules.categories.builtins import builtin_category_names as fallback_builtin_category_names
 from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,
-    seed_category_taxonomy,
     set_rule_tags,
 )
 

@@ -15,6 +15,7 @@ from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.repository import create_category, resolve_category_id
 from finance_app.modules.categories.taxonomy import set_transaction_tags
 from finance_app.modules.review import controller as review_controller
+from finance_app.modules.review import service as review_service
 from finance_app.modules.review.service import apply_review_group_job, undo_review_group_job
 
 
@@ -59,15 +60,15 @@ def insert_review_transaction(
     return tx_id
 
 
-def test_review_apply_route_queues_group_job(client, core_conn, monkeypatch):
+def test_review_apply_route_queues_group_job(owner_client, core_conn, monkeypatch):
     """Verify review group route queues a background review job."""
     insert_review_transaction(core_conn)
-    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
+    submitted_jobs = capture_background_jobs(monkeypatch, review_service, job_id="reviewjob123")
 
-    response = client.post(
+    response = owner_client.post(
         "/review/apply",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "merchant_key": "METRO GROCERY",
             "category": "Food",
             "tags": ["Tax"],
@@ -99,15 +100,15 @@ def test_review_apply_route_queues_group_job(client, core_conn, monkeypatch):
     assert submitted.undo_args == (submitted.args[0],)
 
 
-def test_review_apply_route_returns_ajax_refresh_metadata(client, core_conn, monkeypatch):
+def test_review_apply_route_returns_ajax_refresh_metadata(owner_client, core_conn, monkeypatch):
     """Verify AJAX review submissions expose the refresh and job status URLs."""
     insert_review_transaction(core_conn)
-    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
+    submitted_jobs = capture_background_jobs(monkeypatch, review_service, job_id="reviewjob123")
 
-    response = client.post(
+    response = owner_client.post(
         "/review/apply",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "next": "/review?merchant=Metro",
             "merchant_key": "METRO GROCERY",
             "category": "Food",
@@ -125,7 +126,7 @@ def test_review_apply_route_returns_ajax_refresh_metadata(client, core_conn, mon
     assert submitted_jobs.single().label == "Review METRO GROCERY as Food"
 
 
-def test_review_job_status_route_returns_minimal_status(client, monkeypatch):
+def test_review_job_status_route_returns_minimal_status(owner_client, monkeypatch):
     """Verify the review page can poll its own submitted background job status."""
     monkeypatch.setattr(
         review_controller,
@@ -133,21 +134,21 @@ def test_review_job_status_route_returns_minimal_status(client, monkeypatch):
         lambda job_id: {"id": job_id, "status": "completed"},
     )
 
-    response = client.get("/review/jobs/reviewjob123.json", headers={"X-Requested-With": "fetch"})
+    response = owner_client.get("/review/jobs/reviewjob123.json", headers={"X-Requested-With": "fetch"})
 
     assert response.status_code == 200
     assert response.json == {"ok": True, "status": "completed"}
 
 
-def test_review_apply_route_queues_single_transaction_job(client, core_conn, monkeypatch):
+def test_review_apply_route_queues_single_transaction_job(owner_client, core_conn, monkeypatch):
     """Verify review route can queue a job for one transaction in a group."""
     tx_id = insert_review_transaction(core_conn)
-    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
+    submitted_jobs = capture_background_jobs(monkeypatch, review_service, job_id="reviewjob123")
 
-    response = client.post(
+    response = owner_client.post(
         "/review/apply",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "merchant_key": "METRO GROCERY",
             "transaction_id": str(tx_id),
             "category": "Food",
@@ -171,16 +172,16 @@ def test_review_apply_route_queues_single_transaction_job(client, core_conn, mon
     )
 
 
-def test_review_apply_route_queues_selected_transactions_job(client, core_conn, monkeypatch):
+def test_review_apply_route_queues_selected_transactions_job(owner_client, core_conn, monkeypatch):
     """Verify review route can queue a job for selected transactions in a group."""
     first_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-selected-1")
     second_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-selected-2")
-    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
+    submitted_jobs = capture_background_jobs(monkeypatch, review_service, job_id="reviewjob123")
 
-    response = client.post(
+    response = owner_client.post(
         "/review/apply",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "merchant_key": "METRO GROCERY",
             "transaction_ids": [str(first_id), str(second_id)],
             "category": "Food",
@@ -207,12 +208,12 @@ def test_review_apply_route_queues_selected_transactions_job(client, core_conn, 
     assert submitted.kwargs == {"selected_transaction_ids": [first_id, second_id]}
 
 
-def test_review_page_renders_group_transaction_selector(client, core_conn):
+def test_review_page_renders_group_transaction_selector(owner_client, core_conn):
     """Verify review group modal renders its transaction selector rows."""
     first_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-modal-1")
     second_id = insert_review_transaction(core_conn, "Metro Grocery", "review-route-modal-2")
 
-    response = client.get("/review")
+    response = owner_client.get("/review")
 
     assert response.status_code == 200
     assert_visible_text(
@@ -244,7 +245,7 @@ def test_review_page_renders_group_transaction_selector(client, core_conn):
     )
 
 
-def test_review_page_prefills_consistent_group_assignment(client, core_conn):
+def test_review_page_prefills_consistent_group_assignment(owner_client, core_conn):
     """Verify review group modal defaults to the existing suggested assignment."""
     insert_review_transaction(
         core_conn,
@@ -265,20 +266,20 @@ def test_review_page_prefills_consistent_group_assignment(client, core_conn):
         tags=["Grocery"],
     )
 
-    response = client.get("/review")
+    response = owner_client.get("/review")
 
     assert response.status_code == 200
     assert_option(response, value="Food", selected=True)
     assert_input(response, name="tags", value="Grocery", checked=True)
 
 
-def test_review_page_filters_by_merchant_search(client, core_conn):
+def test_review_page_filters_by_merchant_search(owner_client, core_conn):
     """Verify the review page can be filtered by merchant name."""
     insert_review_transaction(core_conn, "Metro Grocery", "review-route-search-metro")
     insert_review_transaction(core_conn, "Hydro Quebec", "review-route-search-hydro")
     insert_review_transaction(core_conn, "UDEM - PAIE payroll", "review-route-search-udem-paie")
 
-    response = client.get("/review?merchant=UDEM+PAIE")
+    response = owner_client.get("/review?merchant=UDEM+PAIE")
 
     assert response.status_code == 200
     assert_input(response, name="merchant", value="UDEM PAIE")
@@ -287,13 +288,13 @@ def test_review_page_filters_by_merchant_search(client, core_conn):
     assert_not_visible_text(response, "HYDRO QUEBEC")
 
 
-def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypatch):
+def test_review_apply_route_rejects_invalid_payloads(owner_client, core_conn, monkeypatch):
     """Verify review route validation avoids queueing malformed jobs."""
     outside_group_id = insert_review_transaction(core_conn, "Other Shop", "review-route-other")
-    submitted_jobs = capture_background_jobs(monkeypatch, review_controller, job_id="reviewjob123")
-    token = set_csrf_token(client)
+    submitted_jobs = capture_background_jobs(monkeypatch, review_service, job_id="reviewjob123")
+    token = set_csrf_token(owner_client)
 
-    invalid_transaction = client.post(
+    invalid_transaction = owner_client.post(
         "/review/apply",
         data={
             CSRF_FIELD_NAME: token,
@@ -303,7 +304,7 @@ def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypa
         },
         follow_redirects=True,
     )
-    missing_group = client.post(
+    missing_group = owner_client.post(
         "/review/apply",
         data={
             CSRF_FIELD_NAME: token,
@@ -312,7 +313,7 @@ def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypa
         },
         follow_redirects=True,
     )
-    unknown_category = client.post(
+    unknown_category = owner_client.post(
         "/review/apply",
         data={
             CSRF_FIELD_NAME: token,
@@ -321,7 +322,7 @@ def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypa
         },
         follow_redirects=True,
     )
-    invalid_amount = client.post(
+    invalid_amount = owner_client.post(
         "/review/apply",
         data={
             CSRF_FIELD_NAME: token,
@@ -333,7 +334,7 @@ def test_review_apply_route_rejects_invalid_payloads(client, core_conn, monkeypa
         },
         follow_redirects=True,
     )
-    invalid_selection = client.post(
+    invalid_selection = owner_client.post(
         "/review/apply",
         data={
             CSRF_FIELD_NAME: token,

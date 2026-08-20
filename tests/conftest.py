@@ -32,7 +32,6 @@ LAYER_MARKERS = {
 DB_FIXTURES = {"core_conn", "data_factory"}
 FLASK_FIXTURES = {
     "app",
-    "client",
     "owner_client",
     "editor_client",
     "viewer_client",
@@ -209,12 +208,6 @@ def owner_client(app):
 
 
 @pytest.fixture
-def client(owner_client):
-    """A backwards-compatible owner client fixture for existing tests."""
-    return owner_client
-
-
-@pytest.fixture
 def editor_client(app):
     """A test client authenticated as an editor user."""
     editor = get_or_create_test_user(TEST_EDITOR_USERNAME, USER_ROLE_EDITOR)
@@ -248,9 +241,9 @@ def must_change_password_client(app):
 
 
 @pytest.fixture
-def csrf_client(client):
+def csrf_client(owner_client):
     """A test client authenticated as the default owner with CSRF helpers."""
-    return CsrfEnabledClient(client)
+    return CsrfEnabledClient(owner_client)
 
 
 @pytest.fixture

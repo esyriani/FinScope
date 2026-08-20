@@ -9,7 +9,6 @@ from sqlalchemy import text
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_HEADER_NAME
-from finance_app.modules.calendar.presenter import build_recurring_activity_json
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_name
 from finance_app.modules.recurring.forms import parse_expected_day, recurring_pattern_payload
 from finance_app.modules.recurring.patterns import (
@@ -24,6 +23,7 @@ from finance_app.modules.recurring.patterns import (
     recurring_pattern_key,
     upsert_recurring_pattern,
 )
+from finance_app.modules.recurring.presenter import build_recurring_activity_json
 from finance_app.modules.recurring.service import (
     build_recurring_calendar_days,
     recurring_empty_state_message,
@@ -54,20 +54,20 @@ def valid_payload(**overrides):
     return payload
 
 
-def test_recurring_confirm_ignore_and_edit_routes_persist_metadata(client, core_conn):
+def test_recurring_confirm_ignore_and_edit_routes_persist_metadata(owner_client, core_conn):
     """Verify recurring pattern mutation routes persist user metadata."""
     merchant_id = get_or_create_merchant_for_name(core_conn, "NETFLIX")["id"]
     core_conn.commit()
     payload = valid_payload(merchantId=merchant_id, matchType="merchant")
 
-    confirm = recurring_json(client, "/recurring/patterns/confirm", payload)
+    confirm = recurring_json(owner_client, "/recurring/patterns/confirm", payload)
     confirmed = get_recurring_pattern_by_merchant_type(core_conn, merchant_id, "spending")
 
-    ignore = recurring_json(client, "/recurring/patterns/ignore", payload)
+    ignore = recurring_json(owner_client, "/recurring/patterns/ignore", payload)
     ignored = get_recurring_pattern_by_merchant_type(core_conn, merchant_id, "spending")
 
     edit = recurring_json(
-        client,
+        owner_client,
         "/recurring/patterns/edit",
         valid_payload(
             merchantId=merchant_id,
@@ -105,10 +105,10 @@ def test_recurring_confirm_ignore_and_edit_routes_persist_metadata(client, core_
     assert edited["active"] == 0
 
 
-def test_recurring_routes_preserve_keyword_fuzzy_patterns(client, core_conn):
+def test_recurring_routes_preserve_keyword_fuzzy_patterns(owner_client, core_conn):
     """Verify recurring routes keep keyword-fuzzy patterns unbound."""
     confirm = recurring_json(
-        client,
+        owner_client,
         "/recurring/patterns/confirm",
         valid_payload(matchType="keyword"),
     )
@@ -128,9 +128,9 @@ def test_recurring_routes_preserve_keyword_fuzzy_patterns(client, core_conn):
         {"patternKey": "A::neutral", "merchant": "A", "type": "neutral"},
     ],
 )
-def test_recurring_routes_reject_incomplete_payloads(client, payload):
+def test_recurring_routes_reject_incomplete_payloads(owner_client, payload):
     """Verify recurring route payload validation is surfaced as JSON."""
-    response = recurring_json(client, "/recurring/patterns/confirm", payload)
+    response = recurring_json(owner_client, "/recurring/patterns/confirm", payload)
 
     assert response.status_code == 400
     assert response.get_json() == {
@@ -139,9 +139,11 @@ def test_recurring_routes_reject_incomplete_payloads(client, payload):
     }
 
 
-def test_recurring_page_uses_shared_status_filter_links(client):
+def test_recurring_page_uses_shared_status_filter_links(owner_client):
     """Verify recurring status filters are URL-driven instead of client-only buttons."""
-    response = client.get("/recurring?view=list&statuses=overdue&account_id=12&merchant_id=34&merchant_query=NETFLIX")
+    response = owner_client.get(
+        "/recurring?view=list&statuses=overdue&account_id=12&merchant_id=34&merchant_query=NETFLIX"
+    )
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -169,9 +171,9 @@ def test_recurring_page_uses_shared_status_filter_links(client):
     assert "data-recurring-activity-filter" not in body
 
 
-def test_recurring_page_exposes_compact_table_and_export_status_details(client):
+def test_recurring_page_exposes_compact_table_and_export_status_details(owner_client):
     """Verify recurring list and export columns expose compact status context."""
-    response = client.get("/recurring?view=list")
+    response = owner_client.get("/recurring?view=list")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -201,9 +203,9 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(client):
     assert "Actual amount" in body
 
 
-def test_recurring_page_all_confidence_filter_is_explicit(client):
+def test_recurring_page_all_confidence_filter_is_explicit(owner_client):
     """Verify All confidence is opt-in now that High confidence is the default."""
-    response = client.get("/recurring?view=list&confidence=all")
+    response = owner_client.get("/recurring?view=list&confidence=all")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -278,18 +280,18 @@ def test_table_export_script_splits_multi_value_cells_into_export_columns():
     assert "const headers = tableHeaderNames" in body
 
 
-def test_recurring_page_explains_filtered_empty_states(client):
+def test_recurring_page_explains_filtered_empty_states(owner_client):
     """Verify recurring empty states distinguish filtered views from no detections."""
-    response = client.get("/recurring?view=list&statuses=overdue")
+    response = owner_client.get("/recurring?view=list&statuses=overdue")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert "No recurring activity matches the current filters." in body
 
 
-def test_recurring_calendar_exposes_empty_state_context(client):
+def test_recurring_calendar_exposes_empty_state_context(owner_client):
     """Verify an empty recurring calendar explains why no chips are visible."""
-    response = client.get("/recurring?view=calendar")
+    response = owner_client.get("/recurring?view=calendar")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -324,9 +326,9 @@ def test_recurring_calendar_template_places_amount_on_its_own_chip_line():
     assert 'title="{{ _(item.status_label) }} - {{ item.merchant }} - {{ item.amount_label }}"' in body
 
 
-def test_recurring_detail_modal_exposes_decision_summary_hooks(client):
+def test_recurring_detail_modal_exposes_decision_summary_hooks(owner_client):
     """Verify recurring details surface status, evidence, and recommendation hooks."""
-    response = client.get("/recurring?view=list")
+    response = owner_client.get("/recurring?view=list")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200

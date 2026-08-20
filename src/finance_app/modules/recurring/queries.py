@@ -1,4 +1,4 @@
-"""SQLAlchemy Core query helpers for the calendar feature."""
+"""SQLAlchemy Core query helpers for recurring activity detection."""
 
 from collections.abc import Iterable, Sequence
 from datetime import date
@@ -22,8 +22,9 @@ from finance_app.database.tables import (
 from finance_app.modules.accounts.filters import account_filter_condition
 from finance_app.modules.categories.tag_filters import transaction_tag_condition
 from finance_app.modules.merchants.filters import merchant_filter_condition
-from finance_app.modules.recurring.settings import RecurrenceDetectionSettings
 from finance_app.modules.settings.runtime import get_float_setting, get_int_setting
+
+from .settings import RecurrenceDetectionSettings
 
 
 def get_recurrence_detection_settings(conn: Any) -> RecurrenceDetectionSettings:
@@ -68,7 +69,7 @@ def build_category_filter(
     merchant_id: int | None = None,
     merchant_query: str = "",
 ) -> tuple[Any, ...]:
-    """Build Core filters for calendar transaction queries."""
+    """Build Core filters for recurring activity transaction queries."""
     conditions: list[Any] = []
     account_condition = account_filter_condition(account_id)
     if account_condition is not None:
@@ -87,12 +88,12 @@ def build_category_filter(
 
 
 def non_transfer_clause() -> Any:
-    """Return the calendar Core filter for reportable transaction kinds."""
+    """Return the recurring activity Core filter for reportable transaction kinds."""
     return transactions_table.c.transaction_kind.not_in(NON_REPORTABLE_TRANSACTION_KINDS)
 
 
 def transaction_row_select(unknown_category: str) -> Any:
-    """Return the shared calendar transaction projection."""
+    """Return the shared recurring activity transaction projection."""
     return select(
         transactions_table.c.tx_date,
         transactions_table.c.description,

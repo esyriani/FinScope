@@ -6,9 +6,9 @@ from tests.support.database import set_owner_setting
 from tests.support.html import assert_visible_text, response_html
 from tests.support.web import csrf_enabled_client
 
+from finance_app.core.analytics import REPORT_BASIS_CASH_FLOW, REPORT_MEASURE_INCOME, REPORT_MEASURE_SPENDING
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import pinned_reports as pinned_reports_table
-from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW, REPORT_MEASURE_INCOME, REPORT_MEASURE_SPENDING
 from finance_app.modules.reports.definitions import REPORT_INCOME, REPORT_OVERVIEW, REPORT_TAXONOMY
 from finance_app.modules.reports.pins import REPORT_TYPE_ACCOUNT
 
@@ -43,11 +43,11 @@ def list_pins(conn, user_id):
     )
 
 
-def test_reports_overview_renders_empty_pinned_reports_state(client, core_conn):
+def test_reports_overview_renders_empty_pinned_reports_state(owner_client, core_conn):
     """Verify Reports overview owns the pinned report section."""
     seed_reporting_data(core_conn)
 
-    response = client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
+    response = owner_client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
     body = response_html(response)
 
     assert response.status_code == 200
@@ -82,12 +82,12 @@ def test_pin_report_endpoint_persists_exact_view_once(csrf_client, core_conn):
     assert rows[0]["classification_scope"] == "categorized"
 
 
-def test_reports_overview_renders_live_pinned_report_card(client, csrf_client, core_conn):
+def test_reports_overview_renders_live_pinned_report_card(owner_client, csrf_client, core_conn):
     """Verify overview cards render saved views with current report values."""
     seed_reporting_data(core_conn)
     csrf_client.post("/reports/pins", json=overview_pin_payload())
 
-    response = client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
+    response = owner_client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
     body = response_html(response)
 
     assert response.status_code == 200
@@ -172,13 +172,13 @@ def test_save_pinned_reports_edits_order_title_and_removal(csrf_client, core_con
     assert remaining[0]["sort_order"] == 0
 
 
-def test_viewer_can_manage_only_their_own_pinned_reports(client, viewer_client, core_conn):
+def test_viewer_can_manage_only_their_own_pinned_reports(owner_client, viewer_client, core_conn):
     """Verify viewer pin mutations are allowed but remain user-scoped."""
     seed_reporting_data(core_conn)
     viewer_csrf = csrf_enabled_client(viewer_client)
 
     response = viewer_csrf.post("/reports/pins", json=overview_pin_payload())
-    owner_overview = client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
+    owner_overview = owner_client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
     viewer_overview = viewer_client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
 
     assert response.status_code == 200
@@ -186,10 +186,10 @@ def test_viewer_can_manage_only_their_own_pinned_reports(client, viewer_client, 
     assert "data-pinned-card" in response_html(viewer_overview)
 
 
-def test_missing_pinned_report_target_renders_degraded_card(client, core_conn):
+def test_missing_pinned_report_target_renders_degraded_card(owner_client, core_conn):
     """Verify missing targets remain removable from overview edit mode."""
     seed_reporting_data(core_conn)
-    user_id = int(client.test_user["id"])
+    user_id = int(owner_client.test_user["id"])
     core_conn.execute(
         insert(pinned_reports_table).values(
             user_id=user_id,
@@ -207,18 +207,20 @@ def test_missing_pinned_report_target_renders_degraded_card(client, core_conn):
     )
     core_conn.commit()
 
-    response = client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
+    response = owner_client.get("/reports?period=custom&date_from=2026-01-01&date_to=2026-01-31")
 
     assert response.status_code == 200
     assert_visible_text(response, "Missing report target", "Report target no longer exists.", "Edit pins")
 
 
-def test_report_detail_pages_expose_pin_report_action(client, core_conn):
+def test_report_detail_pages_expose_pin_report_action(owner_client, core_conn):
     """Verify detail reports expose the current-view pin action."""
     seed_reporting_data(core_conn)
     category_id = core_conn.execute(select(categories_table.c.id).where(categories_table.c.name == "Food")).scalar_one()
 
-    response = client.get(f"/reports/categories/{category_id}?period=custom&date_from=2026-01-01&date_to=2026-01-31")
+    response = owner_client.get(
+        f"/reports/categories/{category_id}?period=custom&date_from=2026-01-01&date_to=2026-01-31"
+    )
 
     assert response.status_code == 200
     assert_visible_text(response, "Pin report")

@@ -43,7 +43,7 @@ def route_transaction_params(conn, rows, columns):
     return params
 
 
-def test_navigation_pages_render_distinct_browser_titles(client):
+def test_navigation_pages_render_distinct_browser_titles(owner_client):
     """Verify browser history labels include the active navigation destination."""
     expected_titles = {
         "/": "FinScope - Home",
@@ -64,13 +64,13 @@ def test_navigation_pages_render_distinct_browser_titles(client):
     }
 
     for path, expected_title in expected_titles.items():
-        response = client.get(path)
+        response = owner_client.get(path)
 
         assert response.status_code == 200
         assert_has_element(response, "title", text=expected_title)
 
 
-def test_transactions_route_renders_category_source_badges_and_filter(client, core_conn):
+def test_transactions_route_renders_category_source_badges_and_filter(owner_client, core_conn):
     """Verify transaction source provenance is visible on the transaction page."""
     account_id = core_conn.execute(text("""
         INSERT INTO accounts (name)
@@ -125,7 +125,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     )
     core_conn.commit()
 
-    response = client.get(f"/transactions?period=all&account_id={account_id}")
+    response = owner_client.get(f"/transactions?period=all&account_id={account_id}")
     body = response_html(response)
     expected_rule_url = f"/rules/audit/rule/{rule_id}"
     modal_summary = body.split('id="categorize-transaction-', 1)[1].split("</dl>", 1)[0]
@@ -198,7 +198,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(client, co
     assert body.index("Apply once") < body.index("Remember for future matches")
 
 
-def test_transactions_route_escapes_imported_merchant_keys(client, core_conn):
+def test_transactions_route_escapes_imported_merchant_keys(owner_client, core_conn):
     """Verify merchant keys in transaction modals cannot render imported markup."""
     core_conn.execute(text("""
         INSERT INTO transactions (
@@ -220,7 +220,7 @@ def test_transactions_route_escapes_imported_merchant_keys(client, core_conn):
         """))
     core_conn.commit()
 
-    response = client.get("/transactions?period=all")
+    response = owner_client.get("/transactions?period=all")
     body = response_html(response)
 
     assert response.status_code == 200
@@ -230,7 +230,7 @@ def test_transactions_route_escapes_imported_merchant_keys(client, core_conn):
     assert "<img src=x onerror=alert(1)>" not in body
 
 
-def test_dashboard_route_does_not_render_assignment_tooltips(client, core_conn):
+def test_dashboard_route_does_not_render_assignment_tooltips(owner_client, core_conn):
     """Verify category assignment tooltips stay out of dashboard filters."""
     core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
@@ -238,9 +238,9 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, core_conn):
         """))
     core_conn.commit()
 
-    response = client.get("/dashboard?period=all")
-    tag_response = client.get("/dashboard?period=all&tags=Tax")
-    untagged_response = client.get("/dashboard?period=all&quick_view=all")
+    response = owner_client.get("/dashboard?period=all")
+    tag_response = owner_client.get("/dashboard?period=all&tags=Tax")
+    untagged_response = owner_client.get("/dashboard?period=all&quick_view=all")
 
     assert response.status_code == 200
     assert tag_response.status_code == 200
@@ -276,7 +276,7 @@ def test_dashboard_route_does_not_render_assignment_tooltips(client, core_conn):
     assert_not_visible_text(untagged_response, "Hide untagged")
 
 
-def test_category_filters_offer_analysis_category_preset(client, core_conn):
+def test_category_filters_offer_analysis_category_preset(owner_client, core_conn):
     """Verify category filters can bulk-select categories used for analysis."""
     core_conn.execute(text("""
         INSERT INTO categories (name, builtin_key, description, instruction)
@@ -298,7 +298,7 @@ def test_category_filters_offer_analysis_category_preset(client, core_conn):
     }
 
     for path, expected_count in expected_counts.items():
-        response = client.get(path)
+        response = owner_client.get(path)
         body = response_html(response)
 
         assert response.status_code == 200
@@ -312,9 +312,9 @@ def test_category_filters_offer_analysis_category_preset(client, core_conn):
             assert "UNKNOWN" in body
 
 
-def test_calendar_route_renders_bookmarkable_merchant_filter(client):
+def test_calendar_route_renders_bookmarkable_merchant_filter(owner_client):
     """Verify calendar exposes merchant autocomplete and preserves query filters."""
-    response = client.get("/calendar?month=2026-05&account_id=12&merchant_id=34&merchant_query=NETFLIX")
+    response = owner_client.get("/calendar?month=2026-05&account_id=12&merchant_id=34&merchant_query=NETFLIX")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -338,7 +338,7 @@ def test_calendar_route_renders_bookmarkable_merchant_filter(client):
     assert_visible_text(response, "Merchant: NETFLIX", "No posted transactions match this account and merchant.")
 
 
-def test_comparison_route_renders_complete_unknown_warning(client, core_conn, monkeypatch):
+def test_comparison_route_renders_complete_unknown_warning(owner_client, core_conn, monkeypatch):
     """Verify comparison warning placeholders render with category and share values."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     core_conn.execute(
@@ -359,7 +359,7 @@ def test_comparison_route_renders_complete_unknown_warning(client, core_conn, mo
     )
     core_conn.commit()
 
-    response = client.get("/comparison?years=2026&period_comparison=month_previous")
+    response = owner_client.get("/comparison?years=2026&period_comparison=month_previous")
     visible_body = visible_html(response)
 
     assert response.status_code == 200
@@ -368,7 +368,7 @@ def test_comparison_route_renders_complete_unknown_warning(client, core_conn, mo
     assert "because accounts for %" not in visible_body
 
 
-def test_home_route_renders_quick_insight_cards(client, core_conn, monkeypatch):
+def test_home_route_renders_quick_insight_cards(owner_client, core_conn, monkeypatch):
     """Verify Home renders ranked quick insights as linked compact cards."""
     monkeypatch.setattr(home_service, "date", FixedDate)
     monkeypatch.setattr(comparison_service, "date", FixedDate)
@@ -395,7 +395,7 @@ def test_home_route_renders_quick_insight_cards(client, core_conn, monkeypatch):
     )
     core_conn.commit()
 
-    response = client.get("/")
+    response = owner_client.get("/")
 
     assert response.status_code == 200
     assert_visible_text(response, "Quick insights", "Merchant moved up", "5 places", "BRAVO STORE")
@@ -415,7 +415,7 @@ def test_home_route_renders_quick_insight_cards(client, core_conn, monkeypatch):
     )
 
 
-def test_home_quick_insights_escape_user_data(client, core_conn, monkeypatch):
+def test_home_quick_insights_escape_user_data(owner_client, core_conn, monkeypatch):
     """Verify Home quick insights escape category names from user data."""
     monkeypatch.setattr(home_service, "date", FixedDate)
     monkeypatch.setattr(comparison_service, "date", FixedDate)
@@ -433,7 +433,7 @@ def test_home_quick_insights_escape_user_data(client, core_conn, monkeypatch):
     )
     core_conn.commit()
 
-    response = client.get("/")
+    response = owner_client.get("/")
 
     assert response.status_code == 200
     assert_visible_text(response, "Quick insights", category)
@@ -441,7 +441,7 @@ def test_home_quick_insights_escape_user_data(client, core_conn, monkeypatch):
     assert_no_element(response, "img", attrs={"src": "x"})
 
 
-def test_financial_reporting_pages_render_english_and_french_copy(client, core_conn, monkeypatch):
+def test_financial_reporting_pages_render_english_and_french_copy(owner_client, core_conn, monkeypatch):
     """Verify reporting pages localize visible labels and explanatory text."""
     monkeypatch.setattr(home_service, "date", FixedDate)
     monkeypatch.setattr(comparison_service, "date", FixedDate)
@@ -477,11 +477,11 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     )
     core_conn.commit()
 
-    english_home_response = client.get("/")
-    english_dashboard_response = client.get("/dashboard?period=ytd")
-    english_comparison_response = client.get("/comparison")
-    english_calendar_response = client.get("/calendar")
-    english_recurring_response = client.get("/recurring")
+    english_home_response = owner_client.get("/")
+    english_dashboard_response = owner_client.get("/dashboard?period=ytd")
+    english_comparison_response = owner_client.get("/comparison")
+    english_calendar_response = owner_client.get("/calendar")
+    english_recurring_response = owner_client.get("/recurring")
 
     assert_visible_text(english_home_response, "Needs attention", "Quick insights")
     assert_visible_text(
@@ -514,11 +514,11 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
         """))
     core_conn.commit()
 
-    home_response = client.get("/")
-    dashboard_response = client.get("/dashboard?period=ytd")
-    comparison_response = client.get("/comparison")
-    calendar_response = client.get("/calendar")
-    recurring_response = client.get("/recurring")
+    home_response = owner_client.get("/")
+    dashboard_response = owner_client.get("/dashboard?period=ytd")
+    comparison_response = owner_client.get("/comparison")
+    calendar_response = owner_client.get("/calendar")
+    recurring_response = owner_client.get("/recurring")
 
     assert home_response.status_code == 200
     assert dashboard_response.status_code == 200
@@ -564,7 +564,7 @@ def test_financial_reporting_pages_render_english_and_french_copy(client, core_c
     assert_not_visible_text(recurring_response, "Recurring activity")
 
 
-def test_review_route_renders_category_source_for_review_rows(client, core_conn):
+def test_review_route_renders_category_source_for_review_rows(owner_client, core_conn):
     """Verify review details expose source provenance for rows needing review."""
     core_conn.execute(text("""
         INSERT INTO transactions (
@@ -581,13 +581,13 @@ def test_review_route_renders_category_source_for_review_rows(client, core_conn)
         """))
     core_conn.commit()
 
-    response = client.get("/review")
+    response = owner_client.get("/review")
 
     assert response.status_code == 200
     assert_visible_text(response, "Categorized by", "AI", "72%")
 
 
-def test_comparison_route_renders_visual_key_insights(client, core_conn, monkeypatch):
+def test_comparison_route_renders_visual_key_insights(owner_client, core_conn, monkeypatch):
     """Verify comparison insights render as visual cards when period data exists."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     core_conn.execute(
@@ -602,7 +602,7 @@ def test_comparison_route_renders_visual_key_insights(client, core_conn, monkeyp
     )
     core_conn.commit()
 
-    response = client.get("/comparison")
+    response = owner_client.get("/comparison")
 
     assert response.status_code == 200
     assert_markup(
@@ -633,7 +633,7 @@ def test_comparison_route_renders_visual_key_insights(client, core_conn, monkeyp
     )
 
 
-def test_comparison_route_renders_ranked_anomaly_insights(client, core_conn, monkeypatch):
+def test_comparison_route_renders_ranked_anomaly_insights(owner_client, core_conn, monkeypatch):
     """Verify comparison page opts into ranked historical insight candidates."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     rows = [
@@ -653,7 +653,7 @@ def test_comparison_route_renders_ranked_anomaly_insights(client, core_conn, mon
     )
     core_conn.commit()
 
-    response = client.get("/comparison?period_comparison=month_previous")
+    response = owner_client.get("/comparison?period_comparison=month_previous")
 
     assert response.status_code == 200
     assert_visible_text(
@@ -666,7 +666,7 @@ def test_comparison_route_renders_ranked_anomaly_insights(client, core_conn, mon
     assert_not_markup(response, "robust_anomaly", "merchant_behavior", "rank_reason")
 
 
-def test_comparison_route_renders_year_chart_type_toggle(client, core_conn):
+def test_comparison_route_renders_year_chart_type_toggle(owner_client, core_conn):
     """Verify the year comparison chart exposes line, bar, and table display modes."""
     core_conn.execute(
         text("""
@@ -680,7 +680,7 @@ def test_comparison_route_renders_year_chart_type_toggle(client, core_conn):
     )
     core_conn.commit()
 
-    response = client.get("/comparison")
+    response = owner_client.get("/comparison")
 
     assert response.status_code == 200
     assert_markup(response, "comparison_chart_line", "comparison_chart_bar", "comparison_chart_table")

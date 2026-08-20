@@ -4,7 +4,7 @@ from sqlalchemy import text
 from tests.support.html import assert_visible_text
 from tests.support.jobs import capture_background_jobs
 
-from finance_app.modules.rules import controller as rules_controller
+from finance_app.modules.rules import workflow as rules_workflow
 from finance_app.modules.rules.engine import apply_all_rules_job, undo_apply_all_rules_job
 
 
@@ -119,7 +119,7 @@ def test_apply_single_rule_route_reports_missing_rule(csrf_client, core_conn, da
 
 def test_apply_all_rules_route_requires_preview_confirmation(csrf_client, monkeypatch):
     """Verify apply-all is blocked until preview confirmation."""
-    submitted_jobs = capture_background_jobs(monkeypatch, rules_controller)
+    submitted_jobs = capture_background_jobs(monkeypatch, rules_workflow)
 
     response = csrf_client.post(
         "/rules/apply-all",
@@ -133,7 +133,7 @@ def test_apply_all_rules_route_requires_preview_confirmation(csrf_client, monkey
 
 def test_apply_all_rules_route_queues_background_job(csrf_client, monkeypatch):
     """Verify apply-all route queues a background job with undo metadata."""
-    submitted_jobs = capture_background_jobs(monkeypatch, rules_controller, job_id="applyall123")
+    submitted_jobs = capture_background_jobs(monkeypatch, rules_workflow, job_id="applyall123")
 
     response = csrf_client.post(
         "/rules/apply-all",

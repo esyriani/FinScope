@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 from typing import Any
 
+from finance_app.core.builtin_taxonomy import is_income_category_name
 from finance_app.core.constants import (
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTION_CREDIT,
@@ -15,7 +16,6 @@ from finance_app.core.constants import (
 )
 from finance_app.core.money import MoneyValue, quantize_money, rounded_money_decimal
 from finance_app.core.text import strip_accents
-from finance_app.modules.categories.builtins import is_income_category_name
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
 

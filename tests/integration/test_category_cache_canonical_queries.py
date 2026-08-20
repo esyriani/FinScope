@@ -4,12 +4,12 @@ from sqlalchemy import insert
 from tests.support.database import insert_transaction
 from werkzeug.datastructures import MultiDict
 
+from finance_app.core.analytics import REPORT_BASIS_CASH_FLOW
 from finance_app.core.constants import CATEGORY_RULE_SOURCE_MANUAL, TRANSACTION_KIND_EXPENSE
 from finance_app.database.tables import category_rules as category_rules_table
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.repository import get_category_rules, resolve_category_id
 from finance_app.modules.home.service import fetch_top_categories
-from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW
 from finance_app.modules.reports.queries import fetch_category_breakdown
 from finance_app.modules.taxonomy_admin.service import fetch_category_usage
 from finance_app.modules.transactions.filters import build_transaction_core_filters, parse_transaction_filters

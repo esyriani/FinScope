@@ -17,6 +17,8 @@ from tests.support.web import set_csrf_token
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names
+from finance_app.modules.upload import ai_workflow as upload_ai_workflow
+from finance_app.modules.upload import messages as upload_messages
 from finance_app.modules.upload import workflow as upload_workflow
 
 
@@ -51,7 +53,7 @@ def test_import_statement_job_keeps_ai_candidates_for_manual_estimate_first_run(
         )
         return "llm-job-id"
 
-    monkeypatch.setattr(upload_workflow, "submit_background_job", capture_job)
+    monkeypatch.setattr(upload_ai_workflow, "submit_background_job", capture_job)
 
     message = run_statement_import_job(
         core_conn,
@@ -103,7 +105,7 @@ def test_import_statement_job_auto_queues_ai_when_token_confirmation_disabled(ap
         )
         return "llm-auto-job-id"
 
-    monkeypatch.setattr(upload_workflow, "submit_background_job", capture_job)
+    monkeypatch.setattr(upload_ai_workflow, "submit_background_job", capture_job)
 
     message = run_statement_import_job(
         core_conn,
@@ -118,7 +120,7 @@ def test_import_statement_job_auto_queues_ai_when_token_confirmation_disabled(ap
     assert submitted_jobs == [
         {
             "label": f"AI categorize statement {statement_id}",
-            "func": upload_workflow.categorize_statement_unknown_transactions_job,
+            "func": upload_ai_workflow.categorize_statement_unknown_transactions_job,
             "args": (statement_id,),
             "kwargs": {"queue": "ai"},
         }
@@ -131,7 +133,7 @@ def test_import_statement_job_reports_no_ai_candidates_when_none_remain(app, cor
     submitted_jobs = []
 
     monkeypatch.setattr(
-        upload_workflow,
+        upload_ai_workflow,
         "submit_background_job",
         lambda *args, **kwargs: submitted_jobs.append((args, kwargs)),
     )
@@ -221,7 +223,7 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
         )
         return transactions
 
-    message = upload_workflow.categorize_statement_unknown_transactions_job(
+    message = upload_ai_workflow.categorize_statement_unknown_transactions_job(
         statement_id,
         transaction_categorizer=categorize_for_test,
     )
@@ -298,7 +300,7 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
         )
         return transactions
 
-    message = upload_workflow.categorize_statement_unknown_transactions_job(
+    message = upload_ai_workflow.categorize_statement_unknown_transactions_job(
         statement_id,
         transaction_categorizer=categorize_for_test,
     )
@@ -336,7 +338,7 @@ def test_categorize_unknown_transactions_job_logs_real_batch_progress(app, core_
         """Capture workflow log entries emitted by the AI categorization loop."""
         log_entries.append({"message": message, "params": dict(params or {}), "level": level})
 
-    message = upload_workflow.categorize_statement_unknown_transactions_job(
+    message = upload_ai_workflow.categorize_statement_unknown_transactions_job(
         statement_id,
         batch_size=2,
         transaction_categorizer=build_llm_progress_categorizer(batches),
@@ -358,7 +360,7 @@ def test_categorize_statement_unknown_transactions_job_reports_no_work(app, core
     _, statement_id = create_account_statement(core_conn, "none.csv")
     calls = []
 
-    message = upload_workflow.categorize_statement_unknown_transactions_job(
+    message = upload_ai_workflow.categorize_statement_unknown_transactions_job(
         statement_id,
         transaction_categorizer=lambda *args, **kwargs: calls.append((args, kwargs)),
     )
@@ -367,7 +369,7 @@ def test_categorize_statement_unknown_transactions_job_reports_no_work(app, core
     assert calls == []
 
 
-def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_conn, monkeypatch):
+def test_categorize_statement_unknowns_route_queues_statement_ai(owner_client, core_conn, monkeypatch):
     """Verify Uploaded statements can queue AI reruns for remaining unknown rows."""
     _, statement_id = create_account_statement(core_conn, "manual-statement-ai.csv")
     core_conn.execute(
@@ -395,10 +397,10 @@ def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_co
 
     monkeypatch.setattr(upload_workflow, "queue_statement_llm_categorization", queue_for_test)
 
-    response = client.post(
+    response = owner_client.post(
         f"/upload/{statement_id}/categorize-unknowns",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "next": "/upload",
             "ai_token_estimate_confirmed": "1",
         },
@@ -412,7 +414,7 @@ def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_co
 
 def test_automatic_categorization_message_reports_source_breakdown():
     """Verify background job summaries distinguish similarity and AI sources."""
-    message = upload_workflow.automatic_categorization_message(
+    message = upload_messages.automatic_categorization_message(
         76,
         {
             "history": 50,

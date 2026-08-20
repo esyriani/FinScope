@@ -63,6 +63,6 @@ Examples include statement uploads and supported review/rule operations.
 
 ## Current limitations
 
-The processing runner is process-local and in memory. Processing history, progress, undo metadata, cancellation requests, and errors are lost when the Flask process restarts.
+The processing runner is process-local and in memory. Processing history, progress, undo metadata, cancellation requests, and errors are lost when the Flask process restarts. Statement imports that were queued or running are marked failed during startup so they can be retried or reprocessed from the upload page.
 
 This is acceptable for the current local FinScope shape, but a shared or hosted deployment should move job state to durable storage.

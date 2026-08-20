@@ -33,13 +33,13 @@ def test_merchant_suggestions_require_authentication(anonymous_client):
     assert "/login" in response.headers["Location"]
 
 
-def test_merchant_suggestions_match_partials_and_apply_limit(client, core_conn):
+def test_merchant_suggestions_match_partials_and_apply_limit(owner_client, core_conn):
     """Verify merchant suggestions search partial text and honor the result cap."""
     first_id = insert_merchant(core_conn, "METRO GROCERY")
     insert_merchant(core_conn, "METRO PHARMACY")
     insert_merchant(core_conn, "HYDRO QUEBEC")
 
-    response = client.get("/merchants/suggestions?q=metro&limit=1")
+    response = owner_client.get("/merchants/suggestions?q=metro&limit=1")
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -56,13 +56,13 @@ def test_merchant_suggestions_match_partials_and_apply_limit(client, core_conn):
     }
 
 
-def test_merchant_suggestions_match_spaced_partial_text(client, core_conn):
+def test_merchant_suggestions_match_spaced_partial_text(owner_client, core_conn):
     """Verify merchant suggestions match all words in a spaced query."""
     merchant_id = insert_merchant(core_conn, "UDEM PAYROLL PAIE")
     insert_merchant(core_conn, "UDEM BOOKSTORE")
     insert_merchant(core_conn, "PAIE SERVICES")
 
-    response = client.get("/merchants/suggestions?q=UDEM+PAIE")
+    response = owner_client.get("/merchants/suggestions?q=UDEM+PAIE")
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -75,14 +75,14 @@ def test_merchant_suggestions_match_spaced_partial_text(client, core_conn):
     ]
 
 
-def test_merchant_suggestions_honor_configured_limit(client, core_conn):
+def test_merchant_suggestions_honor_configured_limit(owner_client, core_conn):
     """Verify the runtime setting caps returned merchant suggestions."""
     set_owner_setting(core_conn, "merchant_suggestion_limit", "2")
     first_id = insert_merchant(core_conn, "UDEM ALPHA")
     second_id = insert_merchant(core_conn, "UDEM BETA")
     insert_merchant(core_conn, "UDEM GAMMA")
 
-    response = client.get("/merchants/suggestions?q=udem&limit=10")
+    response = owner_client.get("/merchants/suggestions?q=udem&limit=10")
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -100,11 +100,11 @@ def test_merchant_suggestions_honor_configured_limit(client, core_conn):
     ]
 
 
-def test_merchant_suggestions_return_json_for_markup_names(client, core_conn):
+def test_merchant_suggestions_return_json_for_markup_names(owner_client, core_conn):
     """Verify suggestion labels remain JSON data when merchant names contain markup."""
     merchant_id = insert_merchant(core_conn, "ACME <SCRIPT>")
 
-    response = client.get("/merchants/suggestions?q=acme")
+    response = owner_client.get("/merchants/suggestions?q=acme")
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -118,7 +118,7 @@ def test_merchant_suggestions_return_json_for_markup_names(client, core_conn):
     ]
 
 
-def test_dashboard_route_preserves_selected_merchant_filter(client, core_conn):
+def test_dashboard_route_preserves_selected_merchant_filter(owner_client, core_conn):
     """Verify dashboard renders the merchant autocomplete state from query args."""
     merchant_id = insert_merchant(core_conn, "METRO <GROCERY>")
     insert_transaction(
@@ -133,7 +133,7 @@ def test_dashboard_route_preserves_selected_merchant_filter(client, core_conn):
         needs_review=0,
     )
 
-    response = client.get(f"/dashboard?period=all&merchant_id={merchant_id}&merchant_query=METRO+%3CGROCERY%3E")
+    response = owner_client.get(f"/dashboard?period=all&merchant_id={merchant_id}&merchant_query=METRO+%3CGROCERY%3E")
     body = response_html(response)
 
     assert response.status_code == 200
@@ -162,7 +162,7 @@ def test_dashboard_route_preserves_selected_merchant_filter(client, core_conn):
     assert_has_element(response, "div", attrs={"data-suggestions-limit": "5"})
 
 
-def test_dashboard_route_filters_spaced_merchant_query(client, core_conn):
+def test_dashboard_route_filters_spaced_merchant_query(owner_client, core_conn):
     """Verify dashboard summary applies multi-word typed merchant filters."""
     insert_transaction(
         core_conn,
@@ -185,7 +185,7 @@ def test_dashboard_route_filters_spaced_merchant_query(client, core_conn):
         needs_review=0,
     )
 
-    response = client.get("/dashboard?period=all&merchant_query=UDEM+PAIE")
+    response = owner_client.get("/dashboard?period=all&merchant_query=UDEM+PAIE")
 
     assert response.status_code == 200
     assert_visible_text(response, "Merchant: UDEM PAIE", "15.00", "Explore reports")
@@ -193,7 +193,7 @@ def test_dashboard_route_filters_spaced_merchant_query(client, core_conn):
     assert_not_visible_text(response, "99.00")
 
 
-def test_dashboard_reports_section_replaces_merchant_analytics_table(client, core_conn):
+def test_dashboard_reports_section_replaces_merchant_analytics_table(owner_client, core_conn):
     """Verify dashboard links to Reports instead of rendering merchant analytics rows."""
     merchant_id = insert_merchant(core_conn, "METRO GROCERY")
     insert_transaction(
@@ -208,7 +208,7 @@ def test_dashboard_reports_section_replaces_merchant_analytics_table(client, cor
         needs_review=0,
     )
 
-    response = client.get("/dashboard?period=all")
+    response = owner_client.get("/dashboard?period=all")
 
     assert response.status_code == 200
     assert_visible_text(response, "Explore reports", "Merchants")
@@ -217,7 +217,7 @@ def test_dashboard_reports_section_replaces_merchant_analytics_table(client, cor
     assert_not_markup(response, "data-export-part")
 
 
-def test_comparison_route_preserves_merchant_filter_in_both_tabs(client, core_conn):
+def test_comparison_route_preserves_merchant_filter_in_both_tabs(owner_client, core_conn):
     """Verify comparison renders shared merchant filters for period and year views."""
     merchant_id = insert_merchant(core_conn, "METRO GROCERY")
     insert_transaction(
@@ -232,7 +232,7 @@ def test_comparison_route_preserves_merchant_filter_in_both_tabs(client, core_co
         needs_review=0,
     )
 
-    response = client.get(f"/comparison?merchant_id={merchant_id}&merchant_query=METRO+GROCERY")
+    response = owner_client.get(f"/comparison?merchant_id={merchant_id}&merchant_query=METRO+GROCERY")
     body = response_html(response)
     document = parse_html(response)
     merchant_id_inputs = [
@@ -269,7 +269,7 @@ def test_comparison_route_preserves_merchant_filter_in_both_tabs(client, core_co
     assert_markup(response, "js/merchant-autocomplete.js")
 
 
-def test_comparison_route_filters_spaced_merchant_query(client, core_conn, monkeypatch):
+def test_comparison_route_filters_spaced_merchant_query(owner_client, core_conn, monkeypatch):
     """Verify comparison analytics apply multi-word typed merchant filters."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     for description, amount, tx_date, fingerprint in [
@@ -288,7 +288,7 @@ def test_comparison_route_filters_spaced_merchant_query(client, core_conn, monke
             needs_review=0,
         )
 
-    response = client.get(
+    response = owner_client.get(
         "/comparison?merchant_query=UDEM+PAIE&period_comparison=month_previous&years=2026&comparison_view=period"
     )
 
