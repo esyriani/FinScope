@@ -34,4 +34,35 @@ def test_submit_statement_import_job_uses_upload_workflow_boundary(monkeypatch):
     assert captured["func"] is upload_workflow.import_statement_transactions_job
     assert captured["args"] == (10, 20, "credit_card", "csv", "raw", "token123")
     assert captured["kwargs"]["import_mode"] == "standard"
+    assert captured["kwargs"]["replace_existing_transactions"] is False
     assert captured["kwargs"]["undo_handler"] is upload_workflow.undo_statement_upload_job
+
+
+def test_submit_statement_import_job_disables_upload_undo_for_reprocess(monkeypatch):
+    """Verify reprocess jobs do not expose statement-removal undo."""
+    captured = {}
+
+    def submit_for_test(label, func, *args, **kwargs):
+        """Capture the queued background job for assertion."""
+        del label, func, args
+        captured["kwargs"] = kwargs
+        return "job123"
+
+    monkeypatch.setattr(upload_service, "submit_background_job", submit_for_test)
+
+    result = upload_service.submit_statement_import_job(
+        10,
+        20,
+        "credit_card",
+        "standard",
+        "csv",
+        "raw",
+        "statement.csv",
+        "token123",
+        replace_existing_transactions=True,
+    )
+
+    assert result == "job123"
+    assert captured["kwargs"]["replace_existing_transactions"] is True
+    assert captured["kwargs"]["undo_handler"] is None
+    assert captured["kwargs"]["undo_args"] is None

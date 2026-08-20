@@ -27,12 +27,17 @@ from finance_app.modules.auth.service import (
 from finance_app.modules.auth.service import (
     change_password as change_user_password,
 )
+from finance_app.modules.auth.temporary_passwords import (
+    pop_temporary_password_modal,
+    store_temporary_password_modal,
+)
 
 auth_bp = Blueprint("auth", __name__)
 PENDING_PASSWORD_CHANGE_USER_ID = "pending_password_change_user_id"
 PENDING_PASSWORD_CHANGE_USERNAME = "pending_password_change_username"
 PENDING_PASSWORD_CHANGE_DISPLAY_NAME = "pending_password_change_display_name"
-TEMPORARY_PASSWORD_MODAL = "temporary_password_modal"
+LEGACY_TEMPORARY_PASSWORD_MODAL = "temporary_password_modal"
+TEMPORARY_PASSWORD_MODAL_REFERENCE = "temporary_password_modal_reference"
 
 
 @auth_bp.route("/auth/bootstrap", methods=["GET", "POST"])
@@ -168,12 +173,14 @@ def account() -> ResponseReturnValue:
 def users() -> str:
     """Render owner-only user administration."""
     managed_users = list_managed_users()
+    temporary_password_reference = session.pop(TEMPORARY_PASSWORD_MODAL_REFERENCE, None)
+    session.pop(LEGACY_TEMPORARY_PASSWORD_MODAL, None)
     return render_template(
         "admin_users.html",
         users=managed_users,
         managed_roles=(USER_ROLE_EDITOR, USER_ROLE_VIEWER),
         ownership_handoff_candidates=ownership_handoff_candidates(managed_users),
-        temporary_password_modal=session.pop(TEMPORARY_PASSWORD_MODAL, None),
+        temporary_password_modal=pop_temporary_password_modal(temporary_password_reference),
     )
 
 
@@ -192,7 +199,7 @@ def create_user() -> ResponseReturnValue:
     except ValueError as exc:
         flash(gettext(str(exc)))
     else:
-        session[TEMPORARY_PASSWORD_MODAL] = temporary_password_modal_payload(user, temporary_password)
+        session[TEMPORARY_PASSWORD_MODAL_REFERENCE] = store_temporary_password_modal(user, temporary_password)
         flash(gettext("User created."))
     return redirect(url_for("auth.users"))
 
@@ -244,7 +251,7 @@ def reset_password(user_id: int) -> ResponseReturnValue:
     """Generate a temporary password and require a password change."""
     try:
         user, temporary_password = reset_user_password(user_id, actor=current_user, ip_address=request.remote_addr)
-        session[TEMPORARY_PASSWORD_MODAL] = temporary_password_modal_payload(user, temporary_password)
+        session[TEMPORARY_PASSWORD_MODAL_REFERENCE] = store_temporary_password_modal(user, temporary_password)
         flash(gettext("Temporary password generated."))
     except ValueError as exc:
         flash(gettext(str(exc)))
@@ -337,15 +344,6 @@ def clear_pending_password_change() -> None:
     session.pop(PENDING_PASSWORD_CHANGE_USER_ID, None)
     session.pop(PENDING_PASSWORD_CHANGE_USERNAME, None)
     session.pop(PENDING_PASSWORD_CHANGE_DISPLAY_NAME, None)
-
-
-def temporary_password_modal_payload(user: Mapping[str, Any], temporary_password: str) -> dict[str, str]:
-    """Return modal data for showing a generated temporary password once."""
-    return {
-        "username": user["username"],
-        "display_name": user["display_name"] or user["username"],
-        "temporary_password": temporary_password,
-    }
 
 
 def ownership_handoff_candidates(users: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:

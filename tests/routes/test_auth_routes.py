@@ -13,6 +13,7 @@ from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_OWNER, USER_R
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.core.filters import format_datetime
 from finance_app.modules.auth import repository as auth_repository
+from finance_app.modules.auth import service as auth_service
 from finance_app.modules.auth.service import create_managed_user, hash_password, utc_now
 
 VIEWER_PASSWORD = "ViewerPass123!"
@@ -44,6 +45,12 @@ def user_by_username(conn, username):
         .mappings()
         .fetchone()
     )
+
+
+def client_session_snapshot(client):
+    """Return decoded Flask client-session data for security assertions."""
+    with client.session_transaction() as client_session:
+        return dict(client_session)
 
 
 def test_anonymous_routes_redirect_to_login(anonymous_client):
@@ -298,6 +305,76 @@ def test_owner_user_management_and_last_owner_guard(owner_client, core_conn):
     )
     assert_visible_text(owner_role_response, "Owner role cannot be changed.")
     assert user_by_username(core_conn, "owner")["role"] == USER_ROLE_OWNER
+
+
+def test_created_user_temporary_password_stays_out_of_client_session(owner_client, monkeypatch):
+    """Verify generated user-creation passwords are displayed from server-side state."""
+    generated_password = "KnownTempPass123!"
+    monkeypatch.setattr(auth_service, "generate_temporary_password", lambda length=18: generated_password)
+
+    create_response = owner_client.post(
+        "/admin/users/create",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "username": "cookiesafe",
+            "display_name": "Cookie Safe",
+            "role": USER_ROLE_VIEWER,
+        },
+        follow_redirects=False,
+    )
+    session_data = client_session_snapshot(owner_client)
+
+    assert create_response.status_code == 302
+    assert session_data.get("temporary_password_modal_reference")
+    assert "temporary_password_modal" not in session_data
+    assert generated_password not in repr(session_data)
+
+    users_response = owner_client.get("/admin/users")
+    assert_visible_text(users_response, "Temporary password", "Cookie Safe")
+    assert_input(users_response, value=generated_password)
+    assert generated_password not in repr(client_session_snapshot(owner_client))
+
+    repeat_response = owner_client.get("/admin/users")
+    assert_no_element(repeat_response, "input", attrs={"value": generated_password})
+
+
+def test_reset_temporary_password_stays_out_of_client_session(owner_client, core_conn, monkeypatch):
+    """Verify reset passwords use the same server-side one-time display path."""
+    managed_id = create_test_user(core_conn, "resetuser", USER_ROLE_VIEWER, VIEWER_PASSWORD)
+    core_conn.commit()
+    generated_password = "ResetTempPass123!"
+    monkeypatch.setattr(auth_service, "generate_temporary_password", lambda length=18: generated_password)
+
+    reset_response = owner_client.post(
+        f"/admin/users/{managed_id}/reset-password",
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
+        follow_redirects=False,
+    )
+    session_data = client_session_snapshot(owner_client)
+
+    assert reset_response.status_code == 302
+    assert session_data.get("temporary_password_modal_reference")
+    assert "temporary_password_modal" not in session_data
+    assert generated_password not in repr(session_data)
+
+    users_response = owner_client.get("/admin/users")
+    assert_visible_text(users_response, "Temporary password generated.", "resetuser")
+    assert_input(users_response, value=generated_password)
+
+
+def test_legacy_temporary_password_session_payload_is_discarded(owner_client):
+    """Verify pre-fix client-side modal payloads are cleared without rendering."""
+    with owner_client.session_transaction() as client_session:
+        client_session["temporary_password_modal"] = {
+            "username": "legacy",
+            "display_name": "Legacy",
+            "temporary_password": "LegacyTempPass123!",
+        }
+
+    response = owner_client.get("/admin/users")
+
+    assert_no_element(response, "input", attrs={"value": "LegacyTempPass123!"})
+    assert "temporary_password_modal" not in client_session_snapshot(owner_client)
 
 
 def test_owner_can_hand_off_ownership_to_active_user(owner_client, core_conn):

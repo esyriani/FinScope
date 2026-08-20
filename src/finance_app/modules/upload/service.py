@@ -56,7 +56,6 @@ from finance_app.modules.upload.queries import (
 )
 from finance_app.modules.upload.repository import (
     create_uploaded_statement,
-    delete_statement_transactions,
     new_statement_import_token,
     reset_statement_import_state,
     statement_by_checksum,
@@ -267,9 +266,6 @@ def queue_existing_statement_import(statement_id: int, reprocess: bool = False) 
         if not queued:
             return statement_action_error("This statement import is already queued or running.")
 
-        if reprocess:
-            delete_statement_transactions(conn, statement_id)
-
     job_id = submit_statement_import_job(
         statement_id,
         statement["account_id"],
@@ -282,6 +278,7 @@ def queue_existing_statement_import(statement_id: int, reprocess: bool = False) 
         label_prefix="Reprocess" if reprocess else "Retry import",
         interac_direction=statement["interac_direction"],
         date_order=statement["date_order"],
+        replace_existing_transactions=reprocess,
     )
     return {"ok": True, "job_id": job_id, "action": "Reprocess" if reprocess else "Retry"}
 
@@ -367,11 +364,14 @@ def submit_statement_import_job(
     label_prefix: str = "Import",
     interac_direction: str = INTERAC_DIRECTION_AUTO,
     date_order: str = DATE_ORDER_AUTO,
+    replace_existing_transactions: bool = False,
 ) -> str:
     """Submit statement import work with upload undo metadata."""
     interac_direction = normalize_interac_direction(interac_direction)
     date_order = normalize_date_order(date_order)
     undo_state: dict[str, Any] = {}
+    undo_handler = None if replace_existing_transactions else upload_workflow.undo_statement_upload_job
+    undo_args = None if replace_existing_transactions else (statement_id, undo_state)
     return submit_background_job(
         f"{label_prefix} {filename}",
         upload_workflow.import_statement_transactions_job,
@@ -384,9 +384,10 @@ def submit_statement_import_job(
         import_mode=import_mode,
         interac_direction=interac_direction,
         date_order=date_order,
+        replace_existing_transactions=replace_existing_transactions,
         undo_state=undo_state,
-        undo_handler=upload_workflow.undo_statement_upload_job,
-        undo_args=(statement_id, undo_state),
+        undo_handler=undo_handler,
+        undo_args=undo_args,
     )
 
 
@@ -429,7 +430,7 @@ def estimate_unknown_llm_categorization(statement_id: int | None, scope: str) ->
             transaction: MutableMapping[str, Any] = dict(row)
             transaction["category"] = row["category"] or unknown_category
             transactions.append(transaction)
-        categorized = categorize_transactions(transactions, conn=conn, use_llm=False) if transactions else []
+        categorized = categorize_transactions(transactions, conn=conn) if transactions else []
         estimate = estimate_llm_categorization_tokens(
             conn,
             categorized,

@@ -174,7 +174,7 @@ def import_transactions(
         tx["merchant_id"] = merchant["id"] if merchant else None
         tx["transaction_kind"] = classify_transaction_kind(conn, account_id, tx)
 
-    transactions = categorizer(transactions, conn=conn, use_llm=False)
+    transactions = categorizer(transactions, conn=conn)
     apply_transaction_kind_categories(transactions, unknown_category=get_unknown_category(conn) or UNKNOWN_CATEGORY)
 
     inserted_fingerprints: set[Any] = set()
@@ -306,7 +306,6 @@ def enrich_interac_transactions(
                 }
             ],
             conn=conn,
-            use_llm=False,
         )[0]
         update_enriched_transaction(
             conn,
@@ -502,6 +501,7 @@ def import_statement_transactions_job(
     import_mode: str | None = None,
     interac_direction: str = INTERAC_DIRECTION_AUTO,
     date_order: str = DATE_ORDER_AUTO,
+    replace_existing_transactions: bool = False,
 ) -> str:
     """Import statement transactions job."""
     import_mode = import_mode or default_import_mode(statement_type)
@@ -522,6 +522,8 @@ def import_statement_transactions_job(
                 return "Statement import was already claimed by another attempt."
 
         with db_core_transaction() as conn:
+            if replace_existing_transactions:
+                delete_statement_transactions(conn, statement_id)
             inserted_count, skipped_count, ignored_count = import_transactions(
                 conn,
                 statement_id,

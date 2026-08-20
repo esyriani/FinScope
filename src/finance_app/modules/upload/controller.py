@@ -72,7 +72,7 @@ def retry_statement_import(statement_id: int) -> ResponseReturnValue:
 @upload_bp.route("/upload/<int:statement_id>/reprocess", methods=["POST"])
 @permission_required(PERMISSION_IMPORT_STATEMENTS)
 def reprocess_statement_import(statement_id: int) -> ResponseReturnValue:
-    """Delete a statement's imported transactions and queue a fresh import."""
+    """Queue a fresh import that replaces a statement's transactions on success."""
     return queue_existing_statement_import(statement_id, reprocess=True)
 
 

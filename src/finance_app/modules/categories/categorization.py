@@ -19,7 +19,6 @@ from finance_app.modules.categories.decision import (
 from finance_app.modules.categories.history import (
     retrieve_historical_decision,
 )
-from finance_app.modules.categories.llm import classify_unknowns_with_llm
 from finance_app.modules.categories.repository import (
     get_category_options,
     get_category_rules,
@@ -52,28 +51,25 @@ class CategorizationEvidenceContext:
 def categorize_transactions(
     transactions: list[MutableMapping[str, Any]],
     conn: Any | None = None,
-    use_llm: bool = True,
 ) -> list[MutableMapping[str, Any]]:
-    """Categorize transactions.
+    """Categorize transactions from local rule and history evidence.
 
     The workflow applies high-confidence rules directly, then consults
-    similar previously categorized transactions before optional LLM fallback.
+    similar previously categorized transactions. Provider-backed AI
+    categorization uses the split workflow in ``categories.llm_workflow`` so
+    external requests run outside database transactions.
     Medium-confidence rule or historical decisions are assigned with review
     when they are strong enough to be useful but not strong enough to finalize.
     """
     if conn is None:
         with db_core_transaction() as owned_conn:
-            return categorize_transactions(transactions, conn=owned_conn, use_llm=use_llm)
+            return categorize_transactions(transactions, conn=owned_conn)
 
-    context = categorize_transactions_from_evidence(
+    categorize_transactions_from_evidence(
         transactions,
         conn,
-        prefer_llm_fallback=use_llm,
+        prefer_llm_fallback=False,
     )
-
-    if use_llm and any(tx.get("category") == context.unknown_category for tx in transactions):
-        classify_unknowns_with_llm(conn, transactions, context.rules, context.unknown_category)
-
     resolve_transaction_category_ids(conn, transactions)
     return transactions
 
@@ -119,7 +115,7 @@ def categorize_transactions_from_evidence(
             scored_rule,
             category_options,
             unknown_category,
-            use_llm=prefer_llm_fallback,
+            prefer_llm_fallback=prefer_llm_fallback,
         )
         state.apply_to(tx)
 
@@ -152,7 +148,7 @@ def category_state_from_evidence(
     scored_rule: Any,
     category_options: Iterable[str],
     unknown_category: str,
-    use_llm: bool = True,
+    prefer_llm_fallback: bool = True,
 ) -> TransactionCategoryState:
     """Return the category state for one transaction from rule/history evidence."""
     rule_category = (
@@ -214,7 +210,7 @@ def category_state_from_evidence(
         and rule_category != unknown_category
         and scored_rule.confidence >= MEDIUM_CONFIDENCE_THRESHOLD
     ):
-        if use_llm:
+        if prefer_llm_fallback:
             return unknown_category_state(
                 conn,
                 unknown_category,

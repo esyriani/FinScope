@@ -382,8 +382,10 @@ def test_retry_statement_import_route_queues_existing_statement(owner_client, co
     assert submitted_jobs[0]["kwargs"]["date_order"] == "auto"
 
 
-def test_reprocess_statement_import_route_removes_statement_transactions(owner_client, core_conn, monkeypatch):
-    """Verify reprocess clears statement transactions before queueing import work."""
+def test_reprocess_statement_import_route_preserves_transactions_until_job_success(
+    owner_client, core_conn, monkeypatch
+):
+    """Verify reprocess queues replacement work without deleting current rows."""
     account_id, statement_id = create_account_statement(core_conn, "reprocess.csv")
     core_conn.execute(
         text("""
@@ -427,18 +429,14 @@ def test_reprocess_statement_import_route_removes_statement_transactions(owner_c
         follow_redirects=True,
     )
 
-    transaction_count = (
-        core_conn.execute(
-            text("""
-        SELECT COUNT(*) AS count
+    existing_description = core_conn.execute(
+        text("""
+        SELECT description
         FROM transactions
         WHERE statement_id = :p0
         """),
-            {"p0": statement_id},
-        )
-        .fetchone()
-        ._mapping["count"]
-    )
+        {"p0": statement_id},
+    ).scalar_one()
     statement = core_conn.execute(
         text("""
         SELECT import_status, imported_count, import_token
@@ -449,9 +447,11 @@ def test_reprocess_statement_import_route_removes_statement_transactions(owner_c
     ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Reprocess queued.")
-    assert transaction_count == 0
+    assert existing_description == "REPLACED SHOP"
     assert tuple(statement)[:2] == ("queued", 0)
     assert submitted_jobs[0][0] == "Reprocess reprocess.csv"
+    assert submitted_jobs[0][3] is None
+    assert submitted_jobs[0][4] is None
     assert submitted_jobs[0][2] == (
         statement_id,
         account_id,
@@ -462,6 +462,7 @@ def test_reprocess_statement_import_route_removes_statement_transactions(owner_c
     )
     assert submitted_jobs[0][5]["interac_direction"] == "auto"
     assert submitted_jobs[0][5]["date_order"] == "auto"
+    assert submitted_jobs[0][5]["replace_existing_transactions"] is True
 
 
 def test_undo_statement_upload_job_removes_statement_transactions_and_tags(app, core_conn):

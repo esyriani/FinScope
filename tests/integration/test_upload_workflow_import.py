@@ -77,9 +77,9 @@ def create_core_statement(conn, filename="workflow.csv"):
     return account_id, statement_id
 
 
-def categorized_unknowns(transactions, conn=None, use_llm=True):
+def categorized_unknowns(transactions, conn=None):
     """Return deterministic unknown categorization output."""
-    assert use_llm is False
+    del conn
     for tx in transactions:
         tx.update(
             {
@@ -96,9 +96,9 @@ def categorized_unknowns(transactions, conn=None, use_llm=True):
     return transactions
 
 
-def categorized_food(transactions, conn=None, use_llm=True):
+def categorized_food(transactions, conn=None):
     """Return deterministic Food categorization output."""
-    assert use_llm is False
+    del conn
     for tx in transactions:
         tx.update(
             {
@@ -658,6 +658,130 @@ def test_import_statement_job_noops_when_attempt_is_already_claimed(core_conn):
     assert second_message == "Statement import was already claimed by another attempt."
     assert transaction_count == 1
     assert tuple(statement) == ("completed", 1)
+
+
+def test_reprocess_statement_import_replaces_rows_after_success(core_conn):
+    """Verify reprocess replaces same-fingerprint rows in the successful import transaction."""
+    account_id, statement_id = create_statement(core_conn, "reprocess-success.csv")
+    raw_csv = "Date,Description,Amount\n2026-01-02,Reprocess Same Shop,12.34\n"
+    initial_message = run_statement_import_job(
+        core_conn,
+        statement_id,
+        account_id,
+        "credit_card",
+        "csv",
+        raw_csv,
+    )
+    original = core_conn.execute(
+        text("""
+        SELECT id, fingerprint
+        FROM transactions
+        WHERE statement_id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+
+    reprocess_message = run_statement_import_job(
+        core_conn,
+        statement_id,
+        account_id,
+        "credit_card",
+        "csv",
+        raw_csv,
+        replace_existing_transactions=True,
+    )
+
+    rows = core_conn.execute(
+        text("""
+        SELECT id, description, fingerprint
+        FROM transactions
+        WHERE statement_id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchall()
+    statement = core_conn.execute(
+        text("""
+        SELECT import_status, imported_count, skipped_count, ignored_count
+        FROM statements
+        WHERE id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+
+    assert "Added 1 transactions" in initial_message
+    assert "Added 1 transactions" in reprocess_message
+    assert len(rows) == 1
+    assert rows[0]._mapping["description"] == "Reprocess Same Shop"
+    assert rows[0]._mapping["fingerprint"] == original._mapping["fingerprint"]
+    assert rows[0]._mapping["id"] != original._mapping["id"]
+    assert tuple(statement) == ("completed", 1, 0, 0)
+
+
+def test_reprocess_statement_import_failure_keeps_existing_transactions(core_conn, monkeypatch):
+    """Verify failed replacement import rolls back to the previous statement rows."""
+    account_id, statement_id = create_statement(core_conn, "reprocess-failure.csv")
+    initial_raw_csv = "Date,Description,Amount\n2026-01-02,Old Reprocess Shop,12.34\n"
+    replacement_raw_csv = "Date,Description,Amount\n2026-01-03,New Reprocess Shop,45.67\n"
+    run_statement_import_job(
+        core_conn,
+        statement_id,
+        account_id,
+        "credit_card",
+        "csv",
+        initial_raw_csv,
+    )
+    original = core_conn.execute(
+        text("""
+        SELECT id, description, fingerprint
+        FROM transactions
+        WHERE statement_id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+
+    def fail_after_replacement_rows_are_imported(conn, counted_statement_id):
+        """Raise during final import bookkeeping after replacement rows are inserted."""
+        del conn, counted_statement_id
+        raise RuntimeError("replacement counter broke")
+
+    monkeypatch.setattr(
+        upload_workflow,
+        "count_statement_unknown_transactions",
+        fail_after_replacement_rows_are_imported,
+    )
+
+    with pytest.raises(RuntimeError, match="replacement counter broke"):
+        run_statement_import_job(
+            core_conn,
+            statement_id,
+            account_id,
+            "credit_card",
+            "csv",
+            replacement_raw_csv,
+            replace_existing_transactions=True,
+        )
+
+    rows = core_conn.execute(
+        text("""
+        SELECT id, description, fingerprint
+        FROM transactions
+        WHERE statement_id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchall()
+    statement = core_conn.execute(
+        text("""
+        SELECT import_status, imported_count, import_error
+        FROM statements
+        WHERE id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+
+    assert [tuple(row) for row in rows] == [tuple(original)]
+    assert statement._mapping["import_status"] == "failed"
+    assert statement._mapping["imported_count"] == 0
+    assert "replacement counter broke" in statement._mapping["import_error"]
 
 
 def test_statement_import_queue_claim_prevents_duplicate_retry_reprocess(core_conn):

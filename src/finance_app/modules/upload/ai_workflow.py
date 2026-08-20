@@ -350,7 +350,7 @@ def categorize_unknown_transaction_rows(
     else:
         with db_core_transaction() as conn:
             unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
-            categorized = transaction_categorizer(transactions, conn=conn, use_llm=True)
+            categorized = transaction_categorizer(transactions, conn=conn)
         prepared = None
         outcome = None
         transactions = list(categorized)

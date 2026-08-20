@@ -209,9 +209,9 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
     ).lastrowid
     core_conn.commit()
 
-    def categorize_for_test(transactions, conn=None, use_llm=True):
+    def categorize_for_test(transactions, conn=None):
         """Return deterministic LLM categorization output for selected unknown rows."""
-        assert use_llm is True
+        assert conn is not None
         assert [tx["id"] for tx in transactions] == [unknown_id]
         transactions[0].update(
             {
@@ -367,10 +367,9 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
     ).lastrowid
     core_conn.commit()
 
-    def categorize_for_test(transactions, conn=None, use_llm=True):
+    def categorize_for_test(transactions, conn=None):
         """Return an explicit unknown LLM outcome with audit metadata."""
         del conn
-        assert use_llm is True
         transactions[0].update(
             {
                 "category": "UNKNOWN",

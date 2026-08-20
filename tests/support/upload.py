@@ -131,10 +131,9 @@ def insert_llm_progress_transactions(conn, statement_id, account_id):
 def build_llm_progress_categorizer(batches):
     """Return a deterministic categorizer for the AI batch progress test."""
 
-    def categorize_for_test(transactions, conn=None, use_llm=True):
+    def categorize_for_test(transactions, conn=None):
         """Return one successful category and two unresolved AI outcomes."""
         del conn
-        assert use_llm is True
         batches.append([tx["description"] for tx in transactions])
         if len(batches) == 1:
             upload_ai_workflow.llm_module.record_llm_request_status(

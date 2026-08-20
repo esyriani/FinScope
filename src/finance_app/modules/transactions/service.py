@@ -301,7 +301,7 @@ def estimate_selected_transaction_recategorization(transaction_ids: Iterable[obj
             return {"ok": False, "message": "No selected transactions found."}
 
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
-        transactions = categorize_transactions([dict(row) for row in rows], conn=conn, use_llm=False)
+        transactions = categorize_transactions([dict(row) for row in rows], conn=conn)
         estimate = estimate_llm_categorization_tokens(
             conn,
             transactions,
@@ -490,7 +490,7 @@ def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
         tag_colors = get_tag_color_map(conn)
         rules = get_category_rules(conn)
         evidence_transaction = dict(row)
-        categorize_transactions([evidence_transaction], conn=conn, use_llm=False)
+        categorize_transactions([evidence_transaction], conn=conn)
 
         llm_transaction = prepare_single_transaction_llm_payload(evidence_transaction, row, unknown_category)
         request_context = llm_module.prepare_llm_categorization_request_context(
@@ -549,7 +549,7 @@ def estimate_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
 
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
         evidence_transaction = dict(row)
-        categorize_transactions([evidence_transaction], conn=conn, use_llm=False)
+        categorize_transactions([evidence_transaction], conn=conn)
         llm_transaction = prepare_single_transaction_llm_payload(evidence_transaction, row, unknown_category)
         estimate = estimate_llm_categorization_tokens(
             conn,
