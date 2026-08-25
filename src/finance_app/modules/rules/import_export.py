@@ -19,6 +19,7 @@ from finance_app.core.constants import (
     IMPORTABLE_CATEGORY_RULE_SOURCES,
     UNKNOWN_CATEGORY,
 )
+from finance_app.core.csv_export import csv_export_value
 from finance_app.core.money import MoneyValue, money_to_float, parse_money_text
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
@@ -112,20 +113,19 @@ def export_rules_csv(conn: Any = None) -> str:
     writer = csv.DictWriter(output, fieldnames=RULE_EXPORT_COLUMNS)
     writer.writeheader()
     for row in rows:
-        writer.writerow(
-            {
-                "keyword": row["keyword"],
-                "account_name": row["account_name"] or "",
-                "merchant_name": row["merchant_name"] or "",
-                "category": row["category"],
-                "tags": "; ".join(row["tags"]),
-                "amount_min": format_export_amount(row["amount_min"]),
-                "amount_max": format_export_amount(row["amount_max"]),
-                "direction": row["direction"] or CATEGORY_RULE_DIRECTION_ANY,
-                "source": row["source"],
-                "created_at": row["created_at"],
-            }
-        )
+        export_row = {
+            "keyword": row["keyword"],
+            "account_name": row["account_name"] or "",
+            "merchant_name": row["merchant_name"] or "",
+            "category": row["category"],
+            "tags": "; ".join(row["tags"]),
+            "amount_min": format_export_amount(row["amount_min"]),
+            "amount_max": format_export_amount(row["amount_max"]),
+            "direction": row["direction"] or CATEGORY_RULE_DIRECTION_ANY,
+            "source": row["source"],
+            "created_at": row["created_at"],
+        }
+        writer.writerow({column: csv_export_value(export_row[column]) for column in RULE_EXPORT_COLUMNS})
     return output.getvalue()
 
 

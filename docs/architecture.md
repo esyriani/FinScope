@@ -81,7 +81,6 @@ user and owner-managed key/value settings.
 Architecture boundaries are intentionally protected by small unit tests:
 
 - [tests/unit/test_import_boundaries.py](../tests/unit/test_import_boundaries.py) guards low-level package imports, dashboard/report and recurring/calendar independence, controller transaction ownership, rules engine purity, settings runtime ownership, and lazy seed writes.
-- [tests/unit/test_module_size.py](../tests/unit/test_module_size.py) keeps refactored modules below reviewable sizes after large-file splits.
 - [tests/unit/test_frontend_initializers.py](../tests/unit/test_frontend_initializers.py) checks browser initialization patterns and verifies that client translation messages come from the registry instead of the app factory.
 - [tests/unit/test_runtime_context.py](../tests/unit/test_runtime_context.py) verifies request-scoped runtime template context caching and defaults.
 - [tests/unit/test_settings_openai_model_validation.py](../tests/unit/test_settings_openai_model_validation.py) and [tests/unit/test_network_guard.py](../tests/unit/test_network_guard.py) protect injectable external-provider behavior and prevent accidental network calls in tests.

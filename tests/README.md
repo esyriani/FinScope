@@ -101,7 +101,7 @@ integration tests should inject fake clients or request functions.
 Quality gates in [tests/unit](unit/) keep the curated structure from drifting. They
 verify pytest defaults, documented layer directories, the remaining catch-all
 route file size, shared background-job recorder usage in route tests, and
-selected production module size boundaries.
+selected architecture boundaries.
 
 <details open>
 <summary>Windows PowerShell</summary>

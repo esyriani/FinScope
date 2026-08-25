@@ -235,6 +235,72 @@ def test_export_rules_csv_includes_tags_and_amount_bounds(core_conn):
     assert exported_rows[0]["created_at"]
 
 
+def test_export_rules_csv_neutralizes_spreadsheet_formula_prefixes(core_conn):
+    """Verify rule CSV export neutralizes values spreadsheet apps treat as formulas."""
+    account_id = core_conn.execute(
+        text("INSERT INTO accounts (name) VALUES (:name)"),
+        {"name": "+Checking"},
+    ).lastrowid
+    merchant_id = core_conn.execute(
+        text("INSERT INTO merchants (merchant_key) VALUES (:merchant_key)"),
+        {"merchant_key": "\rMerchant"},
+    ).lastrowid
+    tag_id = core_conn.execute(
+        text("INSERT INTO tags (name) VALUES (:name)"),
+        {"name": "\tTag"},
+    ).lastrowid
+    category_id = core_conn.execute(
+        text("INSERT INTO categories (name) VALUES (:name)"),
+        {"name": "@Category"},
+    ).lastrowid
+    rule_id = core_conn.execute(
+        text("""
+        INSERT INTO category_rules (
+            account_id,
+            merchant_id,
+            keyword,
+            category,
+            category_id,
+            amount_min,
+            direction,
+            source
+        )
+        VALUES (
+            :account_id,
+            :merchant_id,
+            :keyword,
+            :category,
+            :category_id,
+            :amount_min,
+            'any',
+            'manual'
+        )
+        """),
+        {
+            "account_id": account_id,
+            "merchant_id": merchant_id,
+            "keyword": "=SUM(A1:A2)",
+            "category": "@Category",
+            "category_id": category_id,
+            "amount_min": -10.0,
+        },
+    ).lastrowid
+    core_conn.execute(
+        text("INSERT INTO category_rule_tags (rule_id, tag_id) VALUES (:rule_id, :tag_id)"),
+        {"rule_id": rule_id, "tag_id": tag_id},
+    )
+    core_conn.commit()
+
+    exported_rows = list(csv.DictReader(io.StringIO(export_rules_csv(core_conn))))
+
+    assert exported_rows[0]["keyword"] == "'=SUM(A1:A2)"
+    assert exported_rows[0]["account_name"] == "'+Checking"
+    assert exported_rows[0]["merchant_name"] == "'\rMerchant"
+    assert exported_rows[0]["category"] == "'@Category"
+    assert exported_rows[0]["tags"] == "'\tTag"
+    assert exported_rows[0]["amount_min"] == "'-10.0"
+
+
 def test_import_rules_add_persists_merchant_bound_rules(core_conn):
     """Verify merchant_name imports create merchant-bound category rules."""
     imported_rules = parse_rules_csv(

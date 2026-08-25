@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 from xml.sax.saxutils import escape
 
+from finance_app.core.csv_export import csv_export_value
 from finance_app.core.i18n import gettext
 
 XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -25,7 +26,6 @@ EXPORT_COLUMNS = (
     "transactions",
     "share_percent",
 )
-CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
 def reports_overview_csv(rows: Sequence[Mapping[str, Any]]) -> str:
@@ -36,12 +36,6 @@ def reports_overview_csv(rows: Sequence[Mapping[str, Any]]) -> str:
     for row in rows:
         writer.writerow({column: csv_export_value(row.get(column, "")) for column in EXPORT_COLUMNS})
     return output.getvalue()
-
-
-def csv_export_value(value: object) -> object:
-    """Return a CSV-safe cell value that neutralizes spreadsheet formulas."""
-    text = "" if value is None else str(value)
-    return f"'{text}" if text.startswith(CSV_FORMULA_PREFIXES) else value
 
 
 def export_header(column: str) -> str:

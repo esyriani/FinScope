@@ -71,7 +71,12 @@ Common responsibilities:
 Not every module needs every file. Small features can stay compact, but do not
 let a controller or service grow by mixing form parsing, SQL, business rules,
 URL building, and template dictionaries in one flow. When a module becomes hard
-to scan, split by responsibility before adding more branches.
+to scan, first look for a real responsibility boundary. Split only when the new
+module has a durable reason to exist, such as a distinct layer, workflow,
+external boundary, reusable policy, or independently testable domain concept.
+Do not create one-function, constants-only, or dataclass-only production modules
+just to reduce file length; a larger cohesive file is preferable to a package
+full of artificial fragments.
 
 Avoid import cycles. Shared constants, permissions, runtime settings, and helper
 functions should live in neutral modules rather than relying on delayed imports
@@ -133,9 +138,12 @@ Current architecture boundaries to preserve:
   `src/finance_app/modules/statements/types.py`. Settings may edit those rows
   and Upload may read them, but `modules/settings/runtime.py` should stay
   focused on user and owner-managed runtime setting resolution.
-- Large modules should be split along existing domain seams before adding more
-  branches. Preserve and extend `tests/unit/test_module_size.py` when a split is
-  meant to keep a module reviewable.
+- Large modules should be evaluated for mixed responsibilities before adding
+  more branches. Physical line count is not an architectural boundary. It is
+  acceptable for a cohesive module to be longer when splitting would obscure
+  ownership or force readers to hop through many shallow files. Split only when
+  the file owns too many responsibilities or crosses an established layer
+  boundary.
 
 Special taxonomy behavior should have one clear specialization boundary. Code
 that needs to know whether something is income, a transfer, reimbursable,
@@ -249,9 +257,9 @@ Testing expectations:
   `tests/unit/test_import_boundaries.py` guards low-level package imports,
   controller transaction ownership, recurring/calendar ownership, dashboard and
   reports independence, and app-factory render-time dependencies.
-- Keep module-size tests current when splitting or growing historically large
-  files. Prefer a focused split plus a durable size/boundary test over moving
-  complexity into a different oversized module.
+- Do not add tests that assert production modules stay under a fixed number of
+  lines. Prefer semantic boundary tests, dependency-direction checks, and
+  behavior tests over size budgets.
 
 Documentation-only or editorial-only changes do not require a full test run, but
 the final response must say that tests were not run and why.
