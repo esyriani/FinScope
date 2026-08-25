@@ -7,6 +7,10 @@ from sqlalchemy.exc import IntegrityError
 
 from finance_app.core.constants import (
     ACCOUNT_TYPES,
+    BACKGROUND_JOB_LOG_LEVELS,
+    BACKGROUND_JOB_QUEUES,
+    BACKGROUND_JOB_STATUSES,
+    BACKGROUND_JOB_UNDO_STATUSES,
     CATEGORY_RULE_DIRECTIONS,
     CATEGORY_RULE_SOURCES,
     CATEGORY_SOURCES,
@@ -36,6 +40,12 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     allowed_values_check_sql,
     metadata,
+)
+from finance_app.database.tables import (
+    background_job_events as background_job_events_table,
+)
+from finance_app.database.tables import (
+    background_jobs as background_jobs_table,
 )
 from finance_app.database.tables import (
     categories as categories_table,
@@ -391,6 +401,83 @@ def test_init_core_db_marks_interrupted_statement_imports_failed():
     assert running["import_status"] == STATEMENT_IMPORT_STATUS_FAILED
     assert running["import_error"] == INTERRUPTED_STATEMENT_IMPORT_ERROR
     assert running["import_finished_at"] is not None
+
+
+def test_init_core_db_marks_interrupted_background_jobs_failed():
+    """Verify startup makes orphaned process-local jobs terminal in history."""
+    engine = create_engine("sqlite://")
+    try:
+        connection_module.init_core_db(engine)
+        with engine.begin() as conn:
+            conn.execute(
+                insert(background_jobs_table),
+                [
+                    {
+                        "id": "restart-queued-job",
+                        "label": "Restart queued job",
+                        "queue": "main",
+                        "status": "queued",
+                        "created_at": "2099-01-01T12:00:00Z",
+                        "undo_status": "available",
+                    },
+                    {
+                        "id": "restart-running-job",
+                        "label": "Restart running job",
+                        "queue": "ai",
+                        "status": "running",
+                        "created_at": "2099-01-01T12:01:00Z",
+                        "started_at": "2099-01-01T12:02:00Z",
+                        "undo_status": "available",
+                    },
+                    {
+                        "id": "restart-completed-job",
+                        "label": "Restart completed job",
+                        "queue": "main",
+                        "status": "completed",
+                        "created_at": "2099-01-01T12:03:00Z",
+                        "finished_at": "2099-01-01T12:04:00Z",
+                        "undo_status": "unavailable",
+                    },
+                ],
+            )
+
+        connection_module.init_core_db(engine)
+        with engine.connect() as conn:
+            rows = {
+                row["id"]: row
+                for row in conn.execute(
+                    select(
+                        background_jobs_table.c.id,
+                        background_jobs_table.c.status,
+                        background_jobs_table.c.error,
+                        background_jobs_table.c.finished_at,
+                        background_jobs_table.c.undo_status,
+                    ).order_by(background_jobs_table.c.id)
+                ).mappings()
+            }
+            events = {
+                row["job_id"]: row
+                for row in conn.execute(
+                    select(
+                        background_job_events_table.c.job_id,
+                        background_job_events_table.c.level,
+                        background_job_events_table.c.message,
+                    )
+                ).mappings()
+            }
+    finally:
+        engine.dispose()
+
+    assert rows["restart-completed-job"]["status"] == "completed"
+    assert rows["restart-queued-job"]["status"] == "failed"
+    assert rows["restart-queued-job"]["finished_at"] is not None
+    assert rows["restart-queued-job"]["undo_status"] == "unavailable"
+    assert "app restarted" in rows["restart-queued-job"]["error"]
+    assert rows["restart-running-job"]["status"] == "failed"
+    assert rows["restart-running-job"]["finished_at"] is not None
+    assert rows["restart-running-job"]["undo_status"] == "unavailable"
+    assert events["restart-queued-job"]["level"] == "error"
+    assert events["restart-queued-job"]["message"] == "Job failed: {error}"
 
 
 def test_schema_validation_accepts_mysql_reflected_check_sql_and_truncated_names():
@@ -752,6 +839,10 @@ def test_core_schema_text_constraints_match_shared_constants(schema_conn):
         ("statements", "import_status", STATEMENT_IMPORT_STATUSES),
         ("statements", "interac_direction", INTERAC_DIRECTIONS),
         ("statements", "date_order", DATE_ORDERS),
+        ("background_jobs", "queue", BACKGROUND_JOB_QUEUES),
+        ("background_jobs", "status", BACKGROUND_JOB_STATUSES),
+        ("background_jobs", "undo_status", BACKGROUND_JOB_UNDO_STATUSES),
+        ("background_job_events", "level", BACKGROUND_JOB_LOG_LEVELS),
         ("transactions", "transaction_kind", TRANSACTION_KINDS),
         ("transactions", "category_source", CATEGORY_SOURCES),
         ("category_rules", "source", CATEGORY_RULE_SOURCES),
@@ -784,6 +875,28 @@ def test_core_schema_tracks_statement_import_state(schema_conn):
         "ignored_count",
         "llm_candidate_count",
     }.issubset(statement_columns)
+
+
+def test_core_schema_tracks_background_job_history(schema_conn):
+    """Verify schema records durable processing history and bounded events."""
+    tables = set(inspect(schema_conn).get_table_names())
+    job_columns = column_names(schema_conn, "background_jobs")
+    event_columns = column_names(schema_conn, "background_job_events")
+    event_foreign_keys = foreign_key_triplets(schema_conn, "background_job_events")
+
+    assert {"background_jobs", "background_job_events"}.issubset(tables)
+    assert {
+        "id",
+        "label",
+        "queue",
+        "status",
+        "progress_params",
+        "cancel_requested",
+        "undo_status",
+        "created_sequence",
+    }.issubset(job_columns)
+    assert {"job_id", "created_at", "level", "message", "params"}.issubset(event_columns)
+    assert ("job_id", "background_jobs", "id") in event_foreign_keys
 
 
 def test_core_schema_tracks_account_roles_and_transaction_kinds(schema_conn):

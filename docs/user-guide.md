@@ -106,6 +106,8 @@ Common processing activity includes statement import, AI categorization, applyin
 
 AI categorization uses a separate queue from the main import/rule/review queue. Processing also provides Run AI on unknowns and Clear queued AI controls.
 
+Processing history is retained in the database for recent completed, failed, and cancelled work. If the app restarts while work is queued or running, that item is marked failed because the in-process worker no longer exists.
+
 ## Settings
 
 Settings stores database-backed runtime preferences.
@@ -155,7 +157,7 @@ Operational recommendations:
 ## Known limitations
 
 - FinScope supports multiple authenticated users for one shared finance dataset, not multi-tenant hosting.
-- Processing activity state is process-local and in memory.
+- Processing execution is process-local and does not resume automatically after restart.
 - No bank synchronization is built in.
 - No built-in encryption at rest is implemented.
 - SQLite is intended for local use, not high-concurrency workloads.

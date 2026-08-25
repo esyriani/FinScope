@@ -4,7 +4,7 @@ FinScope fully supports SQLite and MySQL through SQLAlchemy Core. SQLite is the 
 
 The database layer maintains the Core engine/connection lifecycle in [src/finance_app/database/engine.py](../src/finance_app/database/engine.py). Startup creates empty databases from Core metadata, validates existing FinScope databases against the current schema, and seeds runtime defaults through Core for SQLite and MySQL URLs. [src/finance_app/database/tables.py](../src/finance_app/database/tables.py) remains the schema source of truth for the current clean database shape.
 
-User-bound runtime settings, saved report pins, statement type management, account persistence, merchant persistence, category/tag taxonomy helpers, taxonomy admin CRUD, category rule repository helpers, imported-rule repository helpers, rule import/export job entry points, rule listing queries, rule create/update/approval/delete/preview/apply workflows, standalone categorization, recurring pattern writes, transaction list queries and route mutations, transaction repository helpers, transaction import deduplication, home summary queries, upload page context queries, upload queue/import/reprocess/undo workflows, dashboard/comparison/calendar reporting read models, review page/workflow queries and mutations, and jobs page settings lookups use SQLAlchemy Core connections.
+User-bound runtime settings, saved report pins, statement type management, background job history, account persistence, merchant persistence, category/tag taxonomy helpers, taxonomy admin CRUD, category rule repository helpers, imported-rule repository helpers, rule import/export job entry points, rule listing queries, rule create/update/approval/delete/preview/apply workflows, standalone categorization, recurring pattern writes, transaction list queries and route mutations, transaction repository helpers, transaction import deduplication, home summary queries, upload page context queries, upload queue/import/reprocess/undo workflows, dashboard/comparison/calendar reporting read models, review page/workflow queries and mutations, and jobs page settings lookups use SQLAlchemy Core connections.
 
 Runtime-facing persistence helpers require SQLAlchemy Core connections. SQLite uses `sqlite:///` database URLs, while MySQL uses `mysql+pymysql://` URLs. Compatible MariaDB deployments use the same MySQL URL form through PyMySQL.
 
@@ -119,6 +119,32 @@ section is rendered.
 #### `audit_log`
 
 Stores security-relevant account events without plaintext passwords.
+
+#### `background_jobs`
+
+Stores durable Processing-page job history while worker execution remains
+process-local and in memory.
+
+- `id`: Public job identifier returned by queueing helpers.
+- `label`: Human-readable processing label shown on the Processing page.
+- `queue`: Processing queue name, either `main` or `ai`.
+- `status`: Lifecycle state: `queued`, `running`, `completed`, `failed`, or `cancelled`.
+- `created_at`, `started_at`, and `finished_at`: Processing timestamps used for ordering, diagnostics, and restart repair.
+- `result` and `error`: Final summary or failure detail for terminal jobs.
+- `progress_current`, `progress_total`, `progress_percent`, `progress_message`, and `progress_params`: Latest sanitized progress snapshot for browser refreshes and page rendering.
+- `cancel_requested`: Records that the current process has requested cooperative cancellation.
+- `undo_status`, `undo_result`, `undo_error`, and `undone_at`: Durable undo outcome metadata. The actual undo callable remains process-local, so persisted history alone does not make a restarted job undoable.
+- `created_sequence`: Process-local sequence used with `created_at` for stable newest-first ordering when jobs are created in the same second.
+
+#### `background_job_events`
+
+Stores bounded sanitized progress log entries for persisted processing history.
+
+- `job_id`: Parent job. Rows are deleted when the job is pruned.
+- `created_at`: Event timestamp.
+- `level`: Event severity: `info`, `warning`, or `error`.
+- `message`: Translation key or concise display text.
+- `params`: Sanitized JSON parameters for the message. Job logging must not store raw uploaded statement text, credentials, provider payloads, or full transaction data.
 
 #### `statements`
 

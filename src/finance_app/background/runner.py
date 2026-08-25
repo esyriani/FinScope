@@ -1,4 +1,4 @@
-"""In-memory background job runner and undo orchestration."""
+"""Process-local background job runner with persisted job history."""
 
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -7,11 +7,34 @@ from threading import Lock, local
 from typing import Any
 from uuid import uuid4
 
-MAIN_JOB_QUEUE = "main"
-AI_JOB_QUEUE = "ai"
-JOB_QUEUES = frozenset({MAIN_JOB_QUEUE, AI_JOB_QUEUE})
+from sqlalchemy.exc import SQLAlchemyError
+
+from finance_app.background import repository as job_repository
+from finance_app.core.constants import (
+    BACKGROUND_JOB_LOG_LEVEL_INFO,
+    BACKGROUND_JOB_LOG_LEVEL_WARNING,
+    BACKGROUND_JOB_LOG_LEVELS,
+    BACKGROUND_JOB_QUEUE_AI,
+    BACKGROUND_JOB_QUEUE_MAIN,
+    BACKGROUND_JOB_QUEUES,
+    BACKGROUND_JOB_STATUS_CANCELLED,
+    BACKGROUND_JOB_STATUS_COMPLETED,
+    BACKGROUND_JOB_STATUS_FAILED,
+    BACKGROUND_JOB_STATUS_QUEUED,
+    BACKGROUND_JOB_STATUS_RUNNING,
+    BACKGROUND_JOB_UNDO_STATUS_AVAILABLE,
+    BACKGROUND_JOB_UNDO_STATUS_UNAVAILABLE,
+    BACKGROUND_JOB_UNDO_STATUS_UNDOING,
+    BACKGROUND_JOB_UNDO_STATUS_UNDONE,
+    FINISHED_BACKGROUND_JOB_STATUSES,
+)
+from finance_app.database.engine import db_core_transaction
+
+MAIN_JOB_QUEUE = BACKGROUND_JOB_QUEUE_MAIN
+AI_JOB_QUEUE = BACKGROUND_JOB_QUEUE_AI
+JOB_QUEUES = frozenset(BACKGROUND_JOB_QUEUES)
 MAX_BACKGROUND_WORKERS = 1
-MAX_PROGRESS_LOG_ENTRIES = 120
+MAX_PROGRESS_LOG_ENTRIES = job_repository.MAX_JOB_EVENT_ROWS
 
 _executor = ThreadPoolExecutor(max_workers=MAX_BACKGROUND_WORKERS)
 _ai_executor = ThreadPoolExecutor(max_workers=MAX_BACKGROUND_WORKERS)
@@ -19,11 +42,12 @@ _jobs: dict[str, dict[str, Any]] = {}
 _job_sequence = 0
 _lock = Lock()
 _job_context: Any = local()
+_job_history_enabled = True
 
 
-FINISHED_STATUSES = {"completed", "failed", "cancelled"}
-CANCELLABLE_STATUSES = {"queued", "running"}
-UNDOABLE_STATUSES = {"completed", "failed"}
+FINISHED_STATUSES = set(FINISHED_BACKGROUND_JOB_STATUSES)
+CANCELLABLE_STATUSES = {BACKGROUND_JOB_STATUS_QUEUED, BACKGROUND_JOB_STATUS_RUNNING}
+UNDOABLE_STATUSES = {BACKGROUND_JOB_STATUS_COMPLETED, BACKGROUND_JOB_STATUS_FAILED}
 
 
 class JobCancelled(RuntimeError):
@@ -50,7 +74,7 @@ def submit_background_job(
         "id": job_id,
         "label": label,
         "queue": queue,
-        "status": "queued",
+        "status": BACKGROUND_JOB_STATUS_QUEUED,
         "created_at": now,
         "started_at": None,
         "finished_at": None,
@@ -63,7 +87,7 @@ def submit_background_job(
         "progress_params": {},
         "progress_log": [],
         "cancel_requested": False,
-        "undo_status": "available" if undo_handler else "unavailable",
+        "undo_status": BACKGROUND_JOB_UNDO_STATUS_AVAILABLE if undo_handler else BACKGROUND_JOB_UNDO_STATUS_UNAVAILABLE,
         "undo_result": None,
         "undo_error": None,
         "undone_at": None,
@@ -78,6 +102,7 @@ def submit_background_job(
         job["_created_sequence"] = _job_sequence
         _jobs[job_id] = job
 
+    persist_job_snapshot(job)
     future = executor_for_queue(queue).submit(run_job, job_id, func, args, kwargs)
     update_job(job_id, _future=future)
     return job_id
@@ -88,10 +113,10 @@ def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs
     if is_job_cancel_requested(job_id):
         result = "Job cancelled before it started."
         append_background_job_log(result, level="warning", job_id=job_id)
-        update_job(job_id, status="cancelled", result=result, finished_at=utc_now())
+        update_job(job_id, status=BACKGROUND_JOB_STATUS_CANCELLED, result=result, finished_at=utc_now())
         return
 
-    update_job(job_id, status="running", started_at=utc_now())
+    update_job(job_id, status=BACKGROUND_JOB_STATUS_RUNNING, started_at=utc_now())
 
     try:
         _job_context.job_id = job_id
@@ -106,7 +131,7 @@ def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs
         )
         update_job(
             job_id,
-            status="cancelled",
+            status=BACKGROUND_JOB_STATUS_CANCELLED,
             result=result,
             finished_at=utc_now(),
         )
@@ -121,7 +146,7 @@ def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs
         )
         update_job(
             job_id,
-            status="failed",
+            status=BACKGROUND_JOB_STATUS_FAILED,
             error=error,
             finished_at=utc_now(),
         )
@@ -129,15 +154,21 @@ def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs
     finally:
         _job_context.job_id = None
 
-    update_job(job_id, status="completed", result=result, finished_at=utc_now())
+    update_job(job_id, status=BACKGROUND_JOB_STATUS_COMPLETED, result=result, finished_at=utc_now())
 
 
 def update_job(job_id: str, **changes: Any) -> None:
     """Apply state changes to a tracked job."""
+    snapshot = None
+    should_persist = any(not key.startswith("_") for key in changes)
     with _lock:
         job = _jobs.get(job_id)
         if job is not None:
             job.update(changes)
+            if should_persist:
+                snapshot = dict(job)
+    if snapshot is not None:
+        persist_job_snapshot(snapshot)
 
 
 def update_background_job_progress(
@@ -163,6 +194,8 @@ def update_background_job_progress(
     if not job_id:
         return None
 
+    snapshot = None
+    public = None
     with _lock:
         job = _jobs.get(job_id)
         if job is None:
@@ -181,7 +214,10 @@ def update_background_job_progress(
             job.get("progress_current"),
             job.get("progress_total"),
         )
-        return public_job(job)
+        snapshot = dict(job)
+        public = public_job(job)
+    persist_job_snapshot(snapshot)
+    return public
 
 
 def append_background_job_log(
@@ -205,13 +241,17 @@ def append_background_job_log(
     if not job_id:
         return None
 
+    event = None
+    public = None
     with _lock:
         job = _jobs.get(job_id)
         if job is None:
             return None
 
-        append_job_log_entry(job, message, params=params, level=level)
-        return public_job(job)
+        event = append_job_log_entry(job, message, params=params, level=level)
+        public = public_job(job)
+    persist_job_event(job_id, event)
+    return public
 
 
 def append_job_log_entry(
@@ -219,25 +259,25 @@ def append_job_log_entry(
     message: object,
     params: Mapping[str, Any] | None = None,
     level: object = "info",
-) -> None:
+) -> dict[str, Any]:
     """Append a bounded log entry to a job dictionary already under lock."""
     entries = job.setdefault("progress_log", [])
-    entries.append(
-        {
-            "timestamp": utc_now(),
-            "level": normalize_log_level(level),
-            "message": str(message),
-            "params": dict(params or {}),
-        }
-    )
+    entry = {
+        "timestamp": utc_now(),
+        "level": normalize_log_level(level),
+        "message": str(message),
+        "params": dict(params or {}),
+    }
+    entries.append(entry)
     if len(entries) > MAX_PROGRESS_LOG_ENTRIES:
         del entries[: len(entries) - MAX_PROGRESS_LOG_ENTRIES]
+    return entry
 
 
 def normalize_log_level(level: object) -> str:
     """Return a supported progress log severity."""
-    text = str(level or "info").strip().lower()
-    return text if text in {"info", "warning", "error"} else "info"
+    text = str(level or BACKGROUND_JOB_LOG_LEVEL_INFO).strip().lower()
+    return text if text in BACKGROUND_JOB_LOG_LEVELS else BACKGROUND_JOB_LOG_LEVEL_INFO
 
 
 def progress_percent(current: object, total: object) -> int | None:
@@ -255,6 +295,9 @@ def progress_percent(current: object, total: object) -> int | None:
 
 def cancel_background_job(job_id: str) -> dict[str, Any] | None:
     """Request cancellation for a queued or running job."""
+    snapshot = None
+    event = None
+    public = None
     with _lock:
         job = _jobs.get(job_id)
         if job is None:
@@ -267,18 +310,28 @@ def cancel_background_job(job_id: str) -> dict[str, Any] | None:
         future = job.get("_future")
         cancelled_before_start = job["status"] == "queued" and (future is None or future.cancel())
         if cancelled_before_start:
-            job["status"] = "cancelled"
+            job["status"] = BACKGROUND_JOB_STATUS_CANCELLED
             job["result"] = "Job cancelled before it started."
             job["finished_at"] = utc_now()
-            append_job_log_entry(job, "Job cancelled before it started.", level="warning")
-            return public_job(job)
+            event = append_job_log_entry(
+                job,
+                "Job cancelled before it started.",
+                level=BACKGROUND_JOB_LOG_LEVEL_WARNING,
+            )
+            snapshot = dict(job)
+            public = public_job(job)
+        else:
+            event = append_job_log_entry(
+                job,
+                "Cancellation requested; waiting for the current batch to finish.",
+                level=BACKGROUND_JOB_LOG_LEVEL_WARNING,
+            )
+            snapshot = dict(job)
+            public = public_job(job)
 
-        append_job_log_entry(
-            job,
-            "Cancellation requested; waiting for the current batch to finish.",
-            level="warning",
-        )
-        return public_job(job)
+    persist_job_snapshot(snapshot)
+    persist_job_event(job_id, event)
+    return public
 
 
 def cancel_queued_background_jobs(queue: object | None = None) -> int:
@@ -288,7 +341,7 @@ def cancel_queued_background_jobs(queue: object | None = None) -> int:
         job_ids = [
             job_id
             for job_id, job in _jobs.items()
-            if job["status"] == "queued" and (queue is None or job.get("queue") == queue)
+            if job["status"] == BACKGROUND_JOB_STATUS_QUEUED and (queue is None or job.get("queue") == queue)
         ]
 
     cancelled_count = 0
@@ -303,11 +356,18 @@ def get_background_job(job_id: str) -> dict[str, Any] | None:
     """Return a public snapshot of one background job."""
     with _lock:
         job = _jobs.get(job_id)
-        return public_job(job) if job else None
+        if job is not None:
+            return public_job(job)
+
+    return persisted_job(job_id)
 
 
 def list_background_jobs(limit: int | None = 50, offset: int = 0) -> list[dict[str, Any]]:
     """List public job snapshots in newest-first order."""
+    persisted = persisted_jobs(limit=limit, offset=offset)
+    if persisted is not None:
+        return overlay_active_jobs(persisted)
+
     with _lock:
         jobs = list(_jobs.values())
 
@@ -324,48 +384,64 @@ def list_background_jobs(limit: int | None = 50, offset: int = 0) -> list[dict[s
 
 def count_background_jobs() -> int:
     """Count tracked background jobs."""
+    persisted_count = count_persisted_jobs()
+    if persisted_count is not None:
+        return persisted_count
+
     with _lock:
         return len(_jobs)
 
 
 def undo_background_job(job_id: str) -> dict[str, Any] | None:
     """Run the undo handler for a completed job when available."""
+    undo_handler: Callable[..., Any] | None = None
+    undo_args: tuple[Any, ...] = ()
+    undo_kwargs: dict[str, Any] = {}
+    snapshot: dict[str, Any] | None = None
+
     with _lock:
         job = _jobs.get(job_id)
-        if job is None:
+        if job is not None:
+            if job.get("_undo_handler") is None:
+                raise ValueError("This job does not have anything to undo.")
+
+            if job["status"] not in UNDOABLE_STATUSES:
+                raise ValueError("Only finished jobs can be undone.")
+
+            if job["undo_status"] == BACKGROUND_JOB_UNDO_STATUS_UNDONE:
+                raise ValueError("This job has already been undone.")
+
+            if job["undo_status"] == BACKGROUND_JOB_UNDO_STATUS_UNDOING:
+                raise ValueError("This job is already being undone.")
+
+            undo_handler = job["_undo_handler"]
+            undo_args = job["_undo_args"]
+            undo_kwargs = job["_undo_kwargs"]
+            job["undo_status"] = BACKGROUND_JOB_UNDO_STATUS_UNDOING
+            job["undo_error"] = None
+            snapshot = dict(job)
+
+    if job is None:
+        if persisted_job(job_id) is None:
             return None
+        raise ValueError("This job does not have anything to undo.")
 
-        if job.get("_undo_handler") is None:
-            raise ValueError("This job does not have anything to undo.")
-
-        if job["status"] not in UNDOABLE_STATUSES:
-            raise ValueError("Only finished jobs can be undone.")
-
-        if job["undo_status"] == "undone":
-            raise ValueError("This job has already been undone.")
-
-        if job["undo_status"] == "undoing":
-            raise ValueError("This job is already being undone.")
-
-        undo_handler = job["_undo_handler"]
-        undo_args = job["_undo_args"]
-        undo_kwargs = job["_undo_kwargs"]
-        job["undo_status"] = "undoing"
-        job["undo_error"] = None
+    persist_job_snapshot(snapshot)
 
     try:
+        assert undo_handler is not None
         result = undo_handler(*undo_args, **undo_kwargs)
     except Exception as exc:
         update_job(
             job_id,
-            undo_status="available",
+            undo_status=BACKGROUND_JOB_UNDO_STATUS_AVAILABLE,
             undo_error=f"{type(exc).__name__}: {exc}",
         )
         raise
 
     update_job(
         job_id,
-        undo_status="undone",
+        undo_status=BACKGROUND_JOB_UNDO_STATUS_UNDONE,
         undo_result=result,
         undo_error=None,
         undone_at=utc_now(),
@@ -379,7 +455,7 @@ def public_job(job: Mapping[str, Any]) -> dict[str, Any]:
     public["can_undo"] = (
         job.get("_undo_handler") is not None
         and job["status"] in UNDOABLE_STATUSES
-        and job["undo_status"] == "available"
+        and job["undo_status"] == BACKGROUND_JOB_UNDO_STATUS_AVAILABLE
     )
     public["can_cancel"] = job["status"] in CANCELLABLE_STATUSES and not job.get("cancel_requested")
     public["progress_params"] = dict(public.get("progress_params") or {})
@@ -431,3 +507,64 @@ def normalize_job_queue(queue: object) -> str:
 def utc_now() -> str:
     """Return the current UTC timestamp for job metadata."""
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def persist_job_snapshot(job: Mapping[str, Any] | None) -> None:
+    """Persist one job snapshot without letting history failures break work."""
+    if not _job_history_enabled or job is None:
+        return
+    try:
+        job_repository.persist_job_snapshot(job)
+    except SQLAlchemyError:
+        return
+
+
+def persist_job_event(job_id: str, event: Mapping[str, Any] | None) -> None:
+    """Persist one job progress event without interrupting the active worker."""
+    if not _job_history_enabled or event is None:
+        return
+    try:
+        job_repository.persist_job_event(job_id, event)
+    except SQLAlchemyError:
+        return
+
+
+def persisted_job(job_id: str) -> dict[str, Any] | None:
+    """Load a persisted job snapshot when history storage is available."""
+    if not _job_history_enabled:
+        return None
+    try:
+        with db_core_transaction() as conn:
+            return job_repository.get_job(conn, job_id)
+    except SQLAlchemyError:
+        return None
+
+
+def persisted_jobs(limit: int | None, offset: int) -> list[dict[str, Any]] | None:
+    """Load persisted job snapshots for list views."""
+    if not _job_history_enabled:
+        return None
+    try:
+        with db_core_transaction() as conn:
+            return job_repository.list_jobs(conn, limit=limit, offset=offset)
+    except SQLAlchemyError:
+        return None
+
+
+def count_persisted_jobs() -> int | None:
+    """Count persisted jobs when history storage is available."""
+    if not _job_history_enabled:
+        return None
+    try:
+        with db_core_transaction() as conn:
+            return job_repository.count_jobs(conn)
+    except SQLAlchemyError:
+        return None
+
+
+def overlay_active_jobs(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Replace persisted snapshots with richer in-memory state for active jobs."""
+    with _lock:
+        active_jobs = {job_id: public_job(job) for job_id, job in _jobs.items()}
+
+    return [active_jobs.get(str(job["id"]), job) for job in jobs]

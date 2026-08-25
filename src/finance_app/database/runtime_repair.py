@@ -1,8 +1,8 @@
 """Startup repair helpers for persisted state tied to process-local workers.
 
-The background runner intentionally keeps job state in memory. These helpers
-repair durable rows that would otherwise keep pointing at work that disappeared
-when the process stopped.
+The background runner still executes work in the current process. These helpers
+repair durable rows that would otherwise keep pointing at execution state that
+disappeared when the process stopped.
 """
 
 from datetime import datetime, timezone
@@ -10,6 +10,7 @@ from typing import Any
 
 from sqlalchemy import update
 
+from finance_app.background.repository import cleanup_old_jobs, mark_interrupted_jobs_failed
 from finance_app.core.constants import ACTIVE_STATEMENT_IMPORT_STATUSES, STATEMENT_IMPORT_STATUS_FAILED
 from finance_app.database.tables import statements as statements_table
 
@@ -21,6 +22,8 @@ INTERRUPTED_STATEMENT_IMPORT_ERROR = (
 def repair_startup_runtime_state(conn: Any) -> dict[str, int]:
     """Repair persisted runtime state that cannot survive a process restart."""
     return {
+        "interrupted_background_jobs": mark_interrupted_jobs_failed(conn),
+        "cleaned_background_jobs": cleanup_old_jobs(conn),
         "interrupted_statement_imports": mark_interrupted_statement_imports_failed(conn),
     }
 

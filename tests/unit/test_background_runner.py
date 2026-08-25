@@ -34,6 +34,7 @@ def isolated_background_runner(monkeypatch):
         runner._job_sequence = 0
     monkeypatch.setattr(runner, "_executor", executor)
     monkeypatch.setattr(runner, "_ai_executor", ai_executor)
+    monkeypatch.setattr(runner, "_job_history_enabled", False)
     yield executor
     with runner._lock:
         runner._jobs.clear()

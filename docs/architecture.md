@@ -64,7 +64,7 @@ Rules engine code in [src/finance_app/modules/rules/engine.py](../src/finance_ap
 
 Controllers should not open `db_core_transaction()` or own multi-step business workflows. Route modules collect HTTP inputs and handle Flask concerns; services and workflows own validation decisions, transaction scopes, persistence orchestration, and reusable result objects.
 
-Background jobs are intentionally process-local and in memory. Durable domain status that points at background work needs a startup/runtime reconciliation path, such as statement import recovery in `database/runtime_repair.py` and the upload/background workflow boundary.
+Background job execution is intentionally process-local and in memory, while job lifecycle history, progress, and sanitized log events are persisted in the database. Durable job or domain rows that point at queued/running in-process work need a startup/runtime reconciliation path, such as interrupted job repair, statement import recovery in `database/runtime_repair.py`, and the upload/background workflow boundary.
 
 External provider boundaries must be injectable. LLM categorization and Settings model validation depend on passed request/client/provider collaborators or small adapters; route-facing services should not construct provider clients directly.
 

@@ -120,10 +120,12 @@ Current architecture boundaries to preserve:
   workflows. Route modules collect HTTP inputs and handle Flask concerns;
   services/workflows own validation decisions, transaction scopes, persistence
   orchestration, and reusable result objects.
-- Background jobs are intentionally process-local and in memory. Any durable
-  domain status that points at background work must have a startup/runtime
-  reconciliation path. Statement import recovery belongs with the database
-  startup repair and upload/background workflow boundary, not route-only checks.
+- Background job execution is intentionally process-local and in memory, but
+  job lifecycle history is persisted in the database for user visibility and
+  recovery diagnostics. Durable job rows that still point at queued/running
+  in-process work must have a startup/runtime reconciliation path. Statement
+  import recovery and interrupted job repair belong with the database startup
+  repair and upload/background workflow boundary, not route-only checks.
 - External provider boundaries must be injectable. LLM categorization and
   settings model validation should depend on passed request/client/provider
   collaborators or small adapters, never route-level direct network calls.
