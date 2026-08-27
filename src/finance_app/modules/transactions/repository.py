@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import case, select, update
+from sqlalchemy import and_, case, exists, func, select, update
 
 from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
@@ -18,6 +18,7 @@ from finance_app.core.constants import (
 )
 from finance_app.core.money import MoneyValue, money_to_float, optional_money_to_decimal
 from finance_app.database.tables import accounts as accounts_table
+from finance_app.database.tables import transaction_tags as transaction_tags_table
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.service import save_category_rule
@@ -68,6 +69,7 @@ def get_transaction_for_ai_categorization(conn: Any, transaction_id: int) -> dic
                 transactions_table.c.tx_date,
                 transactions_table.c.description,
                 transactions_table.c.amount,
+                transactions_table.c.category.label("stored_category"),
                 transaction_category_label_expression(None).label("category"),
                 transactions_table.c.category_id,
                 transactions_table.c.needs_review,
@@ -250,18 +252,23 @@ def apply_ai_category_update(
     transaction_id: int,
     transaction: Mapping[str, Any],
     unknown_category: str,
+    expected_original_state: Mapping[str, Any],
 ) -> bool:
     """Persist one AI categorization result to a single transaction row.
 
     The update intentionally does not create or modify category rules. Callers
-    pass the already-classified transaction payload produced by the LLM adapter.
+    pass the already-classified transaction payload produced by the LLM adapter
+    and the original transaction state captured when the suggestion was made.
     """
     category = transaction.get("category") or unknown_category
     source = transaction.get("category_source") or CATEGORY_SOURCE_UNKNOWN
     rule_id = transaction.get("category_rule_id")
     cursor = conn.execute(
         update(transactions_table)
-        .where(transactions_table.c.id == transaction_id)
+        .where(
+            transactions_table.c.id == transaction_id,
+            *ai_suggestion_original_state_conditions(expected_original_state),
+        )
         .values(
             category=category,
             category_id=resolve_category_id(conn, category),
@@ -290,6 +297,115 @@ def apply_ai_category_update(
         rule_id=rule_id,
     )
     return True
+
+
+def get_transaction_tag_ids(conn: Any, transaction_id: object) -> list[int]:
+    """Return sorted tag IDs currently assigned to a transaction."""
+    return [
+        int(tag_id)
+        for tag_id in conn.execute(
+            select(transaction_tags_table.c.tag_id)
+            .where(transaction_tags_table.c.transaction_id == transaction_id)
+            .order_by(transaction_tags_table.c.tag_id)
+        ).scalars()
+    ]
+
+
+def transaction_ai_original_state(row: Mapping[str, Any], tag_ids: Iterable[object]) -> dict[str, Any]:
+    """Return the compact row state used to validate a later AI suggestion apply."""
+    return {
+        "category": state_text(row.get("category")),
+        "stored_category": state_text(row.get("stored_category")),
+        "category_id": state_int_or_none(row.get("category_id")),
+        "needs_review": state_bool_int(row.get("needs_review")),
+        "category_source": state_text(row.get("category_source")),
+        "category_confidence": row.get("category_confidence"),
+        "category_rule_id": state_int_or_none(row.get("category_rule_id")),
+        "categorized_at": state_text(row.get("categorized_at")),
+        "reviewed_at": state_text(row.get("reviewed_at")),
+        "ignored": state_bool_int(row.get("ignored")),
+        "transaction_kind": state_text(row.get("transaction_kind")),
+        "tag_ids": state_int_list(tag_ids),
+    }
+
+
+def ai_suggestion_original_state_conditions(expected: Mapping[str, Any]) -> list[Any]:
+    """Return SQL predicates proving the transaction still matches a suggestion."""
+    return [
+        column_matches(transactions_table.c.category, expected.get("stored_category")),
+        column_matches(transactions_table.c.category_id, state_int_or_none(expected.get("category_id"))),
+        column_matches(transactions_table.c.needs_review, state_bool_int(expected.get("needs_review"))),
+        column_matches(transactions_table.c.category_source, expected.get("category_source")),
+        column_matches(transactions_table.c.category_confidence, expected.get("category_confidence")),
+        column_matches(transactions_table.c.category_rule_id, state_int_or_none(expected.get("category_rule_id"))),
+        column_matches(transactions_table.c.categorized_at, expected.get("categorized_at")),
+        column_matches(transactions_table.c.reviewed_at, expected.get("reviewed_at")),
+        column_matches(transactions_table.c.ignored, state_bool_int(expected.get("ignored"))),
+        column_matches(transactions_table.c.transaction_kind, expected.get("transaction_kind")),
+        exact_transaction_tag_ids_condition(transactions_table.c.id, expected.get("tag_ids") or []),
+    ]
+
+
+def exact_transaction_tag_ids_condition(transaction_id_column: Any, tag_ids: Iterable[object]) -> Any:
+    """Return a predicate requiring the transaction to have exactly these tags."""
+    expected_tag_ids = state_int_list(tag_ids)
+    tag_count = (
+        select(func.count())
+        .select_from(transaction_tags_table)
+        .where(transaction_tags_table.c.transaction_id == transaction_id_column)
+        .scalar_subquery()
+    )
+    no_extra_tags = ~exists(
+        select(1).where(
+            transaction_tags_table.c.transaction_id == transaction_id_column,
+            ~transaction_tags_table.c.tag_id.in_(expected_tag_ids),
+        )
+    )
+    if expected_tag_ids:
+        return and_(tag_count == len(expected_tag_ids), no_extra_tags)
+    return and_(
+        tag_count == 0,
+        ~exists(select(1).where(transaction_tags_table.c.transaction_id == transaction_id_column)),
+    )
+
+
+def column_matches(column: Any, value: object) -> Any:
+    """Return a nullable equality predicate for an optimistic state field."""
+    return column.is_(None) if value is None else column == value
+
+
+def state_text(value: object) -> str | None:
+    """Return a stable JSON-safe text value for optimistic state fields."""
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return str(value.isoformat())
+    return str(value)
+
+
+def state_int_or_none(value: object) -> int | None:
+    """Return an integer state value or ``None``."""
+    if value in (None, ""):
+        return None
+    return int(str(value))
+
+
+def state_int_list(values: Iterable[object]) -> list[int]:
+    """Return sorted integer state values, skipping invalid entries."""
+    result: set[int] = set()
+    for value in values:
+        try:
+            parsed = state_int_or_none(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed is not None:
+            result.add(parsed)
+    return sorted(result)
+
+
+def state_bool_int(value: object) -> int:
+    """Return a persisted boolean state value as 0 or 1."""
+    return 1 if str(value).strip().lower() in {"1", "true", "yes", "on"} else 0
 
 
 def get_transactions_for_recategorization(conn: Any, transaction_ids: Iterable[object]) -> list[dict[str, Any]]:

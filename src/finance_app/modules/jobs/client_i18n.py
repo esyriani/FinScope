@@ -3,6 +3,7 @@
 CLIENT_TRANSLATION_MESSAGES = (
     "AI categorization completed: {summary}",
     "AI request issue in batch {start}-{end}: {error_type}: {detail}",
+    "Background job could not be queued: {detail}",
     "Batch {start}-{end} failed: {error_type}: {detail}",
     "Batch {start}-{end} kept {unknown} transaction unknown for review.",
     "Batch {start}-{end} kept {unknown} transactions unknown for review.",

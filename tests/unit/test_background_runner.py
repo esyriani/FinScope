@@ -23,6 +23,15 @@ class CapturingExecutor:
         return None
 
 
+class RejectingExecutor:
+    """Reject submitted jobs like a shut down executor would."""
+
+    def submit(self, func, *args, **kwargs):
+        """Raise instead of accepting work."""
+        del func, args, kwargs
+        raise RuntimeError("executor stopped")
+
+
 @pytest.fixture(autouse=True)
 def isolated_background_runner(monkeypatch):
     """Reset global background runner state for each test."""
@@ -32,6 +41,8 @@ def isolated_background_runner(monkeypatch):
     with runner._lock:
         runner._jobs.clear()
         runner._job_sequence = 0
+        runner._job_history_degraded = False
+        runner._job_history_degraded_detail = ""
     monkeypatch.setattr(runner, "_executor", executor)
     monkeypatch.setattr(runner, "_ai_executor", ai_executor)
     monkeypatch.setattr(runner, "_job_history_enabled", False)
@@ -39,6 +50,8 @@ def isolated_background_runner(monkeypatch):
     with runner._lock:
         runner._jobs.clear()
         runner._job_sequence = 0
+        runner._job_history_degraded = False
+        runner._job_history_degraded_detail = ""
 
 
 def test_submit_background_job_records_queued_job_and_submission(isolated_background_runner):
@@ -84,6 +97,34 @@ def test_submit_background_job_routes_ai_jobs_to_ai_executor(isolated_background
     assert job["queue"] == "ai"
     assert len(isolated_background_runner.submissions) == 0
     assert len(isolated_background_runner.ai_executor.submissions) == 1
+
+
+def test_submit_background_job_records_failed_job_when_executor_rejects(monkeypatch):
+    """Verify executor rejection leaves a terminal failed job instead of queued work."""
+    monkeypatch.setattr(runner, "_executor", RejectingExecutor())
+
+    with pytest.raises(runner.BackgroundJobSubmissionError) as exc_info:
+        runner.submit_background_job(
+            "Rejected job",
+            lambda: "done",
+            undo_handler=lambda: "undo",
+        )
+
+    job = runner.get_background_job(exc_info.value.job_id)
+
+    assert exc_info.value.label == "Rejected job"
+    assert exc_info.value.queue == "main"
+    assert exc_info.value.detail == "RuntimeError: executor stopped"
+    assert job is not None
+    assert job["status"] == "failed"
+    assert job["error"] == "Background job could not be queued: RuntimeError: executor stopped"
+    assert job["finished_at"] is not None
+    assert job["undo_status"] == "unavailable"
+    assert job["can_cancel"] is False
+    assert job["can_undo"] is False
+    assert job["progress_log"][0]["level"] == "error"
+    assert job["progress_log"][0]["message"] == "Background job could not be queued: {detail}"
+    assert job["progress_log"][0]["params"] == {"detail": "RuntimeError: executor stopped"}
 
 
 def test_cancel_background_job_marks_queued_job_cancelled():

@@ -10,16 +10,30 @@ from finance_app.modules.categories.llm_token_presenter import localize_token_es
 from finance_app.modules.categories.llm_tokens import AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE
 from finance_app.modules.rules.forms import parse_amount_bounds
 from finance_app.modules.transactions import service as transactions_service
+from finance_app.modules.transactions.ai_payloads import (
+    get_transaction_ai_suggestion,
+    pop_transaction_ai_result,
+    pop_transaction_ai_suggestion,
+    store_transaction_ai_result,
+    store_transaction_ai_suggestion,
+)
 from finance_app.modules.transactions.urls import transactions_redirect_target, transactions_redirect_with_ignored
 
 transactions_bp = Blueprint("transactions", __name__)
+LEGACY_TRANSACTION_AI_RESULT = "transaction_ai_result"
+LEGACY_TRANSACTION_AI_SUGGESTION = "transaction_ai_suggestion"
+TRANSACTION_AI_RESULT_REFERENCE = "transaction_ai_result_reference"
+TRANSACTION_AI_SUGGESTION_REFERENCE = "transaction_ai_suggestion_reference"
 
 
 @transactions_bp.route("/transactions")
 def transactions() -> str:
     """Render the transactions page."""
     context = transactions_service.build_transactions_context(request.args)
-    context["transaction_ai_result"] = session.pop("transaction_ai_result", None)
+    result_reference = session.pop(TRANSACTION_AI_RESULT_REFERENCE, None)
+    session.pop(LEGACY_TRANSACTION_AI_RESULT, None)
+    session.pop(LEGACY_TRANSACTION_AI_SUGGESTION, None)
+    context["transaction_ai_result"] = pop_transaction_ai_result(result_reference)
     return render_template("transactions.html", **context)
 
 
@@ -141,7 +155,7 @@ def estimate_transaction_category_suggestion(transaction_id: int) -> ResponseRet
 def suggest_transaction_category(transaction_id: int) -> ResponseReturnValue:
     """Preview an AI category suggestion for one transaction.
 
-    The route stores the signed-session suggestion for an explicit follow-up
+    The route stores server-side payload references for an explicit follow-up
     apply action. It does not mutate the selected transaction or create a rule.
     """
     next_url = transactions_redirect_target()
@@ -152,15 +166,18 @@ def suggest_transaction_category(transaction_id: int) -> ResponseReturnValue:
     result = transactions_service.suggest_transaction_ai_category(transaction_id)
     display_result = dict(result)
     persistence = display_result.pop("persistence", None)
-    session["transaction_ai_result"] = display_result
+    original_state = display_result.pop("original_state", None)
+    discard_transaction_ai_payload_references()
+    session[TRANSACTION_AI_RESULT_REFERENCE] = store_transaction_ai_result(display_result)
     if result.get("can_apply"):
-        session["transaction_ai_suggestion"] = {
-            "transaction_id": result.get("transaction_id"),
-            "can_apply": True,
-            "persistence": persistence,
-        }
-    else:
-        session.pop("transaction_ai_suggestion", None)
+        session[TRANSACTION_AI_SUGGESTION_REFERENCE] = store_transaction_ai_suggestion(
+            {
+                "transaction_id": result.get("transaction_id"),
+                "can_apply": True,
+                "persistence": persistence,
+                "original_state": original_state,
+            }
+        )
     flash(gettext(result.get("message") or "AI categorization completed."))
     return redirect(next_url or url_for("transactions.transactions"))
 
@@ -170,6 +187,7 @@ def suggest_transaction_category(transaction_id: int) -> ResponseReturnValue:
 def apply_transaction_ai_suggestion(transaction_id: int) -> ResponseReturnValue:
     """Apply a pending AI suggestion and optionally save a category rule."""
     next_url = transactions_redirect_target()
+    session.pop(LEGACY_TRANSACTION_AI_SUGGESTION, None)
     action = request.form.get(
         "suggestion_action",
         transactions_service.APPLY_AI_SUGGESTION_ACTION,
@@ -186,18 +204,27 @@ def apply_transaction_ai_suggestion(transaction_id: int) -> ResponseReturnValue:
             flash(gettext(str(exc)))
             return redirect(next_url or url_for("transactions.transactions"))
 
+    suggestion_reference = session.get(TRANSACTION_AI_SUGGESTION_REFERENCE)
     result = transactions_service.apply_transaction_ai_suggestion(
         transaction_id,
-        session.get("transaction_ai_suggestion"),
+        get_transaction_ai_suggestion(suggestion_reference),
         action=action,
         rule_keyword=request.form.get("keyword", ""),
         amount_min=amount_min,
         amount_max=amount_max,
     )
-    if result.get("updated"):
-        session.pop("transaction_ai_suggestion", None)
+    if result.get("updated") or result.get("expired"):
+        pop_transaction_ai_suggestion(session.pop(TRANSACTION_AI_SUGGESTION_REFERENCE, None))
     flash(gettext(result.get("message") or "AI suggestion cannot be applied."))
     return redirect(next_url or url_for("transactions.transactions"))
+
+
+def discard_transaction_ai_payload_references() -> None:
+    """Discard pending transaction AI payload references from the browser session."""
+    pop_transaction_ai_result(session.pop(TRANSACTION_AI_RESULT_REFERENCE, None))
+    pop_transaction_ai_suggestion(session.pop(TRANSACTION_AI_SUGGESTION_REFERENCE, None))
+    session.pop(LEGACY_TRANSACTION_AI_RESULT, None)
+    session.pop(LEGACY_TRANSACTION_AI_SUGGESTION, None)
 
 
 def localized_json_result(result: dict[str, object]) -> dict[str, object]:

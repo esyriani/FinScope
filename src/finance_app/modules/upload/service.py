@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 from werkzeug.datastructures import FileStorage
 
-from finance_app.background.runner import submit_background_job
+from finance_app.background.runner import BackgroundJobSubmissionError, submit_background_job
 from finance_app.core.config import settings
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -17,6 +17,7 @@ from finance_app.core.constants import (
     INTERAC_DIRECTION_AUTO,
     INTERAC_DIRECTIONS,
     STATEMENT_IMPORT_MODES,
+    STATEMENT_IMPORT_STATUS_FAILED,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
     STATEMENT_TYPE_PARSER_TYPES,
     UNKNOWN_CATEGORY,
@@ -28,6 +29,7 @@ from finance_app.modules.accounts.repository import find_account_by_name, get_or
 from finance_app.modules.categories.categorization import categorize_transactions
 from finance_app.modules.categories.llm_estimation import estimate_llm_categorization_tokens
 from finance_app.modules.categories.repository import get_category_rules
+from finance_app.modules.categories.sources import utc_timestamp
 from finance_app.modules.settings.runtime import (
     confirm_ai_token_usage_enabled,
     get_int_setting,
@@ -61,12 +63,14 @@ from finance_app.modules.upload.repository import (
     statement_by_checksum,
     statement_extension,
     statement_import_row,
+    update_statement_import_state,
 )
 
 STATEMENT_DUPLICATE_MESSAGE = (
     "This statement was already uploaded as {filename} on {uploaded_at} "
     "({status}). Use Retry import or Reprocess from Uploaded statements."
 )
+STATEMENT_IMPORT_QUEUE_FAILURE_MESSAGE = "Statement import could not be queued. Retry import from Uploaded statements."
 
 
 def build_upload_context(args: Any) -> dict[str, Any]:
@@ -189,18 +193,23 @@ def queue_uploaded_statement_import(uploaded_file: FileStorage | None, form: Any
         if not reset_statement_import_state(conn, statement_id, import_token):
             return statement_action_error("This statement import is already queued or running.")
 
-    job_id = submit_statement_import_job(
-        statement_id,
-        account["id"],
-        statement_type["parser_type"],
-        statement_type["import_mode"],
-        extension,
-        raw_text,
-        filename,
-        import_token,
-        interac_direction=interac_direction,
-        date_order=date_order,
-    )
+    try:
+        job_id = submit_statement_import_job(
+            statement_id,
+            account["id"],
+            statement_type["parser_type"],
+            statement_type["import_mode"],
+            extension,
+            raw_text,
+            filename,
+            import_token,
+            interac_direction=interac_direction,
+            date_order=date_order,
+        )
+    except BackgroundJobSubmissionError as exc:
+        mark_statement_import_queue_failed(statement_id, import_token, exc)
+        return statement_action_error(STATEMENT_IMPORT_QUEUE_FAILURE_MESSAGE)
+
     return {"ok": True, "job_id": job_id}
 
 
@@ -266,20 +275,25 @@ def queue_existing_statement_import(statement_id: int, reprocess: bool = False) 
         if not queued:
             return statement_action_error("This statement import is already queued or running.")
 
-    job_id = submit_statement_import_job(
-        statement_id,
-        statement["account_id"],
-        statement["parser_type"],
-        statement["import_mode"],
-        extension,
-        raw_text,
-        statement["filename"],
-        import_token,
-        label_prefix="Reprocess" if reprocess else "Retry import",
-        interac_direction=statement["interac_direction"],
-        date_order=statement["date_order"],
-        replace_existing_transactions=reprocess,
-    )
+    try:
+        job_id = submit_statement_import_job(
+            statement_id,
+            statement["account_id"],
+            statement["parser_type"],
+            statement["import_mode"],
+            extension,
+            raw_text,
+            statement["filename"],
+            import_token,
+            label_prefix="Reprocess" if reprocess else "Retry import",
+            interac_direction=statement["interac_direction"],
+            date_order=statement["date_order"],
+            replace_existing_transactions=reprocess,
+        )
+    except BackgroundJobSubmissionError as exc:
+        mark_statement_import_queue_failed(statement_id, import_token, exc)
+        return statement_action_error(STATEMENT_IMPORT_QUEUE_FAILURE_MESSAGE)
+
     return {"ok": True, "job_id": job_id, "action": "Reprocess" if reprocess else "Retry"}
 
 
@@ -389,6 +403,24 @@ def submit_statement_import_job(
         undo_handler=undo_handler,
         undo_args=undo_args,
     )
+
+
+def mark_statement_import_queue_failed(
+    statement_id: int,
+    import_token: str,
+    exc: BackgroundJobSubmissionError,
+) -> None:
+    """Mark the current statement import attempt failed after executor rejection."""
+    with db_core_transaction() as conn:
+        update_statement_import_state(
+            conn,
+            statement_id,
+            STATEMENT_IMPORT_STATUS_FAILED,
+            expected_statuses=ACTIVE_STATEMENT_IMPORT_STATUSES,
+            expected_import_token=import_token,
+            import_error=str(exc),
+            import_finished_at=utc_timestamp(),
+        )
 
 
 def duplicate_statement_error(statement: Any, status_code: int | None = None) -> dict[str, Any]:

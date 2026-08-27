@@ -31,12 +31,16 @@ def isolated_background_runner(monkeypatch):
     with runner._lock:
         runner._jobs.clear()
         runner._job_sequence = 0
+        runner._job_history_degraded = False
+        runner._job_history_degraded_detail = ""
     monkeypatch.setattr(runner, "_executor", CapturingExecutor())
     monkeypatch.setattr(runner, "_ai_executor", CapturingExecutor())
     yield
     with runner._lock:
         runner._jobs.clear()
         runner._job_sequence = 0
+        runner._job_history_degraded = False
+        runner._job_history_degraded_detail = ""
 
 
 def complete_job(label="Completed job", result="done", undo_handler=None):

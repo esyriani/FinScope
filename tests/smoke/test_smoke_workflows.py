@@ -21,11 +21,15 @@ def isolated_background_jobs():
     with runner._lock:
         runner._jobs.clear()
         runner._job_sequence = 0
+        runner._job_history_degraded = False
+        runner._job_history_degraded_detail = ""
     yield
     wait_for_all_jobs()
     with runner._lock:
         runner._jobs.clear()
         runner._job_sequence = 0
+        runner._job_history_degraded = False
+        runner._job_history_degraded_detail = ""
 
 
 def statement_type_id(conn, parser_type="credit_card"):

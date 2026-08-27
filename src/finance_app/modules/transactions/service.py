@@ -81,12 +81,14 @@ from finance_app.modules.transactions.repository import (
     assign_manual_category,
     get_transaction_for_ai_categorization,
     get_transaction_for_category_update,
+    get_transaction_tag_ids,
     get_transactions_for_recategorization,
     mark_transaction_verified,
     mark_transactions_verified,
     normalized_transaction_ids,
     set_transaction_ignored,
     set_transactions_ignored,
+    transaction_ai_original_state,
     update_recategorized_transaction,
 )
 from finance_app.modules.transactions.urls import transactions_sort_url, transactions_url
@@ -94,6 +96,23 @@ from finance_app.modules.transactions.urls import transactions_sort_url, transac
 RUN_TRANSACTION_AI_SETTING_KEY = "transaction_ai_rerun_enabled"
 APPLY_AI_SUGGESTION_ACTION = "apply"
 APPLY_AI_SUGGESTION_WITH_RULE_ACTION = "apply_and_create_rule"
+AI_SUGGESTION_EXPIRED_MESSAGE = "AI suggestion expired. Use Suggest category again."
+AI_SUGGESTION_ORIGINAL_STATE_KEYS = frozenset(
+    {
+        "category",
+        "stored_category",
+        "category_id",
+        "needs_review",
+        "category_source",
+        "category_confidence",
+        "category_rule_id",
+        "categorized_at",
+        "reviewed_at",
+        "ignored",
+        "transaction_kind",
+        "tag_ids",
+    }
+)
 
 
 def build_transactions_context(args: Any) -> dict[str, Any]:
@@ -487,6 +506,7 @@ def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
 
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
         original_tags = get_transaction_tag_names(conn, transaction_id)
+        original_state = transaction_ai_original_state(row, get_transaction_tag_ids(conn, transaction_id))
         tag_colors = get_tag_color_map(conn)
         rules = get_category_rules(conn)
         evidence_transaction = dict(row)
@@ -521,7 +541,7 @@ def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
         request_status = llm_module.last_llm_request_status()
         request_ok = request_status.get("status") == "ok"
 
-    return build_transaction_ai_result(
+    result = build_transaction_ai_result(
         row,
         original_tags,
         llm_transaction,
@@ -531,6 +551,8 @@ def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
         unknown_category=unknown_category,
         model_name=model_name,
     )
+    result["original_state"] = original_state
+    return result
 
 
 def estimate_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
@@ -586,12 +608,12 @@ def apply_transaction_ai_suggestion(
         does not contain an applicable category.
     """
     if not suggestion or int(suggestion.get("transaction_id") or 0) != int(transaction_id):
-        return {
-            "updated": False,
-            "message": "AI suggestion expired. Use Suggest category again.",
-        }
+        return expired_ai_suggestion_result()
     if not suggestion.get("can_apply") or not suggestion.get("persistence"):
         return {"updated": False, "message": "AI suggestion cannot be applied."}
+    original_state = suggestion.get("original_state")
+    if not valid_ai_suggestion_original_state(original_state):
+        return expired_ai_suggestion_result()
 
     with db_core_transaction() as conn:
         if not get_bool_setting(
@@ -617,7 +639,14 @@ def apply_transaction_ai_suggestion(
                     "message": "Rule keyword is required when saving a rule.",
                 }
 
-        updated = apply_ai_category_update(conn, transaction_id, payload, unknown_category)
+        assert isinstance(original_state, Mapping)
+        updated = apply_ai_category_update(
+            conn,
+            transaction_id,
+            payload,
+            unknown_category,
+            expected_original_state=original_state,
+        )
         saved_rule_id = None
         if updated and should_create_rule:
             saved_rule_id = save_category_rule(
@@ -632,7 +661,7 @@ def apply_transaction_ai_suggestion(
             )
 
         if not updated:
-            return {"updated": False, "message": "Transaction not found."}
+            return expired_ai_suggestion_result()
 
         if should_create_rule:
             return {
@@ -646,6 +675,27 @@ def apply_transaction_ai_suggestion(
             "saved_rule_id": None,
             "message": "AI suggestion applied to this transaction.",
         }
+
+
+def expired_ai_suggestion_result() -> dict[str, Any]:
+    """Return the standard stale single-transaction AI suggestion response."""
+    return {
+        "updated": False,
+        "expired": True,
+        "message": AI_SUGGESTION_EXPIRED_MESSAGE,
+    }
+
+
+def valid_ai_suggestion_original_state(value: object) -> bool:
+    """Return whether a signed-session suggestion has a usable state token."""
+    if not isinstance(value, Mapping):
+        return False
+    tag_ids = value.get("tag_ids")
+    return (
+        AI_SUGGESTION_ORIGINAL_STATE_KEYS.issubset(value.keys())
+        and isinstance(tag_ids, list)
+        and all(isinstance(tag_id, int) for tag_id in tag_ids)
+    )
 
 
 def prepare_single_transaction_llm_payload(

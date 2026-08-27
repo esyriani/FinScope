@@ -8,6 +8,16 @@ from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
+from finance_app.modules.transactions.ai_payloads import (
+    get_transaction_ai_suggestion,
+    store_transaction_ai_suggestion,
+)
+from finance_app.modules.transactions.controller import (
+    LEGACY_TRANSACTION_AI_RESULT,
+    LEGACY_TRANSACTION_AI_SUGGESTION,
+    TRANSACTION_AI_RESULT_REFERENCE,
+    TRANSACTION_AI_SUGGESTION_REFERENCE,
+)
 
 
 def insert_route_transaction(conn, fingerprint="route-tx", category="UNKNOWN", needs_review=1):
@@ -38,6 +48,12 @@ def transaction_state(conn, tx_id):
         .mappings()
         .fetchone()
     )
+
+
+def client_session_snapshot(client):
+    """Return decoded Flask client-session data for security assertions."""
+    with client.session_transaction() as client_session:
+        return dict(client_session)
 
 
 def test_transactions_table_exports_category_method_and_score_separately(owner_client, core_conn):
@@ -568,6 +584,7 @@ def test_suggest_transaction_category_route_shows_result_modal(owner_client, cor
             "rule_keyword": "TVA SPORTS DIRECT",
             "rule_exact_amount": "20.68",
             "persistence": {"category": "Entertainment"},
+            "original_state": {"category": "UNKNOWN", "tag_ids": []},
         }
 
     monkeypatch.setattr(
@@ -585,7 +602,24 @@ def test_suggest_transaction_category_route_shows_result_modal(owner_client, cor
         follow_redirects=True,
     )
 
+    session_data = client_session_snapshot(owner_client)
+    suggestion_reference = session_data.get(TRANSACTION_AI_SUGGESTION_REFERENCE)
+    with owner_client.application.app_context():
+        pending_suggestion = get_transaction_ai_suggestion(suggestion_reference)
+
     assert response.status_code == 200
+    assert TRANSACTION_AI_RESULT_REFERENCE not in session_data
+    assert LEGACY_TRANSACTION_AI_RESULT not in session_data
+    assert LEGACY_TRANSACTION_AI_SUGGESTION not in session_data
+    assert suggestion_reference
+    assert "TVA SPORTS DIRECT" not in repr(session_data)
+    assert "Entertainment" not in repr(session_data)
+    assert pending_suggestion == {
+        "transaction_id": tx_id,
+        "can_apply": True,
+        "persistence": {"category": "Entertainment"},
+        "original_state": {"category": "UNKNOWN", "tag_ids": []},
+    }
     assert_visible_text(
         response,
         "AI category suggestion",
@@ -666,8 +700,10 @@ def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(owner_
     }
     captured = {}
 
+    with owner_client.application.app_context():
+        suggestion_reference = store_transaction_ai_suggestion(pending_suggestion)
     with owner_client.session_transaction() as session:
-        session["transaction_ai_suggestion"] = pending_suggestion
+        session[TRANSACTION_AI_SUGGESTION_REFERENCE] = suggestion_reference
 
     def apply_for_test(transaction_id, suggestion, action, rule_keyword="", amount_min=None, amount_max=None):
         """Capture the submitted explicit apply action."""
@@ -701,8 +737,9 @@ def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(owner_
         follow_redirects=True,
     )
 
-    with owner_client.session_transaction() as session:
-        stored_suggestion = session.get("transaction_ai_suggestion")
+    session_data = client_session_snapshot(owner_client)
+    with owner_client.application.app_context():
+        stored_suggestion = get_transaction_ai_suggestion(suggestion_reference)
 
     assert response.status_code == 200
     assert_visible_text(response, "AI suggestion applied. Rule saved.")
@@ -712,4 +749,29 @@ def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(owner_
     assert captured["rule_keyword"] == "TVA SPORTS DIRECT"
     assert captured["amount_min"] is None
     assert captured["amount_max"] is None
+    assert TRANSACTION_AI_SUGGESTION_REFERENCE not in session_data
+    assert LEGACY_TRANSACTION_AI_SUGGESTION not in session_data
     assert stored_suggestion is None
+
+
+def test_apply_transaction_ai_suggestion_route_expires_missing_server_payload(owner_client, core_conn):
+    """Verify stale AI suggestion references expire without client-side payloads."""
+    tx_id = insert_route_transaction(core_conn, fingerprint="route-apply-ai-missing-payload")
+    with owner_client.session_transaction() as session:
+        session[TRANSACTION_AI_SUGGESTION_REFERENCE] = "missing-reference"
+        session[LEGACY_TRANSACTION_AI_SUGGESTION] = {"description": "TVA SPORTS DIRECT"}
+
+    response = owner_client.post(
+        f"/transactions/{tx_id}/ai-suggestion",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "suggestion_action": "apply",
+        },
+        follow_redirects=True,
+    )
+
+    session_data = client_session_snapshot(owner_client)
+    assert response.status_code == 200
+    assert_visible_text(response, "AI suggestion expired. Use Suggest category again.")
+    assert TRANSACTION_AI_SUGGESTION_REFERENCE not in session_data
+    assert LEGACY_TRANSACTION_AI_SUGGESTION not in session_data

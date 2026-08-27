@@ -7,6 +7,7 @@ from tests.support.html import assert_visible_text
 from tests.support.upload import create_account_statement, first_statement_type_id, statement_type_id
 from tests.support.web import set_csrf_token
 
+from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.upload import service as upload_service
 from finance_app.modules.upload import workflow as upload_workflow
@@ -89,6 +90,51 @@ def test_upload_route_submits_background_import_job(owner_client, core_conn, mon
     assert submitted["undo_args"][1] is submitted["kwargs"]["undo_state"]
     assert submitted["kwargs"]["interac_direction"] == "auto"
     assert submitted["kwargs"]["date_order"] == "auto"
+
+
+def test_upload_route_marks_statement_failed_when_executor_rejects(owner_client, core_conn, monkeypatch):
+    """Verify rejected upload queueing fails the statement attempt immediately."""
+
+    def reject_job(label, func, *args, undo_handler=None, undo_args=None, undo_kwargs=None, **kwargs):
+        """Reject the background job after upload state has been queued."""
+        del func, args, undo_handler, undo_args, undo_kwargs, kwargs
+        raise runner.BackgroundJobSubmissionError(
+            "rejected-upload-job",
+            label,
+            runner.MAIN_JOB_QUEUE,
+            "RuntimeError: executor stopped",
+        )
+
+    monkeypatch.setattr(upload_service, "submit_background_job", reject_job)
+    raw_csv = b"Date,Description,Amount\n2026-01-02,QUEUE REJECTED SHOP,12.34\n"
+
+    response = owner_client.post(
+        "/upload",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "account_name": "Personal",
+            "statement_type_id": str(first_statement_type_id(core_conn)),
+            "statement": (io.BytesIO(raw_csv), "queue-rejected.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    statement = core_conn.execute(text("""
+        SELECT import_status, import_error, import_finished_at, imported_count
+        FROM statements
+        WHERE filename = 'queue-rejected.csv'
+        """)).fetchone()
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Statement import could not be queued. Retry import from Uploaded statements.")
+    assert statement is not None
+    assert tuple(statement)[:2] == (
+        "failed",
+        "Background job could not be queued: RuntimeError: executor stopped",
+    )
+    assert statement._mapping["import_finished_at"] is not None
+    assert statement._mapping["imported_count"] == 0
 
 
 def test_upload_preview_detects_month_first_slash_dates(owner_client, core_conn):
@@ -463,6 +509,87 @@ def test_reprocess_statement_import_route_preserves_transactions_until_job_succe
     assert submitted_jobs[0][5]["interac_direction"] == "auto"
     assert submitted_jobs[0][5]["date_order"] == "auto"
     assert submitted_jobs[0][5]["replace_existing_transactions"] is True
+
+
+def test_reprocess_statement_import_route_marks_failed_when_executor_rejects(owner_client, core_conn, monkeypatch):
+    """Verify rejected reprocess queueing fails the attempt without deleting old rows."""
+    account_id, statement_id = create_account_statement(core_conn, "reprocess-submit-failed.csv")
+    core_conn.execute(
+        text("""
+        UPDATE statements
+        SET raw_text = :p0,
+            extension = 'csv',
+            import_status = 'completed',
+            imported_count = 1
+        WHERE id = :p1
+        """),
+        {"p0": "Date,Description,Amount\n2026-01-02,REJECTED SHOP,12.34\n", "p1": statement_id},
+    )
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            statement_id,
+            account_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            fingerprint
+        )
+        VALUES (:p0, :p1, '2026-01-01', 'STILL IMPORTED', 5.00, 'UNKNOWN', 'reprocess-submit-failed')
+        """),
+        {"p0": statement_id, "p1": account_id},
+    )
+    core_conn.commit()
+
+    def reject_job(label, func, *args, undo_handler=None, undo_args=None, **kwargs):
+        """Reject the background job after service state has been queued."""
+        del func, args, undo_handler, undo_args, kwargs
+        raise runner.BackgroundJobSubmissionError(
+            "rejected-job",
+            label,
+            runner.MAIN_JOB_QUEUE,
+            "RuntimeError: executor stopped",
+        )
+
+    monkeypatch.setattr(upload_service, "submit_background_job", reject_job)
+
+    response = owner_client.post(
+        f"/upload/{statement_id}/reprocess",
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
+        follow_redirects=True,
+    )
+
+    statement = core_conn.execute(
+        text("""
+        SELECT import_status, import_error, import_finished_at, imported_count
+        FROM statements
+        WHERE id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+    transaction_descriptions = [
+        row._mapping["description"]
+        for row in core_conn.execute(
+            text("""
+            SELECT description
+            FROM transactions
+            WHERE statement_id = :p0
+            ORDER BY id
+            """),
+            {"p0": statement_id},
+        )
+    ]
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Statement import could not be queued. Retry import from Uploaded statements.")
+    assert tuple(statement)[:2] == (
+        "failed",
+        "Background job could not be queued: RuntimeError: executor stopped",
+    )
+    assert statement._mapping["import_finished_at"] is not None
+    assert statement._mapping["imported_count"] == 0
+    assert transaction_descriptions == ["STILL IMPORTED"]
 
 
 def test_undo_statement_upload_job_removes_statement_transactions_and_tags(app, core_conn):

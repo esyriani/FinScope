@@ -1,5 +1,6 @@
 """Process-local background job runner with persisted job history."""
 
+import logging
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from finance_app.background import repository as job_repository
 from finance_app.core.constants import (
+    BACKGROUND_JOB_LOG_LEVEL_ERROR,
     BACKGROUND_JOB_LOG_LEVEL_INFO,
     BACKGROUND_JOB_LOG_LEVEL_WARNING,
     BACKGROUND_JOB_LOG_LEVELS,
@@ -30,11 +32,14 @@ from finance_app.core.constants import (
 )
 from finance_app.database.engine import db_core_transaction
 
+logger = logging.getLogger(__name__)
+
 MAIN_JOB_QUEUE = BACKGROUND_JOB_QUEUE_MAIN
 AI_JOB_QUEUE = BACKGROUND_JOB_QUEUE_AI
 JOB_QUEUES = frozenset(BACKGROUND_JOB_QUEUES)
 MAX_BACKGROUND_WORKERS = 1
 MAX_PROGRESS_LOG_ENTRIES = job_repository.MAX_JOB_EVENT_ROWS
+MAX_JOB_HISTORY_ERROR_DETAIL_LENGTH = 500
 
 _executor = ThreadPoolExecutor(max_workers=MAX_BACKGROUND_WORKERS)
 _ai_executor = ThreadPoolExecutor(max_workers=MAX_BACKGROUND_WORKERS)
@@ -43,6 +48,8 @@ _job_sequence = 0
 _lock = Lock()
 _job_context: Any = local()
 _job_history_enabled = True
+_job_history_degraded = False
+_job_history_degraded_detail = ""
 
 
 FINISHED_STATUSES = set(FINISHED_BACKGROUND_JOB_STATUSES)
@@ -52,6 +59,18 @@ UNDOABLE_STATUSES = {BACKGROUND_JOB_STATUS_COMPLETED, BACKGROUND_JOB_STATUS_FAIL
 
 class JobCancelled(RuntimeError):
     """Signal that a running background job stopped after a cancel request."""
+
+
+class BackgroundJobSubmissionError(RuntimeError):
+    """Signal that an executor rejected a background job before it could run."""
+
+    def __init__(self, job_id: str, label: str, queue: str, detail: str) -> None:
+        """Store queueing context for callers that must repair durable state."""
+        self.job_id = job_id
+        self.label = label
+        self.queue = queue
+        self.detail = detail
+        super().__init__(f"Background job could not be queued: {detail}")
 
 
 def submit_background_job(
@@ -102,10 +121,45 @@ def submit_background_job(
         job["_created_sequence"] = _job_sequence
         _jobs[job_id] = job
 
-    persist_job_snapshot(job)
-    future = executor_for_queue(queue).submit(run_job, job_id, func, args, kwargs)
+    try:
+        future = executor_for_queue(queue).submit(run_job, job_id, func, args, kwargs)
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+        mark_job_submission_failed(job_id, detail)
+        raise BackgroundJobSubmissionError(job_id, label, queue, detail) from exc
+
     update_job(job_id, _future=future)
+    with _lock:
+        snapshot = dict(_jobs[job_id])
+    persist_job_snapshot(snapshot)
     return job_id
+
+
+def mark_job_submission_failed(job_id: str, detail: str) -> None:
+    """Record executor rejection as a terminal failed background job."""
+    message = "Background job could not be queued: {detail}"
+    snapshot = None
+    event = None
+    with _lock:
+        job = _jobs.get(job_id)
+        if job is None:
+            return
+
+        job["status"] = BACKGROUND_JOB_STATUS_FAILED
+        job["error"] = message.format(detail=detail)
+        job["finished_at"] = utc_now()
+        job["cancel_requested"] = False
+        job["undo_status"] = BACKGROUND_JOB_UNDO_STATUS_UNAVAILABLE
+        event = append_job_log_entry(
+            job,
+            message,
+            params={"detail": detail},
+            level=BACKGROUND_JOB_LOG_LEVEL_ERROR,
+        )
+        snapshot = dict(job)
+
+    persist_job_snapshot(snapshot)
+    persist_job_event(job_id, event)
 
 
 def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> None:
@@ -364,32 +418,34 @@ def get_background_job(job_id: str) -> dict[str, Any] | None:
 
 def list_background_jobs(limit: int | None = 50, offset: int = 0) -> list[dict[str, Any]]:
     """List public job snapshots in newest-first order."""
+    active_jobs = active_job_records()
+    if active_jobs:
+        persisted = persisted_jobs(limit=None, offset=0)
+        if persisted is not None:
+            return paginate_job_records(overlay_active_jobs(persisted, active_jobs), limit, offset)
+        return paginate_job_records(active_jobs, limit, offset)
+
     persisted = persisted_jobs(limit=limit, offset=offset)
     if persisted is not None:
-        return overlay_active_jobs(persisted)
+        return persisted
 
-    with _lock:
-        jobs = list(_jobs.values())
-
-    jobs.sort(
-        key=lambda job: (job["created_at"], job.get("_created_sequence", 0)),
-        reverse=True,
-    )
-    jobs = [public_job(job) for job in jobs]
-    if limit is None:
-        return jobs[offset:]
-
-    return jobs[offset : offset + limit]
+    return []
 
 
 def count_background_jobs() -> int:
     """Count tracked background jobs."""
+    active_jobs = active_job_records()
+    if active_jobs:
+        persisted = persisted_jobs(limit=None, offset=0)
+        if persisted is not None:
+            return len(overlay_active_jobs(persisted, active_jobs))
+        return len(active_jobs)
+
     persisted_count = count_persisted_jobs()
     if persisted_count is not None:
         return persisted_count
 
-    with _lock:
-        return len(_jobs)
+    return 0
 
 
 def undo_background_job(job_id: str) -> dict[str, Any] | None:
@@ -515,7 +571,8 @@ def persist_job_snapshot(job: Mapping[str, Any] | None) -> None:
         return
     try:
         job_repository.persist_job_snapshot(job)
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        mark_job_history_degraded("persist snapshot", exc)
         return
 
 
@@ -525,7 +582,8 @@ def persist_job_event(job_id: str, event: Mapping[str, Any] | None) -> None:
         return
     try:
         job_repository.persist_job_event(job_id, event)
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        mark_job_history_degraded("persist event", exc)
         return
 
 
@@ -536,7 +594,8 @@ def persisted_job(job_id: str) -> dict[str, Any] | None:
     try:
         with db_core_transaction() as conn:
             return job_repository.get_job(conn, job_id)
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        mark_job_history_degraded("load snapshot", exc)
         return None
 
 
@@ -547,7 +606,8 @@ def persisted_jobs(limit: int | None, offset: int) -> list[dict[str, Any]] | Non
     try:
         with db_core_transaction() as conn:
             return job_repository.list_jobs(conn, limit=limit, offset=offset)
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        mark_job_history_degraded("list snapshots", exc)
         return None
 
 
@@ -558,13 +618,90 @@ def count_persisted_jobs() -> int | None:
     try:
         with db_core_transaction() as conn:
             return job_repository.count_jobs(conn)
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        mark_job_history_degraded("count snapshots", exc)
         return None
 
 
-def overlay_active_jobs(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Replace persisted snapshots with richer in-memory state for active jobs."""
+def active_job_records() -> list[dict[str, Any]]:
+    """Return process-local job records without exposing private state."""
     with _lock:
-        active_jobs = {job_id: public_job(job) for job_id, job in _jobs.items()}
+        return [dict(job) for job in _jobs.values()]
 
-    return [active_jobs.get(str(job["id"]), job) for job in jobs]
+
+def overlay_active_jobs(jobs: list[dict[str, Any]], active_jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge process-local jobs into persisted snapshots by job ID."""
+    merged = {str(job["id"]): dict(job) for job in jobs}
+    for job in active_jobs:
+        merged[str(job["id"])] = dict(job)
+    return sort_job_records(list(merged.values()))
+
+
+def paginate_job_records(
+    jobs: list[dict[str, Any]],
+    limit: int | None,
+    offset: int,
+) -> list[dict[str, Any]]:
+    """Return public job snapshots for one sorted page."""
+    sorted_jobs = sort_job_records(jobs)
+    offset = max(0, int(offset))
+    if limit is None:
+        page = sorted_jobs[offset:]
+    else:
+        page = sorted_jobs[offset : offset + max(0, int(limit))]
+    return [public_job(job) for job in page]
+
+
+def sort_job_records(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sort job records newest first."""
+    return sorted(jobs, key=job_sort_key, reverse=True)
+
+
+def job_sort_key(job: Mapping[str, Any]) -> tuple[str, int, str]:
+    """Return the stable newest-first ordering key for a job snapshot."""
+    return (
+        str(job.get("created_at") or ""),
+        non_negative_int(job.get("_created_sequence", job.get("created_sequence")), default=0),
+        str(job.get("id") or ""),
+    )
+
+
+def non_negative_int(value: object, default: int = 0) -> int:
+    """Return a non-negative integer for internal runner sorting."""
+    if value in (None, ""):
+        return default
+    try:
+        return max(0, int(str(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def mark_job_history_degraded(operation: str, exc: SQLAlchemyError) -> None:
+    """Record and log a bounded job-history persistence failure."""
+    global _job_history_degraded, _job_history_degraded_detail
+
+    detail = bounded_error_detail(exc)
+    status_detail = f"{operation}: {detail}"
+    with _lock:
+        _job_history_degraded = True
+        _job_history_degraded_detail = status_detail
+    logger.warning("Background job history %s failed: %s", operation, detail)
+
+
+def job_history_status() -> dict[str, Any]:
+    """Return the current process-local job history availability state."""
+    with _lock:
+        return {
+            "enabled": _job_history_enabled,
+            "degraded": _job_history_degraded,
+            "detail": _job_history_degraded_detail,
+        }
+
+
+def bounded_error_detail(exc: SQLAlchemyError) -> str:
+    """Return a log-safe, bounded exception detail string."""
+    detail = f"{type(exc).__name__}: {exc}"
+    if len(detail) <= MAX_JOB_HISTORY_ERROR_DETAIL_LENGTH:
+        return detail
+    suffix = "...[truncated]"
+    return detail[: MAX_JOB_HISTORY_ERROR_DETAIL_LENGTH - len(suffix)] + suffix

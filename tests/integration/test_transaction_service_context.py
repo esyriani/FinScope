@@ -28,6 +28,11 @@ from finance_app.modules.categories.taxonomy import (
 )
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_description
 from finance_app.modules.transactions import service as transactions_service
+from finance_app.modules.transactions.repository import (
+    get_transaction_for_ai_categorization,
+    get_transaction_tag_ids,
+    transaction_ai_original_state,
+)
 from finance_app.modules.transactions.service import build_transactions_context
 
 
@@ -79,6 +84,13 @@ def seed_transactions(conn):
 def descriptions(context):
     """Return descriptions from a transaction context."""
     return [row["description"] for row in context["transactions"]]
+
+
+def ai_original_state(conn, transaction_id):
+    """Return the optimistic AI suggestion state for a test transaction."""
+    row = get_transaction_for_ai_categorization(conn, transaction_id)
+    assert row is not None
+    return transaction_ai_original_state(row, get_transaction_tag_ids(conn, transaction_id))
 
 
 def test_transactions_context_paginates_and_sorts(core_conn):
@@ -586,6 +598,11 @@ def test_suggest_transaction_ai_category_does_not_update_rows(core_conn, monkeyp
     assert result["tags"] == ["Service"]
     assert result["llm_reason"] == "TVA Sports is a streaming sports service."
     assert result["persistence"]["category"] == "Entertainment"
+    assert result["original_state"]["category"] == "UNKNOWN"
+    assert result["original_state"]["category_id"] == resolve_category_id(core_conn, "UNKNOWN")
+    assert result["original_state"]["needs_review"] == 1
+    assert result["original_state"]["category_source"] == "unknown"
+    assert result["original_state"]["tag_ids"] == []
     assert target["category"] == "UNKNOWN"
     assert target["category_source"] == "unknown"
     assert target["category_confidence"] is None
@@ -689,6 +706,87 @@ def test_apply_transaction_ai_suggestion_updates_selected_row(core_conn, monkeyp
     assert rule_count == 0
 
 
+def test_apply_transaction_ai_suggestion_expires_after_newer_transaction_edit(core_conn):
+    """Verify a stale AI suggestion cannot overwrite a newer transaction edit."""
+    account_id = core_conn.execute(insert(accounts_table).values(name="AI stale checking")).inserted_primary_key[0]
+    merchant_id = get_or_create_merchant_for_description(core_conn, "TVA SPORTS DIRECT")["id"]
+    tx_id = core_conn.execute(
+        insert(transactions_table).values(
+            account_id=account_id,
+            merchant_id=merchant_id,
+            tx_date="2026-05-04",
+            description="TVA SPORTS DIRECT",
+            amount=20.68,
+            category="UNKNOWN",
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
+            needs_review=1,
+            category_source="unknown",
+            fingerprint="ai-stale-apply-target",
+        )
+    ).inserted_primary_key[0]
+    suggestion = {
+        "transaction_id": tx_id,
+        "can_apply": True,
+        "original_state": ai_original_state(core_conn, tx_id),
+        "persistence": {
+            "category": "Entertainment",
+            "tags": ["Service"],
+            "needs_review": 0,
+            "category_source": "ai",
+            "category_confidence": 0.96,
+            "category_rule_id": None,
+            "category_metadata": {"decision_source": "llm"},
+            "categorized_at": "2026-05-04T12:00:00Z",
+            "reviewed_at": None,
+            "amount": 20.68,
+            "transaction_kind": "expense",
+        },
+    }
+    core_conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id == tx_id)
+        .values(
+            category="Food",
+            category_id=resolve_category_id(core_conn, "Food"),
+            needs_review=0,
+            category_source="manual",
+            reviewed_at="2026-05-05T00:00:00Z",
+        )
+    )
+    set_transaction_tags(core_conn, tx_id, ["Tax"], source="manual")
+    core_conn.commit()
+
+    result = transactions_service.apply_transaction_ai_suggestion(tx_id, suggestion)
+
+    tx = (
+        core_conn.execute(
+            select(
+                transactions_table.c.category,
+                transactions_table.c.category_source,
+                transactions_table.c.category_confidence,
+                transactions_table.c.needs_review,
+                transactions_table.c.reviewed_at,
+            ).where(transactions_table.c.id == tx_id)
+        )
+        .mappings()
+        .fetchone()
+    )
+    rule_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM category_rules")).fetchone()._mapping["count"]
+
+    assert result == {
+        "updated": False,
+        "expired": True,
+        "message": "AI suggestion expired. Use Suggest category again.",
+    }
+    assert tx["category"] == "Food"
+    assert tx["category_source"] == "manual"
+    assert tx["category_confidence"] is None
+    assert tx["needs_review"] == 0
+    assert tx["reviewed_at"] == "2026-05-05T00:00:00Z"
+    assert get_transaction_tag_names(core_conn, tx_id) == ["Tax"]
+    assert rule_count == 0
+
+
 def test_apply_transaction_ai_suggestion_can_create_rule(core_conn):
     """Verify accepting an AI suggestion can save a user-approved rule."""
     account_id = core_conn.execute(insert(accounts_table).values(name="AI checking rule")).inserted_primary_key[0]
@@ -711,6 +809,7 @@ def test_apply_transaction_ai_suggestion_can_create_rule(core_conn):
     suggestion = {
         "transaction_id": tx_id,
         "can_apply": True,
+        "original_state": ai_original_state(core_conn, tx_id),
         "persistence": {
             "category": "Entertainment",
             "tags": ["Service"],

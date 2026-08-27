@@ -15,8 +15,15 @@ from sqlalchemy import delete, func, insert, select, update
 
 from finance_app.core.constants import (
     ACTIVE_BACKGROUND_JOB_STATUSES,
+    BACKGROUND_JOB_LOG_LEVEL_INFO,
+    BACKGROUND_JOB_LOG_LEVELS,
+    BACKGROUND_JOB_QUEUE_MAIN,
+    BACKGROUND_JOB_QUEUES,
     BACKGROUND_JOB_STATUS_FAILED,
+    BACKGROUND_JOB_STATUS_QUEUED,
+    BACKGROUND_JOB_STATUSES,
     BACKGROUND_JOB_UNDO_STATUS_UNAVAILABLE,
+    BACKGROUND_JOB_UNDO_STATUSES,
     FINISHED_BACKGROUND_JOB_STATUSES,
 )
 from finance_app.database.engine import db_core_transaction
@@ -24,6 +31,13 @@ from finance_app.database.tables import background_job_events, background_jobs
 
 MAX_JOB_EVENT_ROWS = 120
 DEFAULT_JOB_RETENTION_DAYS = 90
+JOB_ID_TEXT_LIMIT = 64
+JOB_LABEL_TEXT_LIMIT = 512
+JOB_ENUM_TEXT_LIMIT = 32
+JOB_PARAMS_TEXT_LIMIT = 4096
+JOB_JSON_KEY_TEXT_LIMIT = 128
+JOB_JSON_VALUE_TEXT_LIMIT = 512
+TEXT_TRUNCATION_SUFFIX = "...[truncated]"
 INTERRUPTED_BACKGROUND_JOB_ERROR = (
     "The app restarted before this processing job finished. Retry the original action if needed."
 )
@@ -65,6 +79,10 @@ def persist_job_event(job_id: str, event: Mapping[str, Any]) -> None:
 
 def save_job_event(conn: Any, job_id: str, event: Mapping[str, Any]) -> None:
     """Insert one sanitized progress event for a persisted job."""
+    job_id = bounded_text(job_id, JOB_ID_TEXT_LIMIT, default="")
+    if not job_id:
+        return
+
     if not conn.execute(select(background_jobs.c.id).where(background_jobs.c.id == job_id)).scalar_one_or_none():
         return
 
@@ -72,8 +90,13 @@ def save_job_event(conn: Any, job_id: str, event: Mapping[str, Any]) -> None:
         insert(background_job_events).values(
             job_id=job_id,
             created_at=event.get("timestamp") or utc_timestamp(),
-            level=str(event.get("level") or "info"),
-            message=str(event.get("message") or "Job event."),
+            level=allowed_text_value(
+                event.get("level"),
+                BACKGROUND_JOB_LOG_LEVELS,
+                BACKGROUND_JOB_LOG_LEVEL_INFO,
+                JOB_ENUM_TEXT_LIMIT,
+            ),
+            message=text_value(event.get("message")) or "Job event.",
             params=json_text(event.get("params") or {}),
         )
     )
@@ -232,10 +255,20 @@ def list_job_events(conn: Any, job_ids: Sequence[str]) -> dict[str, list[dict[st
 def job_row_values(job: Mapping[str, Any]) -> dict[str, Any]:
     """Return a sanitized database row for a job dictionary."""
     return {
-        "id": str(job["id"]),
-        "label": str(job["label"]),
-        "queue": str(job.get("queue") or "main"),
-        "status": str(job.get("status") or "queued"),
+        "id": bounded_text(job["id"], JOB_ID_TEXT_LIMIT, default="job"),
+        "label": bounded_text(job.get("label"), JOB_LABEL_TEXT_LIMIT, default="Background job"),
+        "queue": allowed_text_value(
+            job.get("queue"),
+            BACKGROUND_JOB_QUEUES,
+            BACKGROUND_JOB_QUEUE_MAIN,
+            JOB_ENUM_TEXT_LIMIT,
+        ),
+        "status": allowed_text_value(
+            job.get("status"),
+            BACKGROUND_JOB_STATUSES,
+            BACKGROUND_JOB_STATUS_QUEUED,
+            JOB_ENUM_TEXT_LIMIT,
+        ),
         "created_at": job.get("created_at") or utc_timestamp(),
         "started_at": job.get("started_at"),
         "finished_at": job.get("finished_at"),
@@ -247,7 +280,12 @@ def job_row_values(job: Mapping[str, Any]) -> dict[str, Any]:
         "progress_message": text_value(job.get("progress_message")),
         "progress_params": json_text(job.get("progress_params") or {}),
         "cancel_requested": int(bool(job.get("cancel_requested"))),
-        "undo_status": str(job.get("undo_status") or "unavailable"),
+        "undo_status": allowed_text_value(
+            job.get("undo_status"),
+            BACKGROUND_JOB_UNDO_STATUSES,
+            BACKGROUND_JOB_UNDO_STATUS_UNAVAILABLE,
+            JOB_ENUM_TEXT_LIMIT,
+        ),
         "undo_result": text_value(job.get("undo_result")),
         "undo_error": text_value(job.get("undo_error")),
         "undone_at": job.get("undone_at"),
@@ -288,7 +326,34 @@ def json_text(value: object) -> str:
     """Return an ASCII JSON object string for persisted params."""
     if not isinstance(value, Mapping):
         value = {}
-    return json.dumps(dict(value), ensure_ascii=True, sort_keys=True, default=str)
+
+    normalized = {
+        bounded_text(key, JOB_JSON_KEY_TEXT_LIMIT, default="key"): json_safe_value(item)
+        for key, item in dict(value).items()
+    }
+    text = json_dump(normalized)
+    if len(text) <= JOB_PARAMS_TEXT_LIMIT:
+        return text
+
+    truncated: dict[str, Any] = {"_truncated": True}
+    for key, item in normalized.items():
+        candidate = dict(truncated)
+        candidate[key] = bounded_json_value(item, JOB_JSON_VALUE_TEXT_LIMIT)
+        candidate_text = json_dump(candidate)
+        if len(candidate_text) <= JOB_PARAMS_TEXT_LIMIT:
+            truncated = candidate
+            continue
+
+        if isinstance(candidate[key], str):
+            candidate[key] = bounded_text(candidate[key], 64, default="")
+            candidate_text = json_dump(candidate)
+            if len(candidate_text) <= JOB_PARAMS_TEXT_LIMIT:
+                truncated = candidate
+
+    text = json_dump(truncated)
+    if len(text) <= JOB_PARAMS_TEXT_LIMIT:
+        return text
+    return json_dump({"_truncated": True})
 
 
 def json_object(value: object) -> dict[str, Any]:
@@ -307,6 +372,53 @@ def text_value(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def bounded_text(value: object, max_length: int, *, default: str | None = None) -> str:
+    """Return text constrained to a schema column length."""
+    if value is None:
+        text = default or ""
+    else:
+        text = str(value)
+        if not text and default is not None:
+            text = default
+
+    max_length = max(0, int(max_length))
+    if len(text) <= max_length:
+        return text
+    if max_length <= len(TEXT_TRUNCATION_SUFFIX):
+        return text[:max_length]
+    return text[: max_length - len(TEXT_TRUNCATION_SUFFIX)] + TEXT_TRUNCATION_SUFFIX
+
+
+def allowed_text_value(
+    value: object,
+    allowed: Sequence[str],
+    default: str,
+    max_length: int,
+) -> str:
+    """Return a bounded enum-like value, falling back when unsupported."""
+    text = bounded_text(value, max_length, default=default)
+    return text if text in allowed else default
+
+
+def json_safe_value(value: object) -> object:
+    """Return a JSON-serializable scalar-ish value for persisted params."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def bounded_json_value(value: object, max_length: int) -> object:
+    """Return a compact JSON value for an oversized params object."""
+    if isinstance(value, str):
+        return bounded_text(value, max_length, default="")
+    return value
+
+
+def json_dump(value: Mapping[str, Any]) -> str:
+    """Return an ASCII JSON object string."""
+    return json.dumps(dict(value), ensure_ascii=True, sort_keys=True, default=str)
 
 
 def non_negative_int(value: object, default: int | None = None) -> int | None:
