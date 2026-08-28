@@ -10,21 +10,20 @@ from sqlalchemy import event, insert, select
 from tests.support.database import insert_transaction
 from werkzeug.datastructures import MultiDict
 
+from finance_app.core.analytics import REPORT_BASIS_CASH_FLOW
 from finance_app.database import engine as engine_module
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.calendar.queries import fetch_month_transactions
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.comparison.queries import fetch_period_summary
-from finance_app.modules.dashboard.queries import fetch_spending_merchant_totals
-from finance_app.modules.reports.constants import REPORT_BASIS_CASH_FLOW
+from finance_app.modules.dashboard.queries import fetch_spending_merchant_totals, fetch_top_spending_merchants
+from finance_app.modules.recurring.queries import fetch_month_transactions
 from finance_app.modules.reports.queries import fetch_category_breakdown, fetch_merchant_breakdown
 from finance_app.modules.review.queries import review_candidate_rows
-from finance_app.modules.rules.engine import rule_sql_candidate_condition
+from finance_app.modules.rules.queries import rule_sql_candidate_condition
 from finance_app.modules.transactions.filters import (
     build_transaction_core_filters,
     parse_transaction_filters,
 )
-from finance_app.modules.transactions.queries import fetch_transaction_ids
 
 
 @contextmanager
@@ -51,7 +50,7 @@ def compiled_sql(statement):
 
 
 def test_transaction_merchant_filter_builds_sql_candidate_predicate(core_conn):
-    """Verify merchant filters include SQL predicates before Python normalization."""
+    """Verify merchant filters compile to SQL predicates instead of ID lists."""
     core_conn.execute(
         insert(transactions_table),
         [
@@ -78,14 +77,12 @@ def test_transaction_merchant_filter_builds_sql_candidate_predicate(core_conn):
         core_conn,
     )
 
-    with captured_sql() as statements:
-        core_filters = build_transaction_core_filters(filters, "UNKNOWN", conn=core_conn)
+    core_filters = build_transaction_core_filters(filters, "UNKNOWN", conn=core_conn)
 
-    candidate_sql = "\n".join(statement.lower() for statement in statements)
     sql = compiled_sql(select(transactions_table.c.id).where(*core_filters.criteria())).lower()
 
-    assert "upper(transactions.description) like" in candidate_sql
-    assert "transactions.id in" in sql
+    assert "upper(transactions.description) like" in sql
+    assert "transactions.id in" not in sql
     assert "transactions.ignored" in sql
 
 
@@ -149,6 +146,16 @@ def test_dashboard_merchant_totals_use_sql_grouping(core_conn):
     assert "group by" in dashboard_sql
 
 
+def test_dashboard_top_merchants_limits_durable_merchant_groups(core_conn):
+    """Verify dashboard top merchants pushes durable merchant limiting into SQL."""
+    with captured_sql() as statements:
+        fetch_top_spending_merchants(core_conn, [transactions_table.c.ignored == 0], limit=3)
+
+    dashboard_sql = "\n".join(statement.lower() for statement in statements if "from transactions" in statement.lower())
+    assert "transactions.merchant_id is not null" in dashboard_sql
+    assert "limit" in dashboard_sql
+
+
 def test_merchant_breakdown_merges_normalized_fallback_groups(core_conn):
     """Verify SQL pre-aggregation still preserves merchant fallback identity."""
     insert_transaction(
@@ -173,22 +180,6 @@ def test_merchant_breakdown_merges_normalized_fallback_groups(core_conn):
     rows = fetch_merchant_breakdown(core_conn, [transactions_table.c.ignored == 0], REPORT_BASIS_CASH_FLOW)
 
     assert [(row["label"], row["spending"], row["transaction_count"]) for row in rows] == [("COSMETA", 30.00, 2)]
-
-
-def test_transaction_id_navigation_fetches_only_ids(core_conn):
-    """Verify transaction navigation avoids fetching the full page projection."""
-    filters = parse_transaction_filters(MultiDict([("period", "all")]), core_conn)
-    core_filters = build_transaction_core_filters(filters, "UNKNOWN", conn=core_conn)
-
-    with captured_sql() as statements:
-        fetch_transaction_ids(core_conn, core_filters.criteria(), transactions_table.c.tx_date, "desc")
-
-    transaction_sql = "\n".join(
-        statement.lower() for statement in statements if "from transactions" in statement.lower()
-    )
-    assert "select transactions.id" in transaction_sql
-    assert "transactions.description" not in transaction_sql
-    assert "transactions.amount" not in transaction_sql
 
 
 def test_comparison_period_summary_aggregates_with_sql_date_filters(core_conn):

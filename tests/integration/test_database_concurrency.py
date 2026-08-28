@@ -14,6 +14,7 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_EXPENSE,
     TRANSACTION_KIND_INCOME,
 )
+from finance_app.database import taxonomy as category_taxonomy
 from finance_app.database.tables import (
     categories as categories_table,
 )
@@ -26,7 +27,6 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     tags as tags_table,
 )
-from finance_app.modules.categories import taxonomy as category_taxonomy
 from finance_app.modules.merchants import repository as merchant_repository
 from finance_app.modules.reimbursements import repository as reimbursement_repository
 from finance_app.modules.reimbursements.service import (

@@ -104,8 +104,8 @@ def merchant_identity_from_row(row: Mapping[str, Any], conn: Any | None = None) 
     """Return merchant identity metadata for a transaction query row.
 
     Query rows that include `merchant_id` and merchant labels use the durable
-    merchant key. Older tests and ad hoc queries that only provide
-    `description` fall back to deterministic normalization.
+    merchant key. Rows that only provide `description` fall back to
+    deterministic normalization.
     """
     merchant_id = row_value(row, "merchant_id")
     merchant_name = row_value(row, "merchant_name")

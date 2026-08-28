@@ -8,10 +8,13 @@ from werkzeug.datastructures import MultiDict
 
 from finance_app.modules.calendar import parsing as calendar_parsing
 from finance_app.modules.calendar import presenter as calendar_presenter
-from finance_app.modules.calendar import recurrence as calendar_recurrence
 from finance_app.modules.calendar import service as calendar_service
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import set_transaction_tags
+from finance_app.modules.recurring import activity as recurring_activity
+from finance_app.modules.recurring import parsing as recurring_parsing
+from finance_app.modules.recurring import recurrence as recurring_recurrence
 from finance_app.modules.recurring import service as recurring_service
 from finance_app.modules.recurring.patterns import recurring_pattern_key, upsert_recurring_pattern
 
@@ -49,14 +52,18 @@ def seed_calendar_transactions(conn):
             description,
             amount,
             category,
+            category_id,
             ignored,
             transaction_kind,
             fingerprint
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7)
+        VALUES (:p0, :p1, :p2, :p3, :p4, :category_id, :p5, :p6, :p7)
         """),
         [
-            dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"), row))
+            {
+                **dict(zip(("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"), row)),
+                "category_id": resolve_category_id(conn, row[4]),
+            }
             for row in [
                 (account_id, tx_date, description, amount, category, ignored, transaction_kind, fingerprint)
                 for tx_date, description, amount, category, ignored, transaction_kind, fingerprint in rows
@@ -88,12 +95,22 @@ def seed_calendar_transactions(conn):
             description,
             amount,
             category,
+            category_id,
             transaction_kind,
             fingerprint
         )
-        VALUES (:p0, '2026-05-07', 'Savings transfer', 500.00, 'Transfers', 'transfer', 'calendar-transfer')
+        VALUES (
+            :p0,
+            '2026-05-07',
+            'Savings transfer',
+            500.00,
+            'Transfers',
+            :category_id,
+            'transfer',
+            'calendar-transfer'
+        )
         """),
-        {"p0": account_id},
+        {"p0": account_id, "category_id": resolve_category_id(conn, "Transfers")},
     )
     conn.commit()
     return account_id
@@ -104,7 +121,8 @@ def patch_calendar_today(monkeypatch):
     monkeypatch.setattr(calendar_service, "date", FixedDate)
     monkeypatch.setattr(calendar_presenter, "date", FixedDate)
     monkeypatch.setattr(calendar_parsing, "date", FixedDate)
-    monkeypatch.setattr(calendar_recurrence, "date", FixedDate)
+    monkeypatch.setattr(recurring_parsing, "date", FixedDate)
+    monkeypatch.setattr(recurring_recurrence, "date", FixedDate)
     monkeypatch.setattr(recurring_service, "date", FixedDate)
 
 
@@ -340,7 +358,7 @@ def test_recurring_activity_context_exposes_json_payload(app, core_conn, monkeyp
     patch_calendar_today(monkeypatch)
 
     with app.test_request_context("/calendar"):
-        context = calendar_service.build_recurring_activity_context(
+        context = recurring_activity.build_recurring_activity_context(
             real_date(2026, 5, 1),
             ["Entertainment"],
         )
@@ -539,6 +557,6 @@ def test_recurring_activity_context_trains_on_prior_months_only(app, core_conn, 
     patch_calendar_today(monkeypatch)
 
     with app.test_request_context("/calendar"):
-        context = calendar_service.build_recurring_activity_context(real_date(2026, 5, 1), ["Food"])
+        context = recurring_activity.build_recurring_activity_context(real_date(2026, 5, 1), ["Food"])
 
     assert [item["merchant"] for item in context["recurring_items"]] == []

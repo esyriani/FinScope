@@ -19,6 +19,7 @@ from finance_app.core.constants import (
     IMPORTABLE_CATEGORY_RULE_SOURCES,
     UNKNOWN_CATEGORY,
 )
+from finance_app.core.csv_export import csv_export_value
 from finance_app.core.money import MoneyValue, money_to_float, parse_money_text
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
@@ -112,25 +113,24 @@ def export_rules_csv(conn: Any = None) -> str:
     writer = csv.DictWriter(output, fieldnames=RULE_EXPORT_COLUMNS)
     writer.writeheader()
     for row in rows:
-        writer.writerow(
-            {
-                "keyword": row["keyword"],
-                "account_name": row["account_name"] or "",
-                "merchant_name": row["merchant_name"] or "",
-                "category": row["category"],
-                "tags": "; ".join(row["tags"]),
-                "amount_min": format_export_amount(row["amount_min"]),
-                "amount_max": format_export_amount(row["amount_max"]),
-                "direction": row["direction"] or CATEGORY_RULE_DIRECTION_ANY,
-                "source": row["source"],
-                "created_at": row["created_at"],
-            }
-        )
+        export_row = {
+            "keyword": row["keyword"],
+            "account_name": row["account_name"] or "",
+            "merchant_name": row["merchant_name"] or "",
+            "category": row["category"],
+            "tags": "; ".join(row["tags"]),
+            "amount_min": format_export_amount(row["amount_min"]),
+            "amount_max": format_export_amount(row["amount_max"]),
+            "direction": row["direction"] or CATEGORY_RULE_DIRECTION_ANY,
+            "source": row["source"],
+            "created_at": row["created_at"],
+        }
+        writer.writerow({column: csv_export_value(export_row[column]) for column in RULE_EXPORT_COLUMNS})
     return output.getvalue()
 
 
 def format_export_amount(value: MoneyValue | None) -> str:
-    """Return the legacy CSV amount representation for optional rule bounds."""
+    """Return the CSV amount text for optional rule bounds."""
     return "" if value is None else str(money_to_float(value))
 
 
@@ -468,7 +468,7 @@ def undo_rules_override_import(undo_state: Mapping[str, Any]) -> str:
     with db_core_transaction() as conn:
         current_rules = snapshot_category_rules(conn)
         # Override undo is intentionally strict: if rule state changed after
-        # import, restoring the old snapshot would discard later user edits.
+        # import, restoring the prior snapshot would discard later user edits.
         if not rule_snapshots_equal(current_rules, after_rules):
             raise ValueError("Cannot undo this rules import because rules changed after the import job.")
 

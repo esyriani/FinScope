@@ -5,7 +5,7 @@ The helpers are pure formatting functions and do not access the database.
 """
 
 import json
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
 
 from finance_app.core.constants import STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER
@@ -27,7 +27,9 @@ AUTOMATIC_CATEGORIZATION_SOURCE_LABELS = {
 }
 
 
-def ai_batch_report(categorized: list[Mapping[str, Any]], request_status: Mapping[str, Any] | None) -> dict[str, Any]:
+def ai_batch_report(
+    categorized: Sequence[Mapping[str, Any]], request_status: Mapping[str, Any] | None
+) -> dict[str, Any]:
     """Return concise AI request and unresolved-result details for one batch."""
     failure_counts = llm_failure_counts(categorized)
     return {
@@ -37,7 +39,7 @@ def ai_batch_report(categorized: list[Mapping[str, Any]], request_status: Mappin
     }
 
 
-def llm_failure_counts(transactions: list[Mapping[str, Any]]) -> dict[str, int]:
+def llm_failure_counts(transactions: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     """Count LLM failure reasons from categorized transaction metadata."""
     counts: dict[str, int] = {}
     for tx in transactions:

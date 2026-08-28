@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from typing import Any
 
-from finance_app.modules.categories.taxonomy import clean_color, clean_label, tag_color_for_name
+from finance_app.core.taxonomy import clean_color, clean_label, tag_color_for_name
 
 
 def parse_category_form(form: Mapping[str, Any]) -> dict[str, object]:

@@ -1,6 +1,6 @@
 """Application orchestration for the settings feature."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 from flask_login import current_user  # type: ignore[import-untyped]
@@ -14,6 +14,7 @@ from finance_app.core.constants import (
     THEME_MODE_LIGHT,
 )
 from finance_app.core.i18n import SUPPORTED_LANGUAGES, normalize_language
+from finance_app.core.runtime_settings import CONFIRM_AI_TOKEN_USAGE_SETTING_KEY, GENERAL_SETTING_KEYS
 from finance_app.core.setting_limits import (
     COMPARISON_INSIGHT_CARD_LIMIT_MAX,
     DASHBOARD_TOP_DRIVER_LIMIT_MAX,
@@ -31,17 +32,17 @@ from finance_app.modules.settings.forms import (
     parse_general_settings_form,
     parse_global_settings_form,
 )
+from finance_app.modules.settings.openai_model_validation import (
+    OpenAIModelValidationResult,
+    validate_openai_model_availability,
+)
 from finance_app.modules.settings.runtime import (
-    CONFIRM_AI_TOKEN_USAGE_SETTING_KEY,
-    GENERAL_SETTING_KEYS,
     confirm_ai_token_usage_enabled,
     get_all_settings,
-    get_statement_type_options,
-    seed_runtime_settings,
-    sync_statement_types,
     upsert_setting,
     upsert_user_setting,
 )
+from finance_app.modules.statements.types import get_statement_type_options, sync_statement_types
 
 GENERAL_SETTING_SAVE_KEYS = GENERAL_SETTING_KEYS
 
@@ -71,7 +72,6 @@ def build_settings_context() -> dict[str, Any]:
     """Build settings context."""
     can_manage_global_settings = current_user_can(PERMISSION_MANAGE_GLOBAL_SETTINGS)
     with db_core_transaction() as conn:
-        seed_runtime_settings(conn)
         current = get_all_settings(conn)
         statement_types = get_statement_type_options(conn) if can_manage_global_settings else []
         confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
@@ -175,7 +175,6 @@ def save_settings_from_form(form: Any) -> None:
     global_values = parse_global_settings_form(form, app_settings) if can_manage_global_settings else {}
 
     with db_core_transaction() as conn:
-        seed_runtime_settings(conn)
         for key in GENERAL_SETTING_SAVE_KEYS:
             upsert_user_setting(conn, current_user.id, key, str(general_values[key]))
 
@@ -195,30 +194,21 @@ def save_settings_from_form(form: Any) -> None:
         sync_statement_types(conn, statement_types)
 
 
-def validate_openai_model_from_form(form: Any) -> str:
+OpenAIModelValidator = Callable[[str], OpenAIModelValidationResult]
+
+
+def validate_openai_model_from_form(form: Any, model_validator: OpenAIModelValidator | None = None) -> str:
     """Validate openai model from form."""
     model_name = clean_openai_model(form.get("openai_model")) or app_settings.default_categorization_model
-    available, message = is_openai_model_available(model_name)
+    available, message = is_openai_model_available(model_name, model_validator=model_validator)
     return message if available else f"Model validation failed: {message}"
 
 
-def is_openai_model_available(model_name: str) -> tuple[bool, str]:
+def is_openai_model_available(
+    model_name: str,
+    model_validator: OpenAIModelValidator | None = None,
+) -> tuple[bool, str]:
     """Return whether openai model available."""
-    if not app_settings.openai_api_key:
-        return False, "Configure an OpenAI API key first."
-
-    try:
-        from openai import OpenAI
-    except ImportError:
-        return False, "Install the OpenAI Python package first."
-
-    try:
-        models = OpenAI(api_key=app_settings.openai_api_key, timeout=5).models.list()
-    except Exception:
-        return False, "Could not load models for the configured OpenAI API key."
-
-    model_ids = {str(model.id) for model in getattr(models, "data", [])}
-    if model_name in model_ids:
-        return True, f"Model is available to this API key: {model_name}"
-
-    return False, f"Model was not returned by the OpenAI models API: {model_name}"
+    validator = model_validator or validate_openai_model_availability
+    result = validator(model_name)
+    return result.available, result.message

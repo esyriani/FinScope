@@ -10,17 +10,18 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from finance_app.core.config import settings
-from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
-from finance_app.core.money import MoneyValue, money_to_decimal, quantize_money
-from finance_app.database.engine import db_core_transaction
-from finance_app.modules.categories.builtins import (
+from finance_app.core.builtin_taxonomy import (
     BUILTIN_CATEGORY_REIMBURSEMENT,
     BUILTIN_TAG_REIMBURSABLE,
     builtin_tag_by_key,
     is_category_name_for_builtin_key,
 )
-from finance_app.modules.categories.taxonomy import get_tag_color_map, get_transaction_tags_by_id, upsert_tag_metadata
+from finance_app.core.config import settings
+from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
+from finance_app.core.money import MoneyValue, money_to_decimal, quantize_money
+from finance_app.database.engine import db_core_transaction
+from finance_app.database.taxonomy import upsert_tag_metadata
+from finance_app.modules.categories.taxonomy import get_tag_color_map, get_transaction_tags_by_id
 from finance_app.modules.reimbursements import presenter, queries, repository
 from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 from finance_app.modules.settings.runtime import get_int_setting

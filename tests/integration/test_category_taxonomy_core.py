@@ -10,6 +10,7 @@ from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import (
     tags as tags_table,
 )
+from finance_app.database.taxonomy import upsert_category_metadata, upsert_tag_metadata
 from finance_app.modules.categories.taxonomy import (
     get_rule_tags_by_rule_id,
     get_tag_options,
@@ -17,8 +18,6 @@ from finance_app.modules.categories.taxonomy import (
     get_transaction_tags_by_id,
     set_rule_tags,
     set_transaction_tags,
-    upsert_category_metadata,
-    upsert_tag_metadata,
 )
 
 

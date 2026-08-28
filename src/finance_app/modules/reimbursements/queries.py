@@ -4,6 +4,11 @@ from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 
+from finance_app.core.builtin_taxonomy import (
+    BUILTIN_CATEGORY_REIMBURSEMENT,
+    BUILTIN_TAG_REIMBURSABLE,
+    builtin_category_name_for_key,
+)
 from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
 from finance_app.database.tables import accounts as accounts_table
@@ -13,11 +18,6 @@ from finance_app.database.tables import reimbursement_expense_completions as exp
 from finance_app.database.tables import tags as tags_table
 from finance_app.database.tables import transaction_tags as transaction_tags_table
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.builtins import (
-    BUILTIN_CATEGORY_REIMBURSEMENT,
-    BUILTIN_TAG_REIMBURSABLE,
-    builtin_category_name_for_key,
-)
 from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 
 

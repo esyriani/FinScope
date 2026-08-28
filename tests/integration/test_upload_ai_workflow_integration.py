@@ -1,9 +1,11 @@
 """Integration tests for upload AI workflow handoffs."""
 
 import json
+from contextlib import contextmanager
 
 from sqlalchemy import text
 from tests.support.database import set_owner_setting
+from tests.support.llm import result_payload
 from tests.support.upload import (
     assert_llm_progress_log_entries,
     assert_llm_progress_updates,
@@ -15,7 +17,12 @@ from tests.support.upload import (
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.database.engine import db_core_transaction
+from finance_app.modules.categories import llm_workflow as category_llm_workflow
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names
+from finance_app.modules.upload import ai_workflow as upload_ai_workflow
+from finance_app.modules.upload import messages as upload_messages
 from finance_app.modules.upload import workflow as upload_workflow
 
 
@@ -50,7 +57,7 @@ def test_import_statement_job_keeps_ai_candidates_for_manual_estimate_first_run(
         )
         return "llm-job-id"
 
-    monkeypatch.setattr(upload_workflow, "submit_background_job", capture_job)
+    monkeypatch.setattr(upload_ai_workflow, "submit_background_job", capture_job)
 
     message = run_statement_import_job(
         core_conn,
@@ -102,7 +109,7 @@ def test_import_statement_job_auto_queues_ai_when_token_confirmation_disabled(ap
         )
         return "llm-auto-job-id"
 
-    monkeypatch.setattr(upload_workflow, "submit_background_job", capture_job)
+    monkeypatch.setattr(upload_ai_workflow, "submit_background_job", capture_job)
 
     message = run_statement_import_job(
         core_conn,
@@ -117,7 +124,7 @@ def test_import_statement_job_auto_queues_ai_when_token_confirmation_disabled(ap
     assert submitted_jobs == [
         {
             "label": f"AI categorize statement {statement_id}",
-            "func": upload_workflow.categorize_statement_unknown_transactions_job,
+            "func": upload_ai_workflow.categorize_statement_unknown_transactions_job,
             "args": (statement_id,),
             "kwargs": {"queue": "ai"},
         }
@@ -130,7 +137,7 @@ def test_import_statement_job_reports_no_ai_candidates_when_none_remain(app, cor
     submitted_jobs = []
 
     monkeypatch.setattr(
-        upload_workflow,
+        upload_ai_workflow,
         "submit_background_job",
         lambda *args, **kwargs: submitted_jobs.append((args, kwargs)),
     )
@@ -159,12 +166,13 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             description,
             amount,
             category,
+            category_id,
             needs_review,
             fingerprint
         )
-        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'llm-unknown')
+        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', :category_id, 1, 'llm-unknown')
         """),
-        {"p0": statement_id},
+        {"p0": statement_id, "category_id": resolve_category_id(core_conn, "UNKNOWN")},
     ).lastrowid
     known_id = core_conn.execute(
         text("""
@@ -174,12 +182,13 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             description,
             amount,
             category,
+            category_id,
             needs_review,
             fingerprint
         )
-        VALUES (:p0, '2026-01-03', 'KNOWN SHOP', 50.00, 'Utilities', 0, 'llm-known')
+        VALUES (:p0, '2026-01-03', 'KNOWN SHOP', 50.00, 'Utilities', :category_id, 0, 'llm-known')
         """),
-        {"p0": statement_id},
+        {"p0": statement_id, "category_id": resolve_category_id(core_conn, "Utilities")},
     ).lastrowid
     ignored_id = core_conn.execute(
         text("""
@@ -189,19 +198,20 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
             description,
             amount,
             category,
+            category_id,
             needs_review,
             ignored,
             fingerprint
         )
-        VALUES (:p0, '2026-01-04', 'IGNORED SHOP', 25.00, 'UNKNOWN', 1, 1, 'llm-ignored')
+        VALUES (:p0, '2026-01-04', 'IGNORED SHOP', 25.00, 'UNKNOWN', :category_id, 1, 1, 'llm-ignored')
         """),
-        {"p0": statement_id},
+        {"p0": statement_id, "category_id": resolve_category_id(core_conn, "UNKNOWN")},
     ).lastrowid
     core_conn.commit()
 
-    def categorize_for_test(transactions, conn=None, use_llm=True):
+    def categorize_for_test(transactions, conn=None):
         """Return deterministic LLM categorization output for selected unknown rows."""
-        assert use_llm is True
+        assert conn is not None
         assert [tx["id"] for tx in transactions] == [unknown_id]
         transactions[0].update(
             {
@@ -217,7 +227,7 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
         )
         return transactions
 
-    message = upload_workflow.categorize_statement_unknown_transactions_job(
+    message = upload_ai_workflow.categorize_statement_unknown_transactions_job(
         statement_id,
         transaction_categorizer=categorize_for_test,
     )
@@ -248,6 +258,94 @@ def test_categorize_statement_unknown_transactions_job_updates_rows_and_tags(app
     assert ignored._mapping["category"] == "UNKNOWN"
 
 
+def test_categorize_unknown_transaction_rows_requests_ai_outside_database_transaction(app, core_conn, monkeypatch):
+    """Verify the provider request runs between short database phases."""
+    del app
+    account_id, statement_id = create_account_statement(core_conn, "llm-transaction-boundary.csv")
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            statement_id,
+            account_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            category_id,
+            needs_review,
+            fingerprint
+        )
+        VALUES (:p0, :p1, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', :category_id, 1, 'llm-boundary')
+        """),
+        {
+            "p0": statement_id,
+            "p1": account_id,
+            "category_id": resolve_category_id(core_conn, "UNKNOWN"),
+        },
+    )
+    core_conn.commit()
+    rows = upload_ai_workflow.unknown_transaction_rows(core_conn, "UNKNOWN", statement_id=statement_id, limit=1)
+    active_transactions = 0
+    observed_active_transactions = []
+
+    @contextmanager
+    def tracked_transaction(*args, **kwargs):
+        """Record logical app transactions around the provider boundary."""
+        nonlocal active_transactions
+        with db_core_transaction(*args, **kwargs) as conn:
+            active_transactions += 1
+            try:
+                yield conn
+            finally:
+                active_transactions -= 1
+
+    def request_for_test(
+        unknown_chunk,
+        requested_rules,
+        category_options,
+        tag_options,
+        category_rows,
+        tag_rows,
+        openai_model,
+        verify_threshold,
+        review_threshold,
+    ):
+        """Return one accepted result and capture transaction state."""
+        del requested_rules, category_options, tag_options, openai_model, verify_threshold, review_threshold
+        observed_active_transactions.append(active_transactions)
+        upload_ai_workflow.llm_module.record_llm_request_status(
+            "ok",
+            requested_count=len(unknown_chunk),
+            result_count=1,
+        )
+        return [
+            result_payload(
+                category_rows,
+                tag_rows,
+                unknown_chunk[0]["llm_request_id"],
+                "Food",
+                0.96,
+                tags=[],
+                needs_review=False,
+            )
+        ]
+
+    monkeypatch.setattr(category_llm_workflow, "db_core_transaction", tracked_transaction)
+    monkeypatch.setattr(upload_ai_workflow, "db_core_transaction", tracked_transaction)
+    monkeypatch.setattr(upload_ai_workflow.llm_module, "request_llm_categories", request_for_test)
+
+    updated_count, source_counts, report = upload_ai_workflow.categorize_unknown_transaction_rows(rows)
+
+    row = core_conn.execute(
+        text("SELECT category, category_source FROM transactions WHERE fingerprint = 'llm-boundary'")
+    ).fetchone()
+    assert observed_active_transactions == [0]
+    assert updated_count == 1
+    assert source_counts == {"ai": 1}
+    assert report["request_status"]["status"] == "ok"
+    assert tuple(row) == ("Food", "ai")
+
+
 def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_metadata(app, core_conn):
     """Verify metadata-only LLM unknown outcomes are persisted for existing rows."""
     del app
@@ -269,10 +367,9 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
     ).lastrowid
     core_conn.commit()
 
-    def categorize_for_test(transactions, conn=None, use_llm=True):
+    def categorize_for_test(transactions, conn=None):
         """Return an explicit unknown LLM outcome with audit metadata."""
         del conn
-        assert use_llm is True
         transactions[0].update(
             {
                 "category": "UNKNOWN",
@@ -294,7 +391,7 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
         )
         return transactions
 
-    message = upload_workflow.categorize_statement_unknown_transactions_job(
+    message = upload_ai_workflow.categorize_statement_unknown_transactions_job(
         statement_id,
         transaction_categorizer=categorize_for_test,
     )
@@ -332,7 +429,7 @@ def test_categorize_unknown_transactions_job_logs_real_batch_progress(app, core_
         """Capture workflow log entries emitted by the AI categorization loop."""
         log_entries.append({"message": message, "params": dict(params or {}), "level": level})
 
-    message = upload_workflow.categorize_statement_unknown_transactions_job(
+    message = upload_ai_workflow.categorize_statement_unknown_transactions_job(
         statement_id,
         batch_size=2,
         transaction_categorizer=build_llm_progress_categorizer(batches),
@@ -354,7 +451,7 @@ def test_categorize_statement_unknown_transactions_job_reports_no_work(app, core
     _, statement_id = create_account_statement(core_conn, "none.csv")
     calls = []
 
-    message = upload_workflow.categorize_statement_unknown_transactions_job(
+    message = upload_ai_workflow.categorize_statement_unknown_transactions_job(
         statement_id,
         transaction_categorizer=lambda *args, **kwargs: calls.append((args, kwargs)),
     )
@@ -363,7 +460,7 @@ def test_categorize_statement_unknown_transactions_job_reports_no_work(app, core
     assert calls == []
 
 
-def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_conn, monkeypatch):
+def test_categorize_statement_unknowns_route_queues_statement_ai(owner_client, core_conn, monkeypatch):
     """Verify Uploaded statements can queue AI reruns for remaining unknown rows."""
     _, statement_id = create_account_statement(core_conn, "manual-statement-ai.csv")
     core_conn.execute(
@@ -391,10 +488,10 @@ def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_co
 
     monkeypatch.setattr(upload_workflow, "queue_statement_llm_categorization", queue_for_test)
 
-    response = client.post(
+    response = owner_client.post(
         f"/upload/{statement_id}/categorize-unknowns",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "next": "/upload",
             "ai_token_estimate_confirmed": "1",
         },
@@ -408,7 +505,7 @@ def test_categorize_statement_unknowns_route_queues_statement_ai(client, core_co
 
 def test_automatic_categorization_message_reports_source_breakdown():
     """Verify background job summaries distinguish similarity and AI sources."""
-    message = upload_workflow.automatic_categorization_message(
+    message = upload_messages.automatic_categorization_message(
         76,
         {
             "history": 50,

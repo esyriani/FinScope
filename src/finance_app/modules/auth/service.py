@@ -22,6 +22,7 @@ from finance_app.core.constants import (
 )
 from finance_app.database.dates import coerce_utc_datetime
 from finance_app.database.engine import db_core_connection, db_core_transaction
+from finance_app.database.seeds import seed_runtime_settings_defaults
 from finance_app.modules.auth import repository
 from finance_app.modules.auth.models import AuthenticatedUser
 from finance_app.modules.users import repository as user_repository
@@ -152,9 +153,8 @@ def bootstrap_owner(
                 now=now,
                 display_name=normalized_display_name,
             )
-            from finance_app.modules.settings.runtime import seed_runtime_settings
 
-            seed_runtime_settings(conn)
+            seed_runtime_settings_defaults(conn)
             repository.insert_audit_event(
                 conn,
                 user_id,
@@ -198,9 +198,8 @@ def create_managed_user(
                 now=now,
                 display_name=normalized_display_name,
             )
-            from finance_app.modules.settings.runtime import seed_runtime_settings
 
-            seed_runtime_settings(conn)
+            seed_runtime_settings_defaults(conn)
             audit_actor_id, audit_actor_name = actor_identity(actor)
             repository.insert_audit_event(
                 conn,

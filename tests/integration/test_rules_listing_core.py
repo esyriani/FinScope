@@ -1,8 +1,10 @@
 """SQLAlchemy Core tests for rules listing context queries."""
 
 from flask import request
-from sqlalchemy import text
+from sqlalchemy import insert
 
+from finance_app.database.tables import category_rules as category_rules_table
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import set_rule_tags
 from finance_app.modules.merchants.repository import get_or_create_merchant_for_name
 from finance_app.modules.rules.listing import build_rules_context
@@ -21,28 +23,17 @@ def insert_listing_rule(
 ):
     """Insert a category rule and optional tags for listing tests."""
     rule_id = conn.execute(
-        text("""
-        INSERT INTO category_rules (
-            merchant_id,
-            keyword,
-            category,
-            source,
-            ai_approved,
-            amount_min,
-            amount_max
+        insert(category_rules_table).values(
+            merchant_id=merchant_id,
+            keyword=keyword,
+            category=category,
+            category_id=resolve_category_id(conn, category),
+            source=source,
+            ai_approved=ai_approved,
+            amount_min=amount_min,
+            amount_max=amount_max,
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)
-        """),
-        {
-            "p0": merchant_id,
-            "p1": keyword,
-            "p2": category,
-            "p3": source,
-            "p4": ai_approved,
-            "p5": amount_min,
-            "p6": amount_max,
-        },
-    ).lastrowid
+    ).inserted_primary_key[0]
     set_rule_tags(conn, rule_id, tags or [])
     conn.commit()
     return rule_id
@@ -74,7 +65,7 @@ def test_rules_context_filters_with_core_queries(app, core_conn):
         tags=["Tax"],
     )
 
-    with app.test_request_context("/rules?category=Food&source=automatic&approval=suggested&tags=Tax"):
+    with app.test_request_context("/rules?categories=Food&source=automatic&approval=suggested&tags=Tax"):
         context = build_rules_context(request.args)
 
     assert [rule["id"] for rule in context["rules"]] == [matching_id]

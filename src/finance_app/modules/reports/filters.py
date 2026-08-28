@@ -8,6 +8,17 @@ basis, account, merchant, and target filters.
 from dataclasses import dataclass
 from typing import Protocol
 
+from finance_app.core.analytics import (
+    QUICK_VIEW_ALL,
+    QUICK_VIEW_CATEGORIZED,
+    QUICK_VIEW_NEEDS_REVIEW,
+    QUICK_VIEW_UNKNOWN,
+    REPORT_BASES,
+    REPORT_BASIS_CASH_FLOW,
+    REPORT_MEASURE_INCOME,
+    REPORT_MEASURE_SPENDING,
+    REPORT_MEASURES,
+)
 from finance_app.core.periods import (
     DEFAULT_DATE_PERIOD,
     PERIOD_CUSTOM,
@@ -18,20 +29,7 @@ from finance_app.core.periods import (
 from finance_app.core.query import QueryArgs, query_value, query_values
 from finance_app.modules.accounts.filters import parse_account_id
 from finance_app.modules.comparison.parsing import clean_categories, clean_tags
-from finance_app.modules.dashboard.constants import (
-    QUICK_VIEW_ALL,
-    QUICK_VIEW_CATEGORIZED,
-    QUICK_VIEW_NEEDS_REVIEW,
-    QUICK_VIEW_UNKNOWN,
-)
 from finance_app.modules.merchants.filters import parse_merchant_id, parse_merchant_query
-from finance_app.modules.reports.constants import (
-    REPORT_BASES,
-    REPORT_BASIS_CASH_FLOW,
-    REPORT_MEASURE_INCOME,
-    REPORT_MEASURE_SPENDING,
-    REPORT_MEASURES,
-)
 from finance_app.modules.reports.definitions import REPORT_ACCOUNTS, REPORT_INCOME, REPORT_MERCHANTS
 
 REPORT_TAXONOMY_FILTER_SECTIONS = frozenset({REPORT_ACCOUNTS, REPORT_MERCHANTS, REPORT_INCOME})

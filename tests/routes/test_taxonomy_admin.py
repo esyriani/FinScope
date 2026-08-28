@@ -12,7 +12,7 @@ from finance_app.database.tables import tags as tags_table
 
 
 def test_taxonomy_admin_routes_are_registered_and_rules_category_routes_are_removed(app):
-    """Verify taxonomy admin routes are registered and legacy rules category routes are absent."""
+    """Verify taxonomy admin routes are registered and rule category routes are absent."""
     routes = {str(rule.rule) for rule in app.url_map.iter_rules()}
 
     assert "/taxonomy" in routes
@@ -27,9 +27,9 @@ def test_taxonomy_admin_routes_are_registered_and_rules_category_routes_are_remo
     assert "/rules/categories/rename" not in routes
 
 
-def test_taxonomy_page_exposes_yaml_import_and_export_controls(client):
+def test_taxonomy_page_exposes_yaml_import_and_export_controls(owner_client):
     """Verify taxonomy import/export controls and category/tag tabs render."""
-    response = client.get("/taxonomy")
+    response = owner_client.get("/taxonomy")
     document = parse_html(response)
 
     assert response.status_code == 200
@@ -115,7 +115,7 @@ def test_taxonomy_page_exposes_yaml_import_and_export_controls(client):
     assert_has_element(response, "button", attrs={"data-bs-target": "#create-tag-modal"}, text="Add")
 
 
-def test_taxonomy_tables_export_description_and_llm_instruction_separately(client, core_conn):
+def test_taxonomy_tables_export_description_and_llm_instruction_separately(owner_client, core_conn):
     """Verify taxonomy table exports do not collapse metadata into the name column."""
     core_conn.execute(
         categories_table.insert().values(
@@ -134,7 +134,7 @@ def test_taxonomy_tables_export_description_and_llm_instruction_separately(clien
     )
     core_conn.commit()
 
-    response = client.get("/taxonomy")
+    response = owner_client.get("/taxonomy")
 
     assert response.status_code == 200
     assert_has_element(response, "div", attrs={"data-export-part": True}, text="Export category")
@@ -181,9 +181,9 @@ def test_taxonomy_tables_export_description_and_llm_instruction_separately(clien
     )
 
 
-def test_taxonomy_export_route_returns_yaml(client):
+def test_taxonomy_export_route_returns_yaml(owner_client):
     """Verify taxonomy YAML export includes category and tag metadata."""
-    response = client.get("/taxonomy/export.yml")
+    response = owner_client.get("/taxonomy/export.yml")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -199,9 +199,9 @@ def test_taxonomy_export_route_returns_yaml(client):
     assert "color:" in body
 
 
-def test_taxonomy_import_route_upserts_yaml_metadata(client, core_conn):
+def test_taxonomy_import_route_upserts_yaml_metadata(owner_client, core_conn):
     """Verify taxonomy YAML import creates and updates category and tag metadata."""
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
     payload = b"""
 categories:
   - name: "Custom admin"
@@ -214,7 +214,7 @@ tags:
     color: "#123abc"
 """
 
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/import",
         data={
             CSRF_FIELD_NAME: token,
@@ -256,9 +256,9 @@ tags:
     assert tag["color"] == "#123abc"
 
 
-def test_taxonomy_import_route_skips_builtin_tag_metadata(client, core_conn):
+def test_taxonomy_import_route_skips_builtin_tag_metadata(owner_client, core_conn):
     """Verify taxonomy YAML import cannot mutate built-in tag definitions."""
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
     original = (
         core_conn.execute(
             select(tags_table.c.id, tags_table.c.description, tags_table.c.instruction, tags_table.c.color).where(
@@ -277,7 +277,7 @@ tags:
     builtin_key: "reimbursable"
 """
 
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/import",
         data={
             CSRF_FIELD_NAME: token,

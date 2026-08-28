@@ -27,7 +27,7 @@ from finance_app.modules.categories.repository import (
     save_category_rule,
 )
 from finance_app.modules.categories.taxonomy import get_transaction_tag_names
-from finance_app.modules.rules.engine import apply_all_rules_to_transactions
+from finance_app.modules.rules.workflow import apply_all_rules_to_transactions
 from finance_app.modules.transactions.repository import assign_manual_category
 
 

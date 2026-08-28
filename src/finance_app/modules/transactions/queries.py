@@ -76,25 +76,6 @@ def fetch_transactions(
     )
 
 
-def fetch_transaction_ids(conn: Any, filters: Iterable[Any], sort_expression: Any, direction: str) -> list[int]:
-    """Fetch ordered IDs for all transactions matching the current list filters."""
-    sort_order = sort_expression.desc() if direction == "desc" else sort_expression.asc()
-    return [
-        row["id"]
-        for row in conn.execute(
-            select(transactions_table.c.id)
-            .select_from(
-                transactions_table.outerjoin(
-                    accounts_table,
-                    accounts_table.c.id == transactions_table.c.account_id,
-                )
-            )
-            .where(*filters)
-            .order_by(sort_order, transactions_table.c.id.desc())
-        ).mappings()
-    ]
-
-
 def fetch_distinct_categories(conn: Any) -> Any:
     """Fetch distinct categories."""
     category_label = transaction_category_label_expression(None)

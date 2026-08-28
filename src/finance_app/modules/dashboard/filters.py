@@ -2,6 +2,11 @@
 
 from dataclasses import dataclass
 
+from finance_app.core.analytics import (
+    QUICK_VIEW_ALL,
+    QUICK_VIEW_CATEGORIZED,
+    QUICK_VIEW_CUSTOM,
+)
 from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.periods import (
     DEFAULT_DATE_PERIOD,
@@ -17,12 +22,6 @@ from finance_app.modules.merchants.filters import (
     merchant_filter_condition,
     parse_merchant_id,
     parse_merchant_query,
-)
-
-from .constants import (
-    QUICK_VIEW_ALL,
-    QUICK_VIEW_CATEGORIZED,
-    QUICK_VIEW_CUSTOM,
 )
 
 

@@ -1,51 +1,20 @@
 """Flask routes for the rules feature."""
 
 from pathlib import Path
-from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 
-from finance_app.background.runner import submit_background_job
-from finance_app.core.config import settings
 from finance_app.core.i18n import gettext
-from finance_app.database.engine import db_core_transaction
 from finance_app.modules.auth.permissions import PERMISSION_MANAGE_RULES, permission_required
-from finance_app.modules.rules.audit_presenter import (
-    build_rule_audit_context,
-    build_rule_change_preview_context,
-    build_rule_detail_context,
-    build_rule_import_preview_context,
-    build_rule_overlap_detail_context,
-)
-from finance_app.modules.rules.engine import (
-    apply_all_rules_job,
-    apply_rule_where_it_wins_to_transactions,
-    apply_single_rule_to_transactions,
-    preview_rule_matches,
-    undo_apply_all_rules_job,
-)
+from finance_app.modules.rules import workflow as rules_workflow
 from finance_app.modules.rules.import_export import (
     RULE_IMPORT_MODE_ADD,
     RULE_IMPORT_MODES,
     export_rules_csv,
-    import_rules_job,
-    undo_import_rules_job,
 )
 from finance_app.modules.rules.listing import build_rules_context
-from finance_app.modules.rules.service import (
-    approve_automatic_rule,
-    count_rule_transaction_references,
-    create_rule_from_form,
-    get_rule_for_apply,
-    preview_rule_from_form,
-    update_rule_from_form,
-)
-from finance_app.modules.rules.service import (
-    delete_rule as delete_rule_record,
-)
-from finance_app.modules.settings.runtime import get_int_setting
 
 rules_bp = Blueprint("rules", __name__)
 
@@ -61,12 +30,7 @@ def rules() -> ResponseReturnValue:
 @permission_required(PERMISSION_MANAGE_RULES)
 def audit_rules() -> ResponseReturnValue:
     """Render the read-only rule audit page."""
-    with db_core_transaction() as conn:
-        context = build_rule_audit_context(
-            conn,
-            request.args,
-            transaction_limit=rule_audit_transaction_limit(conn),
-        )
+    context = rules_workflow.build_rule_audit_page_context(request.args)
     return render_template("rules_audit.html", **context)
 
 
@@ -74,14 +38,7 @@ def audit_rules() -> ResponseReturnValue:
 @permission_required(PERMISSION_MANAGE_RULES)
 def audit_rule_overlap(rule_a_id: int, rule_b_id: int) -> ResponseReturnValue:
     """Render shared transactions for one overlapping rule pair."""
-    with db_core_transaction() as conn:
-        context = build_rule_overlap_detail_context(
-            conn,
-            rule_a_id,
-            rule_b_id,
-            request.args,
-            transaction_limit=rule_audit_transaction_limit(conn),
-        )
+    context = rules_workflow.build_rule_overlap_page_context(rule_a_id, rule_b_id, request.args)
     if context is None:
         abort(404)
     return render_template("rules_audit_overlap.html", **context)
@@ -91,12 +48,7 @@ def audit_rule_overlap(rule_a_id: int, rule_b_id: int) -> ResponseReturnValue:
 @permission_required(PERMISSION_MANAGE_RULES)
 def audit_rule_detail(rule_id: int) -> ResponseReturnValue:
     """Render read-only audit diagnostics for one rule."""
-    with db_core_transaction() as conn:
-        context = build_rule_detail_context(
-            conn,
-            rule_id,
-            transaction_limit=rule_audit_transaction_limit(conn),
-        )
+    context = rules_workflow.build_rule_detail_page_context(rule_id)
     if context is None:
         abort(404)
     return render_template("rules_audit_rule.html", **context)
@@ -112,17 +64,7 @@ def audit_rule_preview() -> ResponseReturnValue:
         abort(400)
 
     try:
-        with db_core_transaction() as conn:
-            proposed_rule = (
-                preview_rule_from_form(conn, request.form) if action in {"create_rule", "edit_rule"} else None
-            )
-            context = build_rule_change_preview_context(
-                conn,
-                action,
-                rule_id,
-                proposed_rule=proposed_rule,
-                transaction_limit=rule_audit_transaction_limit(conn),
-            )
+        context = rules_workflow.build_rule_audit_preview_page_context(action, rule_id, request.form)
     except ValueError:
         abort(400)
     if context is None:
@@ -137,8 +79,7 @@ def add_rule() -> ResponseReturnValue:
     """Create a manual rule from a CSRF-protected POST and return to Rules."""
     next_url = rules_redirect_target()
     try:
-        with db_core_transaction() as conn:
-            rule_id, keyword = create_rule_from_form(conn, request.form)
+        rule_id, keyword = rules_workflow.create_rule_action(request.form)
     except ValueError as exc:
         flash(gettext(str(exc)))
         return redirect(next_url)
@@ -152,22 +93,11 @@ def add_rule() -> ResponseReturnValue:
 def preview_rule() -> ResponseReturnValue:
     """Preview rule."""
     try:
-        with db_core_transaction() as conn:
-            rule = preview_rule_from_form(conn, request.form)
-            preview_limit = get_int_setting(conn, "rule_preview_limit", settings.default_rule_preview_limit)
-            match_count, sample = preview_rule_matches(conn, rule, limit=preview_limit)
+        result = rules_workflow.preview_rule_action(request.form)
     except ValueError as exc:
         return jsonify({"ok": False, "message": gettext(str(exc)), "match_count": 0, "transactions": []}), 400
 
-    return jsonify(
-        {
-            "ok": True,
-            "keyword": rule["keyword"],
-            "category": rule["category"],
-            "match_count": match_count,
-            "transactions": sample,
-        }
-    )
+    return jsonify(result)
 
 
 @rules_bp.route("/rules/export.csv")
@@ -224,42 +154,17 @@ def import_rules() -> ResponseReturnValue:
 
     if not confirmed:
         try:
-            with db_core_transaction() as conn:
-                context = build_rule_import_preview_context(
-                    conn,
-                    raw_text,
-                    mode,
-                    filename,
-                    transaction_limit=rule_audit_transaction_limit(conn),
-                )
+            context = rules_workflow.build_rules_import_preview(raw_text, mode, filename)
         except ValueError as exc:
             flash(gettext(str(exc)))
             return redirect(next_url)
         return render_template("rules_import_preview.html", **context)
 
     try:
-        with db_core_transaction() as conn:
-            build_rule_import_preview_context(
-                conn,
-                raw_text,
-                mode,
-                filename,
-                transaction_limit=rule_audit_transaction_limit(conn),
-            )
+        job_id = rules_workflow.queue_rules_import(raw_text, mode, filename)
     except ValueError as exc:
         flash(gettext(str(exc)))
         return redirect(next_url)
-
-    undo_state: dict[str, Any] = {}
-    job_id = submit_background_job(
-        f"Import rules from {filename}",
-        import_rules_job,
-        raw_text,
-        mode,
-        undo_state,
-        undo_handler=undo_import_rules_job,
-        undo_args=(undo_state,),
-    )
 
     flash(
         gettext(
@@ -276,8 +181,7 @@ def update_rule(rule_id: int) -> ResponseReturnValue:
     """Update a rule from a CSRF-protected POST and return to Rules."""
     next_url = rules_redirect_target()
     try:
-        with db_core_transaction() as conn:
-            update_rule_from_form(conn, rule_id, request.form)
+        rules_workflow.update_rule_action(rule_id, request.form)
     except ValueError as exc:
         flash(gettext(str(exc)))
         return redirect(next_url)
@@ -298,8 +202,7 @@ def approve_rule(rule_id: int) -> ResponseReturnValue:
     """
     next_url = rules_redirect_target()
     try:
-        with db_core_transaction() as conn:
-            keyword, changed = approve_automatic_rule(conn, rule_id)
+        keyword, changed = rules_workflow.approve_rule_action(rule_id)
     except ValueError as exc:
         if wants_json_response():
             return jsonify({"ok": False, "message": gettext(str(exc))}), 400
@@ -337,38 +240,17 @@ def apply_rule(rule_id: int) -> ResponseReturnValue:
     otherwise flashes a message before redirecting to the rules target.
     """
     next_url = rules_redirect_target()
-    with db_core_transaction() as conn:
-        rule = get_rule_for_apply(conn, rule_id)
-
-        if rule is None:
-            message = gettext("Rule not found.")
-            if wants_json_response():
-                return jsonify({"ok": False, "message": message}), 404
-            flash(message)
-            return redirect(next_url)
-
-        if request.form.get("confirm_preview") != "1":
-            message = gettext("Preview apply before applying a rule.")
-            if wants_json_response():
-                return jsonify({"ok": False, "message": message}), 400
-            flash(message)
-            return redirect(next_url)
-
-        mode = request.form.get("mode", "apply_where_wins").strip() or "apply_where_wins"
-        if mode == "force_apply_rule":
-            updated_count = apply_single_rule_to_transactions(conn, rule)
-            message = gettext("Rule force-applied to {count} existing transactions.", count=updated_count)
-        elif mode == "apply_where_wins":
-            updated_count = apply_rule_where_it_wins_to_transactions(conn, rule)
-            message = gettext(
-                "Rule applied where it has priority to {count} existing transactions.", count=updated_count
-            )
-        else:
-            message = gettext("Unsupported apply mode.")
-            if wants_json_response():
-                return jsonify({"ok": False, "message": message}), 400
-            flash(message)
-            return redirect(next_url)
+    result = rules_workflow.apply_rule_action(
+        rule_id,
+        request.form.get("confirm_preview") == "1",
+        request.form.get("mode", "apply_where_wins"),
+    )
+    message = gettext(result["message"], **result.get("params", {}))
+    if not result["ok"]:
+        if wants_json_response():
+            return jsonify({"ok": False, "message": message}), result["status"]
+        flash(message)
+        return redirect(next_url)
 
     if wants_json_response():
         return jsonify(
@@ -376,8 +258,8 @@ def apply_rule(rule_id: int) -> ResponseReturnValue:
                 "ok": True,
                 "action": "apply",
                 "rule_id": rule_id,
-                "mode": mode,
-                "updated_count": updated_count,
+                "mode": result["mode"],
+                "updated_count": result["updated_count"],
                 "message": message,
             }
         )
@@ -396,23 +278,15 @@ def apply_all_rules() -> ResponseReturnValue:
     the background job so bulk rule writes follow the read-only preview flow.
     """
     next_url = rules_redirect_target()
-    if request.form.get("confirm_preview") != "1":
-        flash(gettext("Preview apply before applying all rules."))
+    result = rules_workflow.queue_apply_all_rules(request.form.get("confirm_preview") == "1")
+    if not result["ok"]:
+        flash(gettext(result["message"]))
         return redirect(next_url)
-
-    undo_state: dict[str, Any] = {}
-    job_id = submit_background_job(
-        "Apply all category rules",
-        apply_all_rules_job,
-        undo_state,
-        undo_handler=undo_apply_all_rules_job,
-        undo_args=(undo_state,),
-    )
 
     flash(
         gettext(
             "Applying all rules in the background. Track progress on the Processing page. Job: {job_id}",
-            job_id=job_id[:8],
+            job_id=result["job_id"][:8],
         )
     )
     return redirect(next_url)
@@ -429,31 +303,25 @@ def delete_rule(rule_id: int) -> ResponseReturnValue:
     rule is removed. Returns JSON for fetch/table actions.
     """
     next_url = rules_redirect_target()
-    with db_core_transaction() as conn:
-        confirmed = request.form.get("confirm_preview") == "1"
-        reference_count = count_rule_transaction_references(conn, rule_id)
-        if not confirmed and reference_count:
-            message = gettext("Preview deletion before deleting a rule.")
-            if wants_json_response():
-                return jsonify({"ok": False, "message": message}), 400
-            flash(message)
-            return redirect(next_url)
+    result = rules_workflow.delete_rule_action(rule_id, request.form.get("confirm_preview") == "1")
+    message = gettext(result["message"])
+    if not result["ok"] and result["status"] == 400:
+        if wants_json_response():
+            return jsonify({"ok": False, "message": message}), 400
+        flash(message)
+        return redirect(next_url)
 
-        deleted = delete_rule_record(conn, rule_id)
-
-    message = gettext("Rule deleted.") if deleted else gettext("Rule not found.")
     if wants_json_response():
-        status = 200 if deleted else 404
         return (
             jsonify(
                 {
-                    "ok": deleted,
+                    "ok": result["ok"],
                     "action": "delete",
                     "rule_id": rule_id,
                     "message": message,
                 }
             ),
-            status,
+            result["status"],
         )
 
     flash(message)
@@ -463,15 +331,6 @@ def delete_rule(rule_id: int) -> ResponseReturnValue:
 def wants_json_response() -> bool:
     """Return whether a route should respond with JSON for a table action."""
     return request.headers.get("X-Requested-With") == "fetch"
-
-
-def rule_audit_transaction_limit(conn: Any) -> int:
-    """Return the configured newest-transaction cap for rule audit analysis."""
-    return get_int_setting(
-        conn,
-        "rule_audit_transaction_limit",
-        settings.default_rule_audit_transaction_limit,
-    )
 
 
 def rules_redirect_target() -> str:

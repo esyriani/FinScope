@@ -13,6 +13,7 @@ from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_OWNER, USER_R
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.core.filters import format_datetime
 from finance_app.modules.auth import repository as auth_repository
+from finance_app.modules.auth import service as auth_service
 from finance_app.modules.auth.service import create_managed_user, hash_password, utc_now
 
 VIEWER_PASSWORD = "ViewerPass123!"
@@ -44,6 +45,12 @@ def user_by_username(conn, username):
         .mappings()
         .fetchone()
     )
+
+
+def client_session_snapshot(client):
+    """Return decoded Flask client-session data for security assertions."""
+    with client.session_transaction() as client_session:
+        return dict(client_session)
 
 
 def test_anonymous_routes_redirect_to_login(anonymous_client):
@@ -81,7 +88,7 @@ def test_first_run_bootstrap_creates_owner(anonymous_client, core_conn):
     assert owner["password_hash"] != "OwnerPass123!"
 
 
-def test_login_success_failure_logout_and_lockout(client, anonymous_client, core_conn):
+def test_login_success_failure_logout_and_lockout(owner_client, anonymous_client, core_conn):
     """Verify login, generic failures, logout, and temporary lockout behavior."""
     failed_response = anonymous_client.post(
         "/login",
@@ -119,9 +126,9 @@ def test_login_success_failure_logout_and_lockout(client, anonymous_client, core
     )
     assert_visible_text(locked_response, "Invalid username or password.")
 
-    logout_response = client.post(
+    logout_response = owner_client.post(
         "/logout",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=False,
     )
     assert logout_response.status_code == 302
@@ -147,7 +154,7 @@ def test_inactive_user_cannot_login(anonymous_client, core_conn):
     assert_visible_text(response, "Invalid username or password.")
 
 
-def test_owner_editor_and_viewer_authorization(client, editor_client, viewer_client, core_conn):
+def test_owner_editor_and_viewer_authorization(owner_client, editor_client, viewer_client, core_conn):
     """Verify role-specific route permissions are enforced in the backend."""
     tx_id = core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
@@ -155,7 +162,7 @@ def test_owner_editor_and_viewer_authorization(client, editor_client, viewer_cli
         """)).lastrowid
     core_conn.commit()
 
-    assert client.get("/admin/users").status_code == 200
+    assert owner_client.get("/admin/users").status_code == 200
     assert editor_client.get("/upload").status_code == 200
     assert editor_client.get("/admin/users").status_code == 403
     assert viewer_client.get("/transactions").status_code == 200
@@ -191,7 +198,7 @@ def test_owner_editor_and_viewer_authorization(client, editor_client, viewer_cli
 
 
 def test_named_client_fixtures_exercise_authentication_guards(
-    client,
+    owner_client,
     editor_client,
     viewer_client,
     stale_session_client,
@@ -199,7 +206,7 @@ def test_named_client_fixtures_exercise_authentication_guards(
     anonymous_client,
 ):
     """Verify named clients cover route-visible authentication states."""
-    assert client.get("/admin/users").status_code == 200
+    assert owner_client.get("/admin/users").status_code == 200
     assert editor_client.get("/upload").status_code == 200
     assert editor_client.get("/admin/users").status_code == 403
     assert viewer_client.get("/transactions").status_code == 200
@@ -215,12 +222,12 @@ def test_named_client_fixtures_exercise_authentication_guards(
     assert "/login" in anonymous_response.headers["Location"]
 
 
-def test_owner_user_management_and_last_owner_guard(client, core_conn):
+def test_owner_user_management_and_last_owner_guard(owner_client, core_conn):
     """Verify owner-managed user lifecycle routes and last-owner protection."""
-    create_response = client.post(
+    create_response = owner_client.post(
         "/admin/users/create",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "username": "managed",
             "display_name": "Managed Person",
             "role": USER_ROLE_VIEWER,
@@ -239,40 +246,40 @@ def test_owner_user_management_and_last_owner_guard(client, core_conn):
     assert managed["role"] == USER_ROLE_VIEWER
     assert managed["must_change_password"] == 1
 
-    role_response = client.post(
+    role_response = owner_client.post(
         f"/admin/users/{managed['id']}/role",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "role": USER_ROLE_EDITOR},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), "role": USER_ROLE_EDITOR},
         follow_redirects=True,
     )
     assert_visible_text(role_response, "User role updated.")
     assert user_by_username(core_conn, "managed")["role"] == USER_ROLE_EDITOR
 
-    deactivate_response = client.post(
+    deactivate_response = owner_client.post(
         f"/admin/users/{managed['id']}/deactivate",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
     assert_visible_text(deactivate_response, "User deactivated.")
     assert user_by_username(core_conn, "managed")["is_active"] == 0
 
-    reactivate_response = client.post(
+    reactivate_response = owner_client.post(
         f"/admin/users/{managed['id']}/reactivate",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
     assert_visible_text(reactivate_response, "User reactivated.")
     assert user_by_username(core_conn, "managed")["is_active"] == 1
 
     owner = user_by_username(core_conn, "owner")
-    owner_response = client.post(
+    owner_response = owner_client.post(
         f"/admin/users/{owner['id']}/deactivate",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
     assert_visible_text(owner_response, "The last active owner cannot be changed.")
     assert user_by_username(core_conn, "owner")["is_active"] == 1
 
-    users_response = client.get("/admin/users")
+    users_response = owner_client.get("/admin/users")
     assert_visible_text(
         users_response,
         "Owner password must be changed from the Account page.",
@@ -284,28 +291,98 @@ def test_owner_user_management_and_last_owner_guard(client, core_conn):
     assert_input(users_response, name="role", value="editor")
     assert_input(users_response, name="role", value="viewer")
 
-    owner_reset_response = client.post(
+    owner_reset_response = owner_client.post(
         f"/admin/users/{owner['id']}/reset-password",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
     assert_visible_text(owner_reset_response, "Owner password must be changed from the Account page.")
 
-    owner_role_response = client.post(
+    owner_role_response = owner_client.post(
         f"/admin/users/{owner['id']}/role",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "role": USER_ROLE_EDITOR},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), "role": USER_ROLE_EDITOR},
         follow_redirects=True,
     )
     assert_visible_text(owner_role_response, "Owner role cannot be changed.")
     assert user_by_username(core_conn, "owner")["role"] == USER_ROLE_OWNER
 
 
-def test_owner_can_hand_off_ownership_to_active_user(client, core_conn):
-    """Verify ownership hand-off promotes one user and demotes the old owner."""
-    create_response = client.post(
+def test_created_user_temporary_password_stays_out_of_client_session(owner_client, monkeypatch):
+    """Verify generated user-creation passwords are displayed from server-side state."""
+    generated_password = "KnownTempPass123!"
+    monkeypatch.setattr(auth_service, "generate_temporary_password", lambda length=18: generated_password)
+
+    create_response = owner_client.post(
         "/admin/users/create",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "username": "cookiesafe",
+            "display_name": "Cookie Safe",
+            "role": USER_ROLE_VIEWER,
+        },
+        follow_redirects=False,
+    )
+    session_data = client_session_snapshot(owner_client)
+
+    assert create_response.status_code == 302
+    assert session_data.get("temporary_password_modal_reference")
+    assert "temporary_password_modal" not in session_data
+    assert generated_password not in repr(session_data)
+
+    users_response = owner_client.get("/admin/users")
+    assert_visible_text(users_response, "Temporary password", "Cookie Safe")
+    assert_input(users_response, value=generated_password)
+    assert generated_password not in repr(client_session_snapshot(owner_client))
+
+    repeat_response = owner_client.get("/admin/users")
+    assert_no_element(repeat_response, "input", attrs={"value": generated_password})
+
+
+def test_reset_temporary_password_stays_out_of_client_session(owner_client, core_conn, monkeypatch):
+    """Verify reset passwords use the same server-side one-time display path."""
+    managed_id = create_test_user(core_conn, "resetuser", USER_ROLE_VIEWER, VIEWER_PASSWORD)
+    core_conn.commit()
+    generated_password = "ResetTempPass123!"
+    monkeypatch.setattr(auth_service, "generate_temporary_password", lambda length=18: generated_password)
+
+    reset_response = owner_client.post(
+        f"/admin/users/{managed_id}/reset-password",
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
+        follow_redirects=False,
+    )
+    session_data = client_session_snapshot(owner_client)
+
+    assert reset_response.status_code == 302
+    assert session_data.get("temporary_password_modal_reference")
+    assert "temporary_password_modal" not in session_data
+    assert generated_password not in repr(session_data)
+
+    users_response = owner_client.get("/admin/users")
+    assert_visible_text(users_response, "Temporary password generated.", "resetuser")
+    assert_input(users_response, value=generated_password)
+
+
+def test_legacy_temporary_password_session_payload_is_discarded(owner_client):
+    """Verify pre-fix client-side modal payloads are cleared without rendering."""
+    with owner_client.session_transaction() as client_session:
+        client_session["temporary_password_modal"] = {
+            "username": "legacy",
+            "display_name": "Legacy",
+            "temporary_password": "LegacyTempPass123!",
+        }
+
+    response = owner_client.get("/admin/users")
+
+    assert_no_element(response, "input", attrs={"value": "LegacyTempPass123!"})
+    assert "temporary_password_modal" not in client_session_snapshot(owner_client)
+
+
+def test_owner_can_hand_off_ownership_to_active_user(owner_client, core_conn):
+    """Verify ownership hand-off promotes one user and demotes the previous owner."""
+    create_response = owner_client.post(
+        "/admin/users/create",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "username": "successor",
             "display_name": "Successor",
             "role": USER_ROLE_EDITOR,
@@ -318,10 +395,10 @@ def test_owner_can_hand_off_ownership_to_active_user(client, core_conn):
     assert_visible_text(create_response, "Hand off ownership", "Confirm ownership hand-off")
     assert_no_element(create_response, "a", attrs={"href": f"/admin/users/{owner['id']}/deactivate"})
 
-    response = client.post(
+    response = owner_client.post(
         "/admin/users/handoff-ownership",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "target_user_id": str(successor["id"]),
         },
         follow_redirects=True,
@@ -330,7 +407,7 @@ def test_owner_can_hand_off_ownership_to_active_user(client, core_conn):
     assert_visible_text(response, "Ownership handed off. Your account is now Viewer.")
     assert user_by_username(core_conn, "owner")["role"] == USER_ROLE_VIEWER
     assert user_by_username(core_conn, "successor")["role"] == USER_ROLE_OWNER
-    assert client.get("/admin/users").status_code == 403
+    assert owner_client.get("/admin/users").status_code == 403
 
 
 def test_must_change_password_flow(anonymous_client, core_conn):
@@ -370,16 +447,16 @@ def test_must_change_password_flow(anonymous_client, core_conn):
     assert changed_user["must_change_password"] == 0
 
 
-def test_account_page_updates_display_name_and_password(client, core_conn):
+def test_account_page_updates_display_name_and_password(owner_client, core_conn):
     """Verify users can manage display name and password from Account."""
-    account_response = client.get("/account")
+    account_response = owner_client.get("/account")
     assert account_response.status_code == 200
     assert_visible_text(account_response, "owner")
 
-    display_response = client.post(
+    display_response = owner_client.post(
         "/account",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_action": "display_name",
             "display_name": "Eugene",
         },
@@ -388,10 +465,10 @@ def test_account_page_updates_display_name_and_password(client, core_conn):
     assert_visible_text(display_response, "Display name updated.")
     assert user_by_username(core_conn, "owner")["display_name"] == "Eugene"
 
-    password_response = client.post(
+    password_response = owner_client.post(
         "/account",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "account_action": "password",
             "current_password": "OwnerPass123!",
             "new_password": "OwnerPass456!",
@@ -402,7 +479,7 @@ def test_account_page_updates_display_name_and_password(client, core_conn):
     assert_visible_text(password_response, "Password changed.")
 
 
-def test_home_greets_user_by_display_name_and_shows_shared_context(client, core_conn):
+def test_home_greets_user_by_display_name_and_shows_shared_context(owner_client, core_conn):
     """Verify Home title copy uses display names and subtle shared-access context."""
     owner = auth_repository.get_user_by_username(core_conn, "owner")
     auth_repository.update_display_name(
@@ -422,7 +499,7 @@ def test_home_greets_user_by_display_name_and_shows_shared_context(client, core_
     )
     core_conn.commit()
 
-    response = client.get("/")
+    response = owner_client.get("/")
     assert response.status_code == 200
     assert_visible_text(
         response,

@@ -39,7 +39,7 @@ def test_parse_amount_bounds_rejects_invalid_numbers():
 
 
 def test_parse_rules_csv_normalizes_headers_tags_and_amount_range():
-    """Verify that imported rule CSV rows accept legacy-style column names."""
+    """Verify that imported rule CSV rows accept alternate column names."""
     raw_text = "\n".join(
         [
             "Merchant,Category,Rule Tags,Amount,Source,Created",
@@ -235,6 +235,72 @@ def test_export_rules_csv_includes_tags_and_amount_bounds(core_conn):
     assert exported_rows[0]["created_at"]
 
 
+def test_export_rules_csv_neutralizes_spreadsheet_formula_prefixes(core_conn):
+    """Verify rule CSV export neutralizes values spreadsheet apps treat as formulas."""
+    account_id = core_conn.execute(
+        text("INSERT INTO accounts (name) VALUES (:name)"),
+        {"name": "+Checking"},
+    ).lastrowid
+    merchant_id = core_conn.execute(
+        text("INSERT INTO merchants (merchant_key) VALUES (:merchant_key)"),
+        {"merchant_key": "\rMerchant"},
+    ).lastrowid
+    tag_id = core_conn.execute(
+        text("INSERT INTO tags (name) VALUES (:name)"),
+        {"name": "\tTag"},
+    ).lastrowid
+    category_id = core_conn.execute(
+        text("INSERT INTO categories (name) VALUES (:name)"),
+        {"name": "@Category"},
+    ).lastrowid
+    rule_id = core_conn.execute(
+        text("""
+        INSERT INTO category_rules (
+            account_id,
+            merchant_id,
+            keyword,
+            category,
+            category_id,
+            amount_min,
+            direction,
+            source
+        )
+        VALUES (
+            :account_id,
+            :merchant_id,
+            :keyword,
+            :category,
+            :category_id,
+            :amount_min,
+            'any',
+            'manual'
+        )
+        """),
+        {
+            "account_id": account_id,
+            "merchant_id": merchant_id,
+            "keyword": "=SUM(A1:A2)",
+            "category": "@Category",
+            "category_id": category_id,
+            "amount_min": -10.0,
+        },
+    ).lastrowid
+    core_conn.execute(
+        text("INSERT INTO category_rule_tags (rule_id, tag_id) VALUES (:rule_id, :tag_id)"),
+        {"rule_id": rule_id, "tag_id": tag_id},
+    )
+    core_conn.commit()
+
+    exported_rows = list(csv.DictReader(io.StringIO(export_rules_csv(core_conn))))
+
+    assert exported_rows[0]["keyword"] == "'=SUM(A1:A2)"
+    assert exported_rows[0]["account_name"] == "'+Checking"
+    assert exported_rows[0]["merchant_name"] == "'\rMerchant"
+    assert exported_rows[0]["category"] == "'@Category"
+    assert exported_rows[0]["tags"] == "'\tTag"
+    assert exported_rows[0]["amount_min"] == "'-10.0"
+
+
 def test_import_rules_add_persists_merchant_bound_rules(core_conn):
     """Verify merchant_name imports create merchant-bound category rules."""
     imported_rules = parse_rules_csv(
@@ -299,7 +365,7 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
     """Verify override import replaces rules, clears refs, and can be undone."""
     original_rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
-        VALUES ('OLD STORE', 'Utilities', 'manual')
+        VALUES ('EXISTING STORE', 'Utilities', 'manual')
         """)).lastrowid
     tx_id = core_conn.execute(
         text("""
@@ -311,7 +377,7 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
             category_rule_id,
             fingerprint
         )
-        VALUES ('2026-01-02', 'OLD STORE', 12.34, 'Utilities', :p0, 'override-ref')
+        VALUES ('2026-01-02', 'EXISTING STORE', 12.34, 'Utilities', :p0, 'override-ref')
         """),
         {"p0": original_rule_id},
     ).lastrowid
@@ -358,7 +424,7 @@ def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(c
         text("SELECT category_rule_id FROM transactions WHERE id = :p0"), {"p0": tx_id}
     ).fetchone()
     assert undo_message == ("Restored 1 rule from before import. " "Restored rule references on 1 transaction.")
-    assert [tuple(row) for row in restored_rules] == [(original_rule_id, "OLD STORE", "Utilities")]
+    assert [tuple(row) for row in restored_rules] == [(original_rule_id, "EXISTING STORE", "Utilities")]
     assert restored_tx._mapping["category_rule_id"] == original_rule_id
 
 
@@ -366,7 +432,7 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
     """Verify override-mode import preview reports replacement impact only."""
     first_rule_id = core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
-        VALUES ('OLD STORE', 'Utilities', 'manual')
+        VALUES ('EXISTING STORE', 'Utilities', 'manual')
         """)).lastrowid
     core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
@@ -382,7 +448,7 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
             category_rule_id,
             fingerprint
         )
-        VALUES ('2026-01-02', 'OLD STORE', 12.34, 'Utilities', :p0, 'preview-override-ref')
+        VALUES ('2026-01-02', 'EXISTING STORE', 12.34, 'Utilities', :p0, 'preview-override-ref')
         """),
         {"p0": first_rule_id},
     ).lastrowid
@@ -411,7 +477,7 @@ def test_preview_rules_import_override_reports_without_writing(core_conn):
     assert preview.replaced_rules == 2
     assert preview.cleared_transaction_rule_refs == 1
     assert len(preview.proposed_rules) == 1
-    assert [row["keyword"] for row in rules_after_preview] == ["OLD STORE", "OTHER STORE"]
+    assert [row["keyword"] for row in rules_after_preview] == ["EXISTING STORE", "OTHER STORE"]
     assert tx_after_preview._mapping["category_rule_id"] == first_rule_id
 
 
@@ -419,7 +485,7 @@ def test_undo_rules_override_import_rejects_changed_rules(core_conn):
     """Verify override undo refuses to discard rule edits made after import."""
     core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
-        VALUES ('OLD STORE', 'Utilities', 'manual')
+        VALUES ('EXISTING STORE', 'Utilities', 'manual')
         """))
     core_conn.commit()
     undo_state = {}
@@ -444,7 +510,7 @@ def test_undo_rules_override_import_rejects_imported_rule_references(core_conn):
     """Verify override undo refuses when transactions now reference imported rules."""
     core_conn.execute(text("""
         INSERT INTO category_rules (keyword, category, source)
-        VALUES ('OLD STORE', 'Utilities', 'manual')
+        VALUES ('EXISTING STORE', 'Utilities', 'manual')
         """))
     tx_id = core_conn.execute(text("""
         INSERT INTO transactions (tx_date, description, amount, category, fingerprint)

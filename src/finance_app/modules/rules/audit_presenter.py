@@ -13,14 +13,6 @@ from finance_app.modules.rules.audit import (
     OVERLAP_CATEGORY_CONFLICT,
     OVERLAP_CRITICAL_CONFLICT,
     OVERLAP_TAG_DIFFERENCE,
-    PREVIEW_APPLY_ALL_RULES,
-    PREVIEW_APPLY_WHERE_WINS,
-    PREVIEW_APPROVE_RULE,
-    PREVIEW_CREATE_RULE,
-    PREVIEW_DELETE_RULE,
-    PREVIEW_EDIT_RULE,
-    PREVIEW_FORCE_APPLY_RULE,
-    PREVIEW_REMOVE_RULE,
     analyze_rule_overlaps,
     analyze_shadowed_rules,
     analyze_specificity_warnings,
@@ -28,8 +20,6 @@ from finance_app.modules.rules.audit import (
     compute_rule_match_sets,
     get_rule_audit_summary,
     last_matched_date,
-    preview_rule_change,
-    preview_rule_set_change,
     shared_matching_transaction_audits,
 )
 from finance_app.modules.rules.audit_formatting import (
@@ -51,6 +41,18 @@ from finance_app.modules.rules.audit_formatting import (
     recommended_next_step,
     win_interactions_for_rule,
     win_rate_label,
+)
+from finance_app.modules.rules.audit_preview import (
+    PREVIEW_APPLY_ALL_RULES,
+    PREVIEW_APPLY_WHERE_WINS,
+    PREVIEW_APPROVE_RULE,
+    PREVIEW_CREATE_RULE,
+    PREVIEW_DELETE_RULE,
+    PREVIEW_EDIT_RULE,
+    PREVIEW_FORCE_APPLY_RULE,
+    PREVIEW_REMOVE_RULE,
+    preview_rule_change,
+    preview_rule_set_change,
 )
 from finance_app.modules.rules.audit_tables import (
     build_audit_table_context,

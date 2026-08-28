@@ -57,6 +57,117 @@
 				<fk_column name="user_id" pk="id" />
 			</fk>
 		</table>
+		<table name="background_job_events" spec="" >
+			<column name="id" type="INTEGER" mandatory="y" >
+				<identity><![CDATA[AUTOINCREMENT]]></identity>
+			</column>
+			<column name="job_id" type="TEXT" length="64" mandatory="y" />
+			<column name="created_at" type="TEXT" length="32" mandatory="y" />
+			<column name="level" type="TEXT" length="32" mandatory="y" />
+			<column name="message" type="TEXT" mandatory="y" />
+			<column name="params" type="TEXT" length="4096" mandatory="y" >
+				<defo><![CDATA['{}']]></defo>
+			</column>
+			<index name="pk_background_job_events" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="idx_background_job_events_job_created" unique="NORMAL" >
+				<column name="job_id" />
+				<column name="id" />
+			</index>
+			<constraint name="ck_background_job_events_background_job_events_level_allowed" type="CHECK" options="" >
+				<string><![CDATA[level IN ('error', 'info', 'warning')]]></string>
+			</constraint>
+			<constraint name="ck_background_job_events_background_job_events_message_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(message) != '']]></string>
+			</constraint>
+			<fk name="fk_background_job_events_job_id_background_jobs" to_schema="Default" to_table="background_jobs" delete_action="cascade" >
+				<fk_column name="job_id" pk="id" />
+			</fk>
+		</table>
+		<table name="background_jobs" spec="" >
+			<column name="id" type="TEXT" length="64" mandatory="y" />
+			<column name="label" type="TEXT" length="512" mandatory="y" />
+			<column name="queue" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA['main']]></defo>
+			</column>
+			<column name="status" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA['queued']]></defo>
+			</column>
+			<column name="created_at" type="TEXT" length="32" mandatory="y" />
+			<column name="started_at" type="TEXT" length="32" />
+			<column name="finished_at" type="TEXT" length="32" />
+			<column name="result" type="TEXT" />
+			<column name="error" type="TEXT" />
+			<column name="progress_current" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="progress_total" type="INTEGER" />
+			<column name="progress_percent" type="INTEGER" />
+			<column name="progress_message" type="TEXT" />
+			<column name="progress_params" type="TEXT" length="4096" mandatory="y" >
+				<defo><![CDATA['{}']]></defo>
+			</column>
+			<column name="cancel_requested" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<column name="undo_status" type="TEXT" length="32" mandatory="y" >
+				<defo><![CDATA['unavailable']]></defo>
+			</column>
+			<column name="undo_result" type="TEXT" />
+			<column name="undo_error" type="TEXT" />
+			<column name="undone_at" type="TEXT" length="32" />
+			<column name="created_sequence" type="INTEGER" mandatory="y" >
+				<defo><![CDATA[0]]></defo>
+			</column>
+			<index name="pk_background_jobs" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="idx_background_jobs_finished" unique="NORMAL" >
+				<column name="finished_at" />
+			</index>
+			<index name="idx_background_jobs_queue_status" unique="NORMAL" >
+				<column name="queue" />
+				<column name="status" />
+			</index>
+			<index name="idx_background_jobs_created" unique="NORMAL" >
+				<column name="created_at" />
+				<column name="created_sequence" />
+			</index>
+			<index name="idx_background_jobs_status" unique="NORMAL" >
+				<column name="status" />
+			</index>
+			<constraint name="ck_background_jobs_background_jobs_id_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(id) != '']]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_label_non_empty" type="CHECK" options="" >
+				<string><![CDATA[trim(label) != '']]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_queue_allowed" type="CHECK" options="" >
+				<string><![CDATA[queue IN ('ai', 'main')]]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_status_allowed" type="CHECK" options="" >
+				<string><![CDATA[status IN ('cancelled', 'completed', 'failed', 'queued', 'running')]]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_undo_status_allowed" type="CHECK" options="" >
+				<string><![CDATA[undo_status IN ('available', 'unavailable', 'undoing', 'undone')]]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_progress_current_non_negative" type="CHECK" options="" >
+				<string><![CDATA[progress_current >= 0]]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_progress_total_non_negative" type="CHECK" options="" >
+				<string><![CDATA[progress_total IS NULL OR progress_total >= 0]]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_progress_percent_range" type="CHECK" options="" >
+				<string><![CDATA[progress_percent IS NULL OR (progress_percent >= 0 AND progress_percent <= 100)]]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_cancel_requested_bool" type="CHECK" options="" >
+				<string><![CDATA[cancel_requested IN (0, 1)]]></string>
+			</constraint>
+			<constraint name="ck_background_jobs_background_jobs_created_sequence_non_negative" type="CHECK" options="" >
+				<string><![CDATA[created_sequence >= 0]]></string>
+			</constraint>
+		</table>
 		<table name="categories" spec="" >
 			<column name="id" type="INTEGER" mandatory="y" >
 				<identity><![CDATA[AUTOINCREMENT]]></identity>
@@ -858,6 +969,8 @@
 		<diagram name="Diagram" id="cbc92950-0bb0-484f-816c-daebf3ecff94" show_relation="columns" color="333333" >
 			<entity schema="Default" name="accounts" color="3986C1" x="513" y="931" />
 			<entity schema="Default" name="audit_log" color="3986C1" x="228" y="57" />
+			<entity schema="Default" name="background_job_events" color="3986C1" x="1254" y="76" />
+			<entity schema="Default" name="background_jobs" color="3986C1" x="1501" y="190" />
 			<entity schema="Default" name="categories" color="3986C1" x="893" y="399" />
 			<entity schema="Default" name="category_rule_tags" color="3986C1" x="1083" y="228" />
 			<entity schema="Default" name="category_rules" color="3986C1" x="627" y="114" >

@@ -19,7 +19,7 @@ This guide covers repository onboarding and development workflow. Detailed archi
 - [src/finance_app/app.py](../src/finance_app/app.py): application entry point used by the `finscope` console command.
 - [src/finance_app/core/](../src/finance_app/core/): configuration, constants, SQLAlchemy query helpers, CSRF, filters, and i18n helpers.
 - [src/finance_app/database/](../src/finance_app/database/): SQLAlchemy lifecycle, metadata, schema validation, and initialization seeds.
-- [src/finance_app/background/](../src/finance_app/background/): in-memory background job runner and undo orchestration.
+- [src/finance_app/background/](../src/finance_app/background/): process-local background job runner, undo orchestration, and persisted job history repository.
 - [src/finance_app/modules/](../src/finance_app/modules/): feature modules, including auth, settings, upload, rules, review, and reporting.
 - [src/finance_app/templates/](../src/finance_app/templates/): Jinja templates.
 - [src/finance_app/static/](../src/finance_app/static/): CSS, JavaScript, image assets, and vendored browser libraries.
@@ -79,7 +79,7 @@ files use [constraints.txt](../constraints.txt) to install the tested dependency
 resolution. `package-lock.json` pins the npm formatter and linting dependencies:
 Prettier, ESLint, Stylelint, and their shared configs.
 
-Python packaging and declared dependencies are configured in [pyproject.toml](../pyproject.toml). Runtime dependencies live in `[project].dependencies`; development tools live in the `dev` optional dependency extra. [requirements.txt](../requirements.txt) is a non-editable pip compatibility wrapper for normal installs, and [requirements-dev.txt](../requirements-dev.txt) is an editable wrapper for contributor installs. Do not duplicate Python dependency names in requirements files.
+Python packaging and declared dependencies are configured in [pyproject.toml](../pyproject.toml). Runtime dependencies live in `[project].dependencies`; development tools live in the `dev` optional dependency extra. [requirements.txt](../requirements.txt) is a non-editable pip install wrapper for normal installs, and [requirements-dev.txt](../requirements-dev.txt) is an editable wrapper for contributor installs. Do not duplicate Python dependency names in requirements files.
 
 Contributors can also install the development extra directly with the same constraints:
 
@@ -187,7 +187,7 @@ about each quality tool.
 - [Architecture](architecture.md): feature-module layering and runtime boundaries.
 - [Database](database.md): backend selection, schema responsibilities, table documentation, and generated artifacts.
 - [Testing](testing.md): pytest markers, command reference, suite layout, and quality gates.
-- [Processing activity](background-jobs.md): queue behavior, state lifecycle, cancellation, and undo behavior.
+- [Processing activity](background-jobs.md): queue behavior, persisted history, state lifecycle, cleanup, cancellation, and undo behavior.
 - [Authentication and authorization](authentication.md): owner bootstrap, roles, password handling, settings permissions, and deployment notes.
 - [Categories, tags, and categorization](taxonomy.md): category/tag storage, seed data, synchronization, and categorization flow.
 - [Troubleshooting](troubleshooting.md): common local setup and runtime issues.

@@ -24,9 +24,9 @@ def category_count(conn, name):
     )
 
 
-def test_real_app_form_post_rejects_missing_csrf_token(client, core_conn):
+def test_real_app_form_post_rejects_missing_csrf_token(owner_client, core_conn):
     """Verify real form routes reject missing CSRF tokens before mutation."""
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/categories/create",
         data={"name": "CSRF Missing Category"},
     )
@@ -35,11 +35,11 @@ def test_real_app_form_post_rejects_missing_csrf_token(client, core_conn):
     assert category_count(core_conn, "CSRF Missing Category") == 0
 
 
-def test_real_app_form_post_rejects_invalid_csrf_token(client, core_conn):
+def test_real_app_form_post_rejects_invalid_csrf_token(owner_client, core_conn):
     """Verify real form routes reject invalid CSRF tokens before mutation."""
-    set_csrf_token(client, "expected-token")
+    set_csrf_token(owner_client, "expected-token")
 
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/categories/create",
         data={
             CSRF_FIELD_NAME: "wrong-token",
@@ -51,12 +51,12 @@ def test_real_app_form_post_rejects_invalid_csrf_token(client, core_conn):
     assert category_count(core_conn, "CSRF Invalid Category") == 0
 
 
-def test_real_app_form_post_accepts_valid_csrf_token(client, core_conn):
+def test_real_app_form_post_accepts_valid_csrf_token(owner_client, core_conn):
     """Verify real form routes accept valid CSRF tokens and continue to the route."""
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/categories/create",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "name": "CSRF Valid Category",
             "description": "Created through a protected route.",
             "instruction": "Use only in CSRF tests.",
@@ -77,9 +77,9 @@ def test_real_app_form_post_accepts_valid_csrf_token(client, core_conn):
     )
 
 
-def test_real_app_json_post_rejects_missing_csrf_token_as_json(client, core_conn):
+def test_real_app_json_post_rejects_missing_csrf_token_as_json(owner_client, core_conn):
     """Verify real JSON routes return JSON CSRF errors before mutation."""
-    response = client.post(
+    response = owner_client.post(
         "/recurring/patterns/confirm",
         json={
             "patternKey": "CSRF JSON::spending",
@@ -96,16 +96,16 @@ def test_real_app_json_post_rejects_missing_csrf_token_as_json(client, core_conn
     assert get_recurring_pattern(core_conn, "CSRF JSON::spending") is None
 
 
-def test_real_app_json_post_accepts_valid_csrf_header(client, core_conn):
+def test_real_app_json_post_accepts_valid_csrf_header(owner_client, core_conn):
     """Verify real JSON routes accept valid CSRF headers and mutate state."""
-    response = client.post(
+    response = owner_client.post(
         "/recurring/patterns/confirm",
         json={
             "patternKey": "CSRF Header::spending",
             "merchant": "CSRF Header",
             "type": "spending",
         },
-        headers={CSRF_HEADER_NAME: set_csrf_token(client)},
+        headers={CSRF_HEADER_NAME: set_csrf_token(owner_client)},
     )
 
     pattern = get_recurring_pattern(core_conn, "CSRF Header::spending")
@@ -120,9 +120,9 @@ def test_real_app_json_post_accepts_valid_csrf_header(client, core_conn):
     assert pattern["active"] == 1
 
 
-def test_real_app_fetch_form_post_returns_json_csrf_error(client, core_conn):
+def test_real_app_fetch_form_post_returns_json_csrf_error(owner_client, core_conn):
     """Verify fetch-style form posts get JSON CSRF errors from real routes."""
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/categories/create",
         data={"name": "CSRF Fetch Category"},
         headers={"X-Requested-With": "fetch"},

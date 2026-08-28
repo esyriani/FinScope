@@ -8,6 +8,16 @@ from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
+from finance_app.modules.transactions.ai_payloads import (
+    get_transaction_ai_suggestion,
+    store_transaction_ai_suggestion,
+)
+from finance_app.modules.transactions.controller import (
+    LEGACY_TRANSACTION_AI_RESULT,
+    LEGACY_TRANSACTION_AI_SUGGESTION,
+    TRANSACTION_AI_RESULT_REFERENCE,
+    TRANSACTION_AI_SUGGESTION_REFERENCE,
+)
 
 
 def insert_route_transaction(conn, fingerprint="route-tx", category="UNKNOWN", needs_review=1):
@@ -40,7 +50,13 @@ def transaction_state(conn, tx_id):
     )
 
 
-def test_transactions_table_exports_category_method_and_score_separately(client, core_conn):
+def client_session_snapshot(client):
+    """Return decoded Flask client-session data for security assertions."""
+    with client.session_transaction() as client_session:
+        return dict(client_session)
+
+
+def test_transactions_table_exports_category_method_and_score_separately(owner_client, core_conn):
     """Verify transaction category cells export category, method, and score fields."""
     insert_test_transaction(
         core_conn,
@@ -53,7 +69,7 @@ def test_transactions_table_exports_category_method_and_score_separately(client,
         fingerprint="route-tx-export-category-parts",
     )
 
-    response = client.get("/transactions?period=all")
+    response = owner_client.get("/transactions?period=all")
 
     assert response.status_code == 200
     assert_has_element(
@@ -83,9 +99,9 @@ def test_transactions_table_exports_category_method_and_score_separately(client,
     )
 
 
-def test_transactions_custom_range_filter_renders_date_fields(client):
+def test_transactions_custom_range_filter_renders_date_fields(owner_client):
     """Verify custom period filtering exposes bookmarkable date fields."""
-    response = client.get("/transactions?period=custom&date_from=2026-01-01&date_to=2026-01-31")
+    response = owner_client.get("/transactions?period=custom&date_from=2026-01-01&date_to=2026-01-31")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -105,14 +121,14 @@ def test_transactions_custom_range_filter_renders_date_fields(client):
     assert "js/transactions.js" in body
 
 
-def test_update_transaction_category_route_saves_manual_category_rule_and_tags(client, core_conn):
+def test_update_transaction_category_route_saves_manual_category_rule_and_tags(owner_client, core_conn):
     """Verify category route updates transaction and saves an optional rule."""
     tx_id = insert_route_transaction(core_conn)
 
-    response = client.post(
+    response = owner_client.post(
         f"/transactions/{tx_id}/category",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "category": "Food",
             "tags": ["Tax"],
             "rule_action": "save",
@@ -144,14 +160,14 @@ def test_update_transaction_category_route_saves_manual_category_rule_and_tags(c
     assert get_rule_tags_by_rule_id(core_conn, [rule._mapping["id"]])[rule._mapping["id"]] == ["Tax"]
 
 
-def test_update_transaction_category_route_can_update_transaction_only(client, core_conn):
+def test_update_transaction_category_route_can_update_transaction_only(owner_client, core_conn):
     """Verify category route can update one transaction without creating a rule."""
     tx_id = insert_route_transaction(core_conn, fingerprint="route-tx-only")
 
-    response = client.post(
+    response = owner_client.post(
         f"/transactions/{tx_id}/category",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "category": "Food",
             "rule_action": "transaction_only",
         },
@@ -165,7 +181,7 @@ def test_update_transaction_category_route_can_update_transaction_only(client, c
     assert rule_count == 0
 
 
-def test_update_transaction_category_route_does_not_verify_unchanged_transaction(client, core_conn):
+def test_update_transaction_category_route_does_not_verify_unchanged_transaction(owner_client, core_conn):
     """Verify unchanged category submissions do not mark a transaction verified."""
     tx_id = insert_route_transaction(
         core_conn,
@@ -174,10 +190,10 @@ def test_update_transaction_category_route_does_not_verify_unchanged_transaction
         needs_review=0,
     )
 
-    response = client.post(
+    response = owner_client.post(
         f"/transactions/{tx_id}/category",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "category": "Food",
             "rule_action": "transaction_only",
         },
@@ -192,7 +208,7 @@ def test_update_transaction_category_route_does_not_verify_unchanged_transaction
     assert tx["reviewed_at"] is None
 
 
-def test_update_transaction_category_route_approves_unchanged_transaction_when_saving_rule(client, core_conn):
+def test_update_transaction_category_route_approves_unchanged_transaction_when_saving_rule(owner_client, core_conn):
     """Verify saving a rule counts as explicit approval for the current transaction."""
     tx_id = insert_route_transaction(
         core_conn,
@@ -201,10 +217,10 @@ def test_update_transaction_category_route_approves_unchanged_transaction_when_s
         needs_review=0,
     )
 
-    response = client.post(
+    response = owner_client.post(
         f"/transactions/{tx_id}/category",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "category": "Food",
             "rule_action": "save",
             "keyword": "Metro Grocery",
@@ -228,12 +244,12 @@ def test_update_transaction_category_route_approves_unchanged_transaction_when_s
     assert tuple(rule) == ("METRO GROCERY", "Food", 12.34, 12.34)
 
 
-def test_update_transaction_category_route_validates_missing_transaction_and_amounts(client, core_conn):
+def test_update_transaction_category_route_validates_missing_transaction_and_amounts(owner_client, core_conn):
     """Verify category route handles missing rows and invalid amount bounds."""
     tx_id = insert_route_transaction(core_conn, fingerprint="route-invalid-amount")
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
 
-    missing = client.post(
+    missing = owner_client.post(
         "/transactions/9999/category",
         data={
             CSRF_FIELD_NAME: token,
@@ -242,7 +258,7 @@ def test_update_transaction_category_route_validates_missing_transaction_and_amo
         },
         follow_redirects=True,
     )
-    invalid_amount = client.post(
+    invalid_amount = owner_client.post(
         f"/transactions/{tx_id}/category",
         data={
             CSRF_FIELD_NAME: token,
@@ -259,13 +275,13 @@ def test_update_transaction_category_route_validates_missing_transaction_and_amo
     assert transaction_state(core_conn, tx_id)["category"] == "UNKNOWN"
 
 
-def test_verify_transaction_route_marks_transaction_reviewed(client, core_conn):
+def test_verify_transaction_route_marks_transaction_reviewed(owner_client, core_conn):
     """Verify verify route marks a transaction as no longer needing review."""
     tx_id = insert_route_transaction(core_conn, fingerprint="route-verify")
 
-    response = client.post(
+    response = owner_client.post(
         f"/transactions/{tx_id}/verify",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
 
@@ -276,11 +292,11 @@ def test_verify_transaction_route_marks_transaction_reviewed(client, core_conn):
     assert tx["reviewed_at"] is not None
 
 
-def test_verify_transaction_route_reports_missing_transaction(client):
+def test_verify_transaction_route_reports_missing_transaction(owner_client):
     """Verify verify route reports missing transaction ids."""
-    response = client.post(
+    response = owner_client.post(
         "/transactions/9999/verify",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
 
@@ -288,17 +304,17 @@ def test_verify_transaction_route_reports_missing_transaction(client):
     assert_visible_text(response, "Transaction not found.")
 
 
-def test_update_transaction_ignored_route_ignores_and_restores(client, core_conn):
+def test_update_transaction_ignored_route_ignores_and_restores(owner_client, core_conn):
     """Verify ignored route toggles ignored state and review status."""
     tx_id = insert_route_transaction(core_conn, fingerprint="route-ignore")
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
 
-    ignored = client.post(
+    ignored = owner_client.post(
         f"/transactions/{tx_id}/ignored",
         data={CSRF_FIELD_NAME: token, "ignored": "1"},
         follow_redirects=True,
     )
-    restored = client.post(
+    restored = owner_client.post(
         f"/transactions/{tx_id}/ignored",
         data={CSRF_FIELD_NAME: token, "ignored": "0"},
         follow_redirects=True,
@@ -311,11 +327,11 @@ def test_update_transaction_ignored_route_ignores_and_restores(client, core_conn
     assert tx["needs_review"] == 0
 
 
-def test_update_transaction_ignored_route_reports_missing_transaction(client):
+def test_update_transaction_ignored_route_reports_missing_transaction(owner_client):
     """Verify ignored route reports missing transaction ids."""
-    response = client.post(
+    response = owner_client.post(
         "/transactions/9999/ignored",
-        data={CSRF_FIELD_NAME: set_csrf_token(client), "ignored": "1"},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client), "ignored": "1"},
         follow_redirects=True,
     )
 
@@ -323,16 +339,16 @@ def test_update_transaction_ignored_route_reports_missing_transaction(client):
     assert_visible_text(response, "Transaction not found.")
 
 
-def test_batch_transactions_route_approves_only_selected_ids(client, core_conn):
+def test_batch_transactions_route_approves_only_selected_ids(owner_client, core_conn):
     """Verify batch approval mutates only explicitly selected transactions."""
     first_id = insert_route_transaction(core_conn, fingerprint="route-batch-approve-1")
     second_id = insert_route_transaction(core_conn, fingerprint="route-batch-approve-2")
     other_id = insert_route_transaction(core_conn, fingerprint="route-batch-approve-other")
 
-    response = client.post(
+    response = owner_client.post(
         "/transactions/batch",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "transaction_ids": [str(first_id), str(second_id), str(second_id), "bad"],
             "batch_action": "approve",
         },
@@ -352,15 +368,15 @@ def test_batch_transactions_route_approves_only_selected_ids(client, core_conn):
     assert other["reviewed_at"] is None
 
 
-def test_batch_transactions_route_ignores_only_selected_ids(client, core_conn):
+def test_batch_transactions_route_ignores_only_selected_ids(owner_client, core_conn):
     """Verify batch ignore mutates only explicitly selected transactions."""
     ignored_id = insert_route_transaction(core_conn, fingerprint="route-batch-ignore")
     other_id = insert_route_transaction(core_conn, fingerprint="route-batch-ignore-other")
 
-    response = client.post(
+    response = owner_client.post(
         "/transactions/batch",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "transaction_ids": [str(ignored_id)],
             "batch_action": "ignore",
         },
@@ -377,7 +393,7 @@ def test_batch_transactions_route_ignores_only_selected_ids(client, core_conn):
     assert other["needs_review"] == 1
 
 
-def test_batch_transactions_route_queues_selected_recategorization(client, monkeypatch):
+def test_batch_transactions_route_queues_selected_recategorization(owner_client, monkeypatch):
     """Verify batch recategorization queues a job for the selected IDs only."""
     from finance_app.modules.transactions import controller as transaction_controller
 
@@ -394,10 +410,10 @@ def test_batch_transactions_route_queues_selected_recategorization(client, monke
         queue_for_test,
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/transactions/batch",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "transaction_ids": ["11", "22"],
             "batch_action": "recategorize",
             "ai_token_estimate_confirmed": "1",
@@ -410,7 +426,7 @@ def test_batch_transactions_route_queues_selected_recategorization(client, monke
     assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
 
 
-def test_batch_recategorization_requires_token_estimate_confirmation(client, monkeypatch):
+def test_batch_recategorization_requires_token_estimate_confirmation(owner_client, monkeypatch):
     """Verify selected recategorization does not queue without estimate confirmation."""
     from finance_app.modules.transactions import controller as transaction_controller
 
@@ -427,10 +443,10 @@ def test_batch_recategorization_requires_token_estimate_confirmation(client, mon
         queue_for_test,
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/transactions/batch",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "transaction_ids": ["11", "22"],
             "batch_action": "recategorize",
         },
@@ -442,7 +458,7 @@ def test_batch_recategorization_requires_token_estimate_confirmation(client, mon
     assert_visible_text(response, "Review the estimated AI usage before continuing.")
 
 
-def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(client, core_conn, monkeypatch):
+def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(owner_client, core_conn, monkeypatch):
     """Verify selected recategorization can proceed without modal confirmation when disabled."""
     from finance_app.modules.transactions import controller as transaction_controller
 
@@ -460,10 +476,10 @@ def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(
         queue_for_test,
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/transactions/batch",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "transaction_ids": ["11", "22"],
             "batch_action": "recategorize",
         },
@@ -475,7 +491,7 @@ def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(
     assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
 
 
-def test_estimate_batch_transaction_ai_route_returns_json(client, monkeypatch):
+def test_estimate_batch_transaction_ai_route_returns_json(owner_client, monkeypatch):
     """Verify selected recategorization estimates return JSON."""
     from finance_app.modules.transactions import controller as transaction_controller
 
@@ -496,10 +512,10 @@ def test_estimate_batch_transaction_ai_route_returns_json(client, monkeypatch):
         estimate_for_test,
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/transactions/batch/ai-estimate",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "transaction_ids": ["11", "22"],
         },
     )
@@ -510,12 +526,12 @@ def test_estimate_batch_transaction_ai_route_returns_json(client, monkeypatch):
     assert response.get_json()["message"] == "AI usage estimate ready."
 
 
-def test_batch_transactions_route_requires_selection(client):
+def test_batch_transactions_route_requires_selection(owner_client):
     """Verify batch actions reject empty selections before mutating anything."""
-    response = client.post(
+    response = owner_client.post(
         "/transactions/batch",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "batch_action": "approve",
         },
         follow_redirects=True,
@@ -525,7 +541,7 @@ def test_batch_transactions_route_requires_selection(client):
     assert_visible_text(response, "Select at least one transaction.")
 
 
-def test_suggest_transaction_category_route_shows_result_modal(client, core_conn, monkeypatch):
+def test_suggest_transaction_category_route_shows_result_modal(owner_client, core_conn, monkeypatch):
     """Verify the one-off AI route redirects back with suggestion modal content."""
     from finance_app.modules.transactions import controller as transaction_controller
 
@@ -568,6 +584,7 @@ def test_suggest_transaction_category_route_shows_result_modal(client, core_conn
             "rule_keyword": "TVA SPORTS DIRECT",
             "rule_exact_amount": "20.68",
             "persistence": {"category": "Entertainment"},
+            "original_state": {"category": "UNKNOWN", "tag_ids": []},
         }
 
     monkeypatch.setattr(
@@ -576,16 +593,33 @@ def test_suggest_transaction_category_route_shows_result_modal(client, core_conn
         suggest_ai_for_test,
     )
 
-    response = client.post(
+    response = owner_client.post(
         f"/transactions/{tx_id}/suggest-category",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "ai_token_estimate_confirmed": "1",
         },
         follow_redirects=True,
     )
 
+    session_data = client_session_snapshot(owner_client)
+    suggestion_reference = session_data.get(TRANSACTION_AI_SUGGESTION_REFERENCE)
+    with owner_client.application.app_context():
+        pending_suggestion = get_transaction_ai_suggestion(suggestion_reference)
+
     assert response.status_code == 200
+    assert TRANSACTION_AI_RESULT_REFERENCE not in session_data
+    assert LEGACY_TRANSACTION_AI_RESULT not in session_data
+    assert LEGACY_TRANSACTION_AI_SUGGESTION not in session_data
+    assert suggestion_reference
+    assert "TVA SPORTS DIRECT" not in repr(session_data)
+    assert "Entertainment" not in repr(session_data)
+    assert pending_suggestion == {
+        "transaction_id": tx_id,
+        "can_apply": True,
+        "persistence": {"category": "Entertainment"},
+        "original_state": {"category": "UNKNOWN", "tag_ids": []},
+    }
     assert_visible_text(
         response,
         "AI category suggestion",
@@ -597,7 +631,7 @@ def test_suggest_transaction_category_route_shows_result_modal(client, core_conn
     )
 
 
-def test_suggest_transaction_category_requires_token_estimate_confirmation(client, monkeypatch):
+def test_suggest_transaction_category_requires_token_estimate_confirmation(owner_client, monkeypatch):
     """Verify one-off AI suggestions do not run without estimate confirmation."""
     from finance_app.modules.transactions import controller as transaction_controller
 
@@ -614,9 +648,9 @@ def test_suggest_transaction_category_requires_token_estimate_confirmation(clien
         suggest_ai_for_test,
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/transactions/123/suggest-category",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
         follow_redirects=True,
     )
 
@@ -625,7 +659,7 @@ def test_suggest_transaction_category_requires_token_estimate_confirmation(clien
     assert_visible_text(response, "Review the estimated AI usage before continuing.")
 
 
-def test_estimate_transaction_category_suggestion_route_returns_json(client, monkeypatch):
+def test_estimate_transaction_category_suggestion_route_returns_json(owner_client, monkeypatch):
     """Verify one-transaction AI estimates return JSON."""
     from finance_app.modules.transactions import controller as transaction_controller
 
@@ -644,9 +678,9 @@ def test_estimate_transaction_category_suggestion_route_returns_json(client, mon
         estimate_for_test,
     )
 
-    response = client.post(
+    response = owner_client.post(
         "/transactions/123/suggest-category/estimate",
-        data={CSRF_FIELD_NAME: set_csrf_token(client)},
+        data={CSRF_FIELD_NAME: set_csrf_token(owner_client)},
     )
 
     assert response.status_code == 200
@@ -654,7 +688,7 @@ def test_estimate_transaction_category_suggestion_route_returns_json(client, mon
     assert response.get_json()["message"] == "AI usage estimate ready."
 
 
-def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client, core_conn, monkeypatch):
+def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(owner_client, core_conn, monkeypatch):
     """Verify the AI suggestion apply route delegates to the transaction service."""
     from finance_app.modules.transactions import controller as transaction_controller
 
@@ -666,8 +700,10 @@ def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client
     }
     captured = {}
 
-    with client.session_transaction() as session:
-        session["transaction_ai_suggestion"] = pending_suggestion
+    with owner_client.application.app_context():
+        suggestion_reference = store_transaction_ai_suggestion(pending_suggestion)
+    with owner_client.session_transaction() as session:
+        session[TRANSACTION_AI_SUGGESTION_REFERENCE] = suggestion_reference
 
     def apply_for_test(transaction_id, suggestion, action, rule_keyword="", amount_min=None, amount_max=None):
         """Capture the submitted explicit apply action."""
@@ -689,10 +725,10 @@ def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client
         apply_for_test,
     )
 
-    response = client.post(
+    response = owner_client.post(
         f"/transactions/{tx_id}/ai-suggestion",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "suggestion_action": "apply_and_create_rule",
             "keyword": "TVA SPORTS DIRECT",
             "amount_min": "",
@@ -701,8 +737,9 @@ def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client
         follow_redirects=True,
     )
 
-    with client.session_transaction() as session:
-        stored_suggestion = session.get("transaction_ai_suggestion")
+    session_data = client_session_snapshot(owner_client)
+    with owner_client.application.app_context():
+        stored_suggestion = get_transaction_ai_suggestion(suggestion_reference)
 
     assert response.status_code == 200
     assert_visible_text(response, "AI suggestion applied. Rule saved.")
@@ -712,4 +749,29 @@ def test_apply_transaction_ai_suggestion_route_applies_pending_suggestion(client
     assert captured["rule_keyword"] == "TVA SPORTS DIRECT"
     assert captured["amount_min"] is None
     assert captured["amount_max"] is None
+    assert TRANSACTION_AI_SUGGESTION_REFERENCE not in session_data
+    assert LEGACY_TRANSACTION_AI_SUGGESTION not in session_data
     assert stored_suggestion is None
+
+
+def test_apply_transaction_ai_suggestion_route_expires_missing_server_payload(owner_client, core_conn):
+    """Verify stale AI suggestion references expire without client-side payloads."""
+    tx_id = insert_route_transaction(core_conn, fingerprint="route-apply-ai-missing-payload")
+    with owner_client.session_transaction() as session:
+        session[TRANSACTION_AI_SUGGESTION_REFERENCE] = "missing-reference"
+        session[LEGACY_TRANSACTION_AI_SUGGESTION] = {"description": "TVA SPORTS DIRECT"}
+
+    response = owner_client.post(
+        f"/transactions/{tx_id}/ai-suggestion",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "suggestion_action": "apply",
+        },
+        follow_redirects=True,
+    )
+
+    session_data = client_session_snapshot(owner_client)
+    assert response.status_code == 200
+    assert_visible_text(response, "AI suggestion expired. Use Suggest category again.")
+    assert TRANSACTION_AI_SUGGESTION_REFERENCE not in session_data
+    assert LEGACY_TRANSACTION_AI_SUGGESTION not in session_data

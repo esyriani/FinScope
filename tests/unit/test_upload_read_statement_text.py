@@ -1,11 +1,10 @@
-"""Tests for statement text extraction in the upload controller."""
+"""Tests for statement text extraction in upload previews."""
 
 import io
 
-from flask import get_flashed_messages
 from werkzeug.datastructures import FileStorage
 
-from finance_app.modules.upload import controller as upload_controller
+from finance_app.modules.upload.preview import read_statement_text
 
 
 def file_storage(payload=b"content", filename="statement.csv"):
@@ -13,28 +12,23 @@ def file_storage(payload=b"content", filename="statement.csv"):
     return FileStorage(stream=io.BytesIO(payload), filename=filename)
 
 
-def test_read_statement_text_rejects_pdf_files(app):
+def test_read_statement_text_rejects_pdf_files():
     """Verify PDF uploads are rejected because statements are CSV-only."""
     uploaded_file = file_storage(b"%PDF-1.4", "scanned.pdf")
 
-    with app.test_request_context("/upload"):
-        assert upload_controller.read_statement_text(uploaded_file, "pdf") is None
-        assert get_flashed_messages() == ["Unsupported file type."]
+    assert read_statement_text(uploaded_file, "pdf") is None
 
 
-def test_read_statement_text_rejects_unsupported_file_types(app):
-    """Verify unsupported extensions return no text and flash a message."""
+def test_read_statement_text_rejects_unsupported_file_types():
+    """Verify unsupported extensions return no text."""
     uploaded_file = file_storage(b"plain text", "statement.txt")
 
-    with app.test_request_context("/upload"):
-        assert upload_controller.read_statement_text(uploaded_file, "txt") is None
-        assert get_flashed_messages() == ["Unsupported file type."]
+    assert read_statement_text(uploaded_file, "txt") is None
 
 
-def test_read_statement_text_decodes_csv_with_utf8_sig(app):
+def test_read_statement_text_decodes_csv_with_utf8_sig():
     """Verify CSV uploads are decoded and stream position is restored."""
     uploaded_file = file_storage("\ufeffDate,Description,Amount\n".encode("utf-8"), "statement.csv")
 
-    with app.test_request_context("/upload"):
-        assert upload_controller.read_statement_text(uploaded_file, "csv") == "Date,Description,Amount\n"
-        assert uploaded_file.stream.tell() == 0
+    assert read_statement_text(uploaded_file, "csv") == "Date,Description,Amount\n"
+    assert uploaded_file.stream.tell() == 0

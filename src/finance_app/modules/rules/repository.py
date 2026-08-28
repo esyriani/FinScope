@@ -3,9 +3,10 @@
 from collections.abc import Iterable, Mapping, MutableSequence, Sequence
 from typing import Any
 
-from sqlalchemy import and_, delete, func, insert, select
+from sqlalchemy import and_, delete, func, insert, select, update
 
 from finance_app.core.category_sql import category_assignment_condition
+from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
 from finance_app.core.money import quantize_money
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -30,6 +31,7 @@ from finance_app.modules.categories.repository import (
     resolve_category_id,
 )
 from finance_app.modules.categories.service import create_category
+from finance_app.modules.categories.sources import TransactionCategoryState
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
 from finance_app.modules.merchants.repository import find_merchant_by_name, get_or_create_merchant_for_name
 
@@ -295,6 +297,70 @@ def rule_snapshots_equal(left: Sequence[Mapping[str, Any]], right: Sequence[Mapp
     return [tuple(rule[column] for column in columns) + (tuple(rule.get("tags") or []),) for rule in left] == [
         tuple(rule[column] for column in columns) + (tuple(rule.get("tags") or []),) for rule in right
     ]
+
+
+def update_transaction_state(
+    conn: Any,
+    transaction_id: int,
+    state: TransactionCategoryState,
+    transaction_kind: str,
+) -> None:
+    """Persist a rule-assigned transaction category state."""
+    conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id == transaction_id)
+        .values(
+            category=state.category,
+            category_id=(
+                state.category_id if state.category_id is not None else resolve_category_id(conn, state.category)
+            ),
+            needs_review=0,
+            category_source=state.assignment.category_source,
+            category_confidence=state.assignment.category_confidence,
+            category_rule_id=state.assignment.category_rule_id,
+            category_metadata=state.assignment.category_metadata,
+            categorized_at=state.assignment.categorized_at,
+            reviewed_at=state.assignment.reviewed_at,
+            transaction_kind=transaction_kind,
+        )
+    )
+
+
+def restore_rule_change(conn: Any, change: Mapping[str, Any]) -> Any:
+    """Restore one transaction if it still has the state written by a rule job."""
+    old_category_id = change.get("old_category_id")
+    if old_category_id is None:
+        old_category_id = resolve_category_id(conn, change["old_category"])
+
+    return conn.execute(
+        update(transactions_table)
+        .where(
+            transactions_table.c.id == change["transaction_id"],
+            nullable_equals(transactions_table.c.category, change["new_category"]),
+            transactions_table.c.needs_review == change["new_needs_review"],
+            transactions_table.c.category_source == change["new_category_source"],
+            nullable_equals(transactions_table.c.category_rule_id, change["new_category_rule_id"]),
+            nullable_equals(transactions_table.c.category_metadata, change["new_category_metadata"]),
+            transactions_table.c.categorized_at == change["new_categorized_at"],
+        )
+        .values(
+            category=change["old_category"],
+            category_id=old_category_id,
+            needs_review=change["old_needs_review"],
+            category_source=change["old_category_source"],
+            category_confidence=change["old_category_confidence"],
+            category_rule_id=change["old_category_rule_id"],
+            category_metadata=change["old_category_metadata"],
+            categorized_at=change["old_categorized_at"],
+            reviewed_at=change["old_reviewed_at"],
+            transaction_kind=change.get("old_transaction_kind", TRANSACTION_KIND_EXPENSE),
+        ),
+    )
+
+
+def nullable_equals(column: Any, value: object) -> Any:
+    """Return a SQLAlchemy condition that treats None as SQL NULL equality."""
+    return column.is_(None) if value is None else column == value
 
 
 def snapshot_transaction_rule_refs(conn: Any) -> list[dict[str, Any]]:

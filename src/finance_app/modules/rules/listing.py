@@ -66,9 +66,6 @@ def build_rules_context(args: Any) -> dict[str, Any]:
     """Build rules context."""
     search = args.get("search", "").strip()
     selected_categories = [category.strip() for category in args.getlist("categories") if category.strip()]
-    legacy_category = args.get("category", "").strip()
-    if legacy_category and legacy_category not in selected_categories:
-        selected_categories.append(legacy_category)
     selected_source = args.get("source", "").strip()
     if selected_source not in CATEGORY_RULE_SOURCES:
         selected_source = ""

@@ -6,7 +6,12 @@ from typing import Any
 
 from sqlalchemy import case, delete, func, select, update
 
+from finance_app.core.builtin_taxonomy import (
+    is_builtin_category_name,
+    is_builtin_tag_name,
+)
 from finance_app.core.category_sql import category_assignment_condition, category_assignment_to_row_condition
+from finance_app.core.taxonomy import clean_color, clean_label, tag_color_for_name
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     categories as categories_table,
@@ -27,19 +32,12 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     transactions as transactions_table,
 )
-from finance_app.modules.categories.builtins import (
-    is_builtin_category_name,
-    is_builtin_tag_name,
-)
-from finance_app.modules.categories.repository import rename_category
-from finance_app.modules.categories.taxonomy import (
+from finance_app.database.taxonomy import (
     builtin_tag_order_expression,
-    clean_color,
-    clean_label,
-    tag_color_for_name,
     upsert_category_metadata,
     upsert_tag_metadata,
 )
+from finance_app.modules.categories.repository import rename_category
 from finance_app.modules.taxonomy_admin.forms import (
     parse_category_form,
     parse_required_int,

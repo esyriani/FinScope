@@ -31,6 +31,13 @@ from sqlalchemy.dialects import mysql
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
     ACCOUNT_TYPES,
+    BACKGROUND_JOB_LOG_LEVELS,
+    BACKGROUND_JOB_QUEUE_MAIN,
+    BACKGROUND_JOB_QUEUES,
+    BACKGROUND_JOB_STATUS_QUEUED,
+    BACKGROUND_JOB_STATUSES,
+    BACKGROUND_JOB_UNDO_STATUS_UNAVAILABLE,
+    BACKGROUND_JOB_UNDO_STATUSES,
     CATEGORY_RULE_DIRECTION_ANY,
     CATEGORY_RULE_DIRECTIONS,
     CATEGORY_RULE_SOURCE_MANUAL,
@@ -218,6 +225,61 @@ audit_log = Table(
     Column("ip_address", String(64)),
     Column("created_at", TIMESTAMP_TYPE, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
     non_empty_constraint("action", "audit_log_action_non_empty"),
+    **AUTOINCREMENT_TABLE_OPTIONS,
+)
+
+background_jobs = Table(
+    "background_jobs",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("label", String(512), nullable=False),
+    Column("queue", String(32), nullable=False, server_default=BACKGROUND_JOB_QUEUE_MAIN),
+    Column("status", String(32), nullable=False, server_default=BACKGROUND_JOB_STATUS_QUEUED),
+    Column("created_at", TIMESTAMP_TYPE, nullable=False),
+    Column("started_at", TIMESTAMP_TYPE),
+    Column("finished_at", TIMESTAMP_TYPE),
+    Column("result", Text),
+    Column("error", Text),
+    Column("progress_current", Integer, nullable=False, server_default=text("0")),
+    Column("progress_total", Integer),
+    Column("progress_percent", Integer),
+    Column("progress_message", Text),
+    Column("progress_params", String(4096), nullable=False, server_default="{}"),
+    Column("cancel_requested", Integer, nullable=False, server_default=text("0")),
+    Column("undo_status", String(32), nullable=False, server_default=BACKGROUND_JOB_UNDO_STATUS_UNAVAILABLE),
+    Column("undo_result", Text),
+    Column("undo_error", Text),
+    Column("undone_at", TIMESTAMP_TYPE),
+    Column("created_sequence", Integer, nullable=False, server_default=text("0")),
+    non_empty_constraint("id", "background_jobs_id_non_empty"),
+    non_empty_constraint("label", "background_jobs_label_non_empty"),
+    allowed_values_constraint("queue", BACKGROUND_JOB_QUEUES, "background_jobs_queue_allowed"),
+    allowed_values_constraint("status", BACKGROUND_JOB_STATUSES, "background_jobs_status_allowed"),
+    allowed_values_constraint("undo_status", BACKGROUND_JOB_UNDO_STATUSES, "background_jobs_undo_status_allowed"),
+    CheckConstraint("progress_current >= 0", name="background_jobs_progress_current_non_negative"),
+    CheckConstraint(
+        "progress_total IS NULL OR progress_total >= 0", name="background_jobs_progress_total_non_negative"
+    ),
+    CheckConstraint(
+        "progress_percent IS NULL OR (progress_percent >= 0 AND progress_percent <= 100)",
+        name="background_jobs_progress_percent_range",
+    ),
+    CheckConstraint("cancel_requested IN (0, 1)", name="background_jobs_cancel_requested_bool"),
+    CheckConstraint("created_sequence >= 0", name="background_jobs_created_sequence_non_negative"),
+    **MYSQL_TABLE_OPTIONS,
+)
+
+background_job_events = Table(
+    "background_job_events",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("job_id", String(64), ForeignKey("background_jobs.id", ondelete="CASCADE"), nullable=False),
+    Column("created_at", TIMESTAMP_TYPE, nullable=False),
+    Column("level", String(32), nullable=False),
+    Column("message", Text, nullable=False),
+    Column("params", String(4096), nullable=False, server_default="{}"),
+    allowed_values_constraint("level", BACKGROUND_JOB_LOG_LEVELS, "background_job_events_level_allowed"),
+    non_empty_constraint("message", "background_job_events_message_non_empty"),
     **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
@@ -594,12 +656,19 @@ Index("idx_pinned_reports_user_order", pinned_reports.c.user_id, pinned_reports.
 Index("idx_pinned_reports_user_type", pinned_reports.c.user_id, pinned_reports.c.report_type)
 Index("idx_audit_log_created_at", audit_log.c.created_at)
 Index("idx_audit_log_user", audit_log.c.user_id)
+Index("idx_background_jobs_created", background_jobs.c.created_at, background_jobs.c.created_sequence)
+Index("idx_background_jobs_finished", background_jobs.c.finished_at)
+Index("idx_background_jobs_queue_status", background_jobs.c.queue, background_jobs.c.status)
+Index("idx_background_jobs_status", background_jobs.c.status)
+Index("idx_background_job_events_job_created", background_job_events.c.job_id, background_job_events.c.id)
 
 SCHEMA_TABLES = (
     users,
     user_settings,
     pinned_reports,
     audit_log,
+    background_jobs,
+    background_job_events,
     accounts,
     statement_types,
     statements,

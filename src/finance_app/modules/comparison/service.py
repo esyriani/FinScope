@@ -18,6 +18,12 @@ from finance_app.modules.comparison.constants import (
     ANALYSIS_MODE_SPENDING,
     PERIOD_COMPARISON_OPTIONS,
 )
+from finance_app.modules.comparison.insight_cards import (
+    build_period_insight_groups,
+    build_period_unknown_warning,
+    build_year_unknown_warning,
+)
+from finance_app.modules.comparison.insights import build_period_insights
 from finance_app.modules.comparison.parsing import (
     clean_categories,
     clean_tags,
@@ -35,15 +41,11 @@ from finance_app.modules.comparison.presenter import (
     build_period_category_history,
     build_period_category_rows,
     build_period_filter_context,
-    build_period_insight_groups,
-    build_period_insights,
     build_period_merchant_activity_history,
     build_period_merchant_history,
     build_period_merchant_rows,
     build_period_metric,
-    build_period_unknown_warning,
     build_year_filter_context,
-    build_year_unknown_warning,
     period_comparison_ranges,
 )
 from finance_app.modules.comparison.queries import (

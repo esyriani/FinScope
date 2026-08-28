@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy import and_, case, func, or_, select
 
+from finance_app.core.builtin_taxonomy import BUILTIN_CATEGORY_REIMBURSEMENT
 from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     NON_REPORTABLE_TRANSACTION_KINDS,
@@ -20,7 +21,6 @@ from finance_app.core.constants import (
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.builtins import BUILTIN_CATEGORY_REIMBURSEMENT
 
 
 def reportable_transaction_clause() -> Any:

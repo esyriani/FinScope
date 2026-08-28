@@ -50,6 +50,29 @@ EXPECTED_TABLE_COLUMNS = {
         "created_at",
     ],
     "audit_log": ["id", "user_id", "username", "action", "details", "ip_address", "created_at"],
+    "background_jobs": [
+        "id",
+        "label",
+        "queue",
+        "status",
+        "created_at",
+        "started_at",
+        "finished_at",
+        "result",
+        "error",
+        "progress_current",
+        "progress_total",
+        "progress_percent",
+        "progress_message",
+        "progress_params",
+        "cancel_requested",
+        "undo_status",
+        "undo_result",
+        "undo_error",
+        "undone_at",
+        "created_sequence",
+    ],
+    "background_job_events": ["id", "job_id", "created_at", "level", "message", "params"],
     "accounts": ["id", "name", "name_key", "account_type", "paid_from_account_id"],
     "statement_types": [
         "id",
@@ -166,6 +189,11 @@ EXPECTED_TABLE_COLUMNS = {
 EXPECTED_EXPLICIT_INDEXES = {
     "idx_audit_log_created_at",
     "idx_audit_log_user",
+    "idx_background_job_events_job_created",
+    "idx_background_jobs_created",
+    "idx_background_jobs_finished",
+    "idx_background_jobs_queue_status",
+    "idx_background_jobs_status",
     "idx_category_rule_tags_tag",
     "idx_category_rules_amount_bounds",
     "idx_category_rules_account",
@@ -364,6 +392,11 @@ def test_core_metadata_uses_typed_date_and_timestamp_columns():
         metadata.tables["users"].c.locked_until,
         metadata.tables["user_settings"].c.updated_at,
         metadata.tables["audit_log"].c.created_at,
+        metadata.tables["background_jobs"].c.created_at,
+        metadata.tables["background_jobs"].c.started_at,
+        metadata.tables["background_jobs"].c.finished_at,
+        metadata.tables["background_jobs"].c.undone_at,
+        metadata.tables["background_job_events"].c.created_at,
     ]
 
     assert all(isinstance(column.type, ISODate) for column in date_columns)
@@ -381,8 +414,11 @@ def test_core_metadata_compiles_portable_uniqueness_for_mysql_and_postgresql():
 
         assert "CREATE TABLE accounts" in normalized
         assert "CREATE TABLE settings" not in normalized
+        assert "CREATE TABLE background_jobs" in normalized
+        assert "CREATE TABLE background_job_events" in normalized
         assert "CREATE TABLE user_settings" in normalized
         assert "PRIMARY KEY (user_id, key)" in normalized
+        assert "FOREIGN KEY(job_id) REFERENCES background_jobs (id) ON DELETE CASCADE" in normalized
         assert "FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE" in normalized
         assert "tx_date DATE NOT NULL" in normalized
         assert "NUMERIC(14, 2)" in normalized

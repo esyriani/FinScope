@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
+from finance_app.core.analytics import REPORT_MEASURE_INCOME, build_cash_flow_summary, build_data_quality
 from finance_app.core.config import settings
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.money import rounded_money_float
@@ -16,6 +17,7 @@ from finance_app.core.periods import (
     previous_period_date_range,
 )
 from finance_app.core.query import CoreFilters
+from finance_app.core.urls import build_app_url
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.accounts.filters import account_filter_condition
@@ -23,8 +25,6 @@ from finance_app.modules.accounts.queries import list_account_options
 from finance_app.modules.comparison.constants import ANALYSIS_MODE_SPENDING
 from finance_app.modules.merchants.repository import find_merchant_by_id
 from finance_app.modules.merchants.service import get_merchant_suggestion_limit
-from finance_app.modules.reports.constants import REPORT_MEASURE_INCOME
-from finance_app.modules.reports.urls import build_reports_url
 from finance_app.modules.settings.runtime import get_int_setting, get_unknown_category
 
 from .filters import (
@@ -35,11 +35,9 @@ from .filters import (
 )
 from .presenter import (
     attach_data_quality_urls,
-    build_cash_flow_summary,
     build_classification_scope_options,
     build_dashboard_chart_data,
     build_dashboard_links,
-    build_data_quality,
     build_top_driver_previews,
 )
 from .queries import (
@@ -50,7 +48,6 @@ from .queries import (
     fetch_top_spending_changes,
     fetch_top_spending_merchants,
 )
-from .urls import app_url
 
 
 @dataclass(frozen=True)
@@ -382,12 +379,12 @@ def build_dashboard_report_links(dashboard_request: DashboardRequest) -> dict[st
     """Build Reports URLs that preserve shared dashboard filter state."""
     params = dashboard_report_params(dashboard_request)
     return {
-        "overview": build_reports_url("reports.overview", **params),
-        "taxonomy": build_reports_url("reports.taxonomy", **params),
-        "accounts": build_reports_url("reports.accounts", **params),
-        "merchants": build_reports_url("reports.merchants", **params),
-        "income": build_reports_url("reports.income", **params, measure=REPORT_MEASURE_INCOME),
-        "comparison": app_url("comparison.comparison", **dashboard_comparison_params(dashboard_request)),
+        "overview": build_app_url("reports.overview", **params),
+        "taxonomy": build_app_url("reports.taxonomy", **params),
+        "accounts": build_app_url("reports.accounts", **params),
+        "merchants": build_app_url("reports.merchants", **params),
+        "income": build_app_url("reports.income", **params, measure=REPORT_MEASURE_INCOME),
+        "comparison": build_app_url("comparison.comparison", **dashboard_comparison_params(dashboard_request)),
     }
 
 

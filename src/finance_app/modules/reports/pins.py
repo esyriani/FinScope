@@ -15,6 +15,16 @@ from flask_login import current_user  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from finance_app.core.analytics import (
+    QUICK_VIEW_ALL,
+    QUICK_VIEW_CATEGORIZED,
+    QUICK_VIEW_NEEDS_REVIEW,
+    QUICK_VIEW_UNKNOWN,
+    REPORT_BASIS_OPTIONS,
+    REPORT_MEASURE_INCOME,
+    REPORT_MEASURE_NET,
+    REPORT_MEASURE_OPTIONS,
+)
 from finance_app.core.config import settings as app_settings
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.i18n import gettext
@@ -22,19 +32,7 @@ from finance_app.core.money import rounded_money_float
 from finance_app.core.periods import PERIOD_CUSTOM, get_period_label
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import accounts as accounts_table
-from finance_app.modules.dashboard.constants import (
-    QUICK_VIEW_ALL,
-    QUICK_VIEW_CATEGORIZED,
-    QUICK_VIEW_NEEDS_REVIEW,
-    QUICK_VIEW_UNKNOWN,
-)
 from finance_app.modules.merchants.repository import find_merchant_by_id
-from finance_app.modules.reports.constants import (
-    REPORT_BASIS_OPTIONS,
-    REPORT_MEASURE_INCOME,
-    REPORT_MEASURE_NET,
-    REPORT_MEASURE_OPTIONS,
-)
 from finance_app.modules.reports.definitions import (
     REPORT_ACCOUNTS,
     REPORT_INCOME,

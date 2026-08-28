@@ -33,11 +33,11 @@ def insert_tag(conn, name, color="#64748b"):
     return tag_id
 
 
-def test_taxonomy_category_create_and_delete_routes_persist_changes(client, core_conn):
+def test_taxonomy_category_create_and_delete_routes_persist_changes(owner_client, core_conn):
     """Verify that category create and delete routes update the database."""
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
 
-    create_response = client.post(
+    create_response = owner_client.post(
         "/taxonomy/categories/create",
         data={
             CSRF_FIELD_NAME: token,
@@ -57,7 +57,7 @@ def test_taxonomy_category_create_and_delete_routes_persist_changes(client, core
     assert category is not None
     assert category._mapping["description"] == "Recurring paid services"
 
-    delete_response = client.post(
+    delete_response = owner_client.post(
         "/taxonomy/categories/delete",
         data={
             CSRF_FIELD_NAME: token,
@@ -75,7 +75,7 @@ def test_taxonomy_category_create_and_delete_routes_persist_changes(client, core
     assert remaining == 0
 
 
-def test_taxonomy_category_delete_route_refuses_in_use_category(client, core_conn):
+def test_taxonomy_category_delete_route_refuses_in_use_category(owner_client, core_conn):
     """Verify that the category delete route keeps categories used by transactions."""
     category_id = core_conn.execute(text("""
         INSERT INTO categories (name)
@@ -96,10 +96,10 @@ def test_taxonomy_category_delete_route_refuses_in_use_category(client, core_con
     )
     core_conn.commit()
 
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/categories/delete",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "category_id": category_id,
         },
         follow_redirects=True,
@@ -124,15 +124,15 @@ def test_taxonomy_category_delete_route_refuses_in_use_category(client, core_con
     assert category_count == 1
 
 
-def test_category_update_route_rejects_rename_conflict(client, core_conn):
+def test_category_update_route_rejects_rename_conflict(owner_client, core_conn):
     """Verify category renames cannot collide with an existing category."""
     source_id = insert_category(core_conn, "Pets")
     insert_category(core_conn, "Food Delivery")
 
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/categories/update",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "category_id": source_id,
             "name": "Food Delivery",
             "description": "Pet care",
@@ -154,16 +154,16 @@ def test_category_update_route_rejects_rename_conflict(client, core_conn):
     assert tuple(source) == ("Pets", None, None)
 
 
-def test_category_routes_protect_builtin_categories(client, core_conn):
+def test_category_routes_protect_builtin_categories(owner_client, core_conn):
     """Verify built-in categories cannot be created over, edited, or deleted."""
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
     unknown = core_conn.execute(text("""
         SELECT id, name, builtin_key, description, instruction
         FROM categories
         WHERE builtin_key = 'unknown'
         """)).fetchone()
 
-    create_response = client.post(
+    create_response = owner_client.post(
         "/taxonomy/categories/create",
         data={
             CSRF_FIELD_NAME: token,
@@ -173,7 +173,7 @@ def test_category_routes_protect_builtin_categories(client, core_conn):
         },
         follow_redirects=True,
     )
-    update_response = client.post(
+    update_response = owner_client.post(
         "/taxonomy/categories/update",
         data={
             CSRF_FIELD_NAME: token,
@@ -184,7 +184,7 @@ def test_category_routes_protect_builtin_categories(client, core_conn):
         },
         follow_redirects=True,
     )
-    delete_response = client.post(
+    delete_response = owner_client.post(
         "/taxonomy/categories/delete",
         data={CSRF_FIELD_NAME: token, "category_id": unknown._mapping["id"]},
         follow_redirects=True,
@@ -205,11 +205,11 @@ def test_category_routes_protect_builtin_categories(client, core_conn):
     assert tuple(current) == tuple(unknown)
 
 
-def test_tag_create_update_and_delete_routes(client, core_conn):
+def test_tag_create_update_and_delete_routes(owner_client, core_conn):
     """Verify tag create, update, and unused delete behavior."""
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
 
-    create_response = client.post(
+    create_response = owner_client.post(
         "/taxonomy/tags/create",
         data={
             CSRF_FIELD_NAME: token,
@@ -234,7 +234,7 @@ def test_tag_create_update_and_delete_routes(client, core_conn):
         "#123abc",
     )
 
-    update_response = client.post(
+    update_response = owner_client.post(
         "/taxonomy/tags/update",
         data={
             CSRF_FIELD_NAME: token,
@@ -263,7 +263,7 @@ def test_tag_create_update_and_delete_routes(client, core_conn):
         "#abcdef",
     )
 
-    delete_response = client.post(
+    delete_response = owner_client.post(
         "/taxonomy/tags/delete",
         data={
             CSRF_FIELD_NAME: token,
@@ -284,16 +284,16 @@ def test_tag_create_update_and_delete_routes(client, core_conn):
     assert remaining == 0
 
 
-def test_tag_routes_protect_builtin_tags(client, core_conn):
+def test_tag_routes_protect_builtin_tags(owner_client, core_conn):
     """Verify built-in tags cannot be created over, edited, or deleted."""
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
     reimbursable = core_conn.execute(text("""
         SELECT id, name, builtin_key, description, instruction, color
         FROM tags
         WHERE builtin_key = 'reimbursable'
         """)).fetchone()
 
-    create_response = client.post(
+    create_response = owner_client.post(
         "/taxonomy/tags/create",
         data={
             CSRF_FIELD_NAME: token,
@@ -304,7 +304,7 @@ def test_tag_routes_protect_builtin_tags(client, core_conn):
         },
         follow_redirects=True,
     )
-    update_response = client.post(
+    update_response = owner_client.post(
         "/taxonomy/tags/update",
         data={
             CSRF_FIELD_NAME: token,
@@ -316,7 +316,7 @@ def test_tag_routes_protect_builtin_tags(client, core_conn):
         },
         follow_redirects=True,
     )
-    delete_response = client.post(
+    delete_response = owner_client.post(
         "/taxonomy/tags/delete",
         data={CSRF_FIELD_NAME: token, "tag_id": reimbursable._mapping["id"]},
         follow_redirects=True,
@@ -337,15 +337,15 @@ def test_tag_routes_protect_builtin_tags(client, core_conn):
     assert tuple(current) == tuple(reimbursable)
 
 
-def test_tag_update_route_rejects_name_conflict(client, core_conn):
+def test_tag_update_route_rejects_name_conflict(owner_client, core_conn):
     """Verify tag updates cannot collide with another tag name."""
     first_id = insert_tag(core_conn, "Audit")
     second_id = insert_tag(core_conn, "Reviewed")
 
-    response = client.post(
+    response = owner_client.post(
         "/taxonomy/tags/update",
         data={
-            CSRF_FIELD_NAME: set_csrf_token(client),
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
             "tag_id": first_id,
             "name": "Reviewed",
             "description": "Conflict",
@@ -363,7 +363,7 @@ def test_tag_update_route_rejects_name_conflict(client, core_conn):
     assert second._mapping["name"] == "Reviewed"
 
 
-def test_tag_delete_route_blocks_transaction_and_rule_usage(client, core_conn):
+def test_tag_delete_route_blocks_transaction_and_rule_usage(owner_client, core_conn):
     """Verify used tags cannot be deleted when attached to transactions or rules."""
     transaction_tag_id = insert_tag(core_conn, "Transaction Used")
     rule_tag_id = insert_tag(core_conn, "Rule Used")
@@ -390,14 +390,14 @@ def test_tag_delete_route_blocks_transaction_and_rule_usage(client, core_conn):
         {"p0": rule_id, "p1": rule_tag_id},
     )
     core_conn.commit()
-    token = set_csrf_token(client)
+    token = set_csrf_token(owner_client)
 
-    transaction_response = client.post(
+    transaction_response = owner_client.post(
         "/taxonomy/tags/delete",
         data={CSRF_FIELD_NAME: token, "tag_id": transaction_tag_id},
         follow_redirects=True,
     )
-    rule_response = client.post(
+    rule_response = owner_client.post(
         "/taxonomy/tags/delete",
         data={CSRF_FIELD_NAME: token, "tag_id": rule_tag_id},
         follow_redirects=True,

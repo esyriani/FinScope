@@ -1,4 +1,4 @@
-"""Built-in taxonomy semantics for protected categories and tags.
+"""Neutral built-in taxonomy semantics for protected categories and tags.
 
 This module defines FinScope-managed taxonomy rows and the behavior policies
 attached to them. Persistence layers seed these definitions with stable

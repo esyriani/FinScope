@@ -20,9 +20,9 @@ from finance_app.modules.rules.audit import (
     analyze_stale_rules,
     compute_rule_match_sets,
     get_rule_audit_summary,
-    preview_rule_change,
     shared_rule_pair_audits,
 )
+from finance_app.modules.rules.audit_preview import preview_rule_change
 
 
 def insert_audit_transaction(

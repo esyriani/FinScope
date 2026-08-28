@@ -146,7 +146,7 @@ def apply_review_group_transactions(
             tags=tuple(tags),
             category_id=resolve_category_id(conn, category),
         )
-        changes.append(TransactionCategoryChange(row["id"], old_state, new_state).to_undo_dict())
+        changes.append(TransactionCategoryChange(row["id"], old_state, new_state).to_undo_record())
         update_review_transaction(conn, row["id"], category, metadata, transaction_kind)
         set_transaction_tags(
             conn,

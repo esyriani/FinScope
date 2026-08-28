@@ -11,14 +11,14 @@ from typing import Any
 
 from sqlalchemy import select
 
-from finance_app.database.tables import categories as categories_table
-from finance_app.database.tables import tags as tags_table
-from finance_app.modules.categories.builtins import (
+from finance_app.core.builtin_taxonomy import (
     BUILTIN_CATEGORY_REIMBURSEMENT,
     BUILTIN_CATEGORY_RENTAL,
     BUILTIN_TAG_REIMBURSABLE,
     BUILTIN_TAG_TAX,
 )
+from finance_app.database.tables import categories as categories_table
+from finance_app.database.tables import tags as tags_table
 
 TAXONOMY_TARGET_CATEGORY = "category"
 TAXONOMY_TARGET_TAG = "tag"

@@ -11,6 +11,7 @@ from tests.support.database import insert_account, insert_merchant, insert_trans
 from werkzeug.datastructures import MultiDict
 
 from finance_app.core.constants import TRANSACTION_KIND_INCOME
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.comparison import service as comparison_service
 
 
@@ -138,10 +139,16 @@ def test_period_comparison_ranked_insights_include_robust_anomaly_candidates(app
     ]
     core_conn.execute(
         text("""
-        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
-        VALUES (:p0, :p1, :p2, :p3, 'rule', :p4)
+        INSERT INTO transactions (tx_date, description, amount, category, category_id, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, :p3, :category_id, 'rule', :p4)
         """),
-        [dict(zip(("p0", "p1", "p2", "p3", "p4"), row)) for row in rows],
+        [
+            {
+                **dict(zip(("p0", "p1", "p2", "p3", "p4"), row)),
+                "category_id": resolve_category_id(core_conn, row[3]),
+            }
+            for row in rows
+        ],
     )
     core_conn.commit()
 

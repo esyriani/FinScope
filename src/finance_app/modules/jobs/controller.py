@@ -1,8 +1,5 @@
 """Flask routes for the jobs feature."""
 
-from collections.abc import Mapping
-from typing import Any
-
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 
@@ -10,23 +7,15 @@ from finance_app.background.runner import (
     AI_JOB_QUEUE,
     cancel_background_job,
     cancel_queued_background_jobs,
-    count_background_jobs,
     get_background_job,
-    list_background_jobs,
     undo_background_job,
 )
-from finance_app.core.config import settings
-from finance_app.core.filters import format_datetime
 from finance_app.core.i18n import gettext
-from finance_app.core.query import parse_page
-from finance_app.database.engine import db_core_transaction
 from finance_app.modules.auth.permissions import PERMISSION_MANAGE_JOBS, permission_required
 from finance_app.modules.categories.llm_token_confirmation import ai_token_estimate_confirmed
 from finance_app.modules.categories.llm_token_presenter import localize_token_estimate_result
 from finance_app.modules.categories.llm_tokens import AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE
-from finance_app.modules.settings.runtime import confirm_ai_token_usage_enabled, get_int_setting
-from finance_app.modules.upload import service as upload_service
-from finance_app.modules.upload import workflow as upload_workflow
+from finance_app.modules.jobs import service as jobs_service
 
 jobs_bp = Blueprint("jobs", __name__)
 
@@ -35,27 +24,7 @@ jobs_bp = Blueprint("jobs", __name__)
 @permission_required(PERMISSION_MANAGE_JOBS)
 def jobs() -> str:
     """Render the background jobs page."""
-    page = parse_page(request.args.get("page"))
-    with db_core_transaction() as conn:
-        page_size = get_int_setting(conn, "default_table_page_size", settings.default_table_page_size)
-        confirm_ai_token_usage = confirm_ai_token_usage_enabled(conn)
-
-    total_count = count_background_jobs()
-    total_pages = max(1, (total_count + page_size - 1) // page_size)
-    page = min(page, total_pages)
-    offset = (page - 1) * page_size
-
-    return render_template(
-        "jobs.html",
-        jobs=list_background_jobs(limit=page_size, offset=offset),
-        page=page,
-        page_size=page_size,
-        total_count=total_count,
-        total_pages=total_pages,
-        page_start=offset + 1 if total_count else 0,
-        page_end=min(offset + page_size, total_count),
-        confirm_ai_token_usage_enabled=confirm_ai_token_usage,
-    )
+    return render_template("jobs.html", **jobs_service.build_jobs_context(request.args))
 
 
 @jobs_bp.route("/jobs/<job_id>.json")
@@ -65,20 +34,7 @@ def job_status(job_id: str) -> ResponseReturnValue:
     job = get_background_job(job_id)
     if job is None:
         return jsonify({"error": gettext("Job not found.")}), 404
-    return jsonify(job_status_payload(job))
-
-
-def job_status_payload(job: Mapping[str, Any]) -> dict[str, Any]:
-    """Return a JSON-ready job snapshot with formatted log timestamps."""
-    payload = dict(job)
-    payload["progress_log"] = [
-        {
-            **entry,
-            "timestamp_label": format_datetime(entry.get("timestamp")),
-        }
-        for entry in job.get("progress_log") or []
-    ]
-    return payload
+    return jsonify(jobs_service.job_status_payload(job))
 
 
 @jobs_bp.route("/jobs/<job_id>/undo", methods=["POST"])
@@ -152,8 +108,7 @@ def cancel_queued_ai_jobs() -> ResponseReturnValue:
 def categorize_all_unknowns() -> ResponseReturnValue:
     """Queue AI categorization for all active unknown transactions."""
     next_url = jobs_redirect_target()
-    with db_core_transaction() as conn:
-        unknown_count = upload_workflow.count_unknown_transactions(conn)
+    unknown_count = jobs_service.count_all_unknown_transactions()
 
     if not unknown_count:
         flash(gettext("No unknown transactions need AI categorization."))
@@ -163,7 +118,13 @@ def categorize_all_unknowns() -> ResponseReturnValue:
         flash(gettext(AI_TOKEN_ESTIMATE_REQUIRED_MESSAGE))
         return redirect(next_url)
 
-    job_id = upload_workflow.queue_all_unknown_llm_categorization()
+    result = jobs_service.queue_all_unknown_categorization()
+    if not result.get("ok"):
+        flash(gettext("No unknown transactions need AI categorization."))
+        return redirect(next_url)
+
+    job_id = result["job_id"]
+    unknown_count = result["unknown_count"]
     flash(
         gettext(
             (
@@ -182,13 +143,9 @@ def categorize_all_unknowns() -> ResponseReturnValue:
 @permission_required(PERMISSION_MANAGE_JOBS)
 def estimate_categorize_all_unknowns() -> ResponseReturnValue:
     """Return a token estimate for all-unknown AI categorization."""
-    with db_core_transaction() as conn:
-        unknown_count = upload_workflow.count_unknown_transactions(conn)
-
-    if not unknown_count:
-        return jsonify({"ok": False, "message": gettext("No unknown transactions need AI categorization.")}), 400
-
-    return jsonify(localized_json_result(upload_service.estimate_all_unknown_llm_categorization()))
+    result = jobs_service.estimate_all_unknown_categorization()
+    status_code = 200 if result.get("ok") else 400
+    return jsonify(localized_json_result(result)), status_code
 
 
 def jobs_redirect_target() -> str:
@@ -200,6 +157,6 @@ def jobs_redirect_target() -> str:
     return url_for("jobs.jobs")
 
 
-def localized_json_result(result: Mapping[str, Any]) -> dict[str, Any]:
+def localized_json_result(result: dict[str, object]) -> dict[str, object]:
     """Return a JSON result with its top-level message localized."""
     return localize_token_estimate_result(result, gettext)

@@ -7,18 +7,16 @@ from finance_app.modules.categories.categorization import categorize_transaction
 from finance_app.modules.categories.llm import (
     build_llm_prompt,
     build_llm_system_prompt,
-    normalize_llm_category,
     pair_llm_results,
-    parse_bool,
-    parse_confidence,
     request_llm_categories,
-    sanitize_openai_error,
 )
 from finance_app.modules.categories.llm_estimation import estimate_llm_categorization_tokens
-from finance_app.modules.categories.llm_prompts import (
-    build_llm_messages,
-    build_rule_examples,
-    taxonomy_prompt_line,
+from finance_app.modules.categories.llm_prompts import build_llm_messages
+from finance_app.modules.categories.llm_results import (
+    normalize_llm_category,
+    parse_bool,
+    parse_confidence,
+    sanitize_openai_error,
 )
 from finance_app.modules.categories.llm_tokens import (
     DEFAULT_EXPECTED_OUTPUT_TOKENS,
@@ -63,7 +61,8 @@ def classify_unknowns_with_llm(
 
     ``save_automatic_rules`` controls whether no-review AI decisions should
     also create future matching rules. ``request_categories`` can inject an LLM
-    requester without replacing module globals.
+    requester without replacing module globals. When omitted, the lower-level
+    adapter uses the guarded default provider boundary.
     """
     return _llm.classify_unknowns_with_llm(
         conn,
@@ -71,7 +70,7 @@ def classify_unknowns_with_llm(
         rules,
         unknown_category,
         save_automatic_rules=save_automatic_rules,
-        request_categories=request_categories or request_llm_categories,
+        request_categories=request_categories,
     )
 
 
@@ -81,7 +80,6 @@ __all__ = [
     "build_llm_messages",
     "build_llm_prompt",
     "build_llm_system_prompt",
-    "build_rule_examples",
     "categorize_transactions",
     "classify_unknowns_with_llm",
     "clean_category_name",
@@ -112,5 +110,4 @@ __all__ = [
     "score_category_rule_match",
     "score_category_rule_matches",
     "select_winning_rule_match",
-    "taxonomy_prompt_line",
 ]

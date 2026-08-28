@@ -7,6 +7,10 @@ from sqlalchemy.exc import IntegrityError
 
 from finance_app.core.constants import (
     ACCOUNT_TYPES,
+    BACKGROUND_JOB_LOG_LEVELS,
+    BACKGROUND_JOB_QUEUES,
+    BACKGROUND_JOB_STATUSES,
+    BACKGROUND_JOB_UNDO_STATUSES,
     CATEGORY_RULE_DIRECTIONS,
     CATEGORY_RULE_SOURCES,
     CATEGORY_SOURCES,
@@ -15,6 +19,10 @@ from finance_app.core.constants import (
     RECURRING_PATTERN_TYPES,
     RECURRING_USER_STATUSES,
     STATEMENT_IMPORT_MODES,
+    STATEMENT_IMPORT_STATUS_COMPLETED,
+    STATEMENT_IMPORT_STATUS_FAILED,
+    STATEMENT_IMPORT_STATUS_QUEUED,
+    STATEMENT_IMPORT_STATUS_RUNNING,
     STATEMENT_IMPORT_STATUSES,
     STATEMENT_TYPE_PARSER_TYPES,
     TRANSACTION_KINDS,
@@ -24,6 +32,7 @@ from finance_app.core.constants import (
     USER_ROLES,
 )
 from finance_app.database import connection as connection_module
+from finance_app.database.runtime_repair import INTERRUPTED_STATEMENT_IMPORT_ERROR
 from finance_app.database.seeds import seed_category_taxonomy_defaults
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -31,6 +40,12 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     allowed_values_check_sql,
     metadata,
+)
+from finance_app.database.tables import (
+    background_job_events as background_job_events_table,
+)
+from finance_app.database.tables import (
+    background_jobs as background_jobs_table,
 )
 from finance_app.database.tables import (
     categories as categories_table,
@@ -55,6 +70,9 @@ from finance_app.database.tables import (
 )
 from finance_app.database.tables import (
     statement_types as statement_types_table,
+)
+from finance_app.database.tables import (
+    statements as statements_table,
 )
 from finance_app.database.tables import (
     tags as tags_table,
@@ -108,8 +126,8 @@ def category_id(conn, name):
     return found
 
 
-def create_legacy_statements_table_without_date_order(conn):
-    """Create the statements table shape used before date_order was added."""
+def create_statements_table_without_date_order(conn):
+    """Create a statements table missing the current date_order column."""
     conn.execute(text("""
             CREATE TABLE statements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -217,21 +235,6 @@ def reflected_mysql_foreign_keys(table):
     return foreign_keys
 
 
-def test_core_schema_has_no_retired_tables(schema_conn):
-    """Verify Core metadata does not create retired compatibility or review tables."""
-    retired_tables = set(inspect(schema_conn).get_table_names()) & {
-        "settings",
-        "schema_migrations",
-        "app_metadata",
-        "category_suggestions",
-        "category_suggestion_tags",
-        "merchant_normalization_cache",
-        "merchant_normalization_review_queue",
-    }
-
-    assert retired_tables == set()
-
-
 def test_users_enforce_case_insensitive_username_uniqueness(schema_conn):
     """Verify the database rejects usernames that normalize to the same key."""
     schema_conn.execute(
@@ -311,12 +314,12 @@ def test_visible_names_enforce_normalized_uniqueness(schema_conn):
         schema_conn.rollback()
 
 
-def test_init_core_db_rejects_legacy_statements_table_without_date_order():
-    """Verify startup refuses an outdated schema instead of patching it."""
+def test_init_core_db_rejects_statements_table_without_date_order():
+    """Verify startup refuses a schema missing required statement columns."""
     engine = create_engine("sqlite://")
     try:
         with engine.begin() as conn:
-            create_legacy_statements_table_without_date_order(conn)
+            create_statements_table_without_date_order(conn)
 
         with pytest.raises(RuntimeError, match="statements.date_order"):
             connection_module.init_core_db(engine)
@@ -324,17 +327,157 @@ def test_init_core_db_rejects_legacy_statements_table_without_date_order():
         engine.dispose()
 
 
-def test_init_core_db_rejects_retired_schema_tables():
-    """Verify startup rejects retired compatibility tables."""
+def test_init_core_db_marks_interrupted_statement_imports_failed():
+    """Verify startup makes orphaned in-memory statement imports retryable."""
     engine = create_engine("sqlite://")
     try:
+        connection_module.init_core_db(engine)
         with engine.begin() as conn:
-            conn.execute(text("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)"))
+            statement_type_id = conn.execute(
+                select(statement_types_table.c.id).order_by(statement_types_table.c.id).limit(1)
+            ).scalar_one()
+            conn.execute(
+                insert(statements_table),
+                [
+                    {
+                        "statement_type_id": statement_type_id,
+                        "filename": "restart-queued.csv",
+                        "checksum": "restart-queued",
+                        "raw_text": "",
+                        "import_status": STATEMENT_IMPORT_STATUS_QUEUED,
+                        "import_token": "queued-token",
+                        "import_started_at": None,
+                        "import_finished_at": None,
+                    },
+                    {
+                        "statement_type_id": statement_type_id,
+                        "filename": "restart-running.csv",
+                        "checksum": "restart-running",
+                        "raw_text": "",
+                        "import_status": STATEMENT_IMPORT_STATUS_RUNNING,
+                        "import_token": "running-token",
+                        "import_started_at": "2026-05-01T12:00:00Z",
+                        "import_finished_at": None,
+                    },
+                    {
+                        "statement_type_id": statement_type_id,
+                        "filename": "restart-completed.csv",
+                        "checksum": "restart-completed",
+                        "raw_text": "",
+                        "import_status": STATEMENT_IMPORT_STATUS_COMPLETED,
+                        "import_token": None,
+                        "import_started_at": "2026-05-01T12:30:00Z",
+                        "import_finished_at": "2026-05-01T13:00:00Z",
+                    },
+                ],
+            )
 
-        with pytest.raises(RuntimeError, match="retired tables: schema_migrations"):
-            connection_module.init_core_db(engine)
+        connection_module.init_core_db(engine)
+        with engine.connect() as conn:
+            rows = (
+                conn.execute(
+                    select(
+                        statements_table.c.filename,
+                        statements_table.c.import_status,
+                        statements_table.c.import_error,
+                        statements_table.c.import_finished_at,
+                    ).order_by(statements_table.c.filename)
+                )
+                .mappings()
+                .all()
+            )
     finally:
         engine.dispose()
+
+    completed, queued, running = rows
+    assert completed["filename"] == "restart-completed.csv"
+    assert completed["import_status"] == STATEMENT_IMPORT_STATUS_COMPLETED
+    assert completed["import_error"] is None
+    assert queued["filename"] == "restart-queued.csv"
+    assert queued["import_status"] == STATEMENT_IMPORT_STATUS_FAILED
+    assert queued["import_error"] == INTERRUPTED_STATEMENT_IMPORT_ERROR
+    assert queued["import_finished_at"] is not None
+    assert running["filename"] == "restart-running.csv"
+    assert running["import_status"] == STATEMENT_IMPORT_STATUS_FAILED
+    assert running["import_error"] == INTERRUPTED_STATEMENT_IMPORT_ERROR
+    assert running["import_finished_at"] is not None
+
+
+def test_init_core_db_marks_interrupted_background_jobs_failed():
+    """Verify startup makes orphaned process-local jobs terminal in history."""
+    engine = create_engine("sqlite://")
+    try:
+        connection_module.init_core_db(engine)
+        with engine.begin() as conn:
+            conn.execute(
+                insert(background_jobs_table),
+                [
+                    {
+                        "id": "restart-queued-job",
+                        "label": "Restart queued job",
+                        "queue": "main",
+                        "status": "queued",
+                        "created_at": "2099-01-01T12:00:00Z",
+                        "undo_status": "available",
+                    },
+                    {
+                        "id": "restart-running-job",
+                        "label": "Restart running job",
+                        "queue": "ai",
+                        "status": "running",
+                        "created_at": "2099-01-01T12:01:00Z",
+                        "started_at": "2099-01-01T12:02:00Z",
+                        "undo_status": "available",
+                    },
+                    {
+                        "id": "restart-completed-job",
+                        "label": "Restart completed job",
+                        "queue": "main",
+                        "status": "completed",
+                        "created_at": "2099-01-01T12:03:00Z",
+                        "finished_at": "2099-01-01T12:04:00Z",
+                        "undo_status": "unavailable",
+                    },
+                ],
+            )
+
+        connection_module.init_core_db(engine)
+        with engine.connect() as conn:
+            rows = {
+                row["id"]: row
+                for row in conn.execute(
+                    select(
+                        background_jobs_table.c.id,
+                        background_jobs_table.c.status,
+                        background_jobs_table.c.error,
+                        background_jobs_table.c.finished_at,
+                        background_jobs_table.c.undo_status,
+                    ).order_by(background_jobs_table.c.id)
+                ).mappings()
+            }
+            events = {
+                row["job_id"]: row
+                for row in conn.execute(
+                    select(
+                        background_job_events_table.c.job_id,
+                        background_job_events_table.c.level,
+                        background_job_events_table.c.message,
+                    )
+                ).mappings()
+            }
+    finally:
+        engine.dispose()
+
+    assert rows["restart-completed-job"]["status"] == "completed"
+    assert rows["restart-queued-job"]["status"] == "failed"
+    assert rows["restart-queued-job"]["finished_at"] is not None
+    assert rows["restart-queued-job"]["undo_status"] == "unavailable"
+    assert "app restarted" in rows["restart-queued-job"]["error"]
+    assert rows["restart-running-job"]["status"] == "failed"
+    assert rows["restart-running-job"]["finished_at"] is not None
+    assert rows["restart-running-job"]["undo_status"] == "unavailable"
+    assert events["restart-queued-job"]["level"] == "error"
+    assert events["restart-queued-job"]["message"] == "Job failed: {error}"
 
 
 def test_schema_validation_accepts_mysql_reflected_check_sql_and_truncated_names():
@@ -696,6 +839,10 @@ def test_core_schema_text_constraints_match_shared_constants(schema_conn):
         ("statements", "import_status", STATEMENT_IMPORT_STATUSES),
         ("statements", "interac_direction", INTERAC_DIRECTIONS),
         ("statements", "date_order", DATE_ORDERS),
+        ("background_jobs", "queue", BACKGROUND_JOB_QUEUES),
+        ("background_jobs", "status", BACKGROUND_JOB_STATUSES),
+        ("background_jobs", "undo_status", BACKGROUND_JOB_UNDO_STATUSES),
+        ("background_job_events", "level", BACKGROUND_JOB_LOG_LEVELS),
         ("transactions", "transaction_kind", TRANSACTION_KINDS),
         ("transactions", "category_source", CATEGORY_SOURCES),
         ("category_rules", "source", CATEGORY_RULE_SOURCES),
@@ -728,6 +875,28 @@ def test_core_schema_tracks_statement_import_state(schema_conn):
         "ignored_count",
         "llm_candidate_count",
     }.issubset(statement_columns)
+
+
+def test_core_schema_tracks_background_job_history(schema_conn):
+    """Verify schema records durable processing history and bounded events."""
+    tables = set(inspect(schema_conn).get_table_names())
+    job_columns = column_names(schema_conn, "background_jobs")
+    event_columns = column_names(schema_conn, "background_job_events")
+    event_foreign_keys = foreign_key_triplets(schema_conn, "background_job_events")
+
+    assert {"background_jobs", "background_job_events"}.issubset(tables)
+    assert {
+        "id",
+        "label",
+        "queue",
+        "status",
+        "progress_params",
+        "cancel_requested",
+        "undo_status",
+        "created_sequence",
+    }.issubset(job_columns)
+    assert {"job_id", "created_at", "level", "message", "params"}.issubset(event_columns)
+    assert ("job_id", "background_jobs", "id") in event_foreign_keys
 
 
 def test_core_schema_tracks_account_roles_and_transaction_kinds(schema_conn):

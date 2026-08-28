@@ -1,7 +1,6 @@
 """Application orchestration for the transactions feature."""
 
-import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 from finance_app.background.runner import (
@@ -13,40 +12,53 @@ from finance_app.background.runner import (
     update_background_job_progress,
 )
 from finance_app.core.config import settings
-from finance_app.core.constants import CATEGORY_RULE_SOURCE_MANUAL, TRANSACTION_KINDS, UNKNOWN_CATEGORY
+from finance_app.core.constants import CATEGORY_RULE_SOURCE_MANUAL, UNKNOWN_CATEGORY
 from finance_app.core.money import MoneyValue
 from finance_app.core.periods import DATE_PERIOD_OPTIONS, PERIOD_CUSTOM
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.accounts.queries import list_account_options
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.categorization import categorize_transactions
+from finance_app.modules.categories.llm_workflow import (
+    PreparedTransactionLlmCategorization,
+    prepare_transaction_llm_categorization,
+    request_prepared_transaction_llm_categorization,
+)
 from finance_app.modules.categories.repository import get_category_rules
 from finance_app.modules.categories.service import (
-    classify_unknowns_with_llm,
     estimate_llm_categorization_tokens,
     get_category_options,
+    normalize_category,
     save_category_rule,
 )
-from finance_app.modules.categories.sources import (
-    category_confidence_label,
-    category_source_badge_class,
-    category_source_label,
-    utc_timestamp,
-)
+from finance_app.modules.categories.sources import utc_timestamp
 from finance_app.modules.categories.taxonomy import (
     get_category_description_map,
     get_tag_color_map,
     get_tag_option_rows,
+    get_tag_options,
     get_transaction_tag_names,
     get_transaction_tags_by_id,
+    normalize_tag_names,
 )
-from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword
+from finance_app.modules.rules.forms import amount_bounds_label, normalize_rule_keyword, parse_amount_bounds
 from finance_app.modules.settings.runtime import (
     confirm_ai_token_usage_enabled,
     get_bool_setting,
     get_int_setting,
     get_setting,
     get_unknown_category,
+)
+from finance_app.modules.transactions.ai_presenter import (
+    ai_token_estimate_result,
+    build_transaction_ai_result,
+    disabled_ai_apply_result,
+    disabled_ai_estimate_result,
+    disabled_ai_result,
+    missing_transaction_ai_estimate_result,
+    missing_transaction_ai_result,
+    missing_transaction_apply_result,
+    parse_ai_metadata,
 )
 from finance_app.modules.transactions.constants import (
     CATEGORY_SOURCE_FILTER_OPTIONS,
@@ -62,16 +74,21 @@ from finance_app.modules.transactions.presenter import build_transaction_rows
 from finance_app.modules.transactions.queries import (
     count_transactions,
     fetch_distinct_categories,
-    fetch_transaction_ids,
     fetch_transactions,
 )
 from finance_app.modules.transactions.repository import (
     apply_ai_category_update,
+    assign_manual_category,
     get_transaction_for_ai_categorization,
+    get_transaction_for_category_update,
+    get_transaction_tag_ids,
     get_transactions_for_recategorization,
+    mark_transaction_verified,
     mark_transactions_verified,
     normalized_transaction_ids,
+    set_transaction_ignored,
     set_transactions_ignored,
+    transaction_ai_original_state,
     update_recategorized_transaction,
 )
 from finance_app.modules.transactions.urls import transactions_sort_url, transactions_url
@@ -79,6 +96,23 @@ from finance_app.modules.transactions.urls import transactions_sort_url, transac
 RUN_TRANSACTION_AI_SETTING_KEY = "transaction_ai_rerun_enabled"
 APPLY_AI_SUGGESTION_ACTION = "apply"
 APPLY_AI_SUGGESTION_WITH_RULE_ACTION = "apply_and_create_rule"
+AI_SUGGESTION_EXPIRED_MESSAGE = "AI suggestion expired. Use Suggest category again."
+AI_SUGGESTION_ORIGINAL_STATE_KEYS = frozenset(
+    {
+        "category",
+        "stored_category",
+        "category_id",
+        "needs_review",
+        "category_source",
+        "category_confidence",
+        "category_rule_id",
+        "categorized_at",
+        "reviewed_at",
+        "ignored",
+        "transaction_kind",
+        "tag_ids",
+    }
+)
 
 
 def build_transactions_context(args: Any) -> dict[str, Any]:
@@ -103,12 +137,7 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
             page_size,
             offset,
         )
-        all_transaction_ids = fetch_transaction_ids(
-            conn,
-            filter_criteria,
-            sort_expression,
-            filters["direction"],
-        )
+        all_transaction_ids = [row["id"] for row in fetched_rows]
         tag_map = get_transaction_tags_by_id(conn, [row["id"] for row in fetched_rows])
         rows = build_transaction_rows(fetched_rows, tag_map, get_tag_color_map(conn), conn)
         account_options = list_account_options(conn)
@@ -160,6 +189,79 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "run_transaction_ai_enabled": run_transaction_ai_enabled,
         "confirm_ai_token_usage_enabled": confirm_ai_token_usage,
     }
+
+
+def update_transaction_category_from_form(transaction_id: int, form: Any) -> dict[str, Any]:
+    """Apply a manual category update submitted for one transaction."""
+    with db_core_transaction() as conn:
+        category_options = get_category_options(conn)
+        tag_options = get_tag_options(conn)
+        new_category = normalize_category(form.get("category", ""), category_options)
+        tag_names = normalize_tag_names(form.getlist("tags"), tag_options)
+
+        if not new_category:
+            return {"message": "Category cannot be empty."}
+
+        tx = get_transaction_for_category_update(conn, transaction_id)
+        if tx is None:
+            return {"message": "Transaction not found."}
+
+        description = tx["description"].strip()
+        rule_action = form.get("rule_action", "transaction_only")
+        merchant_key = ""
+        amount_min = None
+        amount_max = None
+
+        if rule_action == "save":
+            merchant_key = normalize_rule_keyword(form.get("keyword", ""), description)
+            amount_min, amount_max = parse_amount_bounds(
+                form.get("amount_min", ""),
+                form.get("amount_max", ""),
+            )
+            if not merchant_key:
+                return {"message": "Rule keyword is required when saving a rule."}
+
+        result = assign_manual_category(
+            conn,
+            transaction_id,
+            new_category,
+            tag_names=tag_names,
+            rule_keyword=merchant_key if rule_action == "save" else None,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            rule_merchant_id=tx["merchant_id"] if rule_action == "save" else None,
+        )
+
+        if not result.updated:
+            return {"message": "Transaction not found."}
+
+        if rule_action == "save":
+            return {
+                "message": (
+                    "Category updated. Rule saved for: {keyword}{amount_bounds}"
+                    if result.transaction_changed
+                    else "Rule saved for: {keyword}{amount_bounds}"
+                ),
+                "params": {
+                    "keyword": merchant_key,
+                    "amount_bounds": amount_bounds_label(amount_min, amount_max),
+                },
+            }
+        if result.transaction_changed:
+            return {"message": "Category updated for this transaction only."}
+        return {"message": "No transaction changes to save."}
+
+
+def verify_transaction_by_id(transaction_id: int) -> bool:
+    """Mark one transaction as manually verified and return whether it changed."""
+    with db_core_transaction() as conn:
+        return mark_transaction_verified(conn, transaction_id)
+
+
+def set_transaction_ignored_by_id(transaction_id: int, ignored: int) -> bool:
+    """Update one transaction ignored flag and return whether it changed."""
+    with db_core_transaction() as conn:
+        return set_transaction_ignored(conn, transaction_id, ignored)
 
 
 def approve_selected_transactions(transaction_ids: Iterable[object] | None) -> int:
@@ -218,7 +320,7 @@ def estimate_selected_transaction_recategorization(transaction_ids: Iterable[obj
             return {"ok": False, "message": "No selected transactions found."}
 
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
-        transactions = categorize_transactions([dict(row) for row in rows], conn=conn, use_llm=False)
+        transactions = categorize_transactions([dict(row) for row in rows], conn=conn)
         estimate = estimate_llm_categorization_tokens(
             conn,
             transactions,
@@ -321,12 +423,20 @@ def recategorize_selected_transactions_job(transaction_ids: Iterable[object] | N
 
 def recategorize_selected_transaction_rows(rows: Sequence[Mapping[str, Any]]) -> int:
     """Categorize and persist one batch of selected transaction rows."""
+    llm_module.clear_llm_request_status()
+    transactions: list[MutableMapping[str, Any]] = [dict(row) for row in rows]
+    prepared = prepare_transaction_llm_categorization(transactions)
+    outcome = request_prepared_transaction_llm_categorization(prepared)
     with db_core_transaction() as conn:
-        unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
-        categorized = categorize_transactions([dict(row) for row in rows], conn=conn, use_llm=True)
+        llm_module.apply_llm_categorization_outcome(
+            conn,
+            transactions,
+            outcome,
+            prepared.unknown_category,
+        )
         updated_count = 0
-        for transaction in categorized:
-            if update_recategorized_transaction(conn, transaction, unknown_category):
+        for transaction in transactions:
+            if update_recategorized_transaction(conn, transaction, prepared.unknown_category):
                 updated_count += 1
     return updated_count
 
@@ -381,6 +491,7 @@ def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
     model and a signed-session persistence payload used only if the user
     explicitly applies the suggestion from the modal dialog.
     """
+    llm_module.clear_llm_request_status()
     with db_core_transaction() as conn:
         if not get_bool_setting(
             conn,
@@ -395,33 +506,53 @@ def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
 
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
         original_tags = get_transaction_tag_names(conn, transaction_id)
+        original_state = transaction_ai_original_state(row, get_transaction_tag_ids(conn, transaction_id))
         tag_colors = get_tag_color_map(conn)
         rules = get_category_rules(conn)
         evidence_transaction = dict(row)
-        categorize_transactions([evidence_transaction], conn=conn, use_llm=False)
+        categorize_transactions([evidence_transaction], conn=conn)
 
         llm_transaction = prepare_single_transaction_llm_payload(evidence_transaction, row, unknown_category)
-        llm_module.clear_llm_request_status()
-        classify_unknowns_with_llm(
+        request_context = llm_module.prepare_llm_categorization_request_context(
             conn,
             [llm_transaction],
-            rules,
+            unknown_category,
+        )
+        model_name = (
+            request_context.openai_model
+            if request_context is not None
+            else get_setting(conn, "openai_model") or settings.default_categorization_model
+        )
+
+    prepared = PreparedTransactionLlmCategorization(
+        unknown_category=unknown_category,
+        rules=rules,
+        request_context=request_context,
+    )
+    outcome = request_prepared_transaction_llm_categorization(prepared)
+    with db_core_transaction() as conn:
+        llm_module.apply_llm_categorization_outcome(
+            conn,
+            [llm_transaction],
+            outcome,
             unknown_category,
             save_automatic_rules=False,
         )
         request_status = llm_module.last_llm_request_status()
         request_ok = request_status.get("status") == "ok"
 
-        return build_transaction_ai_result(
-            row,
-            original_tags,
-            llm_transaction,
-            request_status,
-            tag_colors,
-            request_ok=request_ok,
-            unknown_category=unknown_category,
-            model_name=get_setting(conn, "openai_model") or settings.default_categorization_model,
-        )
+    result = build_transaction_ai_result(
+        row,
+        original_tags,
+        llm_transaction,
+        request_status,
+        tag_colors,
+        request_ok=request_ok,
+        unknown_category=unknown_category,
+        model_name=model_name,
+    )
+    result["original_state"] = original_state
+    return result
 
 
 def estimate_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
@@ -440,7 +571,7 @@ def estimate_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
 
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
         evidence_transaction = dict(row)
-        categorize_transactions([evidence_transaction], conn=conn, use_llm=False)
+        categorize_transactions([evidence_transaction], conn=conn)
         llm_transaction = prepare_single_transaction_llm_payload(evidence_transaction, row, unknown_category)
         estimate = estimate_llm_categorization_tokens(
             conn,
@@ -477,12 +608,12 @@ def apply_transaction_ai_suggestion(
         does not contain an applicable category.
     """
     if not suggestion or int(suggestion.get("transaction_id") or 0) != int(transaction_id):
-        return {
-            "updated": False,
-            "message": "AI suggestion expired. Use Suggest category again.",
-        }
+        return expired_ai_suggestion_result()
     if not suggestion.get("can_apply") or not suggestion.get("persistence"):
         return {"updated": False, "message": "AI suggestion cannot be applied."}
+    original_state = suggestion.get("original_state")
+    if not valid_ai_suggestion_original_state(original_state):
+        return expired_ai_suggestion_result()
 
     with db_core_transaction() as conn:
         if not get_bool_setting(
@@ -508,7 +639,14 @@ def apply_transaction_ai_suggestion(
                     "message": "Rule keyword is required when saving a rule.",
                 }
 
-        updated = apply_ai_category_update(conn, transaction_id, payload, unknown_category)
+        assert isinstance(original_state, Mapping)
+        updated = apply_ai_category_update(
+            conn,
+            transaction_id,
+            payload,
+            unknown_category,
+            expected_original_state=original_state,
+        )
         saved_rule_id = None
         if updated and should_create_rule:
             saved_rule_id = save_category_rule(
@@ -523,7 +661,7 @@ def apply_transaction_ai_suggestion(
             )
 
         if not updated:
-            return {"updated": False, "message": "Transaction not found."}
+            return expired_ai_suggestion_result()
 
         if should_create_rule:
             return {
@@ -537,6 +675,27 @@ def apply_transaction_ai_suggestion(
             "saved_rule_id": None,
             "message": "AI suggestion applied to this transaction.",
         }
+
+
+def expired_ai_suggestion_result() -> dict[str, Any]:
+    """Return the standard stale single-transaction AI suggestion response."""
+    return {
+        "updated": False,
+        "expired": True,
+        "message": AI_SUGGESTION_EXPIRED_MESSAGE,
+    }
+
+
+def valid_ai_suggestion_original_state(value: object) -> bool:
+    """Return whether a signed-session suggestion has a usable state token."""
+    if not isinstance(value, Mapping):
+        return False
+    tag_ids = value.get("tag_ids")
+    return (
+        AI_SUGGESTION_ORIGINAL_STATE_KEYS.issubset(value.keys())
+        and isinstance(tag_ids, list)
+        and all(isinstance(tag_id, int) for tag_id in tag_ids)
+    )
 
 
 def prepare_single_transaction_llm_payload(
@@ -560,86 +719,6 @@ def prepare_single_transaction_llm_payload(
     return payload
 
 
-def build_transaction_ai_result(
-    original_row: Mapping[str, Any],
-    original_tags: Sequence[str],
-    llm_transaction: Mapping[str, Any],
-    request_status: Mapping[str, Any],
-    tag_colors: Mapping[str, str],
-    request_ok: bool,
-    unknown_category: str,
-    model_name: str,
-) -> dict[str, Any]:
-    """Build a JSON-serializable modal view model for a one-off AI run."""
-    metadata = parse_ai_metadata(llm_transaction.get("category_metadata"))
-    tags = list(llm_transaction.get("tags") or [])
-    original_tag_list = list(original_tags or [])
-    category = llm_transaction.get("category")
-    can_apply = bool(request_ok and category and category != unknown_category)
-    message = ai_suggestion_message(request_status, can_apply)
-    amount = original_row.get("amount")
-    transaction_kind = str(original_row.get("transaction_kind") or "")
-    return {
-        "ok": bool(request_ok),
-        "applied": False,
-        "can_apply": can_apply,
-        "message": message,
-        "transaction_id": original_row["id"],
-        "description": original_row["description"],
-        "account_name": original_row.get("account_name"),
-        "tx_date": stringify_date(original_row.get("tx_date")),
-        "amount": amount,
-        "transaction_kind": transaction_kind,
-        "transaction_kind_label": TRANSACTION_KINDS.get(transaction_kind, transaction_kind),
-        "previous_category": original_row.get("category"),
-        "previous_tags": original_tag_list,
-        "previous_tag_pills": tag_pills(original_tag_list, tag_colors),
-        "category": category,
-        "tags": tags,
-        "tag_pills": tag_pills(tags, tag_colors),
-        "needs_review": bool(llm_transaction.get("needs_review")),
-        "category_source": llm_transaction.get("category_source"),
-        "category_source_label": category_source_label(llm_transaction.get("category_source")),
-        "category_source_badge_class": category_source_badge_class(llm_transaction.get("category_source")),
-        "category_confidence": llm_transaction.get("category_confidence"),
-        "category_confidence_label": category_confidence_label(llm_transaction.get("category_confidence")),
-        "model": model_name,
-        "request_status": request_status,
-        "request_status_label": request_status_label(request_status),
-        "request_detail": request_status.get("detail") or "",
-        "metadata_pretty": json.dumps(metadata, ensure_ascii=True, indent=2, sort_keys=True) if metadata else "",
-        "llm_reason": metadata.get("llm_reason") or "",
-        "llm_confidence": metadata.get("llm_confidence"),
-        "proposed_confidence": metadata.get("proposed_confidence"),
-        "final_confidence": metadata.get("final_confidence"),
-        "review_required": bool(metadata.get("review_required")),
-        "failure_reason": metadata.get("failure_reason") or "",
-        "supported_by_similar_transactions": metadata.get("supported_by_similar_transactions"),
-        "rule_evidence": metadata.get("rule") or llm_transaction.get("rule_evidence") or {},
-        "retrieval_evidence": metadata.get("retrieval") or llm_transaction.get("historical_evidence") or {},
-        "rule_keyword": llm_transaction_rule_keyword(original_row),
-        "rule_exact_amount": f"{amount:.2f}" if amount is not None else "",
-        "persistence": ai_suggestion_persistence(llm_transaction, metadata),
-    }
-
-
-def ai_suggestion_persistence(llm_transaction: Mapping[str, Any], metadata: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the AI suggestion fields needed for a later explicit apply."""
-    return {
-        "category": llm_transaction.get("category"),
-        "tags": list(llm_transaction.get("tags") or []),
-        "needs_review": 1 if llm_transaction.get("needs_review") else 0,
-        "category_source": llm_transaction.get("category_source"),
-        "category_confidence": llm_transaction.get("category_confidence"),
-        "category_rule_id": llm_transaction.get("category_rule_id"),
-        "category_metadata": metadata,
-        "categorized_at": llm_transaction.get("categorized_at"),
-        "reviewed_at": llm_transaction.get("reviewed_at"),
-        "amount": llm_transaction.get("amount"),
-        "transaction_kind": llm_transaction.get("transaction_kind"),
-    }
-
-
 def accepted_ai_suggestion_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Return a persistence payload representing a user-accepted AI suggestion."""
     accepted = dict(payload)
@@ -657,135 +736,3 @@ def accepted_ai_suggestion_payload(payload: Mapping[str, Any]) -> dict[str, Any]
     accepted["categorized_at"] = accepted.get("categorized_at") or accepted_at
     accepted["reviewed_at"] = accepted_at
     return accepted
-
-
-def llm_transaction_rule_keyword(original_row: Mapping[str, Any]) -> str:
-    """Return the default rule keyword shown with an AI suggestion."""
-    return normalize_rule_keyword("", original_row.get("description", ""))
-
-
-def ai_suggestion_message(request_status: Mapping[str, Any], can_apply: bool) -> str:
-    """Return a user-facing message for a one-transaction AI suggestion."""
-    if request_status.get("status") == "ok":
-        return "AI suggestion ready." if can_apply else "AI suggestion cannot be applied."
-    return ai_request_failure_message(request_status)
-
-
-def disabled_ai_result() -> dict[str, Any]:
-    """Return the result shown when the per-transaction AI action is disabled."""
-    return {
-        "ok": False,
-        "applied": False,
-        "message": "Single-transaction AI is disabled in settings.",
-        "request_status_label": "disabled",
-    }
-
-
-def disabled_ai_estimate_result() -> dict[str, Any]:
-    """Return the estimate result shown when single-transaction AI is disabled."""
-    return {
-        "ok": False,
-        "message": "Single-transaction AI is disabled in settings.",
-    }
-
-
-def missing_transaction_ai_result(transaction_id: int) -> dict[str, Any]:
-    """Return the result shown when the selected transaction no longer exists."""
-    return {
-        "ok": False,
-        "applied": False,
-        "transaction_id": transaction_id,
-        "message": "Transaction not found.",
-        "request_status_label": "not_found",
-    }
-
-
-def missing_transaction_ai_estimate_result(transaction_id: int) -> dict[str, Any]:
-    """Return the estimate result shown when a transaction no longer exists."""
-    return {
-        "ok": False,
-        "transaction_id": transaction_id,
-        "message": "Transaction not found.",
-    }
-
-
-def disabled_ai_apply_result() -> dict[str, Any]:
-    """Return the apply result shown when single-transaction AI is disabled."""
-    return {
-        "updated": False,
-        "message": "Single-transaction AI is disabled in settings.",
-    }
-
-
-def missing_transaction_apply_result(transaction_id: int) -> dict[str, Any]:
-    """Return the apply result shown when the selected transaction no longer exists."""
-    return {
-        "updated": False,
-        "transaction_id": transaction_id,
-        "message": "Transaction not found.",
-    }
-
-
-def ai_request_failure_message(request_status: Mapping[str, Any]) -> str:
-    """Return a user-facing message for a request that was not persisted."""
-    status = request_status.get("status")
-    if status == "configuration_missing":
-        return "OpenAI API key is not configured."
-    if status == "dependency_missing":
-        return "OpenAI package is not installed."
-    if status == "not_requested":
-        return "AI categorization did not run."
-    return "AI categorization could not be applied."
-
-
-def parse_ai_metadata(value: object) -> dict[str, Any]:
-    """Return category metadata as a dictionary for the result modal."""
-    if isinstance(value, dict):
-        return value
-    text = str(value or "").strip()
-    if not text:
-        return {}
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        return {"raw": text}
-    return parsed if isinstance(parsed, dict) else {"raw": parsed}
-
-
-def tag_pills(tags: Sequence[str], tag_colors: Mapping[str, str]) -> list[dict[str, str]]:
-    """Return tag display pills for the AI result modal."""
-    return [
-        {
-            "name": tag,
-            "color": tag_colors.get(tag, "#64748b"),
-        }
-        for tag in tags
-    ]
-
-
-def request_status_label(request_status: Mapping[str, Any]) -> str:
-    """Return a compact status label for the LLM request result."""
-    return str(request_status.get("status") or "unknown")
-
-
-def stringify_date(value: object) -> str:
-    """Return a stable date string for session storage and modal rendering."""
-    if value is None:
-        return ""
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return str(value)
-
-
-def ai_token_estimate_result(scope: str, transaction_count: int, estimate: Mapping[str, Any]) -> dict[str, Any]:
-    """Return a JSON-ready token estimate payload for transaction AI actions."""
-    request_count = int(estimate.get("request_count") or 0)
-    return {
-        "ok": True,
-        "scope": scope,
-        "transaction_count": transaction_count,
-        "message": (
-            "No AI request would be sent for this action." if request_count == 0 else "AI usage estimate ready."
-        ),
-        "estimate": dict(estimate),
-    }

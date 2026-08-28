@@ -1,6 +1,7 @@
 """Tests for dashboard presenter behavior."""
 
-from finance_app.modules.dashboard.presenter import build_classification_scope_options, build_quick_view_options
+from finance_app.core.analytics import build_quick_view_options
+from finance_app.modules.dashboard.presenter import build_classification_scope_options
 
 
 def test_build_quick_view_options_hides_zero_count_buttons():

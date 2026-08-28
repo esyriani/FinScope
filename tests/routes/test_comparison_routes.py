@@ -24,7 +24,7 @@ class FixedDate(real_date):
         return cls(2026, 5, 11)
 
 
-def test_comparison_route_renders_monthly_spending_distribution(client, core_conn, monkeypatch):
+def test_comparison_route_renders_monthly_spending_distribution(owner_client, core_conn, monkeypatch):
     """Verify comparison renders yearly monthly-spending distribution in both languages."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     core_conn.execute(
@@ -40,7 +40,7 @@ def test_comparison_route_renders_monthly_spending_distribution(client, core_con
     )
     core_conn.commit()
 
-    response = client.get("/comparison?years=2025&years=2026")
+    response = owner_client.get("/comparison?years=2025&years=2026")
 
     assert response.status_code == 200
     assert_visible_text(
@@ -71,7 +71,7 @@ def test_comparison_route_renders_monthly_spending_distribution(client, core_con
         """))
     core_conn.commit()
 
-    french_response = client.get("/comparison?years=2025&years=2026")
+    french_response = owner_client.get("/comparison?years=2025&years=2026")
 
     assert french_response.status_code == 200
     assert_visible_text(
@@ -88,7 +88,7 @@ def test_comparison_route_renders_monthly_spending_distribution(client, core_con
     )
 
 
-def test_comparison_route_renders_monthly_spending_table_option(client, core_conn, monkeypatch):
+def test_comparison_route_renders_monthly_spending_table_option(owner_client, core_conn, monkeypatch):
     """Verify yearly monthly totals can be viewed as an exportable table."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     core_conn.execute(
@@ -104,7 +104,7 @@ def test_comparison_route_renders_monthly_spending_table_option(client, core_con
     )
     core_conn.commit()
 
-    response = client.get("/comparison?comparison_view=year&years=2025&years=2026&baseline_year=2025")
+    response = owner_client.get("/comparison?comparison_view=year&years=2025&years=2026&baseline_year=2025")
 
     assert response.status_code == 200
     assert_has_element(
@@ -201,7 +201,7 @@ def test_comparison_route_renders_monthly_spending_table_option(client, core_con
     )
 
 
-def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypatch):
+def test_comparison_route_uses_period_and_year_tabs(owner_client, core_conn, monkeypatch):
     """Verify comparison separates period changes from yearly trends with tabs."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     core_conn.execute(
@@ -216,7 +216,7 @@ def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypat
     )
     core_conn.commit()
 
-    response = client.get("/comparison")
+    response = owner_client.get("/comparison")
 
     assert response.status_code == 200
     assert_visible_text(response, "Period changes", "Year trends")
@@ -312,7 +312,7 @@ def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypat
         attrs={"id": "comparison-merchant-changes", "role": "tabpanel"},
     )
 
-    year_response = client.get("/comparison?comparison_view=year")
+    year_response = owner_client.get("/comparison?comparison_view=year")
 
     assert year_response.status_code == 200
     assert_has_element(
@@ -348,7 +348,7 @@ def test_comparison_route_uses_period_and_year_tabs(client, core_conn, monkeypat
     )
 
 
-def test_comparison_route_renders_income_analysis_mode(client, core_conn, monkeypatch):
+def test_comparison_route_renders_income_analysis_mode(owner_client, core_conn, monkeypatch):
     """Verify comparison renders and preserves the selected analysis mode."""
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     core_conn.execute(
@@ -378,7 +378,7 @@ def test_comparison_route_renders_income_analysis_mode(client, core_conn, monkey
     )
     core_conn.commit()
 
-    response = client.get("/comparison?analysis_mode=income&comparison_view=year&years=2025&years=2026")
+    response = owner_client.get("/comparison?analysis_mode=income&comparison_view=year&years=2025&years=2026")
 
     assert response.status_code == 200
     assert_has_element(response, "select", attrs={"id": "comparison-year-analysis", "name": "analysis_mode"})

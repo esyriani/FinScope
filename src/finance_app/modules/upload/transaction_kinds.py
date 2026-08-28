@@ -55,7 +55,7 @@ PAYMENT_DESCRIPTION_MARKERS = (
 
 
 def default_import_mode(statement_type: object) -> str:
-    """Return the legacy-compatible import mode for a parser type."""
+    """Return the default import mode for a parser type."""
     if statement_type == STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
         return STATEMENT_IMPORT_MODE_ENRICHMENT
     return STATEMENT_IMPORT_MODE_LEDGER
