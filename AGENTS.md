@@ -134,8 +134,8 @@ Current architecture boundaries to preserve:
   Prepare rule/history and prompt context in a short transaction, release the
   database connection while the provider request runs, then apply validated
   results and persistence updates in a short caller-owned write transaction.
-  Do not call the default provider through `classify_unknowns_with_llm()` or
-  `categorize_transactions(..., use_llm=True)` inside `db_core_transaction()`.
+  Do not reintroduce transaction-bound one-shot helpers or default-provider
+  calls inside `db_core_transaction()`.
 - Statement import type configuration lives in
   `src/finance_app/modules/statements/types.py`. Settings may edit those rows
   and Upload may read them, but `modules/settings/runtime.py` should stay

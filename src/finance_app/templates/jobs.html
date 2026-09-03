@@ -18,7 +18,7 @@
 {% endmacro %}
 
 {% macro translated_job_message(message, params) %}
-{{ _(message, current=params.get("current", ""), total=params.get("total", ""), updated=params.get("updated", ""), start=params.get("start", ""), end=params.get("end", ""), processed=params.get("processed", ""), batch_updated=params.get("batch_updated", ""), unknown=params.get("unknown", ""), reasons=params.get("reasons", ""), error_type=params.get("error_type", ""), detail=params.get("detail", ""), result=params.get("result", ""), summary=params.get("summary", "")) }}
+{{ _(message, current=params.get("current", ""), total=params.get("total", ""), updated=params.get("updated", ""), skipped_stale=params.get("skipped_stale", ""), batch_skipped_stale=params.get("batch_skipped_stale", ""), start=params.get("start", ""), end=params.get("end", ""), processed=params.get("processed", ""), batch_updated=params.get("batch_updated", ""), unknown=params.get("unknown", ""), reasons=params.get("reasons", ""), error_type=params.get("error_type", ""), detail=params.get("detail", ""), result=params.get("result", ""), summary=params.get("summary", "")) }}
 {% endmacro %}
 
 {% macro progress_summary(job) %}

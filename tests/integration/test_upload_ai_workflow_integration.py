@@ -16,6 +16,7 @@ from tests.support.upload import (
 )
 from tests.support.web import set_csrf_token
 
+from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories import llm_workflow as category_llm_workflow
@@ -127,6 +128,67 @@ def test_import_statement_job_auto_queues_ai_when_token_confirmation_disabled(ap
             "func": upload_ai_workflow.categorize_statement_unknown_transactions_job,
             "args": (statement_id,),
             "kwargs": {"queue": "ai"},
+        }
+    ]
+
+
+def test_import_statement_job_keeps_success_when_auto_ai_queue_rejected(app, core_conn, monkeypatch):
+    """Verify optional post-import AI queue failures do not fail the import."""
+    set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
+    account_id, statement_id = create_account_statement(core_conn, "auto-ai-rejected.csv")
+    progress_logs = []
+
+    def reject_job(label, func, *args, **kwargs):
+        """Reject the automatic AI follow-up queue request."""
+        del func, args, kwargs
+        raise runner.BackgroundJobSubmissionError(
+            "rejected-auto-ai",
+            label,
+            runner.AI_JOB_QUEUE,
+            "RuntimeError: executor stopped",
+        )
+
+    def capture_log(message, params=None, level="info", job_id=None):
+        """Capture import-job progress log messages."""
+        progress_logs.append(
+            {
+                "message": message,
+                "params": dict(params or {}),
+                "level": level,
+                "job_id": job_id,
+            }
+        )
+
+    monkeypatch.setattr(upload_ai_workflow, "submit_background_job", reject_job)
+    monkeypatch.setattr(upload_workflow, "append_background_job_log", capture_log)
+
+    message = run_statement_import_job(
+        core_conn,
+        statement_id,
+        account_id,
+        "credit_card",
+        "csv",
+        "Date,Description,Amount\n2026-01-02,UNKNOWN SHOP,12.34\n",
+    )
+
+    statement = core_conn.execute(
+        text("""
+        SELECT import_status, imported_count, skipped_count, ignored_count,
+               llm_candidate_count, import_error
+        FROM statements
+        WHERE id = :p0
+        """),
+        {"p0": statement_id},
+    ).fetchone()
+    assert "1 unknown transaction can be categorized with AI from Uploaded statements." in message
+    assert "AI job:" not in message
+    assert tuple(statement) == ("completed", 1, 0, 0, 1, None)
+    assert progress_logs == [
+        {
+            "message": "AI categorization follow-up could not be queued: {detail}",
+            "params": {"detail": "RuntimeError: executor stopped"},
+            "level": "warning",
+            "job_id": None,
         }
     ]
 

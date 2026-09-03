@@ -1,5 +1,6 @@
 """Background workflow helpers for the upload feature."""
 
+import logging
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 from sqlalchemy import func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 
+from finance_app.background.runner import BackgroundJobSubmissionError, append_background_job_log
 from finance_app.core.constants import (
     ACCOUNT_TYPE_CHECKING,
     ACCOUNT_TYPE_SAVINGS,
@@ -76,6 +78,8 @@ from finance_app.modules.upload.undo import (
     statement_filename_row,
     statement_transaction_count,
 )
+
+logger = logging.getLogger(__name__)
 
 INTERAC_MATCH_DATE_TOLERANCE_DAYS = 5
 INTERAC_MATCH_AMOUNT_TOLERANCE = Decimal("0.005")
@@ -555,7 +559,19 @@ def import_statement_transactions_job(
             if not updated:
                 raise StatementImportClaimError("Statement import attempt is no longer active.")
         if auto_queue_llm:
-            auto_llm_job_id = queue_statement_llm_categorization(statement_id)
+            try:
+                auto_llm_job_id = queue_statement_llm_categorization(statement_id)
+            except BackgroundJobSubmissionError as exc:
+                logger.warning(
+                    "Statement %s AI follow-up could not be queued after import: %s",
+                    statement_id,
+                    exc.detail,
+                )
+                append_background_job_log(
+                    "AI categorization follow-up could not be queued: {detail}",
+                    params={"detail": exc.detail},
+                    level="warning",
+                )
     except Exception as exc:
         with db_core_transaction() as conn:
             update_statement_import_state(

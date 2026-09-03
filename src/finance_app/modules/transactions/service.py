@@ -5,6 +5,7 @@ from typing import Any
 
 from finance_app.background.runner import (
     AI_JOB_QUEUE,
+    BackgroundJobSubmissionError,
     append_background_job_log,
     is_job_cancel_requested,
     raise_if_cancel_requested,
@@ -297,15 +298,23 @@ def queue_selected_transaction_recategorization(transaction_ids: Iterable[object
     """
     ids = normalized_transaction_ids(transaction_ids)
     if not ids:
-        return {"selected_count": 0, "job_id": None}
+        return {"ok": False, "selected_count": 0, "job_id": None, "message": "Select at least one transaction."}
 
-    job_id = submit_background_job(
-        f"Recategorize {len(ids)} selected transactions",
-        recategorize_selected_transactions_job,
-        ids,
-        queue=AI_JOB_QUEUE,
-    )
-    return {"selected_count": len(ids), "job_id": job_id}
+    try:
+        job_id = submit_background_job(
+            f"Recategorize {len(ids)} selected transactions",
+            recategorize_selected_transactions_job,
+            ids,
+            queue=AI_JOB_QUEUE,
+        )
+    except BackgroundJobSubmissionError:
+        return {
+            "ok": False,
+            "selected_count": len(ids),
+            "job_id": None,
+            "message": "Recategorization could not be queued. Try again.",
+        }
+    return {"ok": True, "selected_count": len(ids), "job_id": job_id}
 
 
 def estimate_selected_transaction_recategorization(transaction_ids: Iterable[object] | None) -> dict[str, Any]:
@@ -345,6 +354,7 @@ def recategorize_selected_transactions_job(transaction_ids: Iterable[object] | N
 
     processed_count = 0
     updated_count = 0
+    skipped_stale_count = 0
     with db_core_transaction() as conn:
         rows = get_transactions_for_recategorization(conn, ids)
 
@@ -398,22 +408,50 @@ def recategorize_selected_transactions_job(transaction_ids: Iterable[object] | N
             },
         )
 
-        batch_updated = recategorize_selected_transaction_rows(batch)
+        batch_result = recategorize_selected_transaction_rows(batch)
+        batch_updated = batch_result["updated"]
+        batch_skipped_stale = batch_result["skipped_stale"]
         processed_count += len(batch)
         updated_count += batch_updated
+        skipped_stale_count += batch_skipped_stale
+        batch_log_message = (
+            "Finished selected recategorization batch {start}-{end}: "
+            "{processed} processed; {updated} updated total; {skipped_stale} skipped as changed."
+            if batch_skipped_stale
+            else "Finished selected recategorization batch {start}-{end}: "
+            "{processed} processed; {updated} updated total."
+        )
         append_selected_recategorization_log(
-            "Finished selected recategorization batch {start}-{end}: {processed} processed; {updated} updated total.",
+            batch_log_message,
             params={
                 "start": batch_start,
                 "end": batch_end,
                 "processed": len(batch),
                 "updated": updated_count,
                 "batch_updated": batch_updated,
+                "skipped_stale": skipped_stale_count,
+                "batch_skipped_stale": batch_skipped_stale,
             },
         )
-        update_selected_recategorization_progress(processed_count, total, updated_count)
+        progress_message = (
+            "Recategorized {current} of {total}; {updated} updated; {skipped_stale} skipped as changed."
+            if skipped_stale_count
+            else None
+        )
+        update_selected_recategorization_progress(
+            processed_count,
+            total,
+            updated_count,
+            skipped_stale=skipped_stale_count,
+            message=progress_message,
+        )
 
     summary = f"{updated_count} selected transaction{'s' if updated_count != 1 else ''} recategorized."
+    if skipped_stale_count:
+        summary += (
+            f" Skipped {skipped_stale_count} transaction"
+            f"{'' if skipped_stale_count == 1 else 's'} changed after the job started."
+        )
     append_selected_recategorization_log(
         "Selected transaction recategorization completed: {summary}",
         params={"summary": summary},
@@ -421,7 +459,7 @@ def recategorize_selected_transactions_job(transaction_ids: Iterable[object] | N
     return summary
 
 
-def recategorize_selected_transaction_rows(rows: Sequence[Mapping[str, Any]]) -> int:
+def recategorize_selected_transaction_rows(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     """Categorize and persist one batch of selected transaction rows."""
     llm_module.clear_llm_request_status()
     transactions: list[MutableMapping[str, Any]] = [dict(row) for row in rows]
@@ -435,16 +473,29 @@ def recategorize_selected_transaction_rows(rows: Sequence[Mapping[str, Any]]) ->
             prepared.unknown_category,
         )
         updated_count = 0
+        skipped_stale_count = 0
         for transaction in transactions:
-            if update_recategorized_transaction(conn, transaction, prepared.unknown_category):
+            original_state = transaction.get("original_state")
+            if not isinstance(original_state, Mapping):
+                skipped_stale_count += 1
+                continue
+            if update_recategorized_transaction(
+                conn,
+                transaction,
+                prepared.unknown_category,
+                expected_original_state=original_state,
+            ):
                 updated_count += 1
-    return updated_count
+            else:
+                skipped_stale_count += 1
+    return {"updated": updated_count, "skipped_stale": skipped_stale_count}
 
 
 def update_selected_recategorization_progress(
     current: int,
     total: int,
     updated: int,
+    skipped_stale: int = 0,
     message: str | None = None,
     params: Mapping[str, Any] | None = None,
     log_message: str | None = None,
@@ -457,6 +508,7 @@ def update_selected_recategorization_progress(
         "current": current,
         "total": total,
         "updated": updated,
+        "skipped_stale": skipped_stale,
     }
     if params:
         progress_params.update(params)
@@ -488,8 +540,10 @@ def suggest_transaction_ai_category(transaction_id: int) -> dict[str, Any]:
 
     The action is suggestion-first: it suppresses automatic rule creation and
     does not mutate the selected row. The returned result contains the display
-    model and a signed-session persistence payload used only if the user
-    explicitly applies the suggestion from the modal dialog.
+    model plus a minimal apply payload. The controller stores both payloads in
+    the short-lived server-side AI payload store and keeps only opaque
+    references in the Flask session until the modal is displayed or explicitly
+    applied.
     """
     llm_module.clear_llm_request_status()
     with db_core_transaction() as conn:
@@ -595,8 +649,8 @@ def apply_transaction_ai_suggestion(
 
     Args:
         transaction_id: Transaction primary key targeted by the action.
-        suggestion: Signed-session suggestion payload produced by
-            `suggest_transaction_ai_category`.
+        suggestion: Server-side apply payload loaded by opaque reference from
+            the short-lived AI payload store.
         action: Whether to apply only the transaction or also create a rule.
         rule_keyword: Optional user-edited rule keyword for rule creation.
         amount_min: Optional lower rule amount bound.
@@ -604,8 +658,9 @@ def apply_transaction_ai_suggestion(
 
     Returns:
         A dictionary with `updated`, optional `saved_rule_id`, and a user-facing
-        message. No mutation occurs when the suggestion is missing, stale, or
-        does not contain an applicable category.
+        message. No mutation occurs when the suggestion is missing, stale,
+        already consumed or expired, does not contain an applicable category, or
+        no longer matches the transaction's original state token.
     """
     if not suggestion or int(suggestion.get("transaction_id") or 0) != int(transaction_id):
         return expired_ai_suggestion_result()
@@ -687,7 +742,7 @@ def expired_ai_suggestion_result() -> dict[str, Any]:
 
 
 def valid_ai_suggestion_original_state(value: object) -> bool:
-    """Return whether a signed-session suggestion has a usable state token."""
+    """Return whether a server-side AI suggestion has a usable optimistic state token."""
     if not isinstance(value, Mapping):
         return False
     tag_ids = value.get("tag_ids")

@@ -120,7 +120,7 @@ def categorize_all_unknowns() -> ResponseReturnValue:
 
     result = jobs_service.queue_all_unknown_categorization()
     if not result.get("ok"):
-        flash(gettext("No unknown transactions need AI categorization."))
+        flash(gettext(str(result.get("message") or "No unknown transactions need AI categorization.")))
         return redirect(next_url)
 
     job_id = result["job_id"]

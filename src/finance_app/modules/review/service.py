@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 from typing import Any
 
-from finance_app.background.runner import submit_background_job
+from finance_app.background.runner import BackgroundJobSubmissionError, submit_background_job
 from finance_app.core.config import settings
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.query import parse_page, parse_sort_direction
@@ -203,23 +203,33 @@ def queue_review_group_application(
     if selected_transaction_ids:
         job_kwargs["selected_transaction_ids"] = selected_transaction_ids
 
-    job_id = submit_background_job(
-        job_label,
-        apply_review_group_job,
-        undo_state,
-        merchant_key,
-        category,
-        tags,
-        create_rule,
-        rule_keyword,
-        amount_min,
-        amount_max,
-        transaction_id,
-        undo_handler=undo_review_group_job,
-        undo_args=(undo_state,),
-        **job_kwargs,
-    )
+    try:
+        job_id = submit_background_job(
+            job_label,
+            apply_review_group_job,
+            undo_state,
+            merchant_key,
+            category,
+            tags,
+            create_rule,
+            rule_keyword,
+            amount_min,
+            amount_max,
+            transaction_id,
+            undo_handler=undo_review_group_job,
+            undo_args=(undo_state,),
+            **job_kwargs,
+        )
+    except BackgroundJobSubmissionError:
+        return {
+            "ok": False,
+            "job_id": None,
+            "target": "transaction" if transaction_id else "transactions" if selected_transaction_ids else "group",
+            "message": "Review could not be queued. Try again.",
+            "status": 503,
+        }
     return {
+        "ok": True,
         "job_id": job_id,
         "target": "transaction" if transaction_id else "transactions" if selected_transaction_ids else "group",
     }

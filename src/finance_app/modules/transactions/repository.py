@@ -267,7 +267,7 @@ def apply_ai_category_update(
         update(transactions_table)
         .where(
             transactions_table.c.id == transaction_id,
-            *ai_suggestion_original_state_conditions(expected_original_state),
+            *transaction_ai_original_state_conditions(expected_original_state),
         )
         .values(
             category=category,
@@ -311,6 +311,33 @@ def get_transaction_tag_ids(conn: Any, transaction_id: object) -> list[int]:
     ]
 
 
+def get_transaction_tag_ids_by_id(conn: Any, transaction_ids: Iterable[object]) -> dict[int, list[int]]:
+    """Return sorted transaction tag IDs keyed by transaction ID."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return {}
+
+    result: dict[int, list[int]] = {transaction_id: [] for transaction_id in ids}
+    rows = (
+        conn.execute(
+            select(
+                transaction_tags_table.c.transaction_id,
+                transaction_tags_table.c.tag_id,
+            )
+            .where(transaction_tags_table.c.transaction_id.in_(ids))
+            .order_by(
+                transaction_tags_table.c.transaction_id,
+                transaction_tags_table.c.tag_id,
+            )
+        )
+        .mappings()
+        .fetchall()
+    )
+    for row in rows:
+        result.setdefault(int(row["transaction_id"]), []).append(int(row["tag_id"]))
+    return result
+
+
 def transaction_ai_original_state(row: Mapping[str, Any], tag_ids: Iterable[object]) -> dict[str, Any]:
     """Return the compact row state used to validate a later AI suggestion apply."""
     return {
@@ -329,8 +356,8 @@ def transaction_ai_original_state(row: Mapping[str, Any], tag_ids: Iterable[obje
     }
 
 
-def ai_suggestion_original_state_conditions(expected: Mapping[str, Any]) -> list[Any]:
-    """Return SQL predicates proving the transaction still matches a suggestion."""
+def transaction_ai_original_state_conditions(expected: Mapping[str, Any]) -> list[Any]:
+    """Return SQL predicates proving a transaction still matches an AI state token."""
     return [
         column_matches(transactions_table.c.category, expected.get("stored_category")),
         column_matches(transactions_table.c.category_id, state_int_or_none(expected.get("category_id"))),
@@ -427,7 +454,16 @@ def get_transactions_for_recategorization(conn: Any, transaction_ids: Iterable[o
                 transactions_table.c.merchant_id,
                 transactions_table.c.description,
                 transactions_table.c.amount,
+                transactions_table.c.category.label("stored_category"),
                 transaction_category_label_expression(None).label("category"),
+                transactions_table.c.category_id,
+                transactions_table.c.needs_review,
+                transactions_table.c.category_source,
+                transactions_table.c.category_confidence,
+                transactions_table.c.category_rule_id,
+                transactions_table.c.categorized_at,
+                transactions_table.c.reviewed_at,
+                transactions_table.c.ignored,
                 transactions_table.c.transaction_kind,
             )
             .where(transactions_table.c.id.in_(ids))
@@ -437,16 +473,25 @@ def get_transactions_for_recategorization(conn: Any, transaction_ids: Iterable[o
         .fetchall()
     )
 
-    return [
-        {
-            **dict(row),
-            "amount": money_to_float(row["amount"]),
-        }
-        for row in rows
-    ]
+    tag_ids_by_transaction = get_transaction_tag_ids_by_id(conn, (row["id"] for row in rows))
+    transactions = []
+    for row in rows:
+        transaction = dict(row)
+        transaction["original_state"] = transaction_ai_original_state(
+            transaction,
+            tag_ids_by_transaction.get(int(transaction["id"]), []),
+        )
+        transaction["amount"] = money_to_float(transaction["amount"])
+        transactions.append(transaction)
+    return transactions
 
 
-def update_recategorized_transaction(conn: Any, transaction: Mapping[str, Any], unknown_category: str) -> bool:
+def update_recategorized_transaction(
+    conn: Any,
+    transaction: Mapping[str, Any],
+    unknown_category: str,
+    expected_original_state: Mapping[str, Any],
+) -> bool:
     """Persist one complete workflow categorization result to its transaction."""
     transaction_id = transaction["id"]
     category = transaction.get("category") or unknown_category
@@ -454,7 +499,10 @@ def update_recategorized_transaction(conn: Any, transaction: Mapping[str, Any], 
     rule_id = transaction.get("category_rule_id")
     cursor = conn.execute(
         update(transactions_table)
-        .where(transactions_table.c.id == transaction_id)
+        .where(
+            transactions_table.c.id == transaction_id,
+            *transaction_ai_original_state_conditions(expected_original_state),
+        )
         .values(
             category=category,
             category_id=resolve_category_id(conn, category),

@@ -8,7 +8,6 @@ from threading import local
 from typing import Any
 
 from finance_app.core.config import settings
-from finance_app.database.engine import CORE_DB_TRANSACTION_DEPTH_KEY
 from finance_app.modules.categories.decision import (
     FinalCategoryDecision,
 )
@@ -195,66 +194,6 @@ def prepare_llm_categorization_request_context(
         verify_threshold=verify_threshold,
         openai_model=openai_model,
     )
-
-
-def classify_unknowns_with_llm(
-    conn: Any,
-    transactions: Sequence[MutableMapping[str, Any]],
-    rules: Sequence[Mapping[str, Any]],
-    unknown_category: str,
-    save_automatic_rules: bool = True,
-    request_categories: Any = None,
-    prepare_candidate_taxonomies: Any = None,
-    batch_size: int | None = None,
-) -> None:
-    """Classify unknowns with LLM.
-
-    When ``save_automatic_rules`` is false, accepted high-confidence results
-    are applied to the provided transaction payloads without creating reusable
-    automatic rules. This supports one-off suggestion previews from transaction
-    detail screens. ``request_categories`` can inject the model request
-    function for tests or alternate callers without replacing module globals.
-    ``prepare_candidate_taxonomies`` and ``batch_size`` provide the same
-    explicit injection points for candidate-taxonomy setup and batching.
-    """
-    context = prepare_llm_categorization_request_context(
-        conn,
-        transactions,
-        unknown_category,
-        prepare_candidate_taxonomies=prepare_candidate_taxonomies,
-    )
-    if context is None:
-        return
-
-    require_released_transaction_for_default_provider(conn, request_categories)
-    outcome = request_llm_categorization_outcome(
-        context,
-        rules,
-        unknown_category,
-        request_categories=request_categories,
-        batch_size=batch_size,
-    )
-    apply_llm_categorization_outcome(
-        conn,
-        transactions,
-        outcome,
-        unknown_category,
-        save_automatic_rules=save_automatic_rules,
-    )
-
-
-def require_released_transaction_for_default_provider(conn: Any, request_categories: Any = None) -> None:
-    """Reject default provider calls while a database transaction is active."""
-    if request_categories is not None:
-        return
-
-    in_transaction = bool(getattr(conn, "in_transaction", lambda: False)())
-    logical_depth = int(getattr(conn, "info", {}).get(CORE_DB_TRANSACTION_DEPTH_KEY, 0) or 0)
-    if in_transaction or logical_depth:
-        raise RuntimeError(
-            "Default LLM categorization requests must use the split prepare/request/apply workflow "
-            "so provider calls run outside database transactions."
-        )
 
 
 def request_llm_categorization_outcome(

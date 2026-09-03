@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, insert, select, update
 
 from finance_app.core.constants import CATEGORY_SOURCE_MANUAL
 from finance_app.core.money import MoneyValue, money_to_decimal
+from finance_app.core.reimbursement_sql import active_reimbursement_allocation_rows
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import normalize_name_key
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
@@ -133,12 +134,12 @@ def sum_allocated_to_reimbursement(
     *,
     exclude_allocation_id: int | None = None,
 ) -> Any:
-    """Return total amount allocated from one reimbursement credit."""
-    return sum_allocations(
-        conn,
-        reimbursement_allocations_table.c.reimbursement_transaction_id == reimbursement_transaction_id,
-        exclude_allocation_id=exclude_allocation_id,
-    )
+    """Return active total amount allocated from one reimbursement credit."""
+    active_allocations = active_reimbursement_allocation_rows()
+    conditions = [active_allocations.c.reimbursement_transaction_id == reimbursement_transaction_id]
+    if exclude_allocation_id is not None:
+        conditions.append(active_allocations.c.id != exclude_allocation_id)
+    return conn.execute(select(func.coalesce(func.sum(active_allocations.c.amount), 0)).where(*conditions)).scalar_one()
 
 
 def sum_allocated_to_expense(
@@ -147,22 +148,12 @@ def sum_allocated_to_expense(
     *,
     exclude_allocation_id: int | None = None,
 ) -> Any:
-    """Return total reimbursement amount allocated to one expense."""
-    return sum_allocations(
-        conn,
-        reimbursement_allocations_table.c.expense_transaction_id == expense_transaction_id,
-        exclude_allocation_id=exclude_allocation_id,
-    )
-
-
-def sum_allocations(conn: Any, condition: Any, *, exclude_allocation_id: int | None = None) -> Any:
-    """Return total allocation amount for a caller-supplied filter condition."""
-    conditions = [condition]
+    """Return active total reimbursement amount allocated to one expense."""
+    active_allocations = active_reimbursement_allocation_rows()
+    conditions = [active_allocations.c.expense_transaction_id == expense_transaction_id]
     if exclude_allocation_id is not None:
-        conditions.append(reimbursement_allocations_table.c.id != exclude_allocation_id)
-    return conn.execute(
-        select(func.coalesce(func.sum(reimbursement_allocations_table.c.amount), 0)).where(*conditions)
-    ).scalar_one()
+        conditions.append(active_allocations.c.id != exclude_allocation_id)
+    return conn.execute(select(func.coalesce(func.sum(active_allocations.c.amount), 0)).where(*conditions)).scalar_one()
 
 
 def insert_allocation(

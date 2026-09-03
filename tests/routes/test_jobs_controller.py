@@ -353,6 +353,39 @@ def test_categorize_all_unknowns_queues_ai_job(owner_client, core_conn, monkeypa
     assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
 
 
+def test_categorize_all_unknowns_handles_queue_rejection(owner_client, core_conn, monkeypatch):
+    """Verify all-unknown AI queue rejection flashes a retryable message."""
+    core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
+        VALUES ('2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 'jobs-ai-rejected')
+        """))
+    core_conn.commit()
+
+    def reject_queue():
+        """Reject the all-unknown AI queue request."""
+        raise runner.BackgroundJobSubmissionError(
+            "rejected-all-ai",
+            "AI categorize all unknown transactions",
+            runner.AI_JOB_QUEUE,
+            "RuntimeError: executor stopped",
+        )
+
+    monkeypatch.setattr(jobs_service.upload_ai_workflow, "queue_all_unknown_llm_categorization", reject_queue)
+
+    response = owner_client.post(
+        "/jobs/ai/categorize-unknowns",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "next": "/jobs",
+            "ai_token_estimate_confirmed": "1",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "AI categorization could not be queued. Try again." in response.get_data(as_text=True)
+
+
 def test_categorize_all_unknowns_requires_token_estimate_confirmation(owner_client, core_conn, monkeypatch):
     """Verify AI categorization is not queued without estimate confirmation."""
     core_conn.execute(text("""

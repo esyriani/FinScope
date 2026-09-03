@@ -517,6 +517,105 @@ def test_recategorize_selected_transactions_job_updates_selected_rows(core_conn,
     assert get_transaction_tag_names(core_conn, other_id) == ["Tax"]
 
 
+def test_recategorize_selected_transactions_job_skips_rows_changed_after_snapshot(core_conn, monkeypatch):
+    """Verify selected recategorization does not overwrite newer transaction edits."""
+    account_id = core_conn.execute(insert(accounts_table).values(name="Batch AI stale")).inserted_primary_key[0]
+    target_id = core_conn.execute(
+        insert(transactions_table).values(
+            account_id=account_id,
+            tx_date="2026-05-04",
+            description="TVA SPORTS DIRECT STALE",
+            amount=20.68,
+            category="UNKNOWN",
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
+            category_source="unknown",
+            needs_review=1,
+            fingerprint="batch-recat-stale-target",
+        )
+    ).inserted_primary_key[0]
+    other_id = core_conn.execute(
+        insert(transactions_table).values(
+            account_id=account_id,
+            tx_date="2026-05-05",
+            description="METRO GROCERY STALE",
+            amount=42.00,
+            category="UNKNOWN",
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
+            category_source="unknown",
+            needs_review=1,
+            fingerprint="batch-recat-stale-other",
+        )
+    ).inserted_primary_key[0]
+    core_conn.commit()
+
+    def prepare_for_test(transactions):
+        """Return deterministic categorization after a competing manual edit."""
+        assert [tx["id"] for tx in transactions] == [target_id, other_id]
+        transactions[0].update(
+            {
+                "category": "Entertainment",
+                "tags": ["Service"],
+                "needs_review": 0,
+                "category_source": "ai",
+                "category_confidence": 0.96,
+                "category_rule_id": None,
+                "category_metadata": {"decision_source": "llm"},
+                "categorized_at": "2026-05-04T12:00:00Z",
+                "reviewed_at": None,
+            }
+        )
+        transactions[1].update(
+            {
+                "category": "Food",
+                "tags": ["Tax"],
+                "needs_review": 1,
+                "category_source": "ai",
+                "category_confidence": 0.88,
+                "category_rule_id": None,
+                "category_metadata": {"decision_source": "llm"},
+                "categorized_at": "2026-05-04T12:01:00Z",
+                "reviewed_at": None,
+            }
+        )
+        core_conn.execute(
+            update(transactions_table)
+            .where(transactions_table.c.id == target_id)
+            .values(
+                category="Utilities",
+                category_id=resolve_category_id(core_conn, "Utilities"),
+                category_source="manual",
+                category_confidence=None,
+                needs_review=0,
+                reviewed_at="2026-05-04T12:30:00Z",
+            )
+        )
+        set_transaction_tags(core_conn, target_id, ["Tax"], source="manual")
+        core_conn.commit()
+        return transactions_service.PreparedTransactionLlmCategorization(
+            unknown_category="UNKNOWN",
+            rules=[],
+            request_context=None,
+        )
+
+    monkeypatch.setattr(transactions_service, "prepare_transaction_llm_categorization", prepare_for_test)
+
+    message = transactions_service.recategorize_selected_transactions_job([target_id, other_id])
+
+    target = core_conn.execute(
+        text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"),
+        {"p0": target_id},
+    ).fetchone()
+    other = core_conn.execute(
+        text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"),
+        {"p0": other_id},
+    ).fetchone()
+    assert message == "1 selected transaction recategorized. Skipped 1 transaction changed after the job started."
+    assert tuple(target) == ("Utilities", "manual", None, 0)
+    assert tuple(other) == ("Food", "ai", 0.88, 1)
+    assert get_transaction_tag_names(core_conn, target_id) == ["Tax"]
+    assert get_transaction_tag_names(core_conn, other_id) == ["Tax"]
+
+
 def test_suggest_transaction_ai_category_does_not_update_rows(core_conn, monkeypatch):
     """Verify a one-off AI suggestion does not mutate transactions or rules."""
     account_id = core_conn.execute(insert(accounts_table).values(name="AI checking")).inserted_primary_key[0]

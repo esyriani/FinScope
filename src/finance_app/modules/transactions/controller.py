@@ -109,7 +109,7 @@ def batch_transactions() -> ResponseReturnValue:
         result = transactions_service.queue_selected_transaction_recategorization(transaction_ids)
         job_id = result.get("job_id")
         selected_count = result.get("selected_count") or 0
-        if job_id:
+        if result.get("ok") and job_id:
             flash(
                 gettext(
                     (
@@ -122,7 +122,7 @@ def batch_transactions() -> ResponseReturnValue:
                 )
             )
         else:
-            flash(gettext("Select at least one transaction."))
+            flash(gettext(str(result.get("message") or "Select at least one transaction.")))
         return redirect(redirect_url)
 
     flash(gettext("Choose a batch action."))

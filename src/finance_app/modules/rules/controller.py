@@ -161,15 +161,19 @@ def import_rules() -> ResponseReturnValue:
         return render_template("rules_import_preview.html", **context)
 
     try:
-        job_id = rules_workflow.queue_rules_import(raw_text, mode, filename)
+        result = rules_workflow.queue_rules_import(raw_text, mode, filename)
     except ValueError as exc:
         flash(gettext(str(exc)))
+        return redirect(next_url)
+
+    if not result["ok"]:
+        flash(gettext(result["message"]))
         return redirect(next_url)
 
     flash(
         gettext(
             "Rules import queued in the background. Track progress on the Processing page. Job: {job_id}",
-            job_id=job_id[:8],
+            job_id=result["job_id"][:8],
         )
     )
     return redirect(next_url)

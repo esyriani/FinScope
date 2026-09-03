@@ -42,6 +42,13 @@ def apply_review_group() -> ResponseReturnValue:
         flash(gettext(str(exc)))
         return redirect(next_url)
 
+    if not result.get("ok", True):
+        message = gettext(str(result.get("message") or "Review could not be queued. Try again."))
+        flash(message)
+        if is_fetch_request():
+            return jsonify({"ok": False, "message": message, "refresh_url": next_url}), int(result.get("status", 503))
+        return redirect(next_url)
+
     job_id = result["job_id"]
     review_target = result["target"]
     flash(

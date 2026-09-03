@@ -1,8 +1,5 @@
 """Application orchestration for the categories feature."""
 
-from typing import Any
-
-from finance_app.modules.categories import llm as _llm
 from finance_app.modules.categories.categorization import categorize_transactions
 from finance_app.modules.categories.llm import (
     build_llm_prompt,
@@ -48,32 +45,6 @@ from finance_app.modules.categories.rules_matching import (
 )
 from finance_app.modules.merchants.normalization import normalize_merchant_description
 
-
-def classify_unknowns_with_llm(
-    conn: Any,
-    transactions: Any,
-    rules: Any,
-    unknown_category: str,
-    save_automatic_rules: bool = True,
-    request_categories: Any = None,
-) -> Any:
-    """Classify unknowns with LLM.
-
-    ``save_automatic_rules`` controls whether no-review AI decisions should
-    also create future matching rules. ``request_categories`` can inject an LLM
-    requester without replacing module globals. When omitted, the lower-level
-    adapter uses the guarded default provider boundary.
-    """
-    return _llm.classify_unknowns_with_llm(
-        conn,
-        transactions,
-        rules,
-        unknown_category,
-        save_automatic_rules=save_automatic_rules,
-        request_categories=request_categories,
-    )
-
-
 __all__ = [
     "DEFAULT_EXPECTED_OUTPUT_TOKENS",
     "LlmTokenEstimate",
@@ -81,7 +52,6 @@ __all__ = [
     "build_llm_prompt",
     "build_llm_system_prompt",
     "categorize_transactions",
-    "classify_unknowns_with_llm",
     "clean_category_name",
     "create_category",
     "estimate_llm_categorization_tokens",

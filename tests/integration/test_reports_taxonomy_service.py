@@ -2,13 +2,14 @@
 
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from tests.support.context_services import seed_reporting_data
 from werkzeug.datastructures import MultiDict
 
 from finance_app.core.constants import REIMBURSEMENT_CATEGORY, TRANSACTION_KIND_EXPENSE, TRANSACTION_KIND_INCOME
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import tags as tags_table
+from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.reimbursements.service import create_reimbursement_allocation
 from finance_app.modules.reports.definitions import REPORT_TAXONOMY
 from finance_app.modules.reports.service import build_reports_context, build_reports_taxonomy_detail_context
@@ -181,3 +182,40 @@ def test_reimbursement_targets_add_read_only_tracking_panels(app, core_conn, dat
     assert reimbursement_context["taxonomy_panel"]["title"] == "Reimbursement credit tracking"
     assert reimbursement_metrics["Received amount"] == 400.00
     assert reimbursement_metrics["Matched reimbursements"] == 400.00
+
+
+def test_reimbursable_report_panel_ignores_allocations_from_ignored_credits(app, core_conn, data_factory):
+    """Verify report reimbursement summaries only count active allocation rows."""
+    expense_id = data_factory.transactions.create(
+        description="Conference hotel",
+        amount=Decimal("1000.00"),
+        tx_date="2026-01-09",
+        category="Travel",
+        transaction_kind=TRANSACTION_KIND_EXPENSE,
+        needs_review=0,
+        tags=["Reimbursable"],
+    )
+    reimbursement_id = data_factory.transactions.create(
+        description="Employer reimbursement",
+        amount=Decimal("-400.00"),
+        tx_date="2026-01-20",
+        category=REIMBURSEMENT_CATEGORY,
+        transaction_kind=TRANSACTION_KIND_INCOME,
+        needs_review=0,
+    )
+    create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("400.00"), conn=core_conn)
+    core_conn.execute(update(transactions_table).where(transactions_table.c.id == reimbursement_id).values(ignored=1))
+    core_conn.commit()
+
+    reimbursable_id = tag_id(core_conn, "Reimbursable")
+    with app.test_request_context(f"/reports/tags/{reimbursable_id}"):
+        context = build_reports_taxonomy_detail_context(
+            TAXONOMY_TARGET_TAG,
+            reimbursable_id,
+            taxonomy_args(),
+        )
+
+    metrics = {row["label"]: row["value"] for row in context["taxonomy_panel"]["metrics"]}
+    assert metrics["Gross reimbursable spending"] == 1000.00
+    assert metrics["Matched reimbursements"] == 0.00
+    assert metrics["Pending reimbursement"] == 1000.00

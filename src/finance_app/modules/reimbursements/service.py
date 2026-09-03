@@ -377,6 +377,8 @@ def require_transaction_subject(
 
 def validate_reimbursement_transaction(transaction: dict[str, Any]) -> None:
     """Validate that a transaction can provide reimbursement funds."""
+    if transaction.get("ignored"):
+        raise ReimbursementAllocationError("Reimbursement transaction must not be ignored.")
     if not is_reimbursement_category(transaction):
         raise ReimbursementAllocationError("Reimbursement transaction must use the Reimbursement category.")
     if money_to_decimal(transaction["amount"]) >= 0:
@@ -385,6 +387,8 @@ def validate_reimbursement_transaction(transaction: dict[str, Any]) -> None:
 
 def validate_expense_transaction(transaction: dict[str, Any]) -> None:
     """Validate that a transaction can receive reimbursement funds."""
+    if transaction.get("ignored"):
+        raise ReimbursementAllocationError("Expense transaction must not be ignored.")
     if money_to_decimal(transaction["amount"]) <= 0:
         raise ReimbursementAllocationError("Expense transaction must be a positive spending row.")
     if transaction["transaction_kind"] != TRANSACTION_KIND_EXPENSE:

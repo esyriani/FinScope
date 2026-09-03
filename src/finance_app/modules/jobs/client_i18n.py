@@ -2,6 +2,7 @@
 
 CLIENT_TRANSLATION_MESSAGES = (
     "AI categorization completed: {summary}",
+    "AI categorization follow-up could not be queued: {detail}",
     "AI request issue in batch {start}-{end}: {error_type}: {detail}",
     "Background job could not be queued: {detail}",
     "Batch {start}-{end} failed: {error_type}: {detail}",
@@ -11,6 +12,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Cancellation requested; waiting for the current batch to finish.",
     "Finished batch {start}-{end}: {processed} processed; {updated} categorized total.",
     "Finished selected recategorization batch {start}-{end}: {processed} processed; {updated} updated total.",
+    "Finished selected recategorization batch {start}-{end}: {processed} processed; {updated} updated total; {skipped_stale} skipped as changed.",
     "Job cancelled before it started.",
     "Job cancelled: {result}",
     "Job failed: {error}",
@@ -19,6 +21,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Processing...",
     "Processing {start}-{end} of {total}; {updated} categorized so far.",
     "Recategorized {current} of {total}; {updated} updated.",
+    "Recategorized {current} of {total}; {updated} updated; {skipped_stale} skipped as changed.",
     "Recategorizing {start}-{end} of {total}; {updated} updated so far.",
     "Refresh ({seconds})",
     "Selected transaction recategorization completed: {summary}",

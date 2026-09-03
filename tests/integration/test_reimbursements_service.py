@@ -3,14 +3,18 @@
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from finance_app.core.constants import (
     REIMBURSEMENT_CATEGORY,
     TRANSACTION_KIND_EXPENSE,
     TRANSACTION_KIND_INCOME,
 )
+from finance_app.core.money import money_to_decimal
+from finance_app.core.reporting import spending_impact_amount_expression
 from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
+from finance_app.database.tables import transactions as transactions_table
+from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.reimbursements import presenter, queries
 from finance_app.modules.reimbursements.service import (
     ReimbursementAllocationError,
@@ -55,6 +59,32 @@ def reimbursement_transaction(data_factory, *, amount="-900.00", category=REIMBU
 def allocation_count(conn):
     """Return the number of persisted reimbursement allocations."""
     return conn.execute(select(func.count()).select_from(reimbursement_allocations_table)).scalar_one()
+
+
+def spending_impact_for(conn, transaction_id: int) -> Decimal:
+    """Return shared reporting spending impact for one transaction."""
+    amount = conn.execute(
+        select(spending_impact_amount_expression())
+        .select_from(transactions_table)
+        .where(transactions_table.c.id == transaction_id)
+    ).scalar_one()
+    return money_to_decimal(amount)
+
+
+def set_ignored(conn, transaction_id: int) -> None:
+    """Mark a test transaction ignored."""
+    conn.execute(update(transactions_table).where(transactions_table.c.id == transaction_id).values(ignored=1))
+    conn.commit()
+
+
+def set_category(conn, transaction_id: int, category: str) -> None:
+    """Move a test transaction to another category."""
+    conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id == transaction_id)
+        .values(category=category, category_id=resolve_category_id(conn, category))
+    )
+    conn.commit()
 
 
 def test_reimbursement_allocation_tracks_partial_balances(core_conn, data_factory):
@@ -132,6 +162,45 @@ def test_action_needed_expenses_only_include_tagged_active_pending_rows(core_con
     assert {tagged_expense_id, untagged_expense_id, completed_expense_id}.issubset(all_expense_ids)
 
 
+def test_ignored_reimbursement_allocation_no_longer_offsets_spending(core_conn, data_factory):
+    """Verify ignored reimbursement credits stop reducing expense spending."""
+    expense_id = expense_transaction(data_factory, amount="1000.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-400.00")
+    create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("400.00"), conn=core_conn)
+
+    assert spending_impact_for(core_conn, expense_id) == Decimal("600.00")
+
+    set_ignored(core_conn, reimbursement_id)
+
+    assert spending_impact_for(core_conn, expense_id) == Decimal("1000.00")
+    assert queries.fetch_reimbursement_allocations(core_conn) == []
+
+
+def test_reclassified_reimbursement_allocation_no_longer_offsets_spending(core_conn, data_factory):
+    """Verify credits moved out of Reimbursement stop reducing expense spending."""
+    expense_id = expense_transaction(data_factory, amount="1000.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-400.00")
+    create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("400.00"), conn=core_conn)
+
+    set_category(core_conn, reimbursement_id, "Income")
+
+    assert spending_impact_for(core_conn, expense_id) == Decimal("1000.00")
+    assert queries.fetch_reimbursement_allocations(core_conn) == []
+
+
+def test_reimbursable_expenses_ignore_inactive_allocations(core_conn, data_factory):
+    """Verify stale allocation rows do not keep untagged expenses in tracking."""
+    untagged_expense_id = expense_transaction(data_factory, amount="1000.00", tags=("Conference",))
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-400.00")
+    create_reimbursement_allocation(reimbursement_id, untagged_expense_id, Decimal("400.00"), conn=core_conn)
+
+    assert untagged_expense_id in {row["id"] for row in queries.fetch_reimbursable_expense_transactions(core_conn)}
+
+    set_ignored(core_conn, reimbursement_id)
+
+    assert untagged_expense_id not in {row["id"] for row in queries.fetch_reimbursable_expense_transactions(core_conn)}
+
+
 def test_reimbursement_allocation_rejects_duplicate_transaction_pair(core_conn, data_factory):
     """Verify a reimbursement and expense can only be linked once."""
     expense_id = expense_transaction(data_factory, amount="1000.00")
@@ -171,6 +240,24 @@ def test_reimbursement_allocation_requires_reimbursement_category(core_conn, dat
 
     with pytest.raises(ReimbursementAllocationError, match="Reimbursement category"):
         create_reimbursement_allocation(income_id, expense_id, Decimal("100.00"), conn=core_conn)
+
+
+def test_reimbursement_allocation_rejects_ignored_transactions(core_conn, data_factory):
+    """Verify direct submissions cannot match ignored reimbursement subjects."""
+    expense_id = expense_transaction(data_factory, amount="1000.00")
+    ignored_reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
+    active_reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
+    ignored_expense_id = expense_transaction(data_factory, amount="1000.00")
+    set_ignored(core_conn, ignored_reimbursement_id)
+    set_ignored(core_conn, ignored_expense_id)
+
+    with pytest.raises(ReimbursementAllocationError, match="Reimbursement transaction must not be ignored"):
+        create_reimbursement_allocation(ignored_reimbursement_id, expense_id, Decimal("100.00"), conn=core_conn)
+
+    with pytest.raises(ReimbursementAllocationError, match="Expense transaction must not be ignored"):
+        create_reimbursement_allocation(active_reimbursement_id, ignored_expense_id, Decimal("100.00"), conn=core_conn)
+
+    assert allocation_count(core_conn) == 0
 
 
 def test_reimbursement_allocation_requires_expense_role(core_conn, data_factory):

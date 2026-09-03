@@ -7,7 +7,11 @@ starting asynchronous work.
 
 from dataclasses import dataclass, field
 
+from finance_app.background import runner
+
 DEFAULT_CAPTURED_JOB_ID = "test-background-job"
+DEFAULT_REJECTED_JOB_ID = "rejected-background-job"
+DEFAULT_REJECTION_DETAIL = "RuntimeError: executor stopped"
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,46 @@ class BackgroundJobRecorder:
         return bool(self.jobs)
 
 
+class RejectingBackgroundJobRecorder(BackgroundJobRecorder):
+    """Record submitted job metadata, then raise the runner submission error."""
+
+    def __init__(
+        self,
+        job_id=DEFAULT_REJECTED_JOB_ID,
+        *,
+        queue=runner.MAIN_JOB_QUEUE,
+        detail=DEFAULT_REJECTION_DETAIL,
+    ):
+        """Store rejection metadata used by patched submissions."""
+        super().__init__(job_id)
+        self.queue = queue
+        self.detail = detail
+
+    def submit(
+        self,
+        label,
+        func,
+        *args,
+        undo_handler=None,
+        undo_args=None,
+        undo_kwargs=None,
+        **kwargs,
+    ):
+        """Capture one job submission and raise a typed queue rejection."""
+        self.jobs.append(
+            CapturedBackgroundJob(
+                label=label,
+                func=func,
+                args=args,
+                undo_handler=undo_handler,
+                undo_args=undo_args,
+                undo_kwargs=undo_kwargs,
+                kwargs=dict(kwargs),
+            )
+        )
+        raise runner.BackgroundJobSubmissionError(self.job_id, label, self.queue, self.detail)
+
+
 def capture_background_jobs(monkeypatch, target, *, job_id=DEFAULT_CAPTURED_JOB_ID):
     """Patch a module or object to record background job submissions.
 
@@ -95,3 +139,27 @@ def capture_background_jobs(monkeypatch, target, *, job_id=DEFAULT_CAPTURED_JOB_
         A ``BackgroundJobRecorder`` containing captured submissions.
     """
     return BackgroundJobRecorder(job_id).install(monkeypatch, target)
+
+
+def reject_background_jobs(
+    monkeypatch,
+    target,
+    *,
+    job_id=DEFAULT_REJECTED_JOB_ID,
+    queue=runner.MAIN_JOB_QUEUE,
+    detail=DEFAULT_REJECTION_DETAIL,
+):
+    """Patch a module or object so submitted jobs are rejected.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture used to restore the patched
+            attribute after the test.
+        target: Module or object exposing ``submit_background_job``.
+        job_id: Deterministic id exposed by the raised runner error.
+        queue: Queue name exposed by the raised runner error.
+        detail: Failure detail exposed by the raised runner error.
+
+    Returns:
+        A ``RejectingBackgroundJobRecorder`` containing attempted submissions.
+    """
+    return RejectingBackgroundJobRecorder(job_id, queue=queue, detail=detail).install(monkeypatch, target)

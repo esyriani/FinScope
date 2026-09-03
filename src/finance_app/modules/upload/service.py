@@ -71,6 +71,7 @@ STATEMENT_DUPLICATE_MESSAGE = (
     "({status}). Use Retry import or Reprocess from Uploaded statements."
 )
 STATEMENT_IMPORT_QUEUE_FAILURE_MESSAGE = "Statement import could not be queued. Retry import from Uploaded statements."
+AI_CATEGORIZATION_QUEUE_FAILURE_MESSAGE = "AI categorization could not be queued. Try again."
 
 
 def build_upload_context(args: Any) -> dict[str, Any]:
@@ -326,7 +327,14 @@ def queue_statement_unknown_categorization(statement_id: int) -> dict[str, Any]:
     if not validation["ok"]:
         return {**validation, "job_id": None}
 
-    job_id = upload_workflow.queue_statement_llm_categorization(statement_id)
+    try:
+        job_id = upload_workflow.queue_statement_llm_categorization(statement_id)
+    except BackgroundJobSubmissionError:
+        return statement_action_error(
+            AI_CATEGORIZATION_QUEUE_FAILURE_MESSAGE,
+            status_code=503,
+            unknown_count=validation["unknown_count"],
+        )
     return {**validation, "job_id": job_id}
 
 

@@ -8,7 +8,7 @@ from tests.support.html import (
     assert_option,
     assert_visible_text,
 )
-from tests.support.jobs import capture_background_jobs
+from tests.support.jobs import capture_background_jobs, reject_background_jobs
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
@@ -124,6 +124,32 @@ def test_review_apply_route_returns_ajax_refresh_metadata(owner_client, core_con
         "job_status_url": "/review/jobs/reviewjob123.json",
     }
     assert submitted_jobs.single().label == "Review METRO GROCERY as Food"
+
+
+def test_review_apply_route_returns_ajax_queue_rejection(owner_client, core_conn, monkeypatch):
+    """Verify review job submission failures return JSON instead of a 500."""
+    insert_review_transaction(core_conn)
+    rejected_jobs = reject_background_jobs(monkeypatch, review_service)
+
+    response = owner_client.post(
+        "/review/apply",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "next": "/review?merchant=Metro",
+            "merchant_key": "METRO GROCERY",
+            "category": "Food",
+            "create_rule": "0",
+        },
+        headers={"X-Requested-With": "fetch"},
+    )
+
+    assert response.status_code == 503
+    assert response.json == {
+        "ok": False,
+        "message": "Review could not be queued. Try again.",
+        "refresh_url": "/review?merchant=Metro",
+    }
+    assert len(rejected_jobs) == 1
 
 
 def test_review_job_status_route_returns_minimal_status(owner_client, monkeypatch):

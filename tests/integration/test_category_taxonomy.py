@@ -13,8 +13,11 @@ from finance_app.database.tables import (
 )
 from finance_app.database.taxonomy import seed_category_taxonomy
 from finance_app.modules.categories import llm as llm_module
+from finance_app.modules.categories.llm_workflow import (
+    prepare_transaction_llm_categorization,
+    request_prepared_transaction_llm_categorization,
+)
 from finance_app.modules.categories.service import (
-    classify_unknowns_with_llm,
     get_builtin_category_names,
     get_category_options,
     get_category_rules,
@@ -155,13 +158,10 @@ def test_llm_fallback_path_uses_seeded_taxonomy_options(core_conn):
     ]
 
     request_llm = Mock(return_value=[])
-    classify_unknowns_with_llm(
-        core_conn,
-        transactions,
-        [],
-        "UNKNOWN",
-        request_categories=request_llm,
-    )
+    core_conn.commit()
+    prepared = prepare_transaction_llm_categorization(transactions)
+    outcome = request_prepared_transaction_llm_categorization(prepared, request_categories=request_llm)
+    llm_module.apply_llm_categorization_outcome(core_conn, transactions, outcome, prepared.unknown_category)
 
     assert transactions[0]["category"] == "UNKNOWN"
     assert request_llm.called
@@ -188,13 +188,9 @@ def test_service_llm_request_injection_does_not_replace_global_requester(core_co
         calls.append(args)
         return []
 
-    classify_unknowns_with_llm(
-        core_conn,
-        transactions,
-        [],
-        "UNKNOWN",
-        request_categories=request_for_test,
-    )
+    prepared = prepare_transaction_llm_categorization(transactions)
+    outcome = request_prepared_transaction_llm_categorization(prepared, request_categories=request_for_test)
+    llm_module.apply_llm_categorization_outcome(core_conn, transactions, outcome, prepared.unknown_category)
 
     assert calls
     assert llm_module.request_llm_categories is original_requester

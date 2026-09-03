@@ -4,10 +4,13 @@ from sqlalchemy import text
 from tests.support.database import insert_transaction as insert_test_transaction
 from tests.support.database import set_owner_setting
 from tests.support.html import assert_has_element, assert_visible_text
+from tests.support.jobs import reject_background_jobs
 from tests.support.web import set_csrf_token
 
+from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
+from finance_app.modules.transactions import service as transactions_service
 from finance_app.modules.transactions.ai_payloads import (
     get_transaction_ai_suggestion,
     store_transaction_ai_suggestion,
@@ -402,7 +405,7 @@ def test_batch_transactions_route_queues_selected_recategorization(owner_client,
     def queue_for_test(transaction_ids):
         """Capture the transaction IDs submitted to the queue helper."""
         captured["transaction_ids"] = list(transaction_ids)
-        return {"selected_count": 2, "job_id": "abcdef123456"}
+        return {"ok": True, "selected_count": 2, "job_id": "abcdef123456"}
 
     monkeypatch.setattr(
         transaction_controller.transactions_service,
@@ -426,6 +429,26 @@ def test_batch_transactions_route_queues_selected_recategorization(owner_client,
     assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
 
 
+def test_batch_transactions_route_handles_recategorization_queue_rejection(owner_client, monkeypatch):
+    """Verify selected recategorization queue rejection flashes a retryable message."""
+    rejected_jobs = reject_background_jobs(monkeypatch, transactions_service, queue=runner.AI_JOB_QUEUE)
+
+    response = owner_client.post(
+        "/transactions/batch",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "transaction_ids": ["11", "22"],
+            "batch_action": "recategorize",
+            "ai_token_estimate_confirmed": "1",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert len(rejected_jobs) == 1
+    assert_visible_text(response, "Recategorization could not be queued. Try again.")
+
+
 def test_batch_recategorization_requires_token_estimate_confirmation(owner_client, monkeypatch):
     """Verify selected recategorization does not queue without estimate confirmation."""
     from finance_app.modules.transactions import controller as transaction_controller
@@ -435,7 +458,7 @@ def test_batch_recategorization_requires_token_estimate_confirmation(owner_clien
     def queue_for_test(transaction_ids):
         """Capture accidental recategorization queue requests."""
         captured.append(list(transaction_ids))
-        return {"selected_count": 2, "job_id": "abcdef123456"}
+        return {"ok": True, "selected_count": 2, "job_id": "abcdef123456"}
 
     monkeypatch.setattr(
         transaction_controller.transactions_service,
@@ -468,7 +491,7 @@ def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(
     def queue_for_test(transaction_ids):
         """Capture the recategorization queue request."""
         captured.append(list(transaction_ids))
-        return {"selected_count": 2, "job_id": "abcdef123456"}
+        return {"ok": True, "selected_count": 2, "job_id": "abcdef123456"}
 
     monkeypatch.setattr(
         transaction_controller.transactions_service,

@@ -22,6 +22,10 @@ from finance_app.core.category_sql import transaction_category_join_condition, t
 from finance_app.core.money import money_to_decimal
 from finance_app.core.periods import PERIOD_CUSTOM, period_start_date
 from finance_app.core.query import CoreFilters
+from finance_app.core.reimbursement_sql import (
+    active_reimbursement_allocation_totals_by_expense,
+    active_reimbursement_allocation_totals_by_reimbursement,
+)
 from finance_app.core.reporting import (
     cashflow_amount_expression,
     income_amount_expression,
@@ -34,7 +38,6 @@ from finance_app.database.dates import date_month, date_year, month_label
 from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.tables import categories as categories_table
 from finance_app.database.tables import merchants as merchants_table
-from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import reimbursement_expense_completions as expense_completions_table
 from finance_app.database.tables import tags as tags_table
 from finance_app.database.tables import transaction_tags as transaction_tags_table
@@ -682,27 +685,13 @@ def fetch_taxonomy_evidence_rows(
 
 
 def allocation_totals_by_expense() -> Any:
-    """Return reimbursement allocation totals grouped by expense transaction."""
-    return (
-        select(
-            reimbursement_allocations_table.c.expense_transaction_id.label("transaction_id"),
-            func.coalesce(func.sum(reimbursement_allocations_table.c.amount), 0).label("allocated"),
-        )
-        .group_by(reimbursement_allocations_table.c.expense_transaction_id)
-        .subquery()
-    )
+    """Return active reimbursement allocation totals grouped by expense transaction."""
+    return active_reimbursement_allocation_totals_by_expense()
 
 
 def allocation_totals_by_reimbursement() -> Any:
-    """Return reimbursement allocation totals grouped by reimbursement credit."""
-    return (
-        select(
-            reimbursement_allocations_table.c.reimbursement_transaction_id.label("transaction_id"),
-            func.coalesce(func.sum(reimbursement_allocations_table.c.amount), 0).label("allocated"),
-        )
-        .group_by(reimbursement_allocations_table.c.reimbursement_transaction_id)
-        .subquery()
-    )
+    """Return active reimbursement allocation totals grouped by reimbursement credit."""
+    return active_reimbursement_allocation_totals_by_reimbursement()
 
 
 def fetch_reimbursable_tag_summary(conn: Any, filters: Sequence[Any]) -> Mapping[str, Any]:

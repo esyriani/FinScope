@@ -16,7 +16,7 @@ from tests.support.html import (
     assert_option,
     assert_visible_text,
 )
-from tests.support.jobs import capture_background_jobs
+from tests.support.jobs import capture_background_jobs, reject_background_jobs
 from tests.support.rules import rule_by_id
 from tests.support.web import set_csrf_token
 
@@ -781,6 +781,27 @@ def test_rules_import_route_previews_then_queues_background_job(owner_client, mo
     assert isinstance(submitted.args[2], dict)
     assert submitted.undo_handler is undo_import_rules_job
     assert submitted.undo_args == (submitted.args[2],)
+
+
+def test_rules_import_route_handles_queue_rejection(owner_client, monkeypatch):
+    """Verify rules import queue rejection flashes a retryable message."""
+    rejected_jobs = reject_background_jobs(monkeypatch, rules_workflow)
+
+    response = owner_client.post(
+        "/rules/import",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "confirm_preview": "1",
+            "mode": "add",
+            "filename": "rules.csv",
+            "raw_text": "keyword,category\nMetro,Food\n",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Rules import could not be queued. Try again.")
+    assert len(rejected_jobs) == 1
 
 
 def test_rules_import_route_rejects_malformed_csv_before_queueing(owner_client, monkeypatch):

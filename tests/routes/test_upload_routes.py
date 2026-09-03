@@ -9,6 +9,7 @@ from tests.support.html import assert_has_element, assert_markup, assert_visible
 from tests.support.jobs import capture_background_jobs
 from tests.support.web import set_csrf_token
 
+from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.upload import service as upload_service
@@ -563,6 +564,81 @@ def test_categorize_statement_unknowns_runs_without_confirmation_when_setting_di
     assert response.status_code == 200
     assert submitted == [statement_id]
     assert_visible_text(response, "AI categorization queued for 1 unknown transaction.")
+
+
+def test_categorize_statement_unknowns_handles_queue_rejection(owner_client, core_conn, monkeypatch):
+    """Verify statement AI queue rejection returns a normal route message."""
+    statement_type_id = core_conn.execute(text("""
+        SELECT id
+        FROM statement_types
+        WHERE active = 1
+        ORDER BY id
+        LIMIT 1
+        """)).fetchone()._mapping["id"]
+    statement_id = core_conn.execute(
+        text("""
+        INSERT INTO statements (
+            statement_type_id,
+            filename,
+            checksum,
+            extension,
+            raw_text,
+            import_status,
+            uploaded_at
+        )
+        VALUES (
+            :p0,
+            'statement-ai-rejected.csv',
+            'statement-ai-rejected',
+            'csv',
+            'Date,Description,Amount',
+            'completed',
+            '2026-05-11T09:59:59Z'
+        )
+        """),
+        {"p0": statement_type_id},
+    ).lastrowid
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (
+            statement_id,
+            tx_date,
+            description,
+            amount,
+            category,
+            needs_review,
+            fingerprint
+        )
+        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'statement-ai-rejected-tx')
+        """),
+        {"p0": statement_id},
+    )
+    core_conn.commit()
+
+    def reject_queue(queued_statement_id):
+        """Reject the statement AI queue request."""
+        assert queued_statement_id == statement_id
+        raise runner.BackgroundJobSubmissionError(
+            "rejected-statement-ai",
+            "AI categorize statement",
+            runner.AI_JOB_QUEUE,
+            "RuntimeError: executor stopped",
+        )
+
+    monkeypatch.setattr(upload_service.upload_workflow, "queue_statement_llm_categorization", reject_queue)
+
+    response = owner_client.post(
+        f"/upload/{statement_id}/categorize-unknowns",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "next": "/upload",
+            "ai_token_estimate_confirmed": "1",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert_visible_text(response, "AI categorization could not be queued. Try again.")
 
 
 def test_upload_route_rejects_duplicate_statement_checksum(owner_client, core_conn, monkeypatch):

@@ -2,7 +2,7 @@
 
 from sqlalchemy import text
 from tests.support.html import assert_visible_text
-from tests.support.jobs import capture_background_jobs
+from tests.support.jobs import capture_background_jobs, reject_background_jobs
 
 from finance_app.modules.rules import workflow as rules_workflow
 from finance_app.modules.rules.workflow import apply_all_rules_job, undo_apply_all_rules_job
@@ -152,3 +152,21 @@ def test_apply_all_rules_route_queues_background_job(csrf_client, monkeypatch):
     assert isinstance(submitted.args[0], dict)
     assert submitted.undo_handler is undo_apply_all_rules_job
     assert submitted.undo_args == (submitted.args[0],)
+
+
+def test_apply_all_rules_route_handles_queue_rejection(csrf_client, monkeypatch):
+    """Verify apply-all queue rejection flashes a retryable message."""
+    rejected_jobs = reject_background_jobs(monkeypatch, rules_workflow)
+
+    response = csrf_client.post(
+        "/rules/apply-all",
+        data={
+            "confirm_preview": "1",
+            "next": "/rules?page=2",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Applying all rules could not be queued. Try again.")
+    assert len(rejected_jobs) == 1

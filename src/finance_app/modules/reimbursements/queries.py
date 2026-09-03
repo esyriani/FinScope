@@ -2,18 +2,19 @@
 
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 
-from finance_app.core.builtin_taxonomy import (
-    BUILTIN_CATEGORY_REIMBURSEMENT,
-    BUILTIN_TAG_REIMBURSABLE,
-    builtin_category_name_for_key,
-)
+from finance_app.core.builtin_taxonomy import BUILTIN_TAG_REIMBURSABLE
 from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import TRANSACTION_KIND_EXPENSE
+from finance_app.core.reimbursement_sql import (
+    active_reimbursement_allocation_rows,
+    active_reimbursement_allocation_totals_by_expense,
+    active_reimbursement_allocation_totals_by_reimbursement,
+    reimbursement_category_clause,
+)
 from finance_app.database.tables import accounts as accounts_table
 from finance_app.database.tables import categories as categories_table
-from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import reimbursement_expense_completions as expense_completions_table
 from finance_app.database.tables import tags as tags_table
 from finance_app.database.tables import transaction_tags as transaction_tags_table
@@ -21,39 +22,14 @@ from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 
 
-def reimbursement_category_clause(transaction_table: Any, category_table: Any) -> Any:
-    """Return a predicate for rows categorized as reimbursement credits."""
-    return or_(
-        category_table.c.builtin_key == BUILTIN_CATEGORY_REIMBURSEMENT,
-        and_(
-            transaction_table.c.category_id.is_(None),
-            transaction_table.c.category == builtin_category_name_for_key(BUILTIN_CATEGORY_REIMBURSEMENT),
-        ),
-    )
-
-
 def reimbursement_allocation_totals() -> Any:
-    """Return allocation totals grouped by reimbursement transaction."""
-    return (
-        select(
-            reimbursement_allocations_table.c.reimbursement_transaction_id.label("transaction_id"),
-            func.coalesce(func.sum(reimbursement_allocations_table.c.amount), 0).label("allocated"),
-        )
-        .group_by(reimbursement_allocations_table.c.reimbursement_transaction_id)
-        .subquery()
-    )
+    """Return active allocation totals grouped by reimbursement transaction."""
+    return active_reimbursement_allocation_totals_by_reimbursement()
 
 
 def expense_allocation_totals() -> Any:
-    """Return allocation totals grouped by expense transaction."""
-    return (
-        select(
-            reimbursement_allocations_table.c.expense_transaction_id.label("transaction_id"),
-            func.coalesce(func.sum(reimbursement_allocations_table.c.amount), 0).label("allocated"),
-        )
-        .group_by(reimbursement_allocations_table.c.expense_transaction_id)
-        .subquery()
-    )
+    """Return active allocation totals grouped by expense transaction."""
+    return active_reimbursement_allocation_totals_by_expense()
 
 
 def fetch_reimbursement_transactions(conn: Any) -> list[dict[str, Any]]:
@@ -113,10 +89,11 @@ def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
         .correlate(transactions_table)
         .exists()
     )
+    active_allocations = active_reimbursement_allocation_rows()
     has_allocation = (
         select(1)
-        .select_from(reimbursement_allocations_table)
-        .where(reimbursement_allocations_table.c.expense_transaction_id == transactions_table.c.id)
+        .select_from(active_allocations)
+        .where(active_allocations.c.expense_transaction_id == transactions_table.c.id)
         .correlate(transactions_table)
         .exists()
     )
@@ -172,16 +149,17 @@ def fetch_reimbursable_expense_transactions(conn: Any) -> list[dict[str, Any]]:
 
 def fetch_reimbursement_allocations(conn: Any) -> list[dict[str, Any]]:
     """Fetch allocation rows with both linked transaction labels."""
+    active_allocations = active_reimbursement_allocation_rows()
     reimbursement_tx = transactions_table.alias("reimbursement_tx")
     expense_tx = transactions_table.alias("expense_tx")
     rows = (
         conn.execute(
             select(
-                reimbursement_allocations_table.c.id,
-                reimbursement_allocations_table.c.amount,
-                reimbursement_allocations_table.c.reimbursement_transaction_id,
-                reimbursement_allocations_table.c.expense_transaction_id,
-                reimbursement_allocations_table.c.created_at,
+                active_allocations.c.id,
+                active_allocations.c.amount,
+                active_allocations.c.reimbursement_transaction_id,
+                active_allocations.c.expense_transaction_id,
+                active_allocations.c.created_at,
                 reimbursement_tx.c.tx_date.label("reimbursement_date"),
                 reimbursement_tx.c.description.label("reimbursement_description"),
                 reimbursement_tx.c.amount.label("reimbursement_amount"),
@@ -191,24 +169,18 @@ def fetch_reimbursement_allocations(conn: Any) -> list[dict[str, Any]]:
                 transaction_category_label_expression(None, transaction_table=expense_tx).label("expense_category"),
             )
             .select_from(
-                reimbursement_allocations_table.join(
+                active_allocations.join(
                     reimbursement_tx,
-                    reimbursement_tx.c.id == reimbursement_allocations_table.c.reimbursement_transaction_id,
+                    reimbursement_tx.c.id == active_allocations.c.reimbursement_transaction_id,
                 ).join(
                     expense_tx,
-                    expense_tx.c.id == reimbursement_allocations_table.c.expense_transaction_id,
-                )
-            )
-            .where(
-                and_(
-                    reimbursement_tx.c.ignored == 0,
-                    expense_tx.c.ignored == 0,
+                    expense_tx.c.id == active_allocations.c.expense_transaction_id,
                 )
             )
             .order_by(
                 reimbursement_tx.c.tx_date.desc(),
                 expense_tx.c.tx_date.desc(),
-                reimbursement_allocations_table.c.id.desc(),
+                active_allocations.c.id.desc(),
             )
         )
         .mappings()

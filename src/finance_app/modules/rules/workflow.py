@@ -8,7 +8,7 @@ need to coordinate audit presenters, rule mutations, and background jobs.
 from collections.abc import Mapping, MutableMapping
 from typing import Any
 
-from finance_app.background.runner import submit_background_job
+from finance_app.background.runner import BackgroundJobSubmissionError, submit_background_job
 from finance_app.core.config import settings
 from finance_app.core.constants import CATEGORY_SOURCE_RULE
 from finance_app.database.engine import db_core_transaction
@@ -428,19 +428,23 @@ def build_rules_import_preview(raw_text: str, mode: str, filename: str) -> dict[
         )
 
 
-def queue_rules_import(raw_text: str, mode: str, filename: str) -> str:
+def queue_rules_import(raw_text: str, mode: str, filename: str) -> dict[str, Any]:
     """Validate and queue a rules CSV import job."""
     build_rules_import_preview(raw_text, mode, filename)
     undo_state: dict[str, Any] = {}
-    return submit_background_job(
-        f"Import rules from {filename}",
-        import_rules_job,
-        raw_text,
-        mode,
-        undo_state,
-        undo_handler=undo_import_rules_job,
-        undo_args=(undo_state,),
-    )
+    try:
+        job_id = submit_background_job(
+            f"Import rules from {filename}",
+            import_rules_job,
+            raw_text,
+            mode,
+            undo_state,
+            undo_handler=undo_import_rules_job,
+            undo_args=(undo_state,),
+        )
+    except BackgroundJobSubmissionError:
+        return {"ok": False, "job_id": None, "message": "Rules import could not be queued. Try again."}
+    return {"ok": True, "job_id": job_id}
 
 
 def update_rule_action(rule_id: int, form: Any) -> None:
@@ -492,13 +496,16 @@ def queue_apply_all_rules(confirmed: bool) -> dict[str, Any]:
         return {"ok": False, "message": "Preview apply before applying all rules."}
 
     undo_state: dict[str, Any] = {}
-    job_id = submit_background_job(
-        "Apply all category rules",
-        apply_all_rules_job,
-        undo_state,
-        undo_handler=undo_apply_all_rules_job,
-        undo_args=(undo_state,),
-    )
+    try:
+        job_id = submit_background_job(
+            "Apply all category rules",
+            apply_all_rules_job,
+            undo_state,
+            undo_handler=undo_apply_all_rules_job,
+            undo_args=(undo_state,),
+        )
+    except BackgroundJobSubmissionError:
+        return {"ok": False, "message": "Applying all rules could not be queued. Try again.", "job_id": None}
     return {"ok": True, "job_id": job_id}
 
 

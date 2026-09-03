@@ -8,7 +8,7 @@ status codes while this service owns settings reads and upload workflow calls.
 from collections.abc import Mapping
 from typing import Any
 
-from finance_app.background.runner import count_background_jobs, list_background_jobs
+from finance_app.background.runner import BackgroundJobSubmissionError, count_background_jobs, list_background_jobs
 from finance_app.core.config import settings
 from finance_app.core.filters import format_datetime
 from finance_app.core.query import parse_page
@@ -65,9 +65,22 @@ def queue_all_unknown_categorization() -> dict[str, Any]:
     """Queue AI categorization for all unknown transactions when work exists."""
     unknown_count = count_all_unknown_transactions()
     if not unknown_count:
-        return {"ok": False, "unknown_count": 0, "job_id": None}
+        return {
+            "ok": False,
+            "unknown_count": 0,
+            "job_id": None,
+            "message": "No unknown transactions need AI categorization.",
+        }
 
-    job_id = upload_ai_workflow.queue_all_unknown_llm_categorization()
+    try:
+        job_id = upload_ai_workflow.queue_all_unknown_llm_categorization()
+    except BackgroundJobSubmissionError:
+        return {
+            "ok": False,
+            "unknown_count": unknown_count,
+            "job_id": None,
+            "message": "AI categorization could not be queued. Try again.",
+        }
     return {"ok": True, "unknown_count": unknown_count, "job_id": job_id}
 
 

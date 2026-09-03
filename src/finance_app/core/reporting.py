@@ -7,7 +7,7 @@ include transfer credits as reimbursement offsets.
 
 from typing import Any
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, or_, select
 
 from finance_app.core.builtin_taxonomy import BUILTIN_CATEGORY_REIMBURSEMENT
 from finance_app.core.category_sql import transaction_category_label_expression
@@ -18,8 +18,8 @@ from finance_app.core.constants import (
     TRANSACTION_KIND_REFUND,
     TRANSACTION_KIND_TRANSFER,
 )
+from finance_app.core.reimbursement_sql import active_reimbursed_expense_allocation_amount
 from finance_app.database.tables import categories as categories_table
-from finance_app.database.tables import reimbursement_allocations as reimbursement_allocations_table
 from finance_app.database.tables import transactions as transactions_table
 
 
@@ -76,11 +76,7 @@ def spending_impact_clause() -> Any:
 
 def reimbursed_expense_allocation_amount() -> Any:
     """Return a correlated allocation total for the current expense row."""
-    return (
-        select(func.coalesce(func.sum(reimbursement_allocations_table.c.amount), 0))
-        .where(reimbursement_allocations_table.c.expense_transaction_id == transactions_table.c.id)
-        .scalar_subquery()
-    )
+    return active_reimbursed_expense_allocation_amount(transactions_table.c.id)
 
 
 def spending_impact_amount_expression() -> Any:
