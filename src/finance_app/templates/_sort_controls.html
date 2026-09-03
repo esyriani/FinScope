@@ -1,0 +1,31 @@
+{% macro aria_sort_value(direction) -%}
+    {{- "ascending" if direction == "asc" else "descending" if direction == "desc" else "" -}}
+{%- endmacro %}
+
+{% macro server_sort_header(sort_name, label, active_sort, direction, href, header_class="", ajax=false) -%}
+    {% set sorted = active_sort == sort_name and direction in ["asc", "desc"] %}
+    <th scope="col"{% if header_class %} class="{{ header_class }}"{% endif %}{% if sorted %} aria-sort="{{ aria_sort_value(direction) }}"{% endif %}>
+        <a
+            class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %}"
+            href="{{ href }}"
+            {% if ajax %}data-ajax-refresh-link{% endif %}
+        >
+            <span>{{ _(label) }}</span>{% if sorted %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
+        </a>
+    </th>
+{%- endmacro %}
+
+{% macro client_sort_header(column, label, sort_type="text", header_class="", sorted_direction="", button_class="sort-link border-0 bg-transparent p-0") -%}
+    {% set sorted = sorted_direction in ["asc", "desc"] %}
+    <th scope="col"{% if header_class %} class="{{ header_class }}"{% endif %}{% if sorted %} aria-sort="{{ aria_sort_value(sorted_direction) }}"{% endif %}>
+        <button
+            class="{{ button_class }}{% if 'text-end' in header_class %} justify-content-end{% endif %}"
+            type="button"
+            data-sort-column="{{ column }}"
+            data-sort-type="{{ sort_type }}"
+            {% if sorted %}data-sort-direction="{{ sorted_direction }}"{% endif %}
+        >
+            <span>{{ _(label) }}</span>{% if sorted %}<span class="sort-icon {{ sorted_direction }}" aria-hidden="true"></span>{% endif %}
+        </button>
+    </th>
+{%- endmacro %}

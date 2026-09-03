@@ -78,6 +78,53 @@ function presetInput(multiselect) {
     return multiselect.querySelector("[data-tag-multiselect-preset]");
 }
 
+function tagMultiselectControl(multiselect) {
+    return multiselect.querySelector("[data-tag-multiselect-control]");
+}
+
+function tagMultiselectToggle(multiselect) {
+    return multiselect.querySelector("[data-tag-multiselect-toggle]");
+}
+
+function tagMultiselectMenu(multiselect) {
+    return multiselect.querySelector("[data-tag-multiselect-menu]");
+}
+
+function menuIsOpen(multiselect) {
+    const menu = tagMultiselectMenu(multiselect);
+    return Boolean(menu && !menu.hidden && menu.style.display === "block");
+}
+
+function menuCheckboxInputs(multiselect) {
+    const menu = tagMultiselectMenu(multiselect);
+    if (!menu) {
+        return [];
+    }
+    return Array.from(menu.querySelectorAll("input[type='checkbox']")).filter((input) => !input.disabled);
+}
+
+function focusMenuOption(multiselect, position = "first") {
+    const inputs = menuCheckboxInputs(multiselect);
+    if (inputs.length === 0) {
+        tagMultiselectMenu(multiselect)?.focus();
+        return;
+    }
+
+    const index = position === "last" ? inputs.length - 1 : 0;
+    inputs[index].focus();
+}
+
+function moveMenuFocus(multiselect, step) {
+    const inputs = menuCheckboxInputs(multiselect);
+    if (inputs.length === 0) {
+        return;
+    }
+
+    const currentIndex = inputs.indexOf(document.activeElement);
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + step + inputs.length) % inputs.length;
+    inputs[nextIndex].focus();
+}
+
 function presetExcludedValues(multiselect) {
     const rawValue = multiselect.dataset.selectPresetExcludeValues || "[]";
 
@@ -224,12 +271,12 @@ function setPresetOptions(multiselect, checked) {
 }
 
 function positionMenu(multiselect) {
-    const toggle = multiselect.querySelector("[data-tag-multiselect-toggle]");
-    const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
+    const anchor = tagMultiselectControl(multiselect) || tagMultiselectToggle(multiselect);
+    const menu = tagMultiselectMenu(multiselect);
 
-    if (!toggle || !menu) return;
+    if (!anchor || !menu) return;
 
-    const rect = toggle.getBoundingClientRect();
+    const rect = anchor.getBoundingClientRect();
     const viewportPadding = 8;
     const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
     const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - width - viewportPadding));
@@ -245,25 +292,39 @@ function positionMenu(multiselect) {
     menu.style.maxHeight = maxHeight + "px";
 }
 
-function showMenu(multiselect) {
-    const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
+function setMenuExpanded(multiselect, expanded, focusTarget = "") {
+    const menu = tagMultiselectMenu(multiselect);
+    const toggle = tagMultiselectToggle(multiselect);
     if (menu) {
-        menu.style.display = "block";
+        menu.hidden = !expanded;
+        menu.style.display = expanded ? "block" : "none";
+        multiselect.classList.toggle("open", expanded);
+    }
+    if (toggle) {
+        toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    }
+
+    if (expanded) {
         positionMenu(multiselect);
+        if (focusTarget) {
+            focusMenuOption(multiselect, focusTarget);
+        }
+    } else if (focusTarget === "toggle") {
+        toggle?.focus();
     }
 }
 
-function hideMenu(multiselect) {
-    const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
-    if (menu) {
-        menu.style.display = "none";
-    }
+function showMenu(multiselect, focusTarget = "") {
+    setMenuExpanded(multiselect, true, focusTarget);
+}
+
+function hideMenu(multiselect, focusTarget = "") {
+    setMenuExpanded(multiselect, false, focusTarget);
 }
 
 function updateMenuPosition() {
     document.querySelectorAll("[data-tag-multiselect]").forEach((multiselect) => {
-        const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
-        if (menu && menu.style.display === "block") {
+        if (menuIsOpen(multiselect)) {
             positionMenu(multiselect);
         }
     });
@@ -283,13 +344,31 @@ function setupTagMultiselects(root = document) {
         }
 
         multiselect.dataset.tagMultiselectReady = "true";
-        const toggle = multiselect.querySelector("[data-tag-multiselect-toggle]");
+        const control = tagMultiselectControl(multiselect);
+        const toggle = tagMultiselectToggle(multiselect);
+        const menu = tagMultiselectMenu(multiselect);
         const inputs = optionInputs(multiselect);
         const selectAll = selectAllInput(multiselect);
         const preset = presetInput(multiselect);
 
         renderTags(multiselect);
         updateBulkOptionStates(multiselect);
+
+        if (control && toggle) {
+            control.addEventListener("click", (event) => {
+                if (multiselect.dataset.disabled === "true") {
+                    return;
+                }
+                if (
+                    event.target.closest(
+                        "[data-tag-multiselect-toggle], .tag-multiselect-remove, input, label, a, button"
+                    )
+                ) {
+                    return;
+                }
+                toggle.click();
+            });
+        }
 
         if (toggle) {
             toggle.addEventListener("click", (e) => {
@@ -304,13 +383,10 @@ function setupTagMultiselects(root = document) {
                     }
                 });
 
-                const menu = multiselect.querySelector("[data-tag-multiselect-menu]");
-                if (menu && menu.style.display === "block") {
+                if (menuIsOpen(multiselect)) {
                     hideMenu(multiselect);
-                    toggle.setAttribute("aria-expanded", "false");
                 } else {
                     showMenu(multiselect);
-                    toggle.setAttribute("aria-expanded", "true");
                 }
             });
 
@@ -322,14 +398,57 @@ function setupTagMultiselects(root = document) {
                 if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     toggle.click();
+                    return;
+                }
+
+                if (event.key === "ArrowDown" || event.key === "Down") {
+                    event.preventDefault();
+                    showMenu(multiselect, "first");
+                    return;
+                }
+
+                if (event.key === "ArrowUp" || event.key === "Up") {
+                    event.preventDefault();
+                    showMenu(multiselect, "last");
+                    return;
                 }
 
                 if (event.key === "Escape") {
                     hideMenu(multiselect);
-                    toggle.setAttribute("aria-expanded", "false");
                 }
             });
         }
+
+        menu?.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                hideMenu(multiselect, "toggle");
+                return;
+            }
+
+            if (event.key === "ArrowDown" || event.key === "Down") {
+                event.preventDefault();
+                moveMenuFocus(multiselect, 1);
+                return;
+            }
+
+            if (event.key === "ArrowUp" || event.key === "Up") {
+                event.preventDefault();
+                moveMenuFocus(multiselect, -1);
+                return;
+            }
+
+            if (event.key === "Home") {
+                event.preventDefault();
+                focusMenuOption(multiselect, "first");
+                return;
+            }
+
+            if (event.key === "End") {
+                event.preventDefault();
+                focusMenuOption(multiselect, "last");
+            }
+        });
 
         inputs.forEach((input) => {
             input.addEventListener("change", () => {
@@ -360,10 +479,6 @@ if (window.financeTagMultiselectGlobalReady !== "true") {
         if (!event.target.closest("[data-tag-multiselect]")) {
             document.querySelectorAll("[data-tag-multiselect]").forEach((multiselect) => {
                 hideMenu(multiselect);
-                const toggle = multiselect.querySelector("[data-tag-multiselect-toggle]");
-                if (toggle) {
-                    toggle.setAttribute("aria-expanded", "false");
-                }
             });
         }
     });

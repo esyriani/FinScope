@@ -1,3 +1,4 @@
+{% from "_sort_controls.html" import client_sort_header with context %}
 <section class="card" id="recurring-activity-section" data-table-export-scope>
     {% set recurring_sort_offset = 1 if can_edit_recurring else 0 %}
     {% set recurring_table_colspan = 10 if can_edit_recurring else 8 %}
@@ -40,7 +41,7 @@
                 data-paginated-table
                 {% if can_edit_recurring %}
                 data-recurring-batch-table
-                data-all-recurring-ids="{{ all_recurring_ids | tojson }}"
+                data-all-recurring-ids="{{ all_recurring_ids | tojson | forceescape }}"
                 {% endif %}
                 data-page-size="{{ table_page_size }}"
                 data-pagination-label="{{ _('Recurring activity pages') }}"
@@ -57,14 +58,14 @@
                             >
                         </th>
                         {% endif %}
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 0 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Status") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 1 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Merchant") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 2 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Date") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="{{ 3 + recurring_sort_offset }}" data-sort-type="number"><span>{{ _("Amount") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="{{ 4 + recurring_sort_offset }}" data-sort-type="number"><span>{{ _("Change") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 5 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Confidence level") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="{{ 6 + recurring_sort_offset }}" data-sort-type="text"><span>{{ _("Last seen") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="{{ 7 + recurring_sort_offset }}" data-sort-type="number"><span>{{ _("Observed months") }}</span></button></th>
+                        {{ client_sort_header(0 + recurring_sort_offset, "Status") }}
+                        {{ client_sort_header(1 + recurring_sort_offset, "Merchant") }}
+                        {{ client_sort_header(2 + recurring_sort_offset, "Date") }}
+                        {{ client_sort_header(3 + recurring_sort_offset, "Amount", "number", "text-end") }}
+                        {{ client_sort_header(4 + recurring_sort_offset, "Change", "number", "text-end") }}
+                        {{ client_sort_header(5 + recurring_sort_offset, "Confidence level") }}
+                        {{ client_sort_header(6 + recurring_sort_offset, "Last seen") }}
+                        {{ client_sort_header(7 + recurring_sort_offset, "Observed months", "number", "text-end") }}
                         {% if can_edit_recurring %}
                         <th class="text-end">{{ _("Actions") }}</th>
                         {% endif %}

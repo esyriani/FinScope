@@ -15,6 +15,7 @@
 {% from "_help.html" import help_tip with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
 {% from "_pagination.html" import pagination with context %}
+{% from "_sort_controls.html" import server_sort_header with context %}
 
 {% block content %}
 {% set page = page | default(1) %}
@@ -131,16 +132,8 @@
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>
-                            <a class="sort-link" href="{{ review_sort_url('merchant') if review_sort_url else url_for('review.review', sort='merchant', direction='asc') }}">
-                                <span>{{ _("Merchant group") }}</span>{% if sort == "merchant" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a class="sort-link" href="{{ review_sort_url('review_set') if review_sort_url else url_for('review.review', sort='review_set', direction='desc') }}">
-                                <span>{{ _("Review set") }}</span>{% if sort == "review_set" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
+                        {{ server_sort_header("merchant", "Merchant group", sort, direction, review_sort_url('merchant') if review_sort_url else url_for('review.review', sort='merchant', direction='asc')) }}
+                        {{ server_sort_header("review_set", "Review set", sort, direction, review_sort_url('review_set') if review_sort_url else url_for('review.review', sort='review_set', direction='desc')) }}
                         <th>{{ _("Examples") }}</th>
                         <th class="text-end">{{ _("Action") }}</th>
                     </tr>
@@ -158,9 +151,21 @@
                         </td>
                         <td>
                             <div class="review-set-summary">
-                                <strong>{{ group.count }} transaction{{ "" if group.count == 1 else "s" }}</strong>
-                                <span>{{ group.first_date | datefmt }}{% if group.first_date != group.last_date %} to {{ group.last_date | datefmt }}{% endif %}</span>
-                                <span>{{ group.total_amount | moneyfmt }} impact</span>
+                                <strong>
+                                    {% if group.count == 1 %}
+                                        {{ _("{count} transaction", count=group.count) }}
+                                    {% else %}
+                                        {{ _("{count} transactions", count=group.count) }}
+                                    {% endif %}
+                                </strong>
+                                <span>
+                                    {% if group.first_date != group.last_date %}
+                                        {{ _("{from_date} to {to_date}", from_date=group.first_date | datefmt, to_date=group.last_date | datefmt) }}
+                                    {% else %}
+                                        {{ group.first_date | datefmt }}
+                                    {% endif %}
+                                </span>
+                                <span>{{ _("{amount} impact", amount=group.total_amount | moneyfmt) }}</span>
                             </div>
                             <div class="text-muted small">{{ group.categories | join(", ") }}</div>
                         </td>
@@ -170,13 +175,13 @@
                                     <div class="review-example">
                                         <div>
                                             <div class="review-example-description">{{ tx.description }}</div>
-                                            <div class="text-muted small">{{ tx.tx_date | datefmt }} / {{ tx.account_name or "Personal" }}</div>
+                                            <div class="text-muted small">{{ tx.tx_date | datefmt }} / {{ tx.account_name or _("Personal") }}</div>
                                         </div>
                                         <strong>{{ tx.amount | moneyfmt }}</strong>
                                     </div>
                                 {% endfor %}
                                 {% if group.count > group.examples | length %}
-                                    <div class="text-muted small">+{{ group.count - (group.examples | length) }} more</div>
+                                    <div class="text-muted small">{{ _("+{count} more", count=group.count - (group.examples | length)) }}</div>
                                 {% endif %}
                             </div>
                         </td>

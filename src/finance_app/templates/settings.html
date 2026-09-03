@@ -311,13 +311,13 @@
                 </div>
 
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                    <label class="form-label mb-0" for="statement-types-table">{{ _("Statement types") }}</label>
+                    <h3 id="statement-types-heading" class="h6 form-label mb-0">{{ _("Statement types") }}</h3>
                     <button class="btn btn-sm btn-outline-primary" type="button" data-add-statement-type>
                         <i class="bi bi-plus-circle" aria-hidden="true"></i>{{ _("Add type") }}
                     </button>
                 </div>
                 <div class="table-responsive statement-types-editor">
-                    <table id="statement-types-table" class="table table-hover align-middle mb-0" data-statement-types-table data-no-row-select data-no-export>
+                    <table id="statement-types-table" class="table table-hover align-middle mb-0" aria-labelledby="statement-types-heading" data-statement-types-table data-no-row-select data-no-export>
                         <thead>
                             <tr>
                                 <th>{{ _("Name") }}</th>

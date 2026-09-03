@@ -18,6 +18,9 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_filter_controls.html" import account_filter, filter_actions, hidden_inputs, merchant_filter with context %}
+{% from "_sort_controls.html" import client_sort_header with context %}
+{% from "_tag_multiselect.html" import tag_multiselect with context %}
 
 {% block content %}
 {% set selected_years = selected_years | default([]) %}
@@ -66,42 +69,25 @@
             <form method="get" class="row g-3 align-items-end">
                 <input type="hidden" name="comparison_view" value="year">
                 <input type="hidden" name="period_comparison" value="{{ selected_period_comparison }}">
-                {% for category in selected_period_categories %}
-                    <input type="hidden" name="period_categories" value="{{ category }}">
-                {% endfor %}
-                {% for tag in selected_period_tags %}
-                    <input type="hidden" name="period_tags" value="{{ tag }}">
-                {% endfor %}
+                {{ hidden_inputs("period_categories", selected_period_categories) }}
+                {{ hidden_inputs("period_tags", selected_period_tags) }}
 
                 <div class="col-md-3">
                     <label class="form-label" id="years-label">{{ _("Years") }}</label>
-                    <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('Select years') }}">
-                        <div
-                            class="tag-multiselect-control"
-                            role="button"
-                            tabindex="0"
-                            aria-labelledby="years-label"
-                            aria-expanded="false"
-                            data-tag-multiselect-toggle
-                        >
-                            <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                            <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                        </div>
-                        <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                            {% for year in available_years %}
-                                <label class="tag-multiselect-option">
-                                    <input
-                                        class="form-check-input"
-                                        type="checkbox"
-                                        name="years"
-                                        value="{{ year }}"
-                                        {% if year in selected_years %}checked{% endif %}
-                                    >
-                                    <span>{{ year }}</span>
-                                </label>
-                            {% endfor %}
-                        </div>
-                    </div>
+                    {% call tag_multiselect("years-label", _("Select years")) %}
+                        {% for year in available_years %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="years"
+                                    value="{{ year }}"
+                                    {% if year in selected_years %}checked{% endif %}
+                                >
+                                <span>{{ year }}</span>
+                            </label>
+                        {% endfor %}
+                    {% endcall %}
                 </div>
 
                 <div class="col-md-2">
@@ -123,128 +109,78 @@
                     </select>
                 </div>
 
-                <div class="col-md-3">
-                    <label class="form-label" for="comparison-year-account">{{ _("Account") }}</label>
-                    <select id="comparison-year-account" class="form-select" name="account_id">
-                        <option value="">{{ _("All accounts") }}</option>
-                        {% for account in account_options %}
-                            <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                {{ account_filter("comparison-year-account", selected_account_id, account_options, "col-md-3") }}
 
-                <div class="col-md-3 merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
-                    <label class="form-label" for="comparison-year-merchant">{{ _("Merchant") }}</label>
-                    <input
-                        type="hidden"
-                        name="merchant_id"
-                        value="{{ selected_merchant_id or '' }}"
-                        data-merchant-autocomplete-id
-                    >
-                    <input
-                        id="comparison-year-merchant"
-                        class="form-control"
-                        type="search"
-                        name="merchant_query"
-                        value="{{ comparison_merchant_filter_label }}"
-                        placeholder="{{ _('Search merchant') }}"
-                        autocomplete="off"
-                        role="combobox"
-                        aria-autocomplete="list"
-                        aria-expanded="false"
-                        aria-controls="comparison-year-merchant-suggestions"
-                        data-selected-merchant-label="{{ selected_merchant_label }}"
-                        data-merchant-autocomplete-input
-                    >
-                    <div id="comparison-year-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
-                </div>
+                {{ merchant_filter(
+                    "comparison-year-merchant",
+                    selected_merchant_id,
+                    selected_merchant_label,
+                    comparison_merchant_filter_label,
+                    merchant_suggestion_limit,
+                    "col-md-3",
+                    "comparison-year-merchant-suggestions"
+                ) }}
 
                 <div class="col-md-3">
                     <label class="form-label" id="year-categories-label">{{ _("Categories") }}</label>
-                    <div
-                        class="tag-multiselect"
-                        data-tag-multiselect
-                        data-placeholder="{{ _('All categories') }}"
-                        data-select-all-label="{{ _('Select all categories') }}"
-                        data-select-preset-label="{{ _('Select analysis categories') }}"
-                        data-select-preset-summary-label="{{ _('Analysis categories') }}"
-                        data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
-                    >
-                        <div
-                            class="tag-multiselect-control"
-                            role="button"
-                            tabindex="0"
-                            aria-labelledby="year-categories-label"
-                            aria-expanded="false"
-                            data-tag-multiselect-toggle
-                        >
-                            <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                            <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                        </div>
-                        <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                            {% for option in category_options %}
-                                <label class="tag-multiselect-option">
-                                    <input
-                                        class="form-check-input"
-                                        type="checkbox"
-                                        name="year_categories"
-                                        value="{{ option }}"
-                                        {% if option in selected_year_categories %}checked{% endif %}
-                                    >
-                                    <span>{{ option }}</span>
-                                </label>
-                            {% endfor %}
-                        </div>
-                    </div>
+                    {% call tag_multiselect(
+                        "year-categories-label",
+                        _("All categories"),
+                        select_all_label=_("Select all categories"),
+                        select_preset_label=_("Select analysis categories"),
+                        select_preset_summary_label=_("Analysis categories"),
+                        select_preset_exclude_values=category_filter_builtin_exclusions
+                    ) %}
+                        {% for option in category_options %}
+                            <label class="tag-multiselect-option">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="year_categories"
+                                    value="{{ option }}"
+                                    {% if option in selected_year_categories %}checked{% endif %}
+                                >
+                                <span>{{ option }}</span>
+                            </label>
+                        {% endfor %}
+                    {% endcall %}
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label" id="year-tags-label">{{ _("Tags") }}</label>
-                    <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
-                        <div
-                            class="tag-multiselect-control"
-                            role="button"
-                            tabindex="0"
-                            aria-labelledby="year-tags-label"
-                            aria-expanded="false"
-                            data-tag-multiselect-toggle
-                        >
-                            <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                            <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                        </div>
-                        <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                    {% call tag_multiselect(
+                        "year-tags-label",
+                        _("All tags"),
+                        select_all_label=_("Select all tags")
+                    ) %}
+                        <label class="tag-multiselect-option">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="year_tags"
+                                value="{{ untagged_tag_filter_value }}"
+                                {% if untagged_tag_filter_value in selected_year_tags %}checked{% endif %}
+                            >
+                            <span>{{ _("Untagged") }}</span>
+                        </label>
+                        {% for option in tag_options %}
                             <label class="tag-multiselect-option">
                                 <input
                                     class="form-check-input"
                                     type="checkbox"
                                     name="year_tags"
-                                    value="{{ untagged_tag_filter_value }}"
-                                    {% if untagged_tag_filter_value in selected_year_tags %}checked{% endif %}
+                                    value="{{ option.name }}"
+                                    {% if option.name in selected_year_tags %}checked{% endif %}
                                 >
-                                <span>{{ _("Untagged") }}</span>
+                                <span>{{ option.name }}</span>
                             </label>
-                            {% for option in tag_options %}
-                                <label class="tag-multiselect-option">
-                                    <input
-                                        class="form-check-input"
-                                        type="checkbox"
-                                        name="year_tags"
-                                        value="{{ option.name }}"
-                                        {% if option.name in selected_year_tags %}checked{% endif %}
-                                    >
-                                    <span>{{ option.name }}</span>
-                                </label>
-                            {% endfor %}
-                        </div>
-                    </div>
+                        {% endfor %}
+                    {% endcall %}
                 </div>
 
                 <div class="w-100"></div>
 
-                <div class="col-md-3 ms-md-auto filter-actions">
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                    <a class="btn btn-outline-secondary" href="{{ year_clear_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
-                </div>
+                {{ filter_actions(year_clear_url) }}
             </form>
         {% endcall %}
 
@@ -463,6 +399,12 @@
         ) %}
         <form method="get" class="row g-3 align-items-end">
             <input type="hidden" name="comparison_view" value="period">
+            {{ hidden_inputs("years", selected_years) }}
+            {% if selected_baseline_year %}
+                <input type="hidden" name="baseline_year" value="{{ selected_baseline_year }}">
+            {% endif %}
+            {{ hidden_inputs("year_categories", selected_year_categories) }}
+            {{ hidden_inputs("year_tags", selected_year_tags) }}
             <div class="col-md-3">
                 <label class="form-label" for="period-comparison">{{ _("Period") }}</label>
                 <select id="period-comparison" class="form-select" name="period_comparison">
@@ -481,126 +423,76 @@
                 </select>
             </div>
 
-            <div class="col-md-3">
-                <label class="form-label" for="comparison-period-account">{{ _("Account") }}</label>
-                <select id="comparison-period-account" class="form-select" name="account_id">
-                    <option value="">{{ _("All accounts") }}</option>
-                    {% for account in account_options %}
-                        <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            {{ account_filter("comparison-period-account", selected_account_id, account_options, "col-md-3") }}
 
-            <div class="col-md-3 merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
-                <label class="form-label" for="comparison-period-merchant">{{ _("Merchant") }}</label>
-                <input
-                    type="hidden"
-                    name="merchant_id"
-                    value="{{ selected_merchant_id or '' }}"
-                    data-merchant-autocomplete-id
-                >
-                <input
-                    id="comparison-period-merchant"
-                    class="form-control"
-                    type="search"
-                    name="merchant_query"
-                    value="{{ comparison_merchant_filter_label }}"
-                    placeholder="{{ _('Search merchant') }}"
-                    autocomplete="off"
-                    role="combobox"
-                    aria-autocomplete="list"
-                    aria-expanded="false"
-                    aria-controls="comparison-period-merchant-suggestions"
-                    data-selected-merchant-label="{{ selected_merchant_label }}"
-                    data-merchant-autocomplete-input
-                >
-                <div id="comparison-period-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
-            </div>
+            {{ merchant_filter(
+                "comparison-period-merchant",
+                selected_merchant_id,
+                selected_merchant_label,
+                comparison_merchant_filter_label,
+                merchant_suggestion_limit,
+                "col-md-3",
+                "comparison-period-merchant-suggestions"
+            ) }}
 
             <div class="col-md-3">
                 <label class="form-label" id="period-categories-label">{{ _("Categories") }}</label>
-                <div
-                    class="tag-multiselect"
-                    data-tag-multiselect
-                    data-placeholder="{{ _('All categories') }}"
-                    data-select-all-label="{{ _('Select all categories') }}"
-                    data-select-preset-label="{{ _('Select analysis categories') }}"
-                    data-select-preset-summary-label="{{ _('Analysis categories') }}"
-                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
-                >
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="period-categories-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        {% for option in category_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="period_categories"
-                                    value="{{ option }}"
-                                    {% if option in selected_period_categories %}checked{% endif %}
-                                >
-                                <span>{{ option }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
+                {% call tag_multiselect(
+                    "period-categories-label",
+                    _("All categories"),
+                    select_all_label=_("Select all categories"),
+                    select_preset_label=_("Select analysis categories"),
+                    select_preset_summary_label=_("Analysis categories"),
+                    select_preset_exclude_values=category_filter_builtin_exclusions
+                ) %}
+                    {% for option in category_options %}
+                        <label class="tag-multiselect-option">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="period_categories"
+                                value="{{ option }}"
+                                {% if option in selected_period_categories %}checked{% endif %}
+                            >
+                            <span>{{ option }}</span>
+                        </label>
+                    {% endfor %}
+                {% endcall %}
             </div>
 
             <div class="col-md-3">
                 <label class="form-label" id="period-tags-label">{{ _("Tags") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="period-tags-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                {% call tag_multiselect(
+                    "period-tags-label",
+                    _("All tags"),
+                    select_all_label=_("Select all tags")
+                ) %}
+                    <label class="tag-multiselect-option">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="period_tags"
+                            value="{{ untagged_tag_filter_value }}"
+                            {% if untagged_tag_filter_value in selected_period_tags %}checked{% endif %}
+                        >
+                        <span>{{ _("Untagged") }}</span>
+                    </label>
+                    {% for option in tag_options %}
                         <label class="tag-multiselect-option">
                             <input
                                 class="form-check-input"
                                 type="checkbox"
                                 name="period_tags"
-                                value="{{ untagged_tag_filter_value }}"
-                                {% if untagged_tag_filter_value in selected_period_tags %}checked{% endif %}
+                                value="{{ option.name }}"
+                                {% if option.name in selected_period_tags %}checked{% endif %}
                             >
-                            <span>{{ _("Untagged") }}</span>
+                            <span>{{ option.name }}</span>
                         </label>
-                        {% for option in tag_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="period_tags"
-                                    value="{{ option.name }}"
-                                    {% if option.name in selected_period_tags %}checked{% endif %}
-                                >
-                                <span>{{ option.name }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
+                    {% endfor %}
+                {% endcall %}
             </div>
 
-            <div class="col-md-3 ms-md-auto filter-actions">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                <a class="btn btn-outline-secondary" href="{{ period_clear_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
-            </div>
+            {{ filter_actions(period_clear_url) }}
         </form>
         {% endcall %}
 
@@ -671,17 +563,7 @@
                         <span class="visually-hidden">{{ _("Key insights") }} {{ loop.index }}</span>
                         <div class="insight-grid">
                             {% for insight in slide if insight %}
-                            {% set explicit_tone = insight.tone | default('', true) %}
-                            {% set label_text = insight.label | lower %}
-                            {% if explicit_tone %}
-                                {% set insight_tone = explicit_tone %}
-                            {% elif 'decrease' in label_text or 'dropped' in label_text %}
-                                {% set insight_tone = 'success' %}
-                            {% elif 'increase' in label_text or 'new spending' in label_text %}
-                                {% set insight_tone = 'danger' %}
-                            {% else %}
-                                {% set insight_tone = 'accent' %}
-                            {% endif %}
+                            {% set insight_tone = insight.tone if insight.tone in ["danger", "success", "accent", "muted"] else "accent" %}
                             {% set result_text_class = 'text-danger' if insight_tone == 'danger' else 'text-success' if insight_tone == 'success' else '' %}
                             <article class="insight-card insight-card-{{ insight_tone }}">
                                 <div class="insight-top">
@@ -780,11 +662,11 @@
                     <table class="table table-hover align-middle mb-0" data-comparison-sortable>
                         <thead>
                             <tr>
-                                <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Category") }}</span></button></th>
-                                <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Current") }}</span></button></th>
-                                <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Prior") }}</span></button></th>
-                                <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="number"><span>{{ _("Change") }}</span><span class="sort-icon desc" aria-hidden="true"></span></button></th>
-                                <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Percent") }}</span></button></th>
+                                {{ client_sort_header(0, "Category") }}
+                                {{ client_sort_header(1, "Current", "number", "text-end") }}
+                                {{ client_sort_header(2, "Prior", "number", "text-end") }}
+                                {{ client_sort_header(3, "Change", "number", "text-end", "desc") }}
+                                {{ client_sort_header(4, "Percent", "text", "text-end") }}
                             </tr>
                         </thead>
                         <tbody>
@@ -819,12 +701,12 @@
                     <table class="table table-hover align-middle mb-0" data-comparison-sortable>
                         <thead>
                             <tr>
-                                <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Merchant") }}</span></button></th>
-                                <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Category") }}</span></button></th>
-                                <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Current") }}</span></button></th>
-                                <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="number"><span>{{ _("Prior") }}</span></button></th>
-                                <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="number"><span>{{ _("Change") }}</span><span class="sort-icon desc" aria-hidden="true"></span></button></th>
-                                <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Percent") }}</span></button></th>
+                                {{ client_sort_header(0, "Merchant") }}
+                                {{ client_sort_header(1, "Category") }}
+                                {{ client_sort_header(2, "Current", "number", "text-end") }}
+                                {{ client_sort_header(3, "Prior", "number", "text-end") }}
+                                {{ client_sort_header(4, "Change", "number", "text-end", "desc") }}
+                                {{ client_sort_header(5, "Percent", "text", "text-end") }}
                             </tr>
                         </thead>
                         <tbody>

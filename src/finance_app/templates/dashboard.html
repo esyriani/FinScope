@@ -17,6 +17,7 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_filter_controls.html" import account_filter, date_range_filters, filter_actions, filter_summary, merchant_filter, period_filter, period_summary with context %}
 {% from "_help.html" import help_tip with context %}
 
 {% block content %}
@@ -39,9 +40,18 @@
         {% set dashboard_classification_label.value = _(option.label) %}
     {% endif %}
 {% endfor %}
-{% set dashboard_filter_summary %}
-{{ _("Period") }}: {{ period_label }}{% if selected_period == period_custom and (selected_date_from or selected_date_to) %} ({{ selected_date_from or _("Any") }} {{ _("to") }} {{ selected_date_to or _("Any") }}){% endif %}{% if account_filter_visible %} - {{ _("Account") }}: {{ dashboard_account_label.value }}{% endif %} - {{ _("Merchant") }}: {{ dashboard_merchant_filter_label if dashboard_merchant_filter_label else _("All") }} - {{ _("Scope") }}: {{ dashboard_classification_label.value }}
-{% endset %}
+{% set dashboard_filter_summary_items = [
+    {
+        "label": "Period",
+        "value": period_summary(period_label, selected_period, period_custom, selected_date_from, selected_date_to),
+    },
+] %}
+{% if account_filter_visible %}
+    {% set dashboard_filter_summary_append = dashboard_filter_summary_items.append({"label": "Account", "value": dashboard_account_label.value}) %}
+{% endif %}
+{% set dashboard_filter_summary_append = dashboard_filter_summary_items.append({"label": "Merchant", "value": dashboard_merchant_filter_label if dashboard_merchant_filter_label else _("All")}) %}
+{% set dashboard_filter_summary_append = dashboard_filter_summary_items.append({"label": "Scope", "value": dashboard_classification_label.value}) %}
+{% set dashboard_filter_summary = filter_summary(dashboard_filter_summary_items) %}
 
 <div id="dashboard-page" data-ajax-refresh-target="dashboard-page">
 <div class="page-header">
@@ -53,78 +63,30 @@
 
 {% call collapsible_filter_panel("dashboard-filters", dashboard_filter_summary | trim) %}
         <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-6 col-xl">
-                <label class="form-label" for="dashboard-period">{{ _("Period") }}</label>
-                <select id="dashboard-period" class="form-select" name="period">
-                    {% for period_value, period_text in period_options %}
-                        <option value="{{ period_value }}" {% if selected_period == period_value %}selected{% endif %}>{{ _(period_text) }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-md-6 col-xl {% if selected_period != period_custom %}d-none{% endif %}" data-dashboard-custom-range>
-                <label class="form-label" for="dashboard-date-from">{{ _("From") }}</label>
-                <input
-                    id="dashboard-date-from"
-                    class="form-control"
-                    type="text"
-                    name="date_from"
-                    value="{{ selected_date_from }}"
-                    placeholder="dd-Mon-YYYY"
-                    data-flatpickr-date
-                >
-            </div>
-
-            <div class="col-md-6 col-xl {% if selected_period != period_custom %}d-none{% endif %}" data-dashboard-custom-range>
-                <label class="form-label" for="dashboard-date-to">{{ _("To") }}</label>
-                <input
-                    id="dashboard-date-to"
-                    class="form-control"
-                    type="text"
-                    name="date_to"
-                    value="{{ selected_date_to }}"
-                    placeholder="dd-Mon-YYYY"
-                    data-flatpickr-date
-                >
-            </div>
+            {{ period_filter("dashboard-period", selected_period, period_options, "col-md-6 col-xl") }}
+            {{ date_range_filters(
+                "dashboard",
+                selected_period,
+                period_custom,
+                selected_date_from,
+                selected_date_to,
+                "col-md-6 col-xl",
+                "data-dashboard-custom-range"
+            ) }}
 
             {% if account_filter_visible %}
-            <div class="col-md-6 col-xl">
-                <label class="form-label" for="dashboard-account">{{ _("Account") }}</label>
-                <select id="dashboard-account" class="form-select" name="account_id">
-                    <option value="">{{ _("All accounts") }}</option>
-                    {% for account in account_options %}
-                        <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+                {{ account_filter("dashboard-account", selected_account_id, account_options, "col-md-6 col-xl") }}
             {% endif %}
 
-            <div class="col-md-6 col-xl merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
-                <label class="form-label" for="dashboard-merchant-search">{{ _("Merchant") }}</label>
-                <input
-                    type="hidden"
-                    name="merchant_id"
-                    value="{{ selected_merchant_id or '' }}"
-                    data-merchant-autocomplete-id
-                >
-                <input
-                    id="dashboard-merchant-search"
-                    class="form-control"
-                    type="search"
-                    name="merchant_query"
-                    value="{{ dashboard_merchant_filter_label }}"
-                    placeholder="{{ _('Search merchant') }}"
-                    autocomplete="off"
-                    role="combobox"
-                    aria-autocomplete="list"
-                    aria-expanded="false"
-                    aria-controls="dashboard-merchant-suggestions"
-                    data-selected-merchant-label="{{ selected_merchant_label }}"
-                    data-merchant-autocomplete-input
-                >
-                <div id="dashboard-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
-            </div>
+            {{ merchant_filter(
+                "dashboard-merchant-search",
+                selected_merchant_id,
+                selected_merchant_label,
+                dashboard_merchant_filter_label,
+                merchant_suggestion_limit,
+                "col-md-6 col-xl",
+                "dashboard-merchant-suggestions"
+            ) }}
 
             <div class="col-md-6 col-xl">
                 <label class="form-label">{{ _("Scope") }}</label>
@@ -149,10 +111,7 @@
                 </div>
             </div>
 
-            <div class="col-md-12 col-xl-auto ms-xl-auto filter-actions">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                <a class="btn btn-outline-secondary" href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
-            </div>
+            {{ filter_actions(url_for('dashboard.dashboard'), "col-md-12 col-xl-auto ms-xl-auto filter-actions") }}
         </form>
 {% endcall %}
 

@@ -22,8 +22,11 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_filter_controls.html" import account_filter, date_range_filters, filter_actions, filter_summary, period_filter, period_summary with context %}
 {% from "_help.html" import help_tip with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
+{% from "_sort_controls.html" import server_sort_header with context %}
+{% from "_tag_multiselect.html" import tag_multiselect with context %}
 {% from "_pagination.html" import pagination with context %}
 
 {% block content %}
@@ -81,9 +84,25 @@
         {% set transaction_source_label.value = _(source_text) %}
     {% endif %}
 {% endfor %}
-{% set transaction_filter_summary %}
-{{ _("Search") }}: {{ search if search else _("All") }} - {{ _("Period") }}: {{ transaction_period_label.value }}{% if selected_period == period_custom and (selected_date_from or selected_date_to) %} ({{ selected_date_from or _("Any") }} {{ _("to") }} {{ selected_date_to or _("Any") }}){% endif %} - {{ _("Account") }}: {{ transaction_account_label.value }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ transaction_review_label.value }} - {{ _("Ignored") }}: {{ transaction_ignored_label.value }} - {{ _("How categorized") }}: {{ transaction_source_label.value }}
-{% endset %}
+{% set transaction_filter_summary = filter_summary([
+    {"label": "Search", "value": search if search else _("All")},
+    {
+        "label": "Period",
+        "value": period_summary(
+            transaction_period_label.value,
+            selected_period,
+            period_custom,
+            selected_date_from,
+            selected_date_to
+        ),
+    },
+    {"label": "Account", "value": transaction_account_label.value},
+    {"label": "Categories", "value": selected_filter_values(selected_categories, "All categories")},
+    {"label": "Tags", "value": selected_filter_values(selected_tags, "All tags")},
+    {"label": "Status", "value": transaction_review_label.value},
+    {"label": "Ignored", "value": transaction_ignored_label.value},
+    {"label": "How categorized", "value": transaction_source_label.value},
+]) %}
 
 {% macro transaction_pagination(label) %}
 {{ pagination(page, total_pages, page_url, label) }}
@@ -145,129 +164,74 @@
                 >
             </div>
 
-            <div class="col-md-4 col-xl-4">
-                <label class="form-label" for="period">{{ _("Period") }}</label>
-                <select id="period" class="form-select" name="period">
-                    {% for period_value, period_text in period_options %}
-                        <option value="{{ period_value }}" {% if selected_period == period_value %}selected{% endif %}>{{ _(period_text) }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            {{ period_filter("period", selected_period, period_options, "col-md-4 col-xl-4") }}
+            {{ date_range_filters(
+                "transaction",
+                selected_period,
+                period_custom,
+                selected_date_from,
+                selected_date_to,
+                "col-md-4 col-xl-2",
+                "data-transactions-custom-range"
+            ) }}
 
-            <div class="col-md-4 col-xl-2 {% if selected_period != period_custom %}d-none{% endif %}" data-transactions-custom-range>
-                <label class="form-label" for="transaction-date-from">{{ _("From") }}</label>
-                <input
-                    id="transaction-date-from"
-                    class="form-control"
-                    type="text"
-                    name="date_from"
-                    value="{{ selected_date_from }}"
-                    placeholder="dd-Mon-YYYY"
-                    data-flatpickr-date
-                >
-            </div>
-
-            <div class="col-md-4 col-xl-2 {% if selected_period != period_custom %}d-none{% endif %}" data-transactions-custom-range>
-                <label class="form-label" for="transaction-date-to">{{ _("To") }}</label>
-                <input
-                    id="transaction-date-to"
-                    class="form-control"
-                    type="text"
-                    name="date_to"
-                    value="{{ selected_date_to }}"
-                    placeholder="dd-Mon-YYYY"
-                    data-flatpickr-date
-                >
-            </div>
-
-            <div class="col-md-4">
-                <label class="form-label" for="transaction-account">{{ _("Account") }}</label>
-                <select id="transaction-account" class="form-select" name="account_id">
-                    <option value="">{{ _("All accounts") }}</option>
-                    {% for account in account_options %}
-                        <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            {{ account_filter("transaction-account", selected_account_id, account_options, "col-md-4") }}
 
             <div class="col-md-4">
                 <label class="form-label" id="transaction-categories-label">{{ _("Category") }}</label>
-                <div
-                    class="tag-multiselect"
-                    data-tag-multiselect
-                    data-placeholder="{{ _('All categories') }}"
-                    data-select-all-label="{{ _('Select all categories') }}"
-                    data-select-preset-label="{{ _('Select analysis categories') }}"
-                    data-select-preset-summary-label="{{ _('Analysis categories') }}"
-                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
-                >
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="transaction-categories-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        {% for option in category_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="categories"
-                                    value="{{ option }}"
-                                    {% if option in selected_categories %}checked{% endif %}
-                                >
-                                <span>{{ option }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
+                {% call tag_multiselect(
+                    "transaction-categories-label",
+                    _("All categories"),
+                    select_all_label=_("Select all categories"),
+                    select_preset_label=_("Select analysis categories"),
+                    select_preset_summary_label=_("Analysis categories"),
+                    select_preset_exclude_values=category_filter_builtin_exclusions
+                ) %}
+                    {% for option in category_options %}
+                        <label class="tag-multiselect-option">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="categories"
+                                value="{{ option }}"
+                                {% if option in selected_categories %}checked{% endif %}
+                            >
+                            <span>{{ option }}</span>
+                        </label>
+                    {% endfor %}
+                {% endcall %}
             </div>
 
             <div class="col-md-4">
                 <label class="form-label" id="transaction-tags-label">{{ _("Tags") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="transaction-tags-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                {% call tag_multiselect(
+                    "transaction-tags-label",
+                    _("All tags"),
+                    select_all_label=_("Select all tags")
+                ) %}
+                    <label class="tag-multiselect-option">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="tags"
+                            value="{{ untagged_tag_filter_value }}"
+                            {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                        >
+                        <span>{{ _("Untagged") }}</span>
+                    </label>
+                    {% for option in tag_options %}
                         <label class="tag-multiselect-option">
                             <input
                                 class="form-check-input"
                                 type="checkbox"
                                 name="tags"
-                                value="{{ untagged_tag_filter_value }}"
-                                {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                                value="{{ option.name }}"
+                                {% if option.name in selected_tags %}checked{% endif %}
                             >
-                            <span>{{ _("Untagged") }}</span>
+                            <span>{{ option.name }}</span>
                         </label>
-                        {% for option in tag_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="tags"
-                                    value="{{ option.name }}"
-                                    {% if option.name in selected_tags %}checked{% endif %}
-                                >
-                                <span>{{ option.name }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
+                    {% endfor %}
+                {% endcall %}
             </div>
 
             <div class="col-md-3">
@@ -303,10 +267,7 @@
                 </select>
             </div>
 
-            <div class="col-md-3 filter-actions justify-content-md-end">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                <a class="btn btn-outline-secondary" href="{{ url_for('transactions.transactions') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
-            </div>
+            {{ filter_actions(url_for('transactions.transactions'), "col-md-3 filter-actions justify-content-md-end") }}
         </form>
 </div>
 {% endcall %}
@@ -382,37 +343,13 @@
                             >
                         </th>
                         {% endif %}
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('date') }}">
-                                <span>{{ _("Date") }}</span>{% if sort == "date" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('account') }}">
-                                <span>{{ _("Account") }}</span>{% if sort == "account" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('description') }}">
-                                <span>{{ _("Description") }}</span>{% if sort == "description" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
-                        <th class="text-end">
-                            <a class="sort-link" href="{{ sort_url('amount') }}">
-                                <span>{{ _("Amount") }}</span>{% if sort == "amount" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('category') }}">
-                                <span>{{ _("Category") }}</span>{% if sort == "category" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
+                        {{ server_sort_header("date", "Date", sort, direction, sort_url('date')) }}
+                        {{ server_sort_header("account", "Account", sort, direction, sort_url('account')) }}
+                        {{ server_sort_header("description", "Description", sort, direction, sort_url('description')) }}
+                        {{ server_sort_header("amount", "Amount", sort, direction, sort_url('amount'), "text-end") }}
+                        {{ server_sort_header("category", "Category", sort, direction, sort_url('category')) }}
                         <th>{{ _("Tags") }}</th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('review') }}">
-                                <span>{{ _("Status") }}</span>{% if sort == "review" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
+                        {{ server_sort_header("review", "Status", sort, direction, sort_url('review')) }}
                         <th class="text-end">{{ _("Actions") }}</th>
                     </tr>
                 </thead>

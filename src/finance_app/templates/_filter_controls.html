@@ -1,0 +1,108 @@
+{% macro filter_summary(items) -%}
+    {%- for item in items -%}
+        {%- if not loop.first %} - {% endif -%}
+        {{ _(item.label) }}: {{ item.value }}
+    {%- endfor -%}
+{%- endmacro %}
+
+{% macro period_summary(label, selected_period, custom_period, date_from="", date_to="") -%}
+    {{- label -}}{%- if selected_period == custom_period and (date_from or date_to) %} ({{ date_from or _("Any") }} {{ _("to") }} {{ date_to or _("Any") }}){% endif -%}
+{%- endmacro %}
+
+{% macro hidden_inputs(name, values) -%}
+    {%- for value in values %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+    {%- endfor -%}
+{%- endmacro %}
+
+{% macro filter_actions(clear_url, field_class="col-md-3 ms-md-auto filter-actions") -%}
+    <div class="{{ field_class }}">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
+        <a class="btn btn-outline-secondary" href="{{ clear_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
+    </div>
+{%- endmacro %}
+
+{% macro period_filter(control_id, selected_period, period_options, field_class="col-md-4", label="Period", name="period") -%}
+    <div class="{{ field_class }}">
+        <label class="form-label" for="{{ control_id }}">{{ _(label) }}</label>
+        <select id="{{ control_id }}" class="form-select" name="{{ name }}">
+            {% for period_value, period_text in period_options %}
+                <option value="{{ period_value }}" {% if selected_period == period_value %}selected{% endif %}>{{ _(period_text) }}</option>
+            {% endfor %}
+        </select>
+    </div>
+{%- endmacro %}
+
+{% macro date_range_filters(control_prefix, selected_period, custom_period, date_from, date_to, field_class, data_attribute) -%}
+    <div class="{{ field_class }} {% if selected_period != custom_period %}d-none{% endif %}" {{ data_attribute }}>
+        <label class="form-label" for="{{ control_prefix }}-date-from">{{ _("From") }}</label>
+        <input
+            id="{{ control_prefix }}-date-from"
+            class="form-control"
+            type="text"
+            name="date_from"
+            value="{{ date_from }}"
+            placeholder="dd-Mon-YYYY"
+            data-flatpickr-date
+        >
+    </div>
+
+    <div class="{{ field_class }} {% if selected_period != custom_period %}d-none{% endif %}" {{ data_attribute }}>
+        <label class="form-label" for="{{ control_prefix }}-date-to">{{ _("To") }}</label>
+        <input
+            id="{{ control_prefix }}-date-to"
+            class="form-control"
+            type="text"
+            name="date_to"
+            value="{{ date_to }}"
+            placeholder="dd-Mon-YYYY"
+            data-flatpickr-date
+        >
+    </div>
+{%- endmacro %}
+
+{% macro account_filter(control_id, selected_account_id, account_options, field_class="col-md-4", label="Account", empty_label="All accounts", name="account_id") -%}
+    <div class="{{ field_class }}">
+        <label class="form-label" for="{{ control_id }}">{{ _(label) }}</label>
+        <select id="{{ control_id }}" class="form-select" name="{{ name }}">
+            <option value="">{{ _(empty_label) }}</option>
+            {% for account in account_options %}
+                <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+{%- endmacro %}
+
+{% macro merchant_filter(control_id, selected_merchant_id, selected_merchant_label, merchant_filter_label, merchant_suggestion_limit, field_class="col-md-4", suggestions_id="") -%}
+    {% set autocomplete_menu_id = suggestions_id if suggestions_id else control_id ~ "-suggestions" %}
+    <div
+        class="{{ field_class }} merchant-autocomplete"
+        data-merchant-autocomplete
+        data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}"
+        data-suggestions-limit="{{ merchant_suggestion_limit }}"
+    >
+        <label class="form-label" for="{{ control_id }}">{{ _("Merchant") }}</label>
+        <input
+            type="hidden"
+            name="merchant_id"
+            value="{{ selected_merchant_id or '' }}"
+            data-merchant-autocomplete-id
+        >
+        <input
+            id="{{ control_id }}"
+            class="form-control"
+            type="search"
+            name="merchant_query"
+            value="{{ merchant_filter_label }}"
+            placeholder="{{ _('Search merchant') }}"
+            autocomplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="{{ autocomplete_menu_id }}"
+            data-selected-merchant-label="{{ selected_merchant_label }}"
+            data-merchant-autocomplete-input
+        >
+        <div id="{{ autocomplete_menu_id }}" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
+    </div>
+{%- endmacro %}

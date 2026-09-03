@@ -15,6 +15,7 @@ from tests.support.html import (
     assert_not_visible_text,
     assert_option,
     assert_visible_text,
+    parse_html,
 )
 from tests.support.jobs import capture_background_jobs, reject_background_jobs
 from tests.support.rules import rule_by_id
@@ -102,6 +103,20 @@ def test_rules_route_formats_created_timestamp(owner_client, core_conn):
     assert response.status_code == 200
     assert format_datetime(created_at) in body
     assert created_at not in body
+
+
+def test_rules_route_exposes_active_sort_direction(owner_client, core_conn):
+    """Verify the rules table reports server-side sort state to assistive tech."""
+    insert_rule(core_conn, keyword="SORTED RULE", category="Food")
+
+    response = owner_client.get("/rules?sort=created_at&direction=desc")
+    document = parse_html(response)
+    sorted_headers = [element for element in document.find_all("th") if "aria-sort" in element.attrs]
+
+    assert response.status_code == 200
+    assert len(sorted_headers) == 1
+    assert sorted_headers[0].attrs["aria-sort"] == "descending"
+    assert sorted_headers[0].text == "Created"
 
 
 def test_rules_route_links_to_rule_audit(owner_client, core_conn):

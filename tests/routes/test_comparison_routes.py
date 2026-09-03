@@ -9,6 +9,7 @@ from tests.support.html import (
     assert_not_visible_text,
     assert_option,
     assert_visible_text,
+    parse_html,
 )
 
 from finance_app.core.constants import TRANSACTION_KIND_INCOME
@@ -217,9 +218,14 @@ def test_comparison_route_uses_period_and_year_tabs(owner_client, core_conn, mon
     core_conn.commit()
 
     response = owner_client.get("/comparison")
+    document = parse_html(response)
+    sorted_change_headers = [
+        element for element in document.find_all("th", attrs={"aria-sort": "descending"}) if element.text == "Change"
+    ]
 
     assert response.status_code == 200
     assert_visible_text(response, "Period changes", "Year trends")
+    assert len(sorted_change_headers) == 2
     assert_has_element(
         response,
         "div",
@@ -346,6 +352,34 @@ def test_comparison_route_uses_period_and_year_tabs(owner_client, core_conn, mon
         },
         text="Category table",
     )
+
+
+def test_comparison_period_filter_preserves_year_tab_state(owner_client, core_conn, monkeypatch):
+    """Verify applying period filters does not drop selected year-trend filters."""
+    monkeypatch.setattr(comparison_service, "date", FixedDate)
+    core_conn.execute(
+        text("""
+        INSERT INTO transactions (tx_date, description, amount, category, category_source, fingerprint)
+        VALUES (:p0, :p1, :p2, 'Food', 'rule', :p3)
+        """),
+        [
+            {"p0": "2025-01-02", "p1": "Prior grocery", "p2": 50.00, "p3": "comparison-preserve-2025"},
+            {"p0": "2026-05-02", "p1": "Current grocery", "p2": 120.00, "p3": "comparison-preserve-2026"},
+        ],
+    )
+    core_conn.commit()
+
+    response = owner_client.get(
+        "/comparison?comparison_view=period&years=2025&years=2026"
+        "&baseline_year=2025&year_categories=Food&year_tags=Tax"
+    )
+
+    assert response.status_code == 200
+    assert_has_element(response, "input", attrs={"type": "hidden", "name": "years", "value": "2025"})
+    assert_has_element(response, "input", attrs={"type": "hidden", "name": "years", "value": "2026"})
+    assert_has_element(response, "input", attrs={"type": "hidden", "name": "baseline_year", "value": "2025"})
+    assert_has_element(response, "input", attrs={"type": "hidden", "name": "year_categories", "value": "Food"})
+    assert_has_element(response, "input", attrs={"type": "hidden", "name": "year_tags", "value": "Tax"})
 
 
 def test_comparison_route_renders_income_analysis_mode(owner_client, core_conn, monkeypatch):

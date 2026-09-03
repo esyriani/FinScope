@@ -6,6 +6,7 @@
 ] %}
 {% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
+{% from "_sort_controls.html" import client_sort_header with context %}
 
 {% block content %}
 <div class="page-header">
@@ -138,12 +139,12 @@
             >
                 <thead>
                     <tr>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Keyword") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Category") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Tags") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="text"><span>{{ _("Amount") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Direction") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Source") }}</span></button></th>
+                        {{ client_sort_header(0, "Keyword") }}
+                        {{ client_sort_header(1, "Category") }}
+                        {{ client_sort_header(2, "Tags") }}
+                        {{ client_sort_header(3, "Amount") }}
+                        {{ client_sort_header(4, "Direction") }}
+                        {{ client_sort_header(5, "Source") }}
                     </tr>
                 </thead>
                 <tbody>
@@ -192,15 +193,15 @@
             >
                 <thead>
                     <tr>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Date") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="text"><span>{{ _("Account") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="text"><span>{{ _("Description") }}</span></button></th>
-                        <th class="text-end"><button class="sort-link justify-content-end border-0 bg-transparent p-0" type="button" data-sort-column="3" data-sort-type="number"><span>{{ _("Amount") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="4" data-sort-type="text"><span>{{ _("Current applied rule") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="5" data-sort-type="text"><span>{{ _("Proposed applied rule") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="6" data-sort-type="text"><span>{{ _("Current category") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="7" data-sort-type="text"><span>{{ _("Proposed category") }}</span></button></th>
-                        <th><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="8" data-sort-type="text"><span>{{ _("Tags") }}</span></button></th>
+                        {{ client_sort_header(0, "Date") }}
+                        {{ client_sort_header(1, "Account") }}
+                        {{ client_sort_header(2, "Description") }}
+                        {{ client_sort_header(3, "Amount", "number", "text-end") }}
+                        {{ client_sort_header(4, "Current applied rule") }}
+                        {{ client_sort_header(5, "Proposed applied rule") }}
+                        {{ client_sort_header(6, "Current category") }}
+                        {{ client_sort_header(7, "Proposed category") }}
+                        {{ client_sort_header(8, "Tags") }}
                     </tr>
                 </thead>
                 <tbody>

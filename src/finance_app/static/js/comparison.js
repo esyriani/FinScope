@@ -94,12 +94,36 @@ function comparisonTableCellValue(row, column, type) {
     return cell.textContent.trim().toLocaleLowerCase();
 }
 
-function setComparisonSortIcon(table, button, direction) {
+function comparisonAriaSortDirection(direction) {
+    if (direction === "asc") return "ascending";
+    if (direction === "desc") return "descending";
+    return "";
+}
+
+function comparisonSortControlDirection(button) {
+    if (button.dataset.sortDirection === "asc" || button.dataset.sortDirection === "desc") {
+        return button.dataset.sortDirection;
+    }
+
+    const icon = button.querySelector(".sort-icon.asc, .sort-icon.desc");
+    if (icon?.classList.contains("asc")) return "asc";
+    if (icon?.classList.contains("desc")) return "desc";
+    return "";
+}
+
+function setComparisonSortState(table, button, direction) {
     table.querySelectorAll(".sort-icon").forEach((icon) => icon.remove());
+    table.querySelectorAll("th[aria-sort]").forEach((header) => header.removeAttribute("aria-sort"));
+
     const icon = document.createElement("span");
     icon.className = `sort-icon ${direction}`;
     icon.setAttribute("aria-hidden", "true");
     button.appendChild(icon);
+
+    const ariaSort = comparisonAriaSortDirection(direction);
+    if (ariaSort) {
+        button.closest("th")?.setAttribute("aria-sort", ariaSort);
+    }
 }
 
 function setupComparisonTableSorting(root = document) {
@@ -118,6 +142,13 @@ function setupComparisonTableSorting(root = document) {
         if (!tbody || !buttons.length) return;
 
         table.dataset.comparisonSortableReady = "true";
+        const initialSortedButton = buttons.find((button) => comparisonSortControlDirection(button));
+        if (initialSortedButton) {
+            const initialDirection = comparisonSortControlDirection(initialSortedButton);
+            initialSortedButton.dataset.sortDirection = initialDirection;
+            setComparisonSortState(table, initialSortedButton, initialDirection);
+        }
+
         buttons.forEach((button) => {
             button.addEventListener("click", () => {
                 const column = Number(button.dataset.sortColumn || 0);
@@ -137,7 +168,7 @@ function setupComparisonTableSorting(root = document) {
                 });
 
                 rows.forEach((row) => tbody.appendChild(row));
-                setComparisonSortIcon(table, button, nextDirection);
+                setComparisonSortState(table, button, nextDirection);
             });
         });
     });

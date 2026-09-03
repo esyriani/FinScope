@@ -1402,6 +1402,7 @@
   "1 unknown transaction needs review.": "1 transaction inconnue doit \u00eatre r\u00e9vis\u00e9e.",
   "No unknown transactions need review.": "Aucune transaction inconnue ne doit \u00eatre r\u00e9vis\u00e9e.",
   "Category and merchant drivers may be incomplete until unknown rows are reviewed.": "Les facteurs par cat\u00e9gorie et marchand peuvent \u00eatre incomplets tant que les lignes inconnues ne sont pas r\u00e9vis\u00e9es.",
+  "{amount} impact": "Impact de {amount}",
   "{amount} untagged spending": "{amount} de d\u00e9penses sans \u00e9tiquette",
   "1 day overdue": "1 jour en retard",
   "{count} days overdue": "{count} jours en retard",

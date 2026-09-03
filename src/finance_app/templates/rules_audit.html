@@ -8,6 +8,7 @@
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel with context %}
 {% from "_pagination.html" import pagination with context %}
+{% from "_sort_controls.html" import server_sort_header with context %}
 
 {% block content %}
 {% set overlap_table = audit_tables.overlaps %}
@@ -80,11 +81,7 @@
 {% endmacro %}
 
 {% macro sort_header(table, sort_name, label, header_class="") %}
-<th{% if header_class %} class="{{ header_class }}"{% endif %}>
-    <a class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %}" href="{{ table.sort_url(sort_name) }}" data-ajax-refresh-link>
-        <span>{{ _(label) }}</span>{% if table.sort == sort_name %}<span class="sort-icon {{ table.direction }}" aria-hidden="true"></span>{% endif %}
-    </a>
-</th>
+{{ server_sort_header(sort_name, label, table.sort, table.direction, table.sort_url(sort_name), header_class, true) }}
 {% endmacro %}
 
 {% macro overlap_detail_button(row) %}

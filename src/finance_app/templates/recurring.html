@@ -24,9 +24,12 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_filter_controls.html" import account_filter, filter_actions, filter_summary, merchant_filter with context %}
 {% from "_help.html" import help_tip with context %}
+{% from "_tag_multiselect.html" import tag_multiselect with context %}
 
 {% block content %}
+{% set selected_categories = selected_categories | default([]) %}
 {% set selected_tags = selected_tags | default([]) %}
 {% set tag_options = tag_options | default([]) %}
 {% set account_options = account_options | default([]) %}
@@ -48,9 +51,18 @@
         {% set _ = recurring_status_labels.values.append(_(item.label)) %}
     {% endif %}
 {% endfor %}
-{% set recurring_filter_summary %}
-{{ _("Month") }}: {{ selected_month }} - {{ _("Account") }}: {{ recurring_account_label.value }} - {{ _("Merchant") }}: {{ recurring_merchant_filter_label if recurring_merchant_filter_label else _("All") }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Status") }}: {{ recurring_status_labels.values | join(", ") if recurring_status_labels.values else _("All statuses") }} - {{ _("Confidence level") }}: {{ _(selected_confidence) if selected_confidence else _("All confidence") }}
-{% endset %}
+{% set recurring_filter_summary = filter_summary([
+    {"label": "Month", "value": selected_month},
+    {"label": "Account", "value": recurring_account_label.value},
+    {"label": "Merchant", "value": recurring_merchant_filter_label if recurring_merchant_filter_label else _("All")},
+    {"label": "Categories", "value": selected_filter_values(selected_categories, "All categories")},
+    {"label": "Tags", "value": selected_filter_values(selected_tags, "All tags")},
+    {
+        "label": "Status",
+        "value": recurring_status_labels.values | join(", ") if recurring_status_labels.values else _("All statuses"),
+    },
+    {"label": "Confidence level", "value": _(selected_confidence) if selected_confidence else _("All confidence")},
+]) %}
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Recurring") }}</h2>
@@ -94,120 +106,73 @@
                 <input type="hidden" name="statuses" value="{{ status }}">
             {% endfor %}
 
-            <div class="recurring-account-field">
-                <label class="form-label" for="recurring-account">{{ _("Account") }}</label>
-                <select id="recurring-account" class="form-select" name="account_id">
-                    <option value="">{{ _("All accounts") }}</option>
-                    {% for account in account_options %}
-                        <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>{{ account.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            {{ account_filter("recurring-account", selected_account_id, account_options, "recurring-account-field") }}
 
-            <div class="recurring-merchant-field merchant-autocomplete" data-merchant-autocomplete data-suggestions-url="{{ url_for('merchants.merchant_suggestions') }}" data-suggestions-limit="{{ merchant_suggestion_limit }}">
-                <label class="form-label" for="recurring-merchant">{{ _("Merchant") }}</label>
-                <input
-                    type="hidden"
-                    name="merchant_id"
-                    value="{{ selected_merchant_id or '' }}"
-                    data-merchant-autocomplete-id
-                >
-                <input
-                    id="recurring-merchant"
-                    class="form-control"
-                    type="search"
-                    name="merchant_query"
-                    value="{{ recurring_merchant_filter_label }}"
-                    placeholder="{{ _('Search merchant') }}"
-                    autocomplete="off"
-                    role="combobox"
-                    aria-autocomplete="list"
-                    aria-expanded="false"
-                    aria-controls="recurring-merchant-suggestions"
-                    data-selected-merchant-label="{{ selected_merchant_label }}"
-                    data-merchant-autocomplete-input
-                >
-                <div id="recurring-merchant-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-merchant-autocomplete-menu></div>
-            </div>
+            {{ merchant_filter(
+                "recurring-merchant",
+                selected_merchant_id,
+                selected_merchant_label,
+                recurring_merchant_filter_label,
+                merchant_suggestion_limit,
+                "recurring-merchant-field",
+                "recurring-merchant-suggestions"
+            ) }}
 
             <div class="recurring-category-field">
                 <label class="form-label" id="recurring-categories-label">{{ _("Categories") }}</label>
-                <div
-                    class="tag-multiselect"
-                    data-tag-multiselect
-                    data-placeholder="{{ _('All categories') }}"
-                    data-select-all-label="{{ _('Select all categories') }}"
-                    data-select-preset-label="{{ _('Select analysis categories') }}"
-                    data-select-preset-summary-label="{{ _('Analysis categories') }}"
-                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
-                >
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="recurring-categories-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        {% for option in category_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="categories"
-                                    value="{{ option }}"
-                                    {% if option in selected_categories %}checked{% endif %}
-                                >
-                                <span>{{ option }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
+                {% call tag_multiselect(
+                    "recurring-categories-label",
+                    _("All categories"),
+                    select_all_label=_("Select all categories"),
+                    select_preset_label=_("Select analysis categories"),
+                    select_preset_summary_label=_("Analysis categories"),
+                    select_preset_exclude_values=category_filter_builtin_exclusions
+                ) %}
+                    {% for option in category_options %}
+                        <label class="tag-multiselect-option">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="categories"
+                                value="{{ option }}"
+                                {% if option in selected_categories %}checked{% endif %}
+                            >
+                            <span>{{ option }}</span>
+                        </label>
+                    {% endfor %}
+                {% endcall %}
             </div>
 
             <div class="recurring-tag-field">
                 <label class="form-label" id="recurring-tags-label">{{ _("Tags") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="recurring-tags-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                {% call tag_multiselect(
+                    "recurring-tags-label",
+                    _("All tags"),
+                    select_all_label=_("Select all tags")
+                ) %}
+                    <label class="tag-multiselect-option">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="tags"
+                            value="{{ untagged_tag_filter_value }}"
+                            {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                        >
+                        <span>{{ _("Untagged") }}</span>
+                    </label>
+                    {% for option in tag_options %}
                         <label class="tag-multiselect-option">
                             <input
                                 class="form-check-input"
                                 type="checkbox"
                                 name="tags"
-                                value="{{ untagged_tag_filter_value }}"
-                                {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                                value="{{ option.name }}"
+                                {% if option.name in selected_tags %}checked{% endif %}
                             >
-                            <span>{{ _("Untagged") }}</span>
+                            <span>{{ option.name }}</span>
                         </label>
-                        {% for option in tag_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="tags"
-                                    value="{{ option.name }}"
-                                    {% if option.name in selected_tags %}checked{% endif %}
-                                >
-                                <span>{{ option.name }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
+                    {% endfor %}
+                {% endcall %}
             </div>
 
             <div class="recurring-confidence-field">
@@ -223,10 +188,7 @@
                 </select>
             </div>
 
-            <div class="recurring-filter-actions filter-actions">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                <a class="btn btn-outline-secondary" href="{{ clear_filters_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
-            </div>
+            {{ filter_actions(clear_filters_url, "recurring-filter-actions filter-actions") }}
         </form>
 {% endcall %}
 

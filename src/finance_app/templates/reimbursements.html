@@ -2,6 +2,7 @@
 {% set page_scripts = ["js/tables.js", "js/reimbursements.js"] %}
 {% extends "base.html" %}
 {% from "_help.html" import help_tip with context %}
+{% from "_sort_controls.html" import client_sort_header with context %}
 
 {% macro amount_fact(label, value, tone="neutral") %}
     <div class="reimbursement-amount-fact reimbursement-amount-{{ tone }}">
@@ -11,11 +12,7 @@
 {% endmacro %}
 
 {% macro sort_header(column, label, type="text", header_class="") %}
-    <th{% if header_class %} class="{{ header_class }}"{% endif %}>
-        <button class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %}" type="button" data-sort-column="{{ column }}" data-sort-type="{{ type }}">
-            <span>{{ _(label) }}</span>
-        </button>
-    </th>
+    {{ client_sort_header(column, label, type, header_class, button_class="sort-link") }}
 {% endmacro %}
 
 {% macro progress_meter(percent, label) %}

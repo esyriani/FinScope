@@ -2,6 +2,7 @@
 {% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
 {% from "_help.html" import help_tip with context %}
+{% from "_sort_controls.html" import client_sort_header with context %}
 
 {% block content %}
 {% set categories = categories | default([]) %}
@@ -96,9 +97,9 @@
                         <table class="table table-hover align-middle mb-0 taxonomy-table" data-sortable-table>
                             <thead>
                                 <tr>
-                                    <th class="taxonomy-name-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Name") }}</span></button></th>
-                                    <th class="taxonomy-transactions-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Transactions") }}</span></button></th>
-                                    <th class="taxonomy-rules-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Rules") }}</span></button></th>
+                                    {{ client_sort_header(0, "Name", header_class="taxonomy-name-column") }}
+                                    {{ client_sort_header(1, "Transactions", "number", "taxonomy-transactions-column") }}
+                                    {{ client_sort_header(2, "Rules", "number", "taxonomy-rules-column") }}
                                     <th class="text-end taxonomy-actions-column"></th>
                                 </tr>
                             </thead>
@@ -210,9 +211,9 @@
                         <table class="table table-hover align-middle mb-0 taxonomy-table" data-sortable-table>
                             <thead>
                                 <tr>
-                                    <th class="taxonomy-name-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="0" data-sort-type="text"><span>{{ _("Name") }}</span></button></th>
-                                    <th class="taxonomy-transactions-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="1" data-sort-type="number"><span>{{ _("Transactions") }}</span></button></th>
-                                    <th class="taxonomy-rules-column"><button class="sort-link border-0 bg-transparent p-0" type="button" data-sort-column="2" data-sort-type="number"><span>{{ _("Rules") }}</span></button></th>
+                                    {{ client_sort_header(0, "Name", header_class="taxonomy-name-column") }}
+                                    {{ client_sort_header(1, "Transactions", "number", "taxonomy-transactions-column") }}
+                                    {{ client_sort_header(2, "Rules", "number", "taxonomy-rules-column") }}
                                     <th class="text-end taxonomy-actions-column">{{ _("Actions") }}</th>
                                 </tr>
                             </thead>

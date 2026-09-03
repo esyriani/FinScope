@@ -259,6 +259,158 @@ def test_tag_multiselect_summarizes_preset_selection():
     assert "setPresetOptions(multiselect, false)" in tag_multiselect_js
 
 
+def test_tag_multiselect_uses_shared_accessible_disclosure_contract():
+    """Verify tag multiselect markup and scripts keep the shared accessibility contract."""
+    tag_multiselect_template = (TEMPLATES / "_tag_multiselect.html").read_text(encoding="utf-8")
+    tag_multiselect_js = read_script("tag-multiselect.js")
+    tag_multiselect_css = read_style("tag-multiselect.css")
+
+    assert "macro tag_multiselect" in tag_multiselect_template
+    assert "data-tag-multiselect-control" in tag_multiselect_template
+    assert 'type="button"' in tag_multiselect_template
+    assert 'aria-labelledby="{{ label_id }} {{ label_id }}-summary"' in tag_multiselect_template
+    assert 'aria-controls="{{ label_id }}-menu"' in tag_multiselect_template
+    assert 'role="group"' in tag_multiselect_template
+    assert 'tabindex="-1"' in tag_multiselect_template
+    assert "hidden" in tag_multiselect_template
+    assert 'role="button"' not in tag_multiselect_template
+    assert "function moveMenuFocus" in tag_multiselect_js
+    assert "function focusMenuOption" in tag_multiselect_js
+    assert 'event.key === "ArrowDown"' in tag_multiselect_js
+    assert 'event.key === "ArrowUp"' in tag_multiselect_js
+    assert 'event.key === "Home"' in tag_multiselect_js
+    assert 'event.key === "End"' in tag_multiselect_js
+    assert 'hideMenu(multiselect, "toggle")' in tag_multiselect_js
+    assert ".tag-multiselect-toggle" in tag_multiselect_css
+    assert ".tag-multiselect-control:focus-within" in tag_multiselect_css
+
+    for template_name in (
+        "transactions.html",
+        "reports.html",
+        "comparison.html",
+        "calendar.html",
+        "recurring.html",
+        "rules.html",
+    ):
+        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        assert 'from "_tag_multiselect.html" import tag_multiselect with context' in template_source
+        assert "{% call tag_multiselect" in template_source
+
+
+def test_filter_controls_use_shared_template_contract():
+    """Verify common filter markup lives behind the shared filter-control macros."""
+    filter_controls_template = (TEMPLATES / "_filter_controls.html").read_text(encoding="utf-8")
+
+    for macro_name in (
+        "filter_summary",
+        "period_summary",
+        "hidden_inputs",
+        "filter_actions",
+        "period_filter",
+        "date_range_filters",
+        "account_filter",
+        "merchant_filter",
+    ):
+        assert f"macro {macro_name}" in filter_controls_template
+
+    summary_templates = (
+        "dashboard.html",
+        "transactions.html",
+        "rules.html",
+        "calendar.html",
+        "recurring.html",
+        "reports.html",
+    )
+    for template_name in summary_templates:
+        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        assert 'from "_filter_controls.html" import' in template_source
+        assert "filter_summary(" in template_source
+        assert "filter_actions(" in template_source
+
+    for template_name in ("dashboard.html", "transactions.html", "reports.html"):
+        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        assert "period_filter(" in template_source
+        assert "date_range_filters(" in template_source
+
+    for template_name in (
+        "dashboard.html",
+        "transactions.html",
+        "reports.html",
+        "comparison.html",
+        "calendar.html",
+        "recurring.html",
+    ):
+        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        assert "account_filter(" in template_source
+
+    for template_name in ("dashboard.html", "reports.html", "comparison.html", "calendar.html", "recurring.html"):
+        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        assert "merchant_filter(" in template_source
+        assert "data-merchant-autocomplete" not in template_source
+
+
+def test_sortable_tables_publish_accessible_sort_state():
+    """Verify sortable table headers expose and update assistive sort state."""
+    sort_controls_template = (TEMPLATES / "_sort_controls.html").read_text(encoding="utf-8")
+    tables_js = read_script("tables.js")
+    comparison_js = read_script("comparison.js")
+
+    assert "macro server_sort_header" in sort_controls_template
+    assert "macro client_sort_header" in sort_controls_template
+    assert "aria-sort" in sort_controls_template
+    assert '"ascending"' in sort_controls_template
+    assert '"descending"' in sort_controls_template
+
+    for script in (tables_js, comparison_js):
+        assert 'querySelectorAll("th[aria-sort]")' in script
+        assert 'removeAttribute("aria-sort")' in script
+        assert 'setAttribute("aria-sort", ariaSort)' in script
+
+    for template_name in (
+        "transactions.html",
+        "rules.html",
+        "review.html",
+        "rules_audit.html",
+        "rules_audit_overlap.html",
+    ):
+        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        assert "server_sort_header" in template_source
+
+    for template_name in (
+        "_recurring_activity.html",
+        "taxonomy.html",
+        "reimbursements.html",
+        "reports.html",
+        "rules_audit_preview.html",
+        "rules_audit_rule.html",
+        "rules_import_preview.html",
+        "comparison.html",
+    ):
+        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        assert "client_sort_header" in template_source
+
+    comparison_template = (TEMPLATES / "comparison.html").read_text(encoding="utf-8")
+    assert 'client_sort_header(3, "Change", "number", "text-end", "desc")' in comparison_template
+    assert 'client_sort_header(4, "Change", "number", "text-end", "desc")' in comparison_template
+
+    for template_path in TEMPLATES.rglob("*.html"):
+        if template_path.name == "_sort_controls.html":
+            continue
+        assert "sort-icon {{" not in template_path.read_text(encoding="utf-8")
+
+
+def test_comparison_template_uses_presenter_tone_for_insight_cards():
+    """Verify comparison insight cards do not infer tone from English labels."""
+    comparison_template = (TEMPLATES / "comparison.html").read_text(encoding="utf-8")
+
+    assert "insight.tone" in comparison_template
+    assert "insight.label | lower" not in comparison_template
+    assert "label_text" not in comparison_template
+    assert "'new spending' in" not in comparison_template
+    assert "'decrease' in" not in comparison_template
+    assert "'increase' in" not in comparison_template
+
+
 def test_scrollable_modals_fit_content_height():
     """Verify scrollable Bootstrap modals do not stretch to full-page height."""
     base_css = read_style("base.css")

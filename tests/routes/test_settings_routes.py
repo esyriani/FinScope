@@ -1,7 +1,7 @@
 """Route tests for the settings feature."""
 
 from sqlalchemy import text
-from tests.support.html import assert_has_element, assert_visible_text
+from tests.support.html import assert_has_element, assert_no_element, assert_visible_text
 from tests.support.web import set_csrf_token
 
 from finance_app.core.constants import USER_ROLE_VIEWER
@@ -82,6 +82,13 @@ def test_settings_page_uses_dark_theme_by_default(owner_client):
     assert_has_element(response, "button", attrs={"id": "settings-general-tab", "role": "tab"})
     assert_has_element(response, "button", attrs={"id": "settings-categorization-tab", "role": "tab"})
     assert_has_element(response, "section", attrs={"id": "settings-general", "role": "tabpanel"})
+    assert_has_element(response, "h3", attrs={"id": "statement-types-heading"}, text="Statement types")
+    assert_has_element(
+        response,
+        "table",
+        attrs={"id": "statement-types-table", "aria-labelledby": "statement-types-heading"},
+    )
+    assert_no_element(response, "label", attrs={"for": "statement-types-table"})
     assert_has_element(response, "input", attrs={"id": "theme_mode_dark", "checked": True})
     assert_has_element(response, "input", attrs={"id": "confirm_ai_token_usage_enabled", "checked": True})
     assert_has_element(response, "input", attrs={"id": "comparison_insight_card_limit"})

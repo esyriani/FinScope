@@ -3,7 +3,7 @@
 from sqlalchemy import text
 from tests.support.database import insert_transaction as insert_test_transaction
 from tests.support.database import set_owner_setting
-from tests.support.html import assert_has_element, assert_visible_text
+from tests.support.html import assert_has_element, assert_visible_text, parse_html
 from tests.support.jobs import reject_background_jobs
 from tests.support.web import set_csrf_token
 
@@ -122,6 +122,27 @@ def test_transactions_custom_range_filter_renders_date_fields(owner_client):
     assert "vendor/flatpickr" in body
     assert "js/dates.js" in body
     assert "js/transactions.js" in body
+
+
+def test_transactions_route_exposes_active_sort_direction(owner_client, core_conn):
+    """Verify the transaction table reports server-side sort state to assistive tech."""
+    insert_test_transaction(
+        core_conn,
+        description="Sorted transaction",
+        amount=12.34,
+        category="Food",
+        needs_review=0,
+        fingerprint="route-tx-sort-aria",
+    )
+
+    response = owner_client.get("/transactions?period=all&sort=amount&direction=asc")
+    document = parse_html(response)
+    sorted_headers = [element for element in document.find_all("th") if "aria-sort" in element.attrs]
+
+    assert response.status_code == 200
+    assert len(sorted_headers) == 1
+    assert sorted_headers[0].attrs["aria-sort"] == "ascending"
+    assert sorted_headers[0].text == "Amount"
 
 
 def test_update_transaction_category_route_saves_manual_category_rule_and_tags(owner_client, core_conn):

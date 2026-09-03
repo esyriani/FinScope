@@ -1,11 +1,14 @@
 """Tests for recurring pattern routes and persistence helpers."""
 
+import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from flask import render_template
 from sqlalchemy import text
+from tests.support.html import parse_html
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_HEADER_NAME
@@ -175,6 +178,8 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(owner_cl
     """Verify recurring list and export columns expose compact status context."""
     response = owner_client.get("/recurring?view=list")
     body = response.get_data(as_text=True)
+    document = parse_html(response)
+    activity_table = document.find_all("table", attrs={"id": "recurring-activity-table"})[0]
 
     assert response.status_code == 200
     assert "data-recurring-dynamic" in body
@@ -187,13 +192,17 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(owner_cl
     assert "No recurring activity detected for this month." in body
     assert "Confidence level: High" in body
     assert '<option value="High" selected>High</option>' in body
-    assert 'data-sort-column="8" data-sort-type="number"' in body
+    assert document.has_element(
+        "button",
+        attrs={"data-sort-column": "8", "data-sort-type": "number"},
+        text="Observed months",
+    )
     assert "data-paginated-table" in body
     assert 'data-pagination-label="Recurring activity pages"' in body
     assert 'data-export-visible-source="#recurring-activity-table"' in body
     assert 'data-export-excel-extension="xlsx"' not in body
     assert "data-recurring-batch-table" in body
-    assert "data-all-recurring-ids" in body
+    assert json.loads(activity_table.attrs["data-all-recurring-ids"]) == []
     assert "data-recurring-select-all" in body
     assert "Confirm selected" in body
     assert "Remove selected" in body
@@ -201,6 +210,26 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(owner_cl
     assert "Status detail" in body
     assert "Matched date" in body
     assert "Actual amount" in body
+
+
+def test_recurring_activity_template_serializes_string_batch_ids_as_json(app):
+    """Verify string recurring ids survive HTML attribute parsing as JSON."""
+    recurring_ids = ["recurring-0", "recurring-1"]
+
+    with app.test_request_context("/recurring"):
+        body = render_template(
+            "_recurring_activity.html",
+            can_edit_recurring=True,
+            all_recurring_ids=recurring_ids,
+            recurring_empty_state_message="No recurring activity detected for this month.",
+            recurring_items=[],
+            table_page_size=25,
+        )
+
+    document = parse_html(body)
+    activity_table = document.find_all("table", attrs={"id": "recurring-activity-table"})[0]
+
+    assert json.loads(activity_table.attrs["data-all-recurring-ids"]) == recurring_ids
 
 
 def test_recurring_page_all_confidence_filter_is_explicit(owner_client):

@@ -1,12 +1,14 @@
 """Route tests for the review feature."""
 
 from sqlalchemy import text
+from tests.support.database import set_owner_setting
 from tests.support.html import (
     assert_has_element,
     assert_input,
     assert_not_visible_text,
     assert_option,
     assert_visible_text,
+    parse_html,
 )
 from tests.support.jobs import capture_background_jobs, reject_background_jobs
 from tests.support.web import set_csrf_token
@@ -27,6 +29,7 @@ def insert_review_transaction(
     source="unknown",
     confidence=None,
     tags=None,
+    tx_date="2026-01-02",
 ):
     """Insert a transaction that can be reviewed."""
     create_category(conn, category)
@@ -43,9 +46,10 @@ def insert_review_transaction(
             needs_review,
             fingerprint
         )
-        VALUES ('2026-01-02', :p0, 12.34, :p1, :category_id, :p2, :p3, 1, :p4)
+        VALUES (:tx_date, :p0, 12.34, :p1, :category_id, :p2, :p3, 1, :p4)
         """),
         {
+            "tx_date": tx_date,
             "p0": description,
             "p1": category,
             "category_id": resolve_category_id(conn, category),
@@ -297,6 +301,29 @@ def test_review_page_prefills_consistent_group_assignment(owner_client, core_con
     assert response.status_code == 200
     assert_option(response, value="Food", selected=True)
     assert_input(response, name="tags", value="Grocery", checked=True)
+
+
+def test_review_page_localizes_group_summary_fragments(owner_client, core_conn):
+    """Verify review group summaries use translated source strings."""
+    insert_review_transaction(core_conn, "Metro Grocery", "review-route-fr-1", tx_date="2026-01-02")
+    insert_review_transaction(core_conn, "Metro Grocery", "review-route-fr-2", tx_date="2026-01-05")
+    set_owner_setting(core_conn, "ui_language", "fr")
+
+    response = owner_client.get("/review")
+    document = parse_html(response)
+    review_summary = document.find_all("div", attrs={"class": "review-set-summary"})[0].text
+    example_details = [
+        element.text
+        for element in document.find_all("div")
+        if element.attrs.get("class") == "text-muted small" and "/" in element.text
+    ]
+
+    assert response.status_code == 200
+    assert "2 transactions" in review_summary
+    assert "02-janv.-2026 \u00e0 05-janv.-2026" in review_summary
+    assert "Impact de 24.68 $" in review_summary
+    assert_visible_text(response, "02-janv.-2026 / Personnel")
+    assert all("Personal" not in detail for detail in example_details)
 
 
 def test_review_page_filters_by_merchant_search(owner_client, core_conn):

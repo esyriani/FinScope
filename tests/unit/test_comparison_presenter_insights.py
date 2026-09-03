@@ -257,6 +257,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
         "transaction_activity",
     ]
     for insight in insights:
+        assert insight["tone"] in {"danger", "success", "accent", "muted"}
         assert isinstance(insight["score"], float)
         assert insight["rank_reason"]
         assert "abs=" in insight["rank_reason"]

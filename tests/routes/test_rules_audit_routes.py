@@ -163,9 +163,14 @@ def test_rules_audit_route_paginates_and_sorts_overlap_table(owner_client, core_
         "Precision and priority warnings",
         1,
     )[0]
+    overlap_document = parse_html(overlap_section)
+    sorted_headers = [element for element in overlap_document.find_all("th") if "aria-sort" in element.attrs]
 
     assert response.status_code == 200
     assert "Showing 2-2 of 2 findings" in overlap_section
+    assert len(sorted_headers) == 1
+    assert sorted_headers[0].attrs["aria-sort"] == "ascending"
+    assert sorted_headers[0].text == "Rule A"
     assert "METRO" in overlap_section
     assert "CAFE" not in overlap_section
     assert (
@@ -750,13 +755,22 @@ def test_rules_audit_preview_route_marks_impact_tables_paginated_and_sortable(ow
         },
     )
     body = response.get_data(as_text=True)
+    document = parse_html(response)
 
     assert response.status_code == 200
     assert "data-paginated-table" in body
     assert 'data-page-size="1"' in body
     assert 'data-pagination-label="Preview impact pages"' in body
-    assert 'data-sort-column="0" data-sort-type="text"' in body
-    assert 'data-sort-column="3" data-sort-type="number"' in body
+    assert document.has_element(
+        "button",
+        attrs={"data-sort-column": "0", "data-sort-type": "text"},
+        text="Date",
+    )
+    assert document.has_element(
+        "button",
+        attrs={"data-sort-column": "3", "data-sort-type": "number"},
+        text="Amount",
+    )
     assert "Metro Pharmacy A" in body
     assert "Metro Pharmacy B" in body
 

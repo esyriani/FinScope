@@ -439,12 +439,43 @@ function setupSortableTables(root = document) {
             return Number(row.dataset.sortGroup || 0) || 0;
         }
 
-        function setSortIcon(button, direction) {
+        function ariaSortDirection(direction) {
+            if (direction === "asc") return "ascending";
+            if (direction === "desc") return "descending";
+            return "";
+        }
+
+        function sortControlDirection(button) {
+            if (button.dataset.sortDirection === "asc" || button.dataset.sortDirection === "desc") {
+                return button.dataset.sortDirection;
+            }
+
+            const icon = button.querySelector(".sort-icon.asc, .sort-icon.desc");
+            if (icon?.classList.contains("asc")) return "asc";
+            if (icon?.classList.contains("desc")) return "desc";
+            return "";
+        }
+
+        function setSortState(button, direction) {
             table.querySelectorAll(".sort-icon").forEach((icon) => icon.remove());
+            table.querySelectorAll("th[aria-sort]").forEach((header) => header.removeAttribute("aria-sort"));
+
             const icon = document.createElement("span");
             icon.className = `sort-icon ${direction}`;
             icon.setAttribute("aria-hidden", "true");
             button.appendChild(icon);
+
+            const ariaSort = ariaSortDirection(direction);
+            if (ariaSort) {
+                button.closest("th")?.setAttribute("aria-sort", ariaSort);
+            }
+        }
+
+        const initialSortedButton = buttons.find((button) => sortControlDirection(button));
+        if (initialSortedButton) {
+            const initialDirection = sortControlDirection(initialSortedButton);
+            initialSortedButton.dataset.sortDirection = initialDirection;
+            setSortState(initialSortedButton, initialDirection);
         }
 
         buttons.forEach((button) => {
@@ -470,7 +501,7 @@ function setupSortableTables(root = document) {
                 });
 
                 [...sortableRows, ...ignoredRows].forEach((row) => tbody.appendChild(row));
-                setSortIcon(button, nextDirection);
+                setSortState(button, nextDirection);
                 table.dispatchEvent(new CustomEvent("finance:table-sorted"));
             });
         });

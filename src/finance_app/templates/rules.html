@@ -12,8 +12,11 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_filter_controls.html" import filter_actions, filter_summary with context %}
 {% from "_help.html" import help_tip with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_account_control, rule_category_control, rule_direction_control, rule_keyword_control, rule_scope_control, rule_tag_control with context %}
+{% from "_sort_controls.html" import server_sort_header with context %}
+{% from "_tag_multiselect.html" import tag_multiselect with context %}
 {% from "_pagination.html" import pagination with context %}
 
 {% block content %}
@@ -47,9 +50,13 @@
         {% set rules_approval_label.value = _(approval_text) %}
     {% endif %}
 {% endfor %}
-{% set rules_filter_summary %}
-{{ _("Search") }}: {{ search if search else _("All") }} - {{ _("Categories") }}: {{ selected_filter_values(selected_categories, "All categories") }} - {{ _("Tags") }}: {{ selected_filter_values(selected_tags, "All tags") }} - {{ _("Source") }}: {{ rules_source_label.value }} - {{ _("Approval") }}: {{ rules_approval_label.value }}
-{% endset %}
+{% set rules_filter_summary = filter_summary([
+    {"label": "Search", "value": search if search else _("All")},
+    {"label": "Categories", "value": selected_filter_values(selected_categories, "All categories")},
+    {"label": "Tags", "value": selected_filter_values(selected_tags, "All tags")},
+    {"label": "Source", "value": rules_source_label.value},
+    {"label": "Approval", "value": rules_approval_label.value},
+]) %}
 
 {% macro rule_preview_panel() %}
 <section class="rule-preview" data-rule-preview>
@@ -241,81 +248,58 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label" id="rules-categories-label">{{ _("Category") }}</label>
-                <div
-                    class="tag-multiselect"
-                    data-tag-multiselect
-                    data-placeholder="{{ _('All categories') }}"
-                    data-select-all-label="{{ _('Select all categories') }}"
-                    data-select-preset-label="{{ _('Select analysis categories') }}"
-                    data-select-preset-summary-label="{{ _('Analysis categories') }}"
-                    data-select-preset-exclude-values='{{ category_filter_builtin_exclusions | tojson }}'
-                >
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="rules-categories-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
-                        {% for option in category_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="categories"
-                                    value="{{ option }}"
-                                    {% if option in selected_categories %}checked{% endif %}
-                                >
-                                <span>{{ option }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
+                {% call tag_multiselect(
+                    "rules-categories-label",
+                    _("All categories"),
+                    select_all_label=_("Select all categories"),
+                    select_preset_label=_("Select analysis categories"),
+                    select_preset_summary_label=_("Analysis categories"),
+                    select_preset_exclude_values=category_filter_builtin_exclusions
+                ) %}
+                    {% for option in category_options %}
+                        <label class="tag-multiselect-option">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="categories"
+                                value="{{ option }}"
+                                {% if option in selected_categories %}checked{% endif %}
+                            >
+                            <span>{{ option }}</span>
+                        </label>
+                    {% endfor %}
+                {% endcall %}
             </div>
             <div class="col-md-4">
                 <label class="form-label" id="rules-tags-label">{{ _("Tags") }}</label>
-                <div class="tag-multiselect" data-tag-multiselect data-placeholder="{{ _('All tags') }}" data-select-all-label="{{ _('Select all tags') }}">
-                    <div
-                        class="tag-multiselect-control"
-                        role="button"
-                        tabindex="0"
-                        aria-labelledby="rules-tags-label"
-                        aria-expanded="false"
-                        data-tag-multiselect-toggle
-                    >
-                        <div class="tag-multiselect-tags" data-tag-multiselect-tags></div>
-                        <span class="tag-multiselect-arrow" aria-hidden="true"></span>
-                    </div>
-                    <div class="tag-multiselect-menu" data-tag-multiselect-menu>
+                {% call tag_multiselect(
+                    "rules-tags-label",
+                    _("All tags"),
+                    select_all_label=_("Select all tags")
+                ) %}
+                    <label class="tag-multiselect-option">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="tags"
+                            value="{{ untagged_tag_filter_value }}"
+                            {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                        >
+                        <span>{{ _("Untagged") }}</span>
+                    </label>
+                    {% for option in tag_options %}
                         <label class="tag-multiselect-option">
                             <input
                                 class="form-check-input"
                                 type="checkbox"
                                 name="tags"
-                                value="{{ untagged_tag_filter_value }}"
-                                {% if untagged_tag_filter_value in selected_tags %}checked{% endif %}
+                                value="{{ option.name }}"
+                                {% if option.name in selected_tags %}checked{% endif %}
                             >
-                            <span>{{ _("Untagged") }}</span>
+                            <span>{{ option.name }}</span>
                         </label>
-                        {% for option in tag_options %}
-                            <label class="tag-multiselect-option">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    name="tags"
-                                    value="{{ option.name }}"
-                                    {% if option.name in selected_tags %}checked{% endif %}
-                                >
-                                <span>{{ option.name }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </div>
+                    {% endfor %}
+                {% endcall %}
             </div>
             <div class="col-md-3">
                 <label class="form-label" for="rules-source">{{ _("Source") }}</label>
@@ -333,10 +317,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3 ms-md-auto filter-actions">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>{{ _("Apply") }}</button>
-                <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Clear") }}</a>
-            </div>
+            {{ filter_actions(url_for('rules.rules')) }}
         </form>
 {% endcall %}
 
@@ -401,32 +382,12 @@
             <table class="table table-hover align-middle mb-0" data-rules-table data-no-export data-selected-approval="{{ selected_approval }}">
                 <thead>
                     <tr>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('keyword') }}">
-                                <span>{{ _("Keyword") }}</span>{% if sort == "keyword" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('category') }}">
-                                <span>{{ _("Category") }}</span>{% if sort == "category" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
+                        {{ server_sort_header("keyword", "Keyword", sort, direction, sort_url('keyword')) }}
+                        {{ server_sort_header("category", "Category", sort, direction, sort_url('category')) }}
                         <th>{{ _("Tags") }}</th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('amount_min') }}">
-                                <span>{{ _("Amount") }}</span>{% if sort == "amount_min" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('source') }}">
-                                <span>{{ _("Source") }}</span>{% if sort == "source" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a class="sort-link" href="{{ sort_url('created_at') }}">
-                                <span>{{ _("Created") }}</span>{% if sort == "created_at" %}<span class="sort-icon {{ direction }}" aria-hidden="true"></span>{% endif %}
-                            </a>
-                        </th>
+                        {{ server_sort_header("amount_min", "Amount", sort, direction, sort_url('amount_min')) }}
+                        {{ server_sort_header("source", "Source", sort, direction, sort_url('source')) }}
+                        {{ server_sort_header("created_at", "Created", sort, direction, sort_url('created_at')) }}
                         <th class="text-end">{{ _("Actions") }}</th>
                     </tr>
                 </thead>

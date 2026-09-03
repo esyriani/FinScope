@@ -1,0 +1,36 @@
+{% macro tag_multiselect(label_id, placeholder, select_all_label="", select_preset_label="", select_preset_summary_label="", select_preset_exclude_values=none) -%}
+<div
+    class="tag-multiselect"
+    data-tag-multiselect
+    data-placeholder="{{ placeholder }}"
+    {% if select_all_label %}data-select-all-label="{{ select_all_label }}"{% endif %}
+    {% if select_preset_label %}data-select-preset-label="{{ select_preset_label }}"{% endif %}
+    {% if select_preset_summary_label %}data-select-preset-summary-label="{{ select_preset_summary_label }}"{% endif %}
+    {% if select_preset_exclude_values is not none %}data-select-preset-exclude-values='{{ select_preset_exclude_values | tojson }}'{% endif %}
+>
+    <div class="tag-multiselect-control" data-tag-multiselect-control>
+        <div id="{{ label_id }}-summary" class="tag-multiselect-tags" data-tag-multiselect-tags></div>
+        <button
+            class="tag-multiselect-toggle"
+            type="button"
+            aria-labelledby="{{ label_id }} {{ label_id }}-summary"
+            aria-expanded="false"
+            aria-controls="{{ label_id }}-menu"
+            data-tag-multiselect-toggle
+        >
+            <span class="tag-multiselect-arrow" aria-hidden="true"></span>
+        </button>
+    </div>
+    <div
+        id="{{ label_id }}-menu"
+        class="tag-multiselect-menu"
+        role="group"
+        aria-labelledby="{{ label_id }}"
+        tabindex="-1"
+        hidden
+        data-tag-multiselect-menu
+    >
+        {{ caller() }}
+    </div>
+</div>
+{%- endmacro %}

@@ -6,6 +6,7 @@
 ] %}
 {% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
+{% from "_sort_controls.html" import client_sort_header as shared_client_sort_header with context %}
 
 {% block content %}
 {% macro severity_badge(row) %}
@@ -24,16 +25,7 @@
 {% endmacro %}
 
 {% macro client_sort_header(column, label, sort_type="text", header_class="") %}
-<th{% if header_class %} class="{{ header_class }}"{% endif %}>
-    <button
-        class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %} border-0 bg-transparent p-0"
-        type="button"
-        data-sort-column="{{ column }}"
-        data-sort-type="{{ sort_type }}"
-    >
-        <span>{{ _(label) }}</span>
-    </button>
-</th>
+{{ shared_client_sort_header(column, label, sort_type, header_class) }}
 {% endmacro %}
 
 {% macro overlap_detail_button(rule_a_id, rule_b_id) %}

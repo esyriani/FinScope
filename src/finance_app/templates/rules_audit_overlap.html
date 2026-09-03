@@ -7,6 +7,7 @@
 {% set page_scripts = ["js/tables.js", "js/exports.js"] %}
 {% extends "base.html" %}
 {% from "_pagination.html" import pagination with context %}
+{% from "_sort_controls.html" import server_sort_header with context %}
 
 {% block content %}
 {% set transaction_table = transaction_table | default({}) %}
@@ -45,11 +46,7 @@
 {% endmacro %}
 
 {% macro sort_header(table, sort_name, label, header_class="") %}
-<th{% if header_class %} class="{{ header_class }}"{% endif %}>
-    <a class="sort-link{% if 'text-end' in header_class %} justify-content-end{% endif %}" href="{{ table.sort_url(sort_name) }}">
-        <span>{{ _(label) }}</span>{% if table.sort == sort_name %}<span class="sort-icon {{ table.direction }}" aria-hidden="true"></span>{% endif %}
-    </a>
-</th>
+{{ server_sort_header(sort_name, label, table.sort, table.direction, table.sort_url(sort_name), header_class) }}
 {% endmacro %}
 
 {% macro rule_detail_button(rule) %}
