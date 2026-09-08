@@ -619,6 +619,12 @@ h2 {
     color: var(--app-text);
 }
 
+.card-title {
+    color: var(--app-heading);
+    font-weight: 700;
+    margin-bottom: 0;
+}
+
 .filter-panel-heading,
 .collapse-panel-heading {
     border-radius: 6px;

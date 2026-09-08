@@ -300,14 +300,17 @@ function setupCoreCollapseToggleLabels(root = document) {
             return;
         }
 
-        target.addEventListener("show.bs.collapse", () => {
-            label.textContent = hideLabel;
-            icon?.classList.replace("bi-chevron-down", "bi-chevron-up");
-        });
-        target.addEventListener("hide.bs.collapse", () => {
-            label.textContent = showLabel;
-            icon?.classList.replace("bi-chevron-up", "bi-chevron-down");
-        });
+        function setExpanded(expanded) {
+            button.setAttribute("aria-expanded", expanded ? "true" : "false");
+            financeSetCollapsePanelHeadingExpanded(target, expanded);
+            label.textContent = expanded ? hideLabel : showLabel;
+            icon?.classList.toggle("bi-chevron-down", !expanded);
+            icon?.classList.toggle("bi-chevron-up", expanded);
+        }
+
+        setExpanded(target.classList.contains("show") || button.getAttribute("aria-expanded") === "true");
+        target.addEventListener("show.bs.collapse", () => setExpanded(true));
+        target.addEventListener("hide.bs.collapse", () => setExpanded(false));
     });
 }
 

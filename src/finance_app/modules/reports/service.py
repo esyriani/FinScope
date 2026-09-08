@@ -14,7 +14,17 @@ from finance_app.core.analytics import (
     REPORT_MEASURE_OPTIONS,
     build_quick_view_options,
 )
+from finance_app.core.filter_summary import (
+    filter_summary_item,
+    merchant_filter_input_label,
+    period_summary_value,
+    selected_account_label,
+    selected_option_label,
+    selected_values_label,
+    value_or_default,
+)
 from finance_app.core.periods import DATE_PERIOD_OPTIONS, PERIOD_CUSTOM, format_date_label, get_period_label
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.reports.definitions import (
     REPORT_ACCOUNTS,
     REPORT_INCOME,
@@ -355,6 +365,19 @@ def reports_filter_context(
 ) -> dict[str, Any]:
     """Return filter controls and labels for the Reports overview."""
     taxonomy_filter_controls_available = report_taxonomy_filter_controls_available(report_request.section_key)
+    quick_view_options = build_quick_view_options(
+        report_request.quick_view,
+        query_data.quick_view_counts,
+    )
+    scope_label = "Scope" if taxonomy_filter_controls_available else "Quick view"
+    show_account_filter = report_request.section_key != REPORT_ACCOUNTS
+    show_merchant_filter = report_request.section_key != REPORT_MERCHANTS
+    taxonomy_filter_controls_visible = report_request.quick_view == QUICK_VIEW_CATEGORIZED
+    merchant_filter_label = merchant_filter_input_label(
+        report_request.selected_merchant_id,
+        report_request.merchant_query,
+        query_data.selected_merchant_label,
+    )
     return {
         "selected_period": report_request.period,
         "period_options": DATE_PERIOD_OPTIONS,
@@ -369,16 +392,13 @@ def reports_filter_context(
         "basis_options": REPORT_BASIS_OPTIONS,
         "selected_basis": report_request.basis,
         "quick_view": report_request.quick_view,
-        "quick_view_options": build_quick_view_options(
-            report_request.quick_view,
-            query_data.quick_view_counts,
-        ),
-        "reports_scope_label": "Scope" if taxonomy_filter_controls_available else "Quick view",
+        "quick_view_options": quick_view_options,
+        "reports_scope_label": scope_label,
         "categorized_quick_view_value": QUICK_VIEW_CATEGORIZED,
-        "reports_show_account_filter": report_request.section_key != REPORT_ACCOUNTS,
-        "reports_show_merchant_filter": report_request.section_key != REPORT_MERCHANTS,
+        "reports_show_account_filter": show_account_filter,
+        "reports_show_merchant_filter": show_merchant_filter,
         "reports_taxonomy_filter_controls_available": taxonomy_filter_controls_available,
-        "reports_taxonomy_filter_controls_visible": report_request.quick_view == QUICK_VIEW_CATEGORIZED,
+        "reports_taxonomy_filter_controls_visible": taxonomy_filter_controls_visible,
         "selected_categories": report_request.selected_categories,
         "selected_tags": report_request.selected_tags,
         "category_options": getattr(query_data, "category_options", []),
@@ -388,6 +408,17 @@ def reports_filter_context(
         "selected_merchant_id": report_request.selected_merchant_id,
         "selected_merchant_label": query_data.selected_merchant_label,
         "merchant_query": report_request.merchant_query,
+        "reports_merchant_filter_label": merchant_filter_label,
+        "reports_filter_summary_items": build_reports_filter_summary_items(
+            report_request,
+            query_data,
+            quick_view_options,
+            scope_label,
+            show_account_filter,
+            show_merchant_filter,
+            taxonomy_filter_controls_visible,
+            merchant_filter_label,
+        ),
         "merchant_suggestion_limit": query_data.merchant_suggestion_limit,
         "reports_clear_url": url_for(clear_endpoint, **(clear_route_values or {})),
         "reports_export_csv_url": (
@@ -401,3 +432,70 @@ def reports_filter_context(
             else ""
         ),
     }
+
+
+def build_reports_filter_summary_items(
+    report_request: ReportRequest,
+    query_data: Any,
+    quick_view_options: list[dict[str, Any]],
+    scope_label: str,
+    show_account_filter: bool,
+    show_merchant_filter: bool,
+    taxonomy_filter_controls_visible: bool,
+    merchant_filter_label: str,
+) -> list[dict[str, str]]:
+    """Return selected Reports filters as template-ready summary items."""
+    items = [
+        filter_summary_item(
+            "Period",
+            period_summary_value(
+                get_period_label(report_request.period, report_request.date_from, report_request.date_to),
+                report_request.period,
+                PERIOD_CUSTOM,
+                report_request.date_from,
+                report_request.date_to,
+            ),
+        ),
+        filter_summary_item(
+            "Measure",
+            selected_option_label(REPORT_MEASURE_OPTIONS, report_request.measure, "Spending"),
+        ),
+        filter_summary_item(
+            "Basis",
+            selected_option_label(REPORT_BASIS_OPTIONS, report_request.basis, "Reportable cash flow"),
+        ),
+    ]
+    if show_account_filter:
+        items.append(
+            filter_summary_item(
+                "Account",
+                selected_account_label(query_data.account_options, report_request.selected_account_id),
+            )
+        )
+    if show_merchant_filter:
+        items.append(filter_summary_item("Merchant", value_or_default(merchant_filter_label)))
+    items.append(
+        filter_summary_item(
+            scope_label,
+            selected_option_label(quick_view_options, report_request.quick_view, "All"),
+        )
+    )
+    if taxonomy_filter_controls_visible and report_request.selected_categories:
+        items.append(
+            filter_summary_item(
+                "Categories",
+                selected_values_label(report_request.selected_categories, "All categories"),
+            )
+        )
+    if taxonomy_filter_controls_visible and report_request.selected_tags:
+        items.append(
+            filter_summary_item(
+                "Tags",
+                selected_values_label(
+                    report_request.selected_tags,
+                    "All tags",
+                    translated_value_labels={UNTAGGED_TAG_FILTER: "Untagged"},
+                ),
+            )
+        )
+    return items

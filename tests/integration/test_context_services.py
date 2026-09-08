@@ -30,6 +30,14 @@ def test_dashboard_context_totals_filters_custom_dates_and_sorting(app, core_con
     assert context["selected_period"] == "custom"
     assert context["period_label"] == "01-Jan-2026 to 28-Feb-2026"
     assert context["quick_view"] == "categorized"
+    assert context["dashboard_filter_summary_items"] == [
+        {
+            "label": "Period",
+            "value": "01-Jan-2026 to 28-Feb-2026 (2026-01-01 to 2026-02-28)",
+        },
+        {"label": "Merchant", "value": "All"},
+        {"label": "Scope", "value": "Categorized"},
+    ]
     assert [(option["value"], option["active"]) for option in context["classification_scope_options"]] == [
         ("categorized", True),
         ("all", False),

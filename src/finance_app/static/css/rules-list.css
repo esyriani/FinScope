@@ -257,6 +257,10 @@ legend.form-label {
     grid-template-columns: minmax(260px, 1fr) minmax(360px, 2fr) auto;
 }
 
+.audit-summary-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
 .rule-audit-search-row .form-label {
     font-size: 0.86rem;
     margin-bottom: 0.35rem;
@@ -449,4 +453,31 @@ legend.form-label {
 
 .btn-check:focus-visible + .theme-mode-option {
     box-shadow: var(--focus-shadow);
+}
+
+@media (max-width: 1100px) {
+    .audit-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .rule-audit-search-row {
+        grid-template-areas:
+            "search"
+            "conflicts"
+            "actions";
+        grid-template-columns: 1fr;
+    }
+
+    .rule-audit-filter-actions {
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 850px) {
+    .audit-summary-grid,
+    .amount-rule-modes,
+    .amount-range-fields,
+    .rule-preview-row {
+        grid-template-columns: 1fr;
+    }
 }

@@ -1,0 +1,467 @@
+{% from "_reports_summary_cards.html" import report_pin_button with context %}
+{% from "_reports_tables.html" import sort_header with context %}
+{% from "_table_primitives.html" import empty_state, table_card_header with context %}
+
+{% macro taxonomy_target_typeahead(options, search_value="") -%}
+<section class="card reports-taxonomy-search-card" aria-labelledby="reports-taxonomy-search-heading">
+    <div class="card-body">
+        <div class="reports-taxonomy-open merchant-autocomplete" data-taxonomy-open-control data-suggestions-limit="{{ merchant_suggestion_limit }}">
+            <label id="reports-taxonomy-search-heading" class="form-label" for="reports-taxonomy-open-input">
+                {{ _("Open a category or tag report...") }}
+            </label>
+            <input
+                id="reports-taxonomy-open-input"
+                class="form-control"
+                type="search"
+                value="{{ search_value }}"
+                placeholder="{{ _('Search categories and tags') }}"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="reports-taxonomy-open-suggestions"
+                data-taxonomy-explorer-search
+                data-taxonomy-open-input
+            >
+            <div id="reports-taxonomy-open-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-taxonomy-open-menu></div>
+            <script type="application/json" data-taxonomy-open-options>{{ options | tojson }}</script>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro taxonomy_explorer(rows, filter_chips, current_filter="all") -%}
+<section class="card reports-taxonomy-explorer" aria-labelledby="reports-taxonomy-explorer-heading" data-taxonomy-explorer>
+    <div class="card-body border-bottom">
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-3">
+            <div>
+                <div class="reports-shell-kicker">{{ _("Categories and tags") }}</div>
+                <h5 id="reports-taxonomy-explorer-heading" class="card-title mb-0">{{ _("Report explorer") }}</h5>
+            </div>
+        </div>
+        <div class="reports-chip-row" role="group" aria-label="{{ _('Filter categories and tags') }}">
+            {% for chip in filter_chips %}
+            <button
+                type="button"
+                class="btn btn-sm {% if chip.value == current_filter %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                data-taxonomy-filter="{{ chip.value }}"
+                aria-pressed="{% if chip.value == current_filter %}true{% else %}false{% endif %}"
+            >
+                {{ _(chip.label) }}{% if chip.count is defined %}: {{ chip.count }}{% endif %}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% if rows %}
+    <div class="table-responsive">
+        <table
+            id="reports-taxonomy-explorer-table"
+            class="table table-hover align-middle mb-0 reports-table reports-taxonomy-table"
+            data-sortable-table
+            data-paginated-table
+            data-no-export
+            data-page-size="{{ reports_table_page_size | default(25) }}"
+            data-pagination-label="{{ _('Categories and tags') }}"
+        >
+            <thead>
+                <tr>
+                    {{ sort_header("Name", 0) }}
+                    {{ sort_header("Spending", 1, "number", "text-end") }}
+                    {{ sort_header("Income and credits", 2, "number", "text-end") }}
+                    {{ sort_header("Net cash flow", 3, "number", "text-end") }}
+                    {{ sort_header("Transactions", 4, "number", "text-end") }}
+                    {{ sort_header("Share", 5, "number", "text-end") }}
+                    <th class="text-end">{{ _("Actions") }}</th>
+                </tr>
+            </thead>
+            <tbody data-taxonomy-explorer-body>
+                {% for row in rows %}
+                <tr
+                    data-row-href="{{ row.url }}"
+                    data-base-row-href="{{ row.url }}"
+                    data-row-drilldown="dblclick"
+                    data-taxonomy-explorer-row
+                    data-kind="{{ row.kind }}"
+                    data-builtins="{% if row.is_builtin %}true{% else %}false{% endif %}"
+                    data-needs-review="{% if row.needs_review %}true{% else %}false{% endif %}"
+                    data-analytics-category="{% if row.is_analytics_category %}true{% else %}false{% endif %}"
+                    data-has-income="{% if row.has_income %}true{% else %}false{% endif %}"
+                    data-has-spending="{% if row.has_spending %}true{% else %}false{% endif %}"
+                    data-search-text="{{ row.search_text }}"
+                    data-sort-spending="{{ row.spending }}"
+                    data-sort-income="{{ row.income }}"
+                    data-sort-net="{{ row.net }}"
+                    data-sort-transactions="{{ row.transaction_count }}"
+                    data-sort-name="{{ row.label }}"
+                >
+                    <td data-sort-value="{{ row.label }}">
+                        <div class="reports-taxonomy-label">
+                            <a class="fw-semibold reports-taxonomy-name-link" href="{{ row.url }}" data-row-action data-taxonomy-report-link data-base-url="{{ row.url }}">{{ row.label }}</a>
+                            <span class="badge reports-taxonomy-type-badge reports-taxonomy-type-badge-{{ row.kind }}">{{ _(row.type_label) }}</span>
+                        </div>
+                    </td>
+                    <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ row.net }}">{{ row.net | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.transaction_count }}">{{ row.transaction_count }}</td>
+                    <td class="text-end" data-sort-value="{{ row.share }}">
+                        <span>{{ row.share }}%</span>
+                        <span class="reports-bar-track" aria-hidden="true"><span style="width: {{ row.bar_width }}%;"></span></span>
+                    </td>
+                    <td class="text-end">
+                        <div class="reports-row-actions">
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.url }}" title="{{ _('Open report') }}" aria-label="{{ _('Open report') }}: {{ row.label }}" data-row-action data-taxonomy-report-link data-base-url="{{ row.url }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.transactions_url }}" title="{{ _('Transactions') }}" aria-label="{{ _('Transactions') }}: {{ row.label }}" data-row-action><i class="bi bi-list-ul" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.comparison_url }}" title="{{ _('Compare') }}" aria-label="{{ _('Compare') }}: {{ row.label }}" data-row-action><i class="bi bi-layout-split" aria-hidden="true"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {{ empty_state("No rows available for this report.") }}
+    {% endif %}
+</section>
+{%- endmacro %}
+
+{% macro report_target_typeahead(options, search_value, label, placeholder, control_id) -%}
+<section class="card reports-taxonomy-search-card reports-target-search-card" aria-labelledby="{{ control_id }}-heading">
+    <div class="card-body">
+        <div
+            class="reports-taxonomy-open merchant-autocomplete"
+            data-report-open-control
+            data-report-open-filter-param="entity_filter"
+            data-report-open-search-param="entity_search"
+            data-report-open-search-selector="[data-report-explorer-search]"
+            data-suggestions-limit="{{ merchant_suggestion_limit }}"
+            data-no-results-text="{{ _('No report targets found.') }}"
+        >
+            <label id="{{ control_id }}-heading" class="form-label" for="{{ control_id }}-input">
+                {{ _(label) }}
+            </label>
+            <input
+                id="{{ control_id }}-input"
+                class="form-control"
+                type="search"
+                value="{{ search_value }}"
+                placeholder="{{ _(placeholder) }}"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="{{ control_id }}-suggestions"
+                data-report-explorer-search
+                data-report-open-input
+            >
+            <div id="{{ control_id }}-suggestions" class="merchant-autocomplete-menu" role="listbox" hidden data-report-open-menu></div>
+            <script type="application/json" data-report-open-options>{{ options | tojson }}</script>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro report_explorer(rows, filter_chips, current_filter, kicker, title, table_id, label_heading) -%}
+<section
+    class="card reports-taxonomy-explorer reports-target-explorer"
+    aria-labelledby="{{ table_id }}-heading"
+    data-report-explorer
+    data-report-filter-param="entity_filter"
+    data-report-search-param="entity_search"
+    data-report-search-selector="[data-report-explorer-search]"
+>
+    <div class="card-body border-bottom">
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-3">
+            <div>
+                <div class="reports-shell-kicker">{{ _(kicker) }}</div>
+                <h5 id="{{ table_id }}-heading" class="card-title mb-0">{{ _(title) }}</h5>
+            </div>
+        </div>
+        <div class="reports-chip-row" role="group" aria-label="{{ _('Filter report targets') }}">
+            {% for chip in filter_chips %}
+            <button
+                type="button"
+                class="btn btn-sm {% if chip.value == current_filter %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                data-report-filter="{{ chip.value }}"
+                aria-pressed="{% if chip.value == current_filter %}true{% else %}false{% endif %}"
+            >
+                {{ _(chip.label) }}{% if chip.count is defined %}: {{ chip.count }}{% endif %}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% if rows %}
+    <div class="table-responsive">
+        <table
+            id="{{ table_id }}"
+            class="table table-hover align-middle mb-0 reports-table reports-taxonomy-table"
+            data-sortable-table
+            data-paginated-table
+            data-no-export
+            data-page-size="{{ reports_table_page_size | default(25) }}"
+            data-pagination-label="{{ _(kicker) }}"
+        >
+            <thead>
+                <tr>
+                    {{ sort_header(label_heading, 0) }}
+                    {{ sort_header("Spending", 1, "number", "text-end") }}
+                    {{ sort_header("Income and credits", 2, "number", "text-end") }}
+                    {{ sort_header("Net cash flow", 3, "number", "text-end") }}
+                    {{ sort_header("Transactions", 4, "number", "text-end") }}
+                    {{ sort_header("Share", 5, "number", "text-end") }}
+                    <th class="text-end">{{ _("Actions") }}</th>
+                </tr>
+            </thead>
+            <tbody data-report-explorer-body>
+                {% for row in rows %}
+                <tr
+                    data-row-href="{{ row.url }}"
+                    data-base-row-href="{{ row.url }}"
+                    data-row-drilldown="dblclick"
+                    data-report-explorer-row
+                    data-kind="{{ row.kind }}"
+                    data-filter-tokens="{{ row.filter_tokens }}"
+                    data-has-income="{% if row.has_income %}true{% else %}false{% endif %}"
+                    data-has-spending="{% if row.has_spending %}true{% else %}false{% endif %}"
+                    data-search-text="{{ row.search_text }}"
+                >
+                    <td data-sort-value="{{ row.label }}">
+                        <div class="reports-taxonomy-label">
+                            <a class="fw-semibold reports-taxonomy-name-link" href="{{ row.url }}" data-row-action data-report-link data-base-url="{{ row.url }}">{{ row.label }}</a>
+                            {% if row.type_label %}
+                            <span class="badge reports-entity-type-badge reports-entity-type-badge-{{ row.kind }} reports-entity-type-badge-{{ row.account_type | replace('_', '-') }}">{{ _(row.type_label) }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ row.net }}">{{ row.net | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.transaction_count }}">{{ row.transaction_count }}</td>
+                    <td class="text-end" data-sort-value="{{ row.share }}">
+                        <span>{{ row.share }}%</span>
+                        <span class="reports-bar-track" aria-hidden="true"><span style="width: {{ row.bar_width }}%;"></span></span>
+                    </td>
+                    <td class="text-end">
+                        <div class="reports-row-actions">
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.url }}" title="{{ _('Open report') }}" aria-label="{{ _('Open report') }}: {{ row.label }}" data-row-action data-report-link data-base-url="{{ row.url }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.transactions_url }}" title="{{ _('Transactions') }}" aria-label="{{ _('Transactions') }}: {{ row.label }}" data-row-action><i class="bi bi-list-ul" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ row.comparison_url }}" title="{{ _('Compare') }}" aria-label="{{ _('Compare') }}: {{ row.label }}" data-row-action><i class="bi bi-layout-split" aria-hidden="true"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {{ empty_state("No rows available for this report.") }}
+    {% endif %}
+</section>
+{%- endmacro %}
+
+{% macro taxonomy_breadcrumb_nav(breadcrumbs) -%}
+<nav class="reports-breadcrumbs" aria-label="{{ _('Breadcrumb') }}">
+    <ol class="breadcrumb mb-0">
+        {% for item in breadcrumbs %}
+        <li class="breadcrumb-item {% if not item.url %}active{% endif %}" {% if not item.url %}aria-current="page"{% endif %}>
+            {% if item.url %}
+                <a href="{{ item.url }}">{{ _(item.label) }}</a>
+            {% else %}
+                {{ item.label }}
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+</nav>
+{%- endmacro %}
+
+{% macro report_target_switcher(target, options, search_placeholder) -%}
+{% set current_target_key = target.kind ~ ":" ~ target.id %}
+<div class="dropdown reports-target-switcher" data-report-target-switcher>
+    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        {{ target.name }}
+    </button>
+    <div class="dropdown-menu reports-target-switcher-menu">
+        <div class="p-2">
+            <label class="visually-hidden" for="reports-entity-target-search">{{ _(search_placeholder) }}</label>
+            <input
+                id="reports-entity-target-search"
+                class="form-control form-control-sm"
+                type="search"
+                placeholder="{{ _(search_placeholder) }}"
+                autocomplete="off"
+                data-report-target-search
+            >
+        </div>
+        <div class="reports-target-option-list">
+            {% for option in options %}
+            <a
+                class="dropdown-item reports-target-option {% if option.target_key == current_target_key %}active{% endif %}"
+                href="{{ option.url }}"
+                data-report-target-option
+                data-search-text="{{ option.search_text }}"
+            >
+                <span>{{ option.label }}</span>
+                <small>{{ _(option.type_label) }}</small>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{%- endmacro %}
+
+{% macro taxonomy_target_switcher(target, options) -%}
+{% set current_target_key = target.kind ~ ":" ~ target.id %}
+<div class="dropdown reports-target-switcher" data-taxonomy-target-switcher>
+    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        {{ target.name }}
+    </button>
+    <div class="dropdown-menu reports-target-switcher-menu">
+        <div class="p-2">
+            <label class="visually-hidden" for="reports-target-switcher-search">{{ _("Search categories and tags") }}</label>
+            <input
+                id="reports-target-switcher-search"
+                class="form-control form-control-sm"
+                type="search"
+                placeholder="{{ _('Search categories and tags') }}"
+                autocomplete="off"
+                data-taxonomy-target-search
+            >
+        </div>
+        <div class="reports-target-option-list">
+            {% for option in options %}
+            <a
+                class="dropdown-item reports-target-option {% if option.target_key == current_target_key %}active{% endif %}"
+                href="{{ option.url }}"
+                data-taxonomy-target-option
+                data-search-text="{{ option.search_text }}"
+            >
+                <span>{{ option.label }}</span>
+                <small>{{ _(option.type_label) }}{% if option.is_builtin %} - {{ _("Built-in") }}{% endif %}</small>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{%- endmacro %}
+
+{% macro taxonomy_detail_header(target, options, transaction_url, comparison_url, back_url) -%}
+<section class="card reports-target-card reports-taxonomy-target-card">
+    <div class="card-body reports-target-layout">
+        <div>
+            <div class="reports-shell-kicker">{{ _(target.report_label) }}</div>
+            {{ taxonomy_target_switcher(target, options) }}
+            {% if target.description %}
+                <p>{{ _(target.description) }}</p>
+            {% endif %}
+        </div>
+        <div class="reports-actions reports-target-actions">
+            {{ report_pin_button() }}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ back_url }}"><i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Back to categories and tags") }}</a>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro entity_detail_header(target, options, transaction_url, comparison_url, back_url, back_label, search_placeholder) -%}
+<section class="card reports-target-card reports-taxonomy-target-card">
+    <div class="card-body reports-target-layout">
+        <div>
+            <div class="reports-shell-kicker">{{ _(target.report_label) }}</div>
+            {{ report_target_switcher(target, options, search_placeholder) }}
+            {% if target.description %}
+                <p>{{ _(target.description) }}</p>
+            {% endif %}
+        </div>
+        <div class="reports-actions reports-target-actions">
+            {{ report_pin_button() }}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ back_url }}"><i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _(back_label) }}</a>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro render_taxonomy_detail_subnav(items) -%}
+<nav class="reports-detail-subnav" aria-label="{{ _('Report sections') }}">
+    {% for item in items %}
+    <a href="#{{ item.target }}">{{ _(item.label) }}</a>
+    {% endfor %}
+</nav>
+{%- endmacro %}
+
+{% macro taxonomy_related_reports(links) -%}
+{% if links %}
+<section class="card reports-related-card" aria-labelledby="taxonomy-related-heading">
+    <div class="card-body">
+        <div class="section-title">
+            <h5 id="taxonomy-related-heading" class="card-title">{{ _("Related reports") }}</h5>
+        </div>
+        <div class="reports-related-links">
+            {% for link in links %}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ link.url }}">
+                <i class="bi bi-{{ link.icon }}" aria-hidden="true"></i>
+                <span>{{ _(link.label) }}{% if link.detail %}: {{ link.detail }}{% endif %}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+{%- endmacro %}
+
+{% macro evidence_preview(rows, table_id, transaction_url, section_id="taxonomy-transactions") -%}
+<section id="{{ section_id }}" class="card reports-evidence-card reports-evidence-preview" aria-labelledby="{{ table_id }}-heading">
+    {% set controls %}
+        <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("Open all transactions") }}</a>
+    {% endset %}
+    {{ table_card_header(
+        "Evidence preview",
+        "Recent matching transactions",
+        controls,
+        header_class="card-body border-bottom reports-table-header",
+        row_class="d-flex flex-wrap align-items-start justify-content-between gap-3",
+        heading_class="reports-table-heading",
+        title_id=table_id ~ "-heading",
+        title_class="card-title mb-1",
+        detail_tag="p",
+        detail_class="text-muted mb-0 reports-table-summary"
+    ) }}
+    {% if rows %}
+    <div class="table-responsive">
+        <table id="{{ table_id }}" class="table table-hover align-middle mb-0 reports-table">
+            <thead>
+                <tr>
+                    <th>{{ _("Date") }}</th>
+                    <th>{{ _("Description") }}</th>
+                    <th>{{ _("Account") }}</th>
+                    <th>{{ _("Merchant") }}</th>
+                    <th>{{ _("Category") }}</th>
+                    <th class="text-end">{{ _("Amount") }}</th>
+                    <th class="text-end">{{ _("Net cash flow") }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.date | datefmt }}</td>
+                    <td>{{ row.description }}</td>
+                    <td>{{ row.account_name or _("No account") }}</td>
+                    <td>{{ row.merchant_label }}</td>
+                    <td>{{ row.category }}</td>
+                    <td class="text-end">{{ row.amount | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}">{{ row.net | moneyfmt }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {{ empty_state("No evidence rows available for this report.") }}
+    {% endif %}
+</section>
+{%- endmacro %}

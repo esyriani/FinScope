@@ -5,10 +5,6 @@
     {%- endfor -%}
 {%- endmacro %}
 
-{% macro period_summary(label, selected_period, custom_period, date_from="", date_to="") -%}
-    {{- label -}}{%- if selected_period == custom_period and (date_from or date_to) %} ({{ date_from or _("Any") }} {{ _("to") }} {{ date_to or _("Any") }}){% endif -%}
-{%- endmacro %}
-
 {% macro hidden_inputs(name, values) -%}
     {%- for value in values %}
         <input type="hidden" name="{{ name }}" value="{{ value }}">

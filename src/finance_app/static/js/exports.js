@@ -113,6 +113,113 @@ function createExportToolbar() {
 }
 
 let expandedExportState = null;
+const tableExportOperations = new WeakMap();
+
+function tableExportAbortController() {
+    return typeof AbortController === "function" ? new AbortController() : null;
+}
+
+function tableExportAbortError() {
+    const error = new Error("Table export cancelled.");
+    error.name = "AbortError";
+    return error;
+}
+
+function tableExportIsAbortError(error) {
+    return error?.name === "AbortError";
+}
+
+function tableExportIsCancelled(operation) {
+    return Boolean(operation?.cancelled || operation?.controller?.signal?.aborted);
+}
+
+function throwIfTableExportCancelled(operation) {
+    if (tableExportIsCancelled(operation)) {
+        throw tableExportAbortError();
+    }
+}
+
+function cancelTableExportOperation(operation) {
+    if (!operation) {
+        return;
+    }
+
+    operation.cancelled = true;
+    operation.controller?.abort();
+}
+
+function tableExportButtonLabel(button) {
+    return normalizeExportText(button?.querySelector("span")?.textContent || button?.textContent || "");
+}
+
+function beginTableExportOperation(table, button) {
+    cancelTableExportOperation(tableExportOperations.get(table));
+
+    const operation = {
+        button,
+        cancelled: false,
+        controller: tableExportAbortController(),
+        defaultAriaLabel: button?.getAttribute("aria-label") || "",
+        defaultLabel: tableExportButtonLabel(button),
+        labelElement: button?.querySelector("span") || null,
+        table,
+    };
+    tableExportOperations.set(table, operation);
+
+    if (button) {
+        button.dataset.tableExportBusy = "true";
+        button.setAttribute("aria-busy", "true");
+    }
+
+    return operation;
+}
+
+function finishTableExportOperation(operation) {
+    if (operation.button) {
+        if (operation.labelElement) {
+            operation.labelElement.textContent = operation.defaultLabel;
+        }
+        if (operation.defaultAriaLabel) {
+            operation.button.setAttribute("aria-label", operation.defaultAriaLabel);
+        } else {
+            operation.button.removeAttribute("aria-label");
+        }
+        operation.button.removeAttribute("aria-busy");
+        delete operation.button.dataset.tableExportBusy;
+    }
+
+    if (tableExportOperations.get(operation.table) === operation) {
+        tableExportOperations.delete(operation.table);
+    }
+}
+
+function updateTableExportProgress(operation, current, total) {
+    if (!operation.button) {
+        return;
+    }
+
+    const label = financeTranslate("Cancel export ({current}/{total})", { current, total });
+    if (operation.labelElement) {
+        operation.labelElement.textContent = label;
+    }
+    operation.button.setAttribute("aria-label", label);
+}
+
+function cancelTableExportFromButton(table, button) {
+    const operation = tableExportOperations.get(table);
+    if (operation?.button !== button || button?.dataset.tableExportBusy !== "true") {
+        return false;
+    }
+
+    cancelTableExportOperation(operation);
+    return true;
+}
+
+function yieldTableExportWork() {
+    return new Promise((resolve) => {
+        window.setTimeout(resolve, 0);
+    });
+}
 
 function resizeChartElement(element) {
     const chart = window.echarts?.getInstanceByDom(element);
@@ -162,11 +269,11 @@ function closeExpandedExportModal() {
     });
 }
 
-function showModalAfterExpandedExportCloses(modalElement) {
+function showModalAfterExpandedExportCloses(modalElement, relatedTarget) {
     if (!window.bootstrap?.Modal) return;
 
     closeExpandedExportModal().then(() => {
-        bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        bootstrap.Modal.getOrCreateInstance(modalElement).show(relatedTarget);
     });
 }
 
@@ -498,10 +605,11 @@ function matchingTableInDocument(documentRoot, sourceTable, sourceIndex) {
     return exportableTablesIn(documentRoot)[sourceIndex] || null;
 }
 
-async function fetchExportTablePage(url, sourceTable, sourceIndex) {
+async function fetchExportTablePage(url, sourceTable, sourceIndex, signal) {
     const response = await fetch(url, {
         credentials: "same-origin",
         headers: { Accept: "text/html" },
+        signal,
     });
     if (!response.ok) {
         throw new Error(`Table export page request failed: ${response.status}`);
@@ -515,7 +623,7 @@ async function fetchExportTablePage(url, sourceTable, sourceIndex) {
     return table;
 }
 
-async function tableExportTablesForScope(table, scope) {
+async function tableExportTablesForScope(table, scope, options = {}) {
     if (scope !== "all") {
         return [table];
     }
@@ -530,11 +638,23 @@ async function tableExportTablesForScope(table, scope) {
         return [table];
     }
 
-    return Promise.all(
-        plan.pageUrls.map(({ pageNumber, url }) =>
-            pageNumber === plan.activePage ? Promise.resolve(table) : fetchExportTablePage(url, table, sourceIndex)
-        )
-    );
+    const tables = [];
+    const totalPages = plan.pageUrls.length;
+    for (const { pageNumber, url } of plan.pageUrls) {
+        throwIfTableExportCancelled(options.operation);
+        const currentPage = tables.length + 1;
+        options.onProgress?.({ currentPage, pageNumber, totalPages });
+
+        tables.push(
+            pageNumber === plan.activePage
+                ? table
+                : await fetchExportTablePage(url, table, sourceIndex, options.operation?.controller?.signal)
+        );
+        throwIfTableExportCancelled(options.operation);
+        await yieldTableExportWork();
+    }
+
+    return tables;
 }
 
 function tableRowsForExportTables(primaryTable, tables, scope) {
@@ -658,48 +778,38 @@ function notifyTableExportError(error) {
     window.alert?.(financeTranslate("Could not load every table page for export."));
 }
 
-async function exportTableCsv(table, filenameBase) {
+async function exportTableCsv(table, filenameBase, button = null) {
+    if (cancelTableExportFromButton(table, button)) {
+        return;
+    }
+
     const scope = await tableExportScope(table);
     if (!scope) return;
 
+    const operation = beginTableExportOperation(table, button);
     try {
-        const exportTables = await tableExportTablesForScope(table, scope);
+        const exportTables = await tableExportTablesForScope(table, scope, {
+            operation,
+            onProgress: ({ currentPage, totalPages }) => {
+                updateTableExportProgress(operation, currentPage, totalPages);
+            },
+        });
+        throwIfTableExportCancelled(operation);
         const csv = tableMatrix(table, scope, exportTables)
             .map((row) => row.map(csvEscape).join(","))
             .join("\r\n");
 
         downloadBlob(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), `${filenameBase}.csv`);
     } catch (error) {
-        notifyTableExportError(error);
+        if (!tableExportIsAbortError(error)) {
+            notifyTableExportError(error);
+        }
+    } finally {
+        finishTableExportOperation(operation);
     }
 }
 
-function xmlEscape(value) {
-    return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
-
-function excelSheetName(value) {
-    const cleaned = normalizeExportText(value).replace(/[:\\/?*[\]]/g, " ");
-    return cleaned.slice(0, 31) || "Export";
-}
-
-const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const XLSX_MONEY_FORMAT = '#,##0.00 [$$-C0C];-#,##0.00 [$$-C0C];"-" [$$-C0C]';
-const XLSX_NUMBER_FORMAT = "#,##0.00";
-const XLSX_MAX_TABLE_HEADER_LENGTH = 255;
-const XLSX_TABLE_NAME = "Table1";
 const ACTION_HEADER_RE = /^actions?$/i;
-const MONEY_HEADER_RE =
-    /\b(amount|spending|income|balance|debit|credit|payment|paid|current|prior|change|delta|expected|actual|budget)\b|\$/i;
-const PERCENT_HEADER_RE = /\b(percent|percentage|share|rate)\b|%/i;
-const CURRENCY_RE = /[$\u20ac\u00a3\u00a5]/;
-const PERCENT_RE = /%/;
-const STRICT_NUMBER_RE = /^[+-]?(?:(?:\d+)|(?:\d{1,3}(?:[ ,]\d{3})+))(?:[.,]\d+)?(?:e[+-]?\d+)?$/i;
-const NUMBER_TOKEN_RE = /[+-]?\(?\d[\d ,.]*\)?/;
 const EXPORT_PART_SELECTOR =
     "[data-export-part], [data-export-label], [data-export-header], [data-export-text], [data-export-value], [data-export-type]";
 
@@ -713,25 +823,6 @@ function rowCellsExpanded(row) {
         }
     });
     return cells;
-}
-
-function uniqueExcelHeaders(values) {
-    const used = new Map();
-
-    return values.map((value, index) => {
-        const rawBase = normalizeExportText(value) || `Column${index + 1}`;
-        const base = rawBase.slice(0, XLSX_MAX_TABLE_HEADER_LENGTH);
-        const key = base.toLocaleLowerCase();
-        const count = used.get(key) || 0;
-        used.set(key, count + 1);
-
-        if (!count) {
-            return base;
-        }
-
-        const suffix = String(count + 1);
-        return `${base.slice(0, XLSX_MAX_TABLE_HEADER_LENGTH - suffix.length)}${suffix}`;
-    });
 }
 
 function cellExportParts(cell) {
@@ -861,10 +952,8 @@ function tableHeaderNames(table, columnPlan) {
     }
 
     const cells = rowCellsExpanded(headerRow);
-    return uniqueExcelHeaders(
-        columnPlan.map((column) =>
-            exportHeaderName(cells[column.sourceIndex] ? cellExportText(cells[column.sourceIndex]) : "", column)
-        )
+    return columnPlan.map((column) =>
+        exportHeaderName(cells[column.sourceIndex] ? cellExportText(cells[column.sourceIndex]) : "", column)
     );
 }
 
@@ -900,487 +989,56 @@ function rowExportMetadata(row, columnPlan, sortTypes) {
     });
 }
 
-function isBlankExcelValue(value) {
-    return normalizeExportText(value) === "";
-}
-
-function normalizeNumberToken(value) {
-    const raw = normalizeExportText(value)
-        .replace(/\u00a0/g, " ")
-        .replace(/[\u2212\u2013\u2014]/g, "-");
-    if (!raw) return null;
-
-    const negativeParentheses = /^\(.*\)$/.test(raw);
-    let cleaned = raw.replace(/[()]/g, "").replace(/[^\d,.\-+eE]/g, "");
-    if (!cleaned || cleaned === "-" || cleaned === "+") return null;
-
-    const commaCount = (cleaned.match(/,/g) || []).length;
-    const dotCount = (cleaned.match(/\./g) || []).length;
-    if (commaCount && dotCount) {
-        cleaned = cleaned.replace(/,/g, "");
-    } else if (commaCount === 1 && dotCount === 0) {
-        cleaned = cleaned.replace(",", ".");
-    } else if (commaCount > 1 && dotCount === 0) {
-        cleaned = cleaned.replace(/,/g, "");
-    }
-
-    const parsed = Number(cleaned);
-    if (!Number.isFinite(parsed)) return null;
-    return negativeParentheses ? -Math.abs(parsed) : parsed;
-}
-
-function parseWholeNumberText(value) {
-    const text = normalizeExportText(value);
-    if (!STRICT_NUMBER_RE.test(text.replace(/\u00a0/g, " "))) {
-        return null;
-    }
-    return normalizeNumberToken(text);
-}
-
-function parseFirstNumberText(value) {
-    const match = normalizeExportText(value).match(NUMBER_TOKEN_RE);
-    return match ? normalizeNumberToken(match[0]) : null;
-}
-
-function parsedExcelValue(cell, headerName, sortType) {
-    const explicitValue = normalizeExportText(cell.explicitValue);
-    const text = normalizeExportText(cell.text);
-    const source = explicitValue || text;
-
-    if (isBlankExcelValue(source)) {
-        return { kind: "blank", value: null };
-    }
-
-    const explicitKind = cell.explicitType;
-    const looksPercent = explicitKind === "percent" || PERCENT_RE.test(text) || PERCENT_HEADER_RE.test(headerName);
-    const looksMoney = explicitKind === "money" || CURRENCY_RE.test(text) || MONEY_HEADER_RE.test(headerName);
-
-    if (explicitValue) {
-        const explicitNumber = normalizeNumberToken(explicitValue);
-        if (explicitNumber !== null) {
-            return {
-                kind: explicitKind || (looksPercent ? "percent" : looksMoney ? "money" : "number"),
-                value: looksPercent && PERCENT_RE.test(explicitValue) ? explicitNumber / 100 : explicitNumber,
-            };
-        }
-    }
-
-    if (looksPercent) {
-        const percentNumber = parseFirstNumberText(text);
-        if (percentNumber !== null && PERCENT_RE.test(text)) {
-            return { kind: "percent", value: percentNumber / 100 };
-        }
-    }
-
-    if (looksMoney) {
-        const moneyNumber = CURRENCY_RE.test(text) ? parseFirstNumberText(text) : parseWholeNumberText(text);
-        if (moneyNumber !== null) {
-            return { kind: "money", value: moneyNumber };
-        }
-    }
-
-    const strictNumber = sortType === "number" ? parseFirstNumberText(text) : parseWholeNumberText(text);
-    if (strictNumber !== null) {
-        return { kind: "number", value: strictNumber };
-    }
-
-    return { kind: "string", value: text };
-}
-
-function analyzeExcelColumns(headers, rows, parsedRows, sortTypes) {
-    return headers.map((header, columnIndex) => {
-        const parsedCells = parsedRows.map((row) => row[columnIndex]);
-        const nonBlankCells = parsedCells.filter((cell) => cell.kind !== "blank");
-        const numeric = nonBlankCells.length > 0 && nonBlankCells.every((cell) => cell.kind !== "string");
-        const hasMoneyCells = nonBlankCells.some((cell) => cell.kind === "money");
-        const hasPercentCells = nonBlankCells.some((cell) => cell.kind === "percent");
-        const percent = numeric && !hasMoneyCells && (hasPercentCells || PERCENT_HEADER_RE.test(header));
-        const money = numeric && !percent && (hasMoneyCells || MONEY_HEADER_RE.test(header));
-        const type = money ? "money" : percent ? "percent" : numeric ? "number" : "string";
-        const sortType = sortTypes[columnIndex] || "";
-        const widthSamples = [
-            header,
-            ...rows.map((row) => row[columnIndex]?.text || row[columnIndex]?.explicitValue || ""),
-        ];
-        const maxLength = Math.max(8, ...widthSamples.map((value) => normalizeExportText(value).length));
-
-        return {
-            type,
-            sortType,
-            total: numeric,
-            width: Math.min(60, Math.max(8, maxLength + 2)),
-        };
-    });
-}
-
-function buildExcelTableModel(table, scope, exportTables = [table]) {
+function buildTableExportWorkbookSource(table, scope, exportTables = [table]) {
     const columnPlan = tableExportColumnPlan(table, scope, exportTables);
-    const headers = tableHeaderNames(table, columnPlan);
     const sortTypes = tableColumnSortTypes(table);
-    const exportSortTypes = columnPlan.map((column) => sortTypes.get(column.sourceIndex) || "");
-    const rows = tableBodyRowsForExcel(table, scope, exportTables)
-        .map((row) => rowExportMetadata(row, columnPlan, sortTypes))
-        .filter((row) => row.some((cell) => !isBlankExcelValue(cell.text) || !isBlankExcelValue(cell.explicitValue)));
-    const parsedRows = rows.map((row) =>
-        row.map((cell, columnIndex) => parsedExcelValue(cell, headers[columnIndex], exportSortTypes[columnIndex]))
-    );
-    const columns = analyzeExcelColumns(headers, rows, parsedRows, exportSortTypes);
-    const hasTotalRow = columns.some((column) => column.total);
-    const labelColumnIndex = columns.findIndex((column) => !column.total);
 
     return {
-        columns,
-        hasTotalRow,
-        headers,
-        labelColumnIndex,
-        parsedRows,
-        rows,
+        headers: tableHeaderNames(table, columnPlan),
+        rows: tableBodyRowsForExcel(table, scope, exportTables).map((row) =>
+            rowExportMetadata(row, columnPlan, sortTypes)
+        ),
+        sortTypes: columnPlan.map((column) => sortTypes.get(column.sourceIndex) || ""),
+        totalLabel: financeTranslate("Total"),
     };
 }
 
-function excelColumnName(index) {
-    let name = "";
-    let value = index + 1;
-    while (value > 0) {
-        const remainder = (value - 1) % 26;
-        name = String.fromCharCode(65 + remainder) + name;
-        value = Math.floor((value - 1) / 26);
-    }
-    return name;
-}
-
-function excelCellReference(columnIndex, rowIndex) {
-    return `${excelColumnName(columnIndex)}${rowIndex}`;
-}
-
-function excelRange(columnCount, rowCount) {
-    return `A1:${excelColumnName(columnCount - 1)}${rowCount}`;
-}
-
-function excelStyleIdForType(type) {
-    if (type === "money") return 1;
-    if (type === "percent") return 2;
-    if (type === "number") return 3;
-    return 0;
-}
-
-function excelNumberText(value) {
-    if (!Number.isFinite(value)) {
-        return "0";
-    }
-    return String(Math.round((value + Number.EPSILON) * 1000000000000) / 1000000000000);
-}
-
-function excelStringCell(reference, value) {
-    const text = xmlEscape(value);
-    return `<c r="${reference}" t="inlineStr"><is><t>${text}</t></is></c>`;
-}
-
-function excelNumberCell(reference, value, styleId, formula = "") {
-    const style = styleId ? ` s="${styleId}"` : "";
-    const formulaXml = formula ? `<f>${xmlEscape(formula)}</f>` : "";
-    return `<c r="${reference}"${style}>${formulaXml}<v>${excelNumberText(value)}</v></c>`;
-}
-
-function excelWorksheetRows(model) {
-    const rows = [
-        `<row r="1" spans="1:${model.headers.length}">${model.headers
-            .map((header, columnIndex) => excelStringCell(excelCellReference(columnIndex, 1), header))
-            .join("")}</row>`,
-    ];
-
-    model.rows.forEach((row, rowIndex) => {
-        const excelRowIndex = rowIndex + 2;
-        const cells = row
-            .map((cell, columnIndex) => {
-                const reference = excelCellReference(columnIndex, excelRowIndex);
-                const parsed = model.parsedRows[rowIndex][columnIndex];
-                const column = model.columns[columnIndex];
-
-                if (parsed.kind === "blank") {
-                    return "";
-                }
-                if (column.total && parsed.kind !== "string") {
-                    return excelNumberCell(reference, parsed.value, excelStyleIdForType(column.type));
-                }
-                return excelStringCell(reference, cell.text);
-            })
-            .join("");
-        rows.push(`<row r="${excelRowIndex}" spans="1:${model.headers.length}">${cells}</row>`);
-    });
-
-    if (model.hasTotalRow) {
-        const totalRowIndex = model.rows.length + 2;
-        const firstDataRow = 2;
-        const lastDataRow = model.rows.length + 1;
-        const totalLabel = typeof financeTranslate === "function" ? financeTranslate("Total") : "Total";
-        const cells = model.columns
-            .map((column, columnIndex) => {
-                const reference = excelCellReference(columnIndex, totalRowIndex);
-                if (column.total) {
-                    const sum = model.parsedRows.reduce((total, row) => total + (row[columnIndex].value || 0), 0);
-                    const columnName = excelColumnName(columnIndex);
-                    const formula = `SUBTOTAL(109,${columnName}${firstDataRow}:${columnName}${lastDataRow})`;
-                    return excelNumberCell(reference, sum, excelStyleIdForType(column.type), formula);
-                }
-                if (columnIndex === model.labelColumnIndex) {
-                    return excelStringCell(reference, totalLabel);
-                }
-                return "";
-            })
-            .join("");
-        rows.push(`<row r="${totalRowIndex}" spans="1:${model.headers.length}">${cells}</row>`);
+function createTableExportXlsxBlob(source, sheetName) {
+    const writer = window.financeXlsxWriter;
+    if (!writer?.createXlsxBlob) {
+        throw new Error("XLSX export writer is not loaded.");
     }
 
-    return rows.join("");
+    return writer.createXlsxBlob(source, sheetName);
 }
 
-function excelWorksheetXml(model) {
-    const dataEndRow = model.rows.length + 1;
-    const totalRowCount = model.hasTotalRow ? 1 : 0;
-    const rowCount = dataEndRow + totalRowCount;
-    const dimension = excelRange(model.headers.length, rowCount);
-    const columns = model.columns
-        .map(
-            (column, index) =>
-                `<col min="${index + 1}" max="${index + 1}" width="${column.width}" bestFit="1" customWidth="1"/>`
-        )
-        .join("");
-
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-    <dimension ref="${dimension}"/>
-    <sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>
-    <sheetFormatPr defaultRowHeight="15"/>
-    <cols>${columns}</cols>
-    <sheetData>${excelWorksheetRows(model)}</sheetData>
-    <tableParts count="1"><tablePart r:id="rId1"/></tableParts>
-</worksheet>`;
-}
-
-function excelTableXml(model) {
-    const dataEndRow = model.rows.length + 1;
-    const rowCount = dataEndRow + (model.hasTotalRow ? 1 : 0);
-    const tableRef = excelRange(model.headers.length, rowCount);
-    const autoFilterRef = excelRange(model.headers.length, dataEndRow);
-    const totalAttrs = model.hasTotalRow ? 'totalsRowCount="1"' : 'totalsRowShown="0"';
-    const totalLabel = typeof financeTranslate === "function" ? financeTranslate("Total") : "Total";
-    const columns = model.headers
-        .map((header, index) => {
-            const column = model.columns[index];
-            const attrs = [`id="${index + 1}"`, `name="${xmlEscape(header)}"`];
-            if (model.hasTotalRow && column.total) {
-                attrs.push('totalsRowFunction="sum"');
-            } else if (model.hasTotalRow && index === model.labelColumnIndex) {
-                attrs.push(`totalsRowLabel="${xmlEscape(totalLabel)}"`);
-            }
-            return `<tableColumn ${attrs.join(" ")}/>`;
-        })
-        .join("");
-
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="${XLSX_TABLE_NAME}" displayName="${XLSX_TABLE_NAME}" ref="${tableRef}" ${totalAttrs}>
-    <autoFilter ref="${autoFilterRef}"/>
-    <tableColumns count="${model.headers.length}">${columns}</tableColumns>
-    <tableStyleInfo name="TableStyleLight1" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>
-</table>`;
-}
-
-function excelStylesXml() {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-    <numFmts count="2">
-        <numFmt numFmtId="164" formatCode="${xmlEscape(XLSX_MONEY_FORMAT)}"/>
-        <numFmt numFmtId="165" formatCode="${xmlEscape(XLSX_NUMBER_FORMAT)}"/>
-    </numFmts>
-    <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
-    <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
-    <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
-    <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-    <cellXfs count="4">
-        <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-        <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
-        <xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
-        <xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
-    </cellXfs>
-    <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
-    <dxfs count="0"/>
-    <tableStyles count="1" defaultTableStyle="TableStyleLight1" defaultPivotStyle="PivotStyleLight16"/>
-</styleSheet>`;
-}
-
-function excelWorkbookXml(sheetName) {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-    <bookViews><workbookView/></bookViews>
-    <sheets><sheet name="${xmlEscape(excelSheetName(sheetName))}" sheetId="1" r:id="rId1"/></sheets>
-</workbook>`;
-}
-
-function excelWorkbookRelationshipsXml() {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-    <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`;
-}
-
-function excelWorksheetRelationshipsXml() {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/>
-</Relationships>`;
-}
-
-function excelPackageRelationshipsXml() {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>`;
-}
-
-function excelContentTypesXml() {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-    <Default Extension="xml" ContentType="application/xml"/>
-    <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-    <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-    <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-    <Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>
-</Types>`;
-}
-
-function xlsxPackageFiles(model, sheetName) {
-    return [
-        { name: "[Content_Types].xml", content: excelContentTypesXml() },
-        { name: "_rels/.rels", content: excelPackageRelationshipsXml() },
-        { name: "xl/workbook.xml", content: excelWorkbookXml(sheetName) },
-        { name: "xl/_rels/workbook.xml.rels", content: excelWorkbookRelationshipsXml() },
-        { name: "xl/worksheets/sheet1.xml", content: excelWorksheetXml(model) },
-        { name: "xl/worksheets/_rels/sheet1.xml.rels", content: excelWorksheetRelationshipsXml() },
-        { name: "xl/tables/table1.xml", content: excelTableXml(model) },
-        { name: "xl/styles.xml", content: excelStylesXml() },
-    ];
-}
-
-const CRC32_TABLE = Array.from({ length: 256 }, (_value, index) => {
-    let crc = index;
-    for (let bit = 0; bit < 8; bit += 1) {
-        crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+async function exportTableExcel(table, filenameBase, sheetName, button = null) {
+    if (cancelTableExportFromButton(table, button)) {
+        return;
     }
-    return crc >>> 0;
-});
 
-function crc32(bytes) {
-    let crc = 0xffffffff;
-    bytes.forEach((byte) => {
-        crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
-    });
-    return (crc ^ 0xffffffff) >>> 0;
-}
-
-function writeUint16(target, offset, value) {
-    target[offset] = value & 0xff;
-    target[offset + 1] = (value >>> 8) & 0xff;
-}
-
-function writeUint32(target, offset, value) {
-    target[offset] = value & 0xff;
-    target[offset + 1] = (value >>> 8) & 0xff;
-    target[offset + 2] = (value >>> 16) & 0xff;
-    target[offset + 3] = (value >>> 24) & 0xff;
-}
-
-function zipDateTime(date = new Date()) {
-    const year = Math.min(2107, Math.max(1980, date.getFullYear()));
-    return {
-        date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
-        time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
-    };
-}
-
-function createZipBlob(files, mimeType) {
-    const encoder = new TextEncoder();
-    const timestamp = zipDateTime();
-    const localParts = [];
-    const centralParts = [];
-    let offset = 0;
-
-    files.forEach((file) => {
-        const nameBytes = encoder.encode(file.name);
-        const contentBytes = typeof file.content === "string" ? encoder.encode(file.content) : file.content;
-        const checksum = crc32(contentBytes);
-        const localHeader = new Uint8Array(30 + nameBytes.length);
-        writeUint32(localHeader, 0, 0x04034b50);
-        writeUint16(localHeader, 4, 20);
-        writeUint16(localHeader, 6, 0x0800);
-        writeUint16(localHeader, 8, 0);
-        writeUint16(localHeader, 10, timestamp.time);
-        writeUint16(localHeader, 12, timestamp.date);
-        writeUint32(localHeader, 14, checksum);
-        writeUint32(localHeader, 18, contentBytes.length);
-        writeUint32(localHeader, 22, contentBytes.length);
-        writeUint16(localHeader, 26, nameBytes.length);
-        writeUint16(localHeader, 28, 0);
-        localHeader.set(nameBytes, 30);
-        localParts.push(localHeader, contentBytes);
-
-        const centralHeader = new Uint8Array(46 + nameBytes.length);
-        writeUint32(centralHeader, 0, 0x02014b50);
-        writeUint16(centralHeader, 4, 20);
-        writeUint16(centralHeader, 6, 20);
-        writeUint16(centralHeader, 8, 0x0800);
-        writeUint16(centralHeader, 10, 0);
-        writeUint16(centralHeader, 12, timestamp.time);
-        writeUint16(centralHeader, 14, timestamp.date);
-        writeUint32(centralHeader, 16, checksum);
-        writeUint32(centralHeader, 20, contentBytes.length);
-        writeUint32(centralHeader, 24, contentBytes.length);
-        writeUint16(centralHeader, 28, nameBytes.length);
-        writeUint16(centralHeader, 30, 0);
-        writeUint16(centralHeader, 32, 0);
-        writeUint16(centralHeader, 34, 0);
-        writeUint16(centralHeader, 36, 0);
-        writeUint32(centralHeader, 38, 0);
-        writeUint32(centralHeader, 42, offset);
-        centralHeader.set(nameBytes, 46);
-        centralParts.push(centralHeader);
-
-        offset += localHeader.length + contentBytes.length;
-    });
-
-    const centralDirectoryOffset = offset;
-    const centralDirectorySize = centralParts.reduce((total, part) => total + part.length, 0);
-    const endRecord = new Uint8Array(22);
-    writeUint32(endRecord, 0, 0x06054b50);
-    writeUint16(endRecord, 4, 0);
-    writeUint16(endRecord, 6, 0);
-    writeUint16(endRecord, 8, files.length);
-    writeUint16(endRecord, 10, files.length);
-    writeUint32(endRecord, 12, centralDirectorySize);
-    writeUint32(endRecord, 16, centralDirectoryOffset);
-    writeUint16(endRecord, 20, 0);
-
-    return new Blob([...localParts, ...centralParts, endRecord], { type: mimeType });
-}
-
-function createXlsxBlob(model, sheetName) {
-    return createZipBlob(xlsxPackageFiles(model, sheetName), XLSX_MIME_TYPE);
-}
-
-async function exportTableExcel(table, filenameBase, sheetName) {
     const scope = await tableExportScope(table);
     if (!scope) return;
 
+    const operation = beginTableExportOperation(table, button);
     try {
-        const exportTables = await tableExportTablesForScope(table, scope);
+        const exportTables = await tableExportTablesForScope(table, scope, {
+            operation,
+            onProgress: ({ currentPage, totalPages }) => {
+                updateTableExportProgress(operation, currentPage, totalPages);
+            },
+        });
+        throwIfTableExportCancelled(operation);
         downloadBlob(
-            createXlsxBlob(buildExcelTableModel(table, scope, exportTables), sheetName),
+            createTableExportXlsxBlob(buildTableExportWorkbookSource(table, scope, exportTables), sheetName),
             `${filenameBase}.xlsx`
         );
     } catch (error) {
-        notifyTableExportError(error);
+        if (!tableExportIsAbortError(error)) {
+            notifyTableExportError(error);
+        }
+    } finally {
+        finishTableExportOperation(operation);
     }
 }
 
@@ -1430,11 +1088,13 @@ function setupTableExports(root = document) {
         toolbar.classList.add("table-export-toolbar");
 
         toolbar.appendChild(
-            createExportButton(financeTranslate("CSV"), "download", () => exportTableCsv(table, filenameBase))
+            createExportButton(financeTranslate("CSV"), "download", (event) =>
+                exportTableCsv(table, filenameBase, event.currentTarget)
+            )
         );
         toolbar.appendChild(
-            createExportButton(financeTranslate("Excel"), "download", () =>
-                exportTableExcel(table, filenameBase, title)
+            createExportButton(financeTranslate("Excel"), "download", (event) =>
+                exportTableExcel(table, filenameBase, title, event.currentTarget)
             )
         );
         toolbar.appendChild(createExpandButton(title, () => expandTable(table, title)));

@@ -65,7 +65,11 @@ def test_reimbursement_match_candidates_must_precede_reimbursement_date():
     )
 
     candidates = view_model["reimbursement_match_items"][0]["match_candidates"]
+    modal_candidates = view_model["reimbursement_match_modal_items"][0]["candidates"]
     assert [row["id"] for row in candidates] == [prior_expense["id"]]
+    assert [row["id"] for row in modal_candidates] == [prior_expense["id"]]
+    assert modal_candidates[0]["date_label"] == "09-May-2026"
+    assert modal_candidates[0]["default_amount"] == "100.00"
 
 
 def test_expense_match_candidates_must_follow_expense_date():
@@ -83,7 +87,11 @@ def test_expense_match_candidates_must_follow_expense_date():
     )
 
     candidates = view_model["expense_detail_rows"][0]["reimbursement_candidates"]
+    modal_candidates = view_model["expense_detail_modal_items"][0]["reimbursement_candidates"]
     assert [row["id"] for row in candidates] == [next_reimbursement["id"], later_reimbursement["id"]]
+    assert [row["id"] for row in modal_candidates] == [next_reimbursement["id"], later_reimbursement["id"]]
+    assert modal_candidates[0]["date_label"] == "11-May-2026"
+    assert modal_candidates[0]["default_amount"] == "100.00"
 
 
 def test_allocation_rows_include_update_maximums():
@@ -123,3 +131,52 @@ def test_allocation_rows_include_update_maximums():
 
     assert view_model["allocations"][0]["max_amount"] == Decimal("600.00")
     assert view_model["allocations"][1]["max_amount"] == Decimal("700.00")
+
+
+def test_expense_detail_modal_payload_includes_matches_and_actions_state():
+    """Verify expense detail modal payloads carry matched rows and button state."""
+    expense = expense_row(1, tx_date=date(2026, 5, 10))
+    expense["amount"] = Decimal("1000.00")
+    expense["allocated"] = Decimal("700.00")
+    allocations = [
+        {
+            "id": 1,
+            "amount": Decimal("300.00"),
+            "created_at": "2026-05-01T00:00:00Z",
+            "reimbursement_transaction_id": 10,
+            "expense_transaction_id": expense["id"],
+            "reimbursement_date": date(2026, 5, 15),
+            "reimbursement_description": "Employer reimbursement",
+            "reimbursement_amount": Decimal("-900.00"),
+            "expense_date": expense["tx_date"],
+            "expense_description": expense["description"],
+            "expense_amount": expense["amount"],
+            "expense_category": expense["category"],
+        },
+        {
+            "id": 2,
+            "amount": Decimal("400.00"),
+            "created_at": "2026-05-02T00:00:00Z",
+            "reimbursement_transaction_id": 11,
+            "expense_transaction_id": expense["id"],
+            "reimbursement_date": date(2026, 5, 16),
+            "reimbursement_description": "Second reimbursement",
+            "reimbursement_amount": Decimal("-700.00"),
+            "expense_date": expense["tx_date"],
+            "expense_description": expense["description"],
+            "expense_amount": expense["amount"],
+            "expense_category": expense["category"],
+        },
+    ]
+
+    view_model = build_reimbursements_view_model([], [expense], allocations)
+    payload = view_model["expense_detail_modal_items"][0]
+
+    assert payload["id"] == expense["id"]
+    assert payload["has_reimbursable_tag"] is True
+    assert payload["status_label"] == "Partially reimbursed"
+    assert payload["pending_remaining"] == "300.00"
+    assert [row["description"] for row in payload["matched_reimbursements"]] == [
+        "Employer reimbursement",
+        "Second reimbursement",
+    ]

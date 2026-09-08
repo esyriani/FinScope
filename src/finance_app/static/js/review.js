@@ -53,6 +53,10 @@ function setupReviewTransactionSelectors(root = document) {
     });
 }
 
+function reviewTranslate(message, variables) {
+    return window.financeTranslate ? window.financeTranslate(message, variables) : message;
+}
+
 const reviewTerminalJobStatuses = new Set(["completed", "failed", "cancelled"]);
 const reviewTrackedJobStatusUrls = new Set();
 
@@ -71,7 +75,7 @@ async function fetchReviewJobStatus(statusUrl) {
     });
 
     if (!response.ok) {
-        throw new Error("Review job status could not be loaded.");
+        throw new Error(reviewTranslate("Review job status could not be loaded."));
     }
 
     return response.json();

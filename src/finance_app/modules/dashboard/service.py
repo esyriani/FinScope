@@ -7,6 +7,14 @@ from typing import Any
 from finance_app.core.analytics import REPORT_MEASURE_INCOME, build_cash_flow_summary, build_data_quality
 from finance_app.core.config import settings
 from finance_app.core.constants import UNKNOWN_CATEGORY
+from finance_app.core.filter_summary import (
+    filter_summary_item,
+    merchant_filter_input_label,
+    period_summary_value,
+    selected_account_label,
+    selected_option_label,
+    value_or_default,
+)
 from finance_app.core.money import rounded_money_float
 from finance_app.core.periods import (
     DATE_PERIOD_OPTIONS,
@@ -325,20 +333,79 @@ def dashboard_period_context(dashboard_request: DashboardRequest) -> dict[str, A
 
 def dashboard_filter_context(dashboard_request: DashboardRequest, query_data: DashboardQueryData) -> dict[str, Any]:
     """Return filter and quick-view context values for the dashboard template."""
+    account_filter_visible = len(query_data.account_options) > 1
+    classification_scope_options = build_classification_scope_options(
+        dashboard_request.quick_view,
+        query_data.quick_view_counts,
+    )
+    merchant_filter_label = merchant_filter_input_label(
+        dashboard_request.selected_merchant_id,
+        dashboard_request.merchant_query,
+        query_data.selected_merchant_label,
+    )
     return {
         "account_options": query_data.account_options,
+        "account_filter_visible": account_filter_visible,
         "selected_account_id": dashboard_request.selected_account_id,
         "selected_merchant_id": dashboard_request.selected_merchant_id,
         "selected_merchant_label": query_data.selected_merchant_label,
+        "dashboard_merchant_filter_label": merchant_filter_label,
         "merchant_suggestion_limit": query_data.merchant_suggestion_limit,
         "merchant_query": dashboard_request.merchant_query,
         "merchant_search": dashboard_request.merchant_search,
         "quick_view": dashboard_request.quick_view,
-        "classification_scope_options": build_classification_scope_options(
-            dashboard_request.quick_view,
-            query_data.quick_view_counts,
+        "classification_scope_options": classification_scope_options,
+        "dashboard_filter_summary_items": build_dashboard_filter_summary_items(
+            dashboard_request,
+            query_data,
+            classification_scope_options,
+            account_filter_visible,
+            merchant_filter_label,
         ),
     }
+
+
+def build_dashboard_filter_summary_items(
+    dashboard_request: DashboardRequest,
+    query_data: DashboardQueryData,
+    classification_scope_options: list[dict[str, Any]],
+    account_filter_visible: bool,
+    merchant_filter_label: str,
+) -> list[dict[str, str]]:
+    """Return selected dashboard filters as template-ready summary items."""
+    items = [
+        filter_summary_item(
+            "Period",
+            period_summary_value(
+                get_period_label(
+                    dashboard_request.period,
+                    dashboard_request.date_from,
+                    dashboard_request.date_to,
+                ),
+                dashboard_request.period,
+                PERIOD_CUSTOM,
+                dashboard_request.date_from,
+                dashboard_request.date_to,
+            ),
+        ),
+    ]
+    if account_filter_visible:
+        items.append(
+            filter_summary_item(
+                "Account",
+                selected_account_label(query_data.account_options, dashboard_request.selected_account_id),
+            )
+        )
+    items.extend(
+        [
+            filter_summary_item("Merchant", value_or_default(merchant_filter_label)),
+            filter_summary_item(
+                "Scope",
+                selected_option_label(classification_scope_options, dashboard_request.quick_view, "All"),
+            ),
+        ]
+    )
+    return items
 
 
 def selected_merchant_option_name(conn: Any, selected_merchant_id: int | None, merchant_query: str = "") -> str:

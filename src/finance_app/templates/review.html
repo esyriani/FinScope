@@ -1,5 +1,5 @@
 {% set page_stylesheets = [
-    "css/home-dashboard.css",
+    "css/analytics-components.css",
     "css/tables.css",
     "css/rules-list.css",
     "css/rule-forms.css",
@@ -46,7 +46,7 @@
         <h2 class="mb-1">{{ _("Bulk category review") }}</h2>
         <p class="text-muted mb-0">{{ _("Categorize grouped transactions and optionally save rules for future matches.") }}</p>
     </div>
-    <div class="home-actions">
+    <div class="page-actions">
         <a class="btn btn-outline-secondary" href="{{ url_for('transactions.transactions', review='needs_review', period='all') }}"><i class="bi bi-receipt" aria-hidden="true"></i>{{ _("Transactions") }}</a>
         <a class="btn btn-outline-secondary" href="{{ url_for('jobs.jobs') }}"><i class="bi bi-activity" aria-hidden="true"></i>{{ _("Processing") }}</a>
     </div>

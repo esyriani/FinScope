@@ -145,17 +145,26 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_c
     assert_has_element(
         response,
         "tr",
-        attrs={"data-row-edit-target": f"#match-reimbursement-{reimbursement_id}-modal"},
+        attrs={
+            "data-row-edit-target": "#reimbursement-match-modal",
+            "data-reimbursement-match-id": str(reimbursement_id),
+        },
     )
     assert_has_element(
         response,
         "tr",
         attrs={
             "id": f"action-expense-{expense_id}",
-            "data-row-edit-target": f"#reimbursement-expense-{expense_id}-modal",
+            "data-row-edit-target": "#reimbursement-expense-modal",
+            "data-reimbursement-expense-id": str(expense_id),
         },
     )
     assert_has_element(
+        response,
+        "div",
+        attrs={"id": "reimbursement-expense-modal", "class": "reimbursement-expense-modal"},
+    )
+    assert_no_element(
         response,
         "div",
         attrs={"id": f"reimbursement-expense-{expense_id}-modal", "class": "reimbursement-expense-modal"},
@@ -171,7 +180,11 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_c
     assert_has_element(
         response,
         "button",
-        attrs={"class": "btn-outline-secondary", "data-bs-target": f"#match-reimbursement-{reimbursement_id}-modal"},
+        attrs={
+            "class": "btn-outline-secondary",
+            "data-bs-target": "#reimbursement-match-modal",
+            "data-reimbursement-match-id": str(reimbursement_id),
+        },
         text="Match",
     )
     assert_visible_text(
@@ -186,7 +199,6 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_c
         "Candidate reimbursements",
         "Matched reimbursements",
         "No reimbursements are matched to this expense.",
-        "Remove reimbursable tag",
         "Employer reimbursement",
         "Conference expense",
         "Unmatched",
@@ -222,7 +234,10 @@ def test_reimbursements_action_expenses_include_only_tagged_active_pending_rows(
     assert_has_element(
         response,
         "tr",
-        attrs={"data-row-edit-target": f"#reimbursement-expense-{untagged_expense_id}-modal"},
+        attrs={
+            "data-row-edit-target": "#reimbursement-expense-modal",
+            "data-reimbursement-expense-id": str(untagged_expense_id),
+        },
     )
     assert_visible_text(response, "Tagged work hotel", "Matched but untagged hotel", "Completed work hotel")
 
@@ -237,7 +252,12 @@ def test_reimbursement_match_dialog_only_lists_prior_expense_candidates(csrf_cli
     response = csrf_client.get("/reimbursements")
 
     assert response.status_code == 200
-    assert_has_element(
+    body = response.get_data(as_text=True)
+
+    assert_has_element(response, "div", attrs={"id": "reimbursement-match-modal"})
+    assert f'"id": {reimbursement_id}' in body
+    assert f'"id": {prior_expense_id}' in body
+    assert_no_element(
         response,
         "input",
         attrs={"id": f"match-{reimbursement_id}-expense-{prior_expense_id}"},
@@ -276,15 +296,15 @@ def test_expense_detail_dialog_only_lists_later_reimbursement_candidates(csrf_cl
     response = csrf_client.get("/reimbursements")
 
     assert response.status_code == 200
-    assert_has_element(
-        response,
-        "input",
-        attrs={"id": f"expense-{expense_id}-reimbursement-{later_reimbursement_id}"},
-    )
+    body = response.get_data(as_text=True)
+
+    assert_has_element(response, "div", attrs={"id": "reimbursement-expense-modal"})
+    assert f'"id": {expense_id}' in body
+    assert f'"id": {later_reimbursement_id}' in body
     assert_has_element(
         response,
         "div",
-        attrs={"id": f"reimbursement-expense-{expense_id}-modal", "class": "reimbursement-expense-modal"},
+        attrs={"id": "reimbursement-expense-modal", "class": "reimbursement-expense-modal"},
     )
     assert_has_element(
         response,
@@ -400,6 +420,11 @@ def test_reimbursements_expense_modal_lists_multiple_matches(csrf_client, core_c
 
     assert response.status_code == 200
     assert_has_element(
+        response,
+        "div",
+        attrs={"id": "reimbursement-expense-modal", "class": "reimbursement-expense-modal"},
+    )
+    assert_no_element(
         response,
         "div",
         attrs={"id": f"reimbursement-expense-{expense_id}-modal", "class": "reimbursement-expense-modal"},

@@ -1,0 +1,20 @@
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_reports_explorers.html" import report_explorer, report_target_typeahead with context %}
+{% from "_reports_filters.html" import reports_filter_form with context %}
+{% from "_reports_summary_cards.html" import reports_quality_panel with context %}
+
+<div data-reports-page data-reports-entity>
+{% call collapsible_filter_panel("reports-entity-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+{% if transaction_count > 0 %}
+{{ reports_quality_panel() }}
+{{ report_target_typeahead(entity_target_options, entity_explorer_search, entity_open_label, entity_search_placeholder, "reports-entity-open") }}
+{{ report_explorer(entity_explorer_rows, entity_filter_chips, entity_explorer_filter, active_report_section.label, "Report explorer", "reports-entity-explorer-table", entity_index_label_heading) }}
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>

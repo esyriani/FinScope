@@ -135,6 +135,7 @@ def test_rules_route_links_to_rule_audit(owner_client, core_conn):
     assert_no_asset_reference(response, "js/exports.js")
     assert_no_asset_reference(response, "css/exports.css")
     assert_form(response, "/rules/create")
+    assert_has_element(response, "form", attrs={"data-rule-preview-url": "/rules/preview"})
     assert_input(response, name="action", value="apply_all_rules")
     assert_input(response, name="action", value="create_rule")
     assert_visible_text(response, "Preview apply all", "Preview import", "Review impact", "Save rule")

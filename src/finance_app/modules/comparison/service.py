@@ -4,6 +4,7 @@ from datetime import date
 from typing import Any
 
 from finance_app.core.config import settings
+from finance_app.core.filter_summary import merchant_filter_input_label
 from finance_app.core.i18n import month_abbreviation_labels
 from finance_app.core.query import CoreFilters
 from finance_app.database.engine import db_core_transaction
@@ -183,6 +184,11 @@ def build_comparison_context(args: Any) -> dict[str, Any]:
         selected_merchant_id=selected_merchant_id,
         merchant_query=merchant_query,
         selected_merchant_label=selected_merchant_label,
+        comparison_merchant_filter_label=merchant_filter_input_label(
+            selected_merchant_id,
+            merchant_query,
+            selected_merchant_label,
+        ),
         merchant_suggestion_limit=merchant_suggestion_limit,
         selected_comparison_view=selected_comparison_view,
         selected_analysis_mode=selected_analysis_mode,

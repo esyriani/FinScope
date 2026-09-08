@@ -1,7 +1,7 @@
 {% set page_vendor_scripts = ["vendor/echarts/5.6.0/echarts.min.js"] %}
 {% set page_stylesheets = [
     "css/page-tabs.css",
-    "css/home-dashboard.css",
+    "css/analytics-components.css",
     "css/comparison.css",
     "css/tables.css",
     "css/tag-multiselect.css",
@@ -14,6 +14,7 @@
     "js/comparison.js",
     "js/chart-utils.js",
     "js/comparison-charts.js",
+    "js/xlsx-writer.js",
     "js/exports.js"
 ] %}
 {% extends "base.html" %}
@@ -33,9 +34,8 @@
 {% set selected_comparison_view = selected_comparison_view | default("period") %}
 {% set selected_merchant_id = selected_merchant_id | default(none) %}
 {% set merchant_query = merchant_query | default("") %}
-{% set selected_merchant_label = selected_merchant_label | default(merchant_query) %}
 {% set merchant_suggestion_limit = merchant_suggestion_limit | default(5) %}
-{% set comparison_merchant_filter_label = selected_merchant_label if selected_merchant_id else merchant_query %}
+{% set comparison_merchant_filter_label = comparison_merchant_filter_label | default(merchant_query) %}
 {% set selected_analysis_mode = selected_analysis_mode | default("spending") %}
 {% set selected_analysis_mode_option = selected_analysis_mode_option | default({"label": "Spending", "noun": "spending"}) %}
 {% set analysis_mode_options = analysis_mode_options | default([{"value": "spending", "label": "Spending"}]) %}
@@ -188,8 +188,8 @@
     <div class="card-body">
         <section id="comparison-year-charts-block" class="comparison-year-block page-block" aria-labelledby="comparison-year-charts-heading">
             <h3 id="comparison-year-charts-heading" class="visually-hidden">{{ _("Charts") }}</h3>
-            <div class="dashboard-grid mt-3">
-                <section class="chart-card dashboard-wide" data-chart-export-scope data-table-export-scope data-comparison-monthly-visualization data-comparison-monthly-view="line">
+            <div class="analytics-grid mt-3">
+                <section class="chart-card analytics-wide" data-chart-export-scope data-table-export-scope data-comparison-monthly-visualization data-comparison-monthly-view="line">
                     <div class="section-title">
                         <div>
                             <h5 class="card-title mb-1">{{ _("Monthly {analysis} by year", analysis=_(analysis_noun)) }}</h5>
@@ -287,7 +287,7 @@
                     </div>
                 </section>
 
-                <section class="chart-card dashboard-wide" data-chart-export-scope>
+                <section class="chart-card analytics-wide" data-chart-export-scope>
                     <div class="section-title">
                         <div>
                             <h5 class="card-title mb-1">{{ _("Monthly {analysis} distribution", analysis=_(analysis_noun)) }}</h5>

@@ -260,3 +260,16 @@
     color: var(--app-heading);
     font-weight: 700;
 }
+
+@media (max-width: 850px) {
+    .rule-summary > div,
+    .rule-form-row,
+    .rule-keyword-row {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
+
+    .rule-choice-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -149,52 +149,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.insight-carousel {
-    align-items: center;
-    display: grid;
-    gap: 0.75rem;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-}
-
-.insight-carousel-inner {
-    min-width: 0;
-}
-
-.insight-carousel-control {
-    align-items: center;
-    align-self: center;
-    background: var(--app-surface-soft);
-    border: 1px solid var(--app-border);
-    border-radius: 8px;
-    color: var(--app-text);
-    display: grid;
-    height: 2.5rem;
-    justify-content: center;
-    place-items: center;
-    transition:
-        background-color 120ms ease,
-        border-color 120ms ease,
-        color 120ms ease;
-    width: 2.5rem;
-}
-
-.insight-carousel-control:hover,
-.insight-carousel-control:focus {
-    background: var(--app-accent-soft);
-    border-color: var(--app-accent);
-    color: var(--app-heading);
-}
-
-.insight-carousel-control:focus-visible {
-    box-shadow: var(--focus-shadow);
-    outline: none;
-}
-
-.insight-carousel-control .bi {
-    font-size: 1.05rem;
-    line-height: 1;
-}
-
 .recurring-metric-carousel {
     min-width: 0;
 }
@@ -319,7 +273,6 @@
 .calendar-day {
     border-bottom: 1px solid var(--app-border);
     border-right: 1px solid var(--app-border);
-    cursor: pointer;
     min-height: 124px;
     padding: 0.65rem;
     position: relative;
@@ -365,14 +318,37 @@
     font-weight: 750;
 }
 
+.calendar-day-actions {
+    align-items: center;
+    display: flex;
+    gap: 0.35rem;
+}
+
+.calendar-day-action,
 .calendar-day-link {
+    align-items: center;
+    background: transparent;
+    border: 0;
     color: var(--app-muted);
+    display: inline-flex;
     font-size: 0.78rem;
+    line-height: 1;
+    padding: 0.15rem;
     text-decoration: none;
 }
 
+.calendar-day-action:hover,
+.calendar-day-action:focus,
+.calendar-day-link:focus,
 .calendar-day-link:hover {
     color: var(--app-accent-strong);
+}
+
+.calendar-day-action:focus-visible,
+.calendar-day-link:focus-visible {
+    border-radius: 4px;
+    box-shadow: var(--focus-shadow);
+    outline: none;
 }
 
 .calendar-day-summary {
@@ -411,11 +387,6 @@
 .calendar-day-count span::before {
     content: "/";
     margin-right: 0.35rem;
-}
-
-.calendar-day:focus-visible {
-    box-shadow: inset 0 0 0 2px rgba(var(--app-accent-rgb), 0.72);
-    outline: none;
 }
 
 [data-recurring-activity-row] {
@@ -782,6 +753,32 @@
 }
 
 @media (max-width: 1100px) {
+    .calendar-control-row {
+        grid-template-areas:
+            "account"
+            "merchant"
+            "categories"
+            "tags"
+            "actions";
+        grid-template-columns: 1fr;
+    }
+
+    .recurring-control-row {
+        grid-template-areas:
+            "account"
+            "merchant"
+            "categories"
+            "tags"
+            "confidence"
+            "actions";
+        grid-template-columns: 1fr;
+    }
+
+    .calendar-filter-actions,
+    .recurring-filter-actions {
+        justify-content: flex-end;
+    }
+
     .recurring-summary-layout {
         grid-template-columns: 1fr;
     }
@@ -789,5 +786,29 @@
     .recurring-view-toolbar {
         align-items: flex-start;
         flex-direction: column;
+    }
+}
+
+@media (max-width: 850px) {
+    .calendar-month-controls {
+        align-items: stretch;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        justify-content: stretch;
+        width: 100%;
+    }
+
+    .calendar-month-field {
+        grid-column: 1 / -1;
+    }
+
+    .calendar-month-controls .btn {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 576px) {
+    .calendar-month-controls {
+        grid-template-columns: 1fr;
     }
 }

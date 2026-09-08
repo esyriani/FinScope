@@ -248,6 +248,10 @@ function setupRuleTableActions(root = document) {
         return;
     }
 
+    function ruleActionFailureMessage() {
+        return financeTranslate("The rule action could not be completed.");
+    }
+
     function showStatus(message, isError = false) {
         if (!status) {
             return;
@@ -313,11 +317,11 @@ function setupRuleTableActions(root = document) {
             });
             const data = await response.json().catch(() => ({
                 ok: false,
-                message: "The rule action could not be completed.",
+                message: ruleActionFailureMessage(),
             }));
 
             if (!response.ok || data.ok === false) {
-                showStatus(data.message || "The rule action could not be completed.", true);
+                showStatus(data.message || ruleActionFailureMessage(), true);
                 return;
             }
 
@@ -335,9 +339,9 @@ function setupRuleTableActions(root = document) {
                 }
             }
 
-            showStatus(data.message || "Rule updated.");
+            showStatus(data.message || financeTranslate("Rule updated."));
         } catch (_error) {
-            showStatus("The rule action could not be completed.", true);
+            showStatus(ruleActionFailureMessage(), true);
         } finally {
             if (document.body.contains(form)) {
                 buttons.forEach((button) => {

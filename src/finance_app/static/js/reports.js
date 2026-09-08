@@ -119,356 +119,149 @@ function reportsUrlWithExplorerState(href, state, filterParam, searchParam) {
     return url.href;
 }
 
-function reportsUrlWithTaxonomyState(href, state) {
-    return reportsUrlWithExplorerState(href, state, "taxonomy_filter", "taxonomy_search");
+const taxonomyExplorerConfig = {
+    controlSelector: "[data-taxonomy-open-control]",
+    openReadyKey: "taxonomyOpenReady",
+    openInputSelector: "[data-taxonomy-open-input]",
+    openMenuSelector: "[data-taxonomy-open-menu]",
+    openOptionsSelector: "[data-taxonomy-open-options]",
+    openOptionKey: "taxonomyOpenOption",
+    openOptionSelector: "[data-taxonomy-open-option]",
+    noResultsText: "No categories or tags found.",
+    switcherSelector: "[data-taxonomy-target-switcher]",
+    switcherReadyKey: "taxonomySwitcherReady",
+    switcherSearchSelector: "[data-taxonomy-target-search]",
+    switcherOptionSelector: "[data-taxonomy-target-option]",
+    explorerSelector: "[data-taxonomy-explorer]",
+    explorerReadyKey: "taxonomyExplorerReady",
+    explorerBodySelector: "[data-taxonomy-explorer-body]",
+    explorerRowSelector: "[data-taxonomy-explorer-row]",
+    filterSelector: "[data-taxonomy-filter]",
+    filterKey: "taxonomyFilter",
+    linkSelector: "[data-taxonomy-report-link]",
+    searchSelector: "[data-taxonomy-explorer-search]",
+    filterParam: "taxonomy_filter",
+    searchParam: "taxonomy_search",
+    rowMatchesFilter(row, filter) {
+        if (filter === "categories") return row.dataset.kind === "category";
+        if (filter === "tags") return row.dataset.kind === "tag";
+        if (filter === "analytics-categories") return row.dataset.analyticsCategory === "true";
+        if (filter === "has-income") return row.dataset.hasIncome === "true";
+        if (filter === "has-spending") return row.dataset.hasSpending === "true";
+        return true;
+    },
+};
+
+const reportExplorerConfig = {
+    controlSelector: "[data-report-open-control]",
+    openReadyKey: "reportOpenReady",
+    openInputSelector: "[data-report-open-input]",
+    openMenuSelector: "[data-report-open-menu]",
+    openOptionsSelector: "[data-report-open-options]",
+    openOptionKey: "reportOpenOption",
+    openOptionSelector: "[data-report-open-option]",
+    noResultsDatasetKey: "noResultsText",
+    noResultsText: "No report targets found.",
+    openFilterParamDatasetKey: "reportOpenFilterParam",
+    openSearchParamDatasetKey: "reportOpenSearchParam",
+    openSearchSelectorDatasetKey: "reportOpenSearchSelector",
+    switcherSelector: "[data-report-target-switcher]",
+    switcherReadyKey: "reportSwitcherReady",
+    switcherSearchSelector: "[data-report-target-search]",
+    switcherOptionSelector: "[data-report-target-option]",
+    explorerSelector: "[data-report-explorer]",
+    explorerReadyKey: "reportExplorerReady",
+    explorerBodySelector: "[data-report-explorer-body]",
+    explorerRowSelector: "[data-report-explorer-row]",
+    filterSelector: "[data-report-filter]",
+    filterKey: "reportFilter",
+    linkSelector: "[data-report-link]",
+    searchSelector: "[data-report-explorer-search]",
+    searchSelectorDatasetKey: "reportSearchSelector",
+    filterParam: "entity_filter",
+    searchParam: "entity_search",
+    filterParamDatasetKey: "reportFilterParam",
+    searchParamDatasetKey: "reportSearchParam",
+    rowMatchesFilter(row, filter) {
+        if (filter === "has-income") return row.dataset.hasIncome === "true";
+        if (filter === "has-spending") return row.dataset.hasSpending === "true";
+        if (filter === "all") return true;
+        return String(row.dataset.filterTokens || "")
+            .split(/\s+/)
+            .includes(filter);
+    },
+};
+
+function reportsDatasetValue(element, key) {
+    return key ? element?.dataset[key] || "" : "";
 }
 
-function currentTaxonomyExplorerState(root = document) {
-    const explorer = reportsScopedElement(root, "[data-taxonomy-explorer]");
-    const searchInput = reportsScopedElement(root, "[data-taxonomy-explorer-search]");
-    const activeFilter = explorer?.querySelector("[data-taxonomy-filter][aria-pressed='true']");
+const reportsOpenControlCloseEvent = "finance:reports-open-control-close";
+const reportsOpenControlSelector = `${taxonomyExplorerConfig.controlSelector}, ${reportExplorerConfig.controlSelector}`;
+
+function reportsOpenControlForEvent(event) {
+    return typeof event.target?.closest === "function" ? event.target.closest(reportsOpenControlSelector) : null;
+}
+
+function setupReportsOpenControlGlobalListeners() {
+    if (window.financeReportsOpenControlsGlobalReady === "true") {
+        return;
+    }
+
+    window.financeReportsOpenControlsGlobalReady = "true";
+    document.addEventListener("click", (event) => {
+        const currentControl = reportsOpenControlForEvent(event);
+        document.querySelectorAll(reportsOpenControlSelector).forEach((control) => {
+            if (control !== currentControl) {
+                control.dispatchEvent(new CustomEvent(reportsOpenControlCloseEvent));
+            }
+        });
+    });
+}
+
+function reportsExplorerParams(source, config, prefix = "") {
+    const filterDatasetKey = prefix ? `${prefix}FilterParamDatasetKey` : "filterParamDatasetKey";
+    const searchDatasetKey = prefix ? `${prefix}SearchParamDatasetKey` : "searchParamDatasetKey";
     return {
-        filter: activeFilter?.dataset.taxonomyFilter || "all",
-        search: searchInput?.value || "",
+        filterParam: reportsDatasetValue(source, config[filterDatasetKey]) || config.filterParam,
+        searchParam: reportsDatasetValue(source, config[searchDatasetKey]) || config.searchParam,
     };
 }
 
-function setupTaxonomyOpenControls(root = document) {
-    root.querySelectorAll("[data-taxonomy-open-control]").forEach((control) => {
-        if (control.dataset.taxonomyOpenReady === "true") {
-            return;
-        }
-
-        const input = control.querySelector("[data-taxonomy-open-input]");
-        const menu = control.querySelector("[data-taxonomy-open-menu]");
-        const optionsScript = control.querySelector("[data-taxonomy-open-options]");
-        if (!input || !menu || !optionsScript) {
-            return;
-        }
-
-        let targets = [];
-        try {
-            const parsed = JSON.parse(optionsScript.textContent || "[]");
-            targets = Array.isArray(parsed) ? parsed : [];
-        } catch (_error) {
-            targets = [];
-        }
-        if (!targets.length) {
-            return;
-        }
-
-        control.dataset.taxonomyOpenReady = "true";
-        let activeIndex = -1;
-        let suggestions = [];
-        let debounceId = 0;
-        const suggestionsLimit = Math.max(1, Number(control.dataset.suggestionsLimit || 8) || 8);
-
-        function setExpanded(expanded) {
-            input.setAttribute("aria-expanded", expanded ? "true" : "false");
-            menu.hidden = !expanded;
-        }
-
-        function clearMenu() {
-            suggestions = [];
-            activeIndex = -1;
-            menu.replaceChildren();
-            setExpanded(false);
-        }
-
-        function renderStatus(message) {
-            const status = document.createElement("div");
-            status.className = "merchant-autocomplete-status";
-            status.setAttribute("role", "option");
-            status.setAttribute("aria-disabled", "true");
-            status.textContent = message;
-            menu.replaceChildren(status);
-            setExpanded(true);
-        }
-
-        function updateActiveOption() {
-            const options = Array.from(menu.querySelectorAll("[data-taxonomy-open-option]"));
-            options.forEach((option, index) => {
-                const active = index === activeIndex;
-                option.classList.toggle("active", active);
-                option.setAttribute("aria-selected", active ? "true" : "false");
-            });
-        }
-
-        function targetUrl(target) {
-            return reportsUrlWithTaxonomyState(target.url || "", currentTaxonomyExplorerState(root));
-        }
-
-        function openTarget(target) {
-            const url = targetUrl(target);
-            if (url) {
-                window.location.href = url;
-            }
-        }
-
-        function renderSuggestions(items) {
-            suggestions = items;
-            activeIndex = -1;
-            menu.replaceChildren();
-            if (!items.length) {
-                renderStatus(
-                    window.financeTranslate?.("No categories or tags found.") || "No categories or tags found."
-                );
-                return;
-            }
-
-            items.forEach((target, index) => {
-                const option = document.createElement("button");
-                option.type = "button";
-                option.className = "merchant-autocomplete-option reports-taxonomy-open-option";
-                option.id = `${menu.id || input.id}-option-${index}`;
-                option.setAttribute("role", "option");
-                option.setAttribute("aria-selected", "false");
-                option.dataset.taxonomyOpenOption = "true";
-
-                const label = document.createElement("span");
-                label.className = "reports-taxonomy-open-label";
-                label.textContent = target.label || "";
-                const type = document.createElement("small");
-                type.className = "reports-taxonomy-open-type";
-                type.textContent = target.type_label || "";
-                option.append(label, type);
-
-                option.addEventListener("mousedown", (event) => event.preventDefault());
-                option.addEventListener("click", () => openTarget(target));
-                menu.appendChild(option);
-            });
-            setExpanded(true);
-        }
-
-        function matchingTargets(query) {
-            const normalizedQuery = normalizeReportsSearchText(query);
-            return targets
-                .filter((target) =>
-                    normalizeReportsSearchText(target.search_text || target.display_label).includes(normalizedQuery)
-                )
-                .slice(0, suggestionsLimit);
-        }
-
-        function exactTarget() {
-            const normalizedValue = normalizeReportsSearchText(input.value);
-            if (!normalizedValue) {
-                return null;
-            }
-            return (
-                targets.find((target) => normalizeReportsSearchText(target.display_label) === normalizedValue) || null
-            );
-        }
-
-        function scheduleSearch() {
-            const query = input.value.trim();
-            window.clearTimeout(debounceId);
-            if (query.length < 2) {
-                clearMenu();
-                return;
-            }
-            debounceId = window.setTimeout(() => renderSuggestions(matchingTargets(query)), 160);
-        }
-
-        input.addEventListener("input", scheduleSearch);
-        input.addEventListener("focus", scheduleSearch);
-        input.addEventListener("keydown", (event) => {
-            if (event.key === "Escape") {
-                clearMenu();
-                return;
-            }
-            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                if (!suggestions.length || menu.hidden) {
-                    return;
-                }
-                event.preventDefault();
-                const step = event.key === "ArrowDown" ? 1 : -1;
-                activeIndex = (activeIndex + step + suggestions.length) % suggestions.length;
-                updateActiveOption();
-                return;
-            }
-            if (event.key === "Enter") {
-                if (activeIndex >= 0 && suggestions[activeIndex]) {
-                    event.preventDefault();
-                    openTarget(suggestions[activeIndex]);
-                    return;
-                }
-                const target = exactTarget();
-                if (target) {
-                    event.preventDefault();
-                    openTarget(target);
-                }
-            }
-        });
-
-        document.addEventListener("click", (event) => {
-            if (!control.contains(event.target)) {
-                clearMenu();
-            }
-        });
-    });
-}
-
-function setupTaxonomyTargetSwitchers(root = document) {
-    root.querySelectorAll("[data-taxonomy-target-switcher]").forEach((switcher) => {
-        if (switcher.dataset.taxonomySwitcherReady === "true") {
-            return;
-        }
-
-        const search = switcher.querySelector("[data-taxonomy-target-search]");
-        const options = Array.from(switcher.querySelectorAll("[data-taxonomy-target-option]"));
-        if (!search || options.length === 0) {
-            return;
-        }
-
-        function applySearch() {
-            const query = normalizeReportsSearchText(search.value);
-            options.forEach((option) => {
-                const matches = !query || normalizeReportsSearchText(option.dataset.searchText).includes(query);
-                option.hidden = !matches;
-            });
-        }
-
-        switcher.dataset.taxonomySwitcherReady = "true";
-        search.addEventListener("input", applySearch);
-        switcher.addEventListener("shown.bs.dropdown", () => {
-            search.focus();
-            search.select();
-        });
-        applySearch();
-    });
-}
-
-function setupTaxonomyExplorer(root = document) {
-    root.querySelectorAll("[data-taxonomy-explorer]").forEach((explorer) => {
-        if (explorer.dataset.taxonomyExplorerReady === "true") {
-            return;
-        }
-
-        const table = explorer.querySelector("table");
-        const body = explorer.querySelector("[data-taxonomy-explorer-body]");
-        const filterButtons = Array.from(explorer.querySelectorAll("[data-taxonomy-filter]"));
-        const searchInput =
-            reportsScopedElement(root, "[data-taxonomy-explorer-search]") ||
-            document.querySelector("[data-taxonomy-explorer-search]");
-        if (!table || !body || filterButtons.length === 0) {
-            return;
-        }
-
-        const rows = Array.from(body.querySelectorAll("[data-taxonomy-explorer-row]"));
-        const activeButton =
-            filterButtons.find((button) => button.getAttribute("aria-pressed") === "true") || filterButtons[0];
-        const state = { filter: activeButton?.dataset.taxonomyFilter || "all" };
-
-        function explorerState() {
-            return {
-                filter: state.filter,
-                search: searchInput?.value || "",
-            };
-        }
-
-        function syncReportLinks() {
-            const currentState = explorerState();
-            rows.forEach((row) => {
-                const baseRowHref = row.dataset.baseRowHref || row.dataset.rowHref || "";
-                const rowHref = reportsUrlWithTaxonomyState(baseRowHref, currentState);
-                row.dataset.rowHref = rowHref;
-                row.querySelectorAll("[data-taxonomy-report-link]").forEach((link) => {
-                    const baseUrl = link.dataset.baseUrl || link.getAttribute("href") || "";
-                    link.setAttribute("href", reportsUrlWithTaxonomyState(baseUrl, currentState));
-                });
-            });
-        }
-
-        function syncLocationState() {
-            if (typeof window.history?.replaceState !== "function") {
-                return;
-            }
-            const nextUrl = reportsUrlWithTaxonomyState(window.location.href, explorerState());
-            window.history.replaceState(window.history.state, "", nextUrl);
-        }
-
-        function syncExplorerState({ replaceLocation = true } = {}) {
-            syncReportLinks();
-            if (replaceLocation) {
-                syncLocationState();
-            }
-        }
-
-        function rowMatchesFilter(row) {
-            if (state.filter === "categories") return row.dataset.kind === "category";
-            if (state.filter === "tags") return row.dataset.kind === "tag";
-            if (state.filter === "analytics-categories") return row.dataset.analyticsCategory === "true";
-            if (state.filter === "has-income") return row.dataset.hasIncome === "true";
-            if (state.filter === "has-spending") return row.dataset.hasSpending === "true";
-            return true;
-        }
-
-        function rowMatchesSearch(row) {
-            const query = normalizeReportsSearchText(searchInput?.value || "");
-            return !query || normalizeReportsSearchText(row.dataset.searchText).includes(query);
-        }
-
-        function applyFilter() {
-            rows.forEach((row) => {
-                if (rowMatchesFilter(row) && rowMatchesSearch(row)) {
-                    delete row.dataset.tableFilteredOut;
-                } else {
-                    row.dataset.tableFilteredOut = "true";
-                }
-            });
-            table.dispatchEvent(new CustomEvent("finance:table-filtered"));
-        }
-
-        function setActiveFilter(button) {
-            state.filter = button.dataset.taxonomyFilter || "all";
-            filterButtons.forEach((filterButton) => {
-                const isActive = filterButton === button;
-                filterButton.classList.toggle("btn-primary", isActive);
-                filterButton.classList.toggle("btn-outline-secondary", !isActive);
-                filterButton.setAttribute("aria-pressed", isActive ? "true" : "false");
-            });
-            applyFilter();
-            syncExplorerState();
-        }
-
-        explorer.dataset.taxonomyExplorerReady = "true";
-        filterButtons.forEach((button) => {
-            button.addEventListener("click", () => setActiveFilter(button));
-        });
-        searchInput?.addEventListener("input", () => {
-            applyFilter();
-            syncExplorerState();
-        });
-        applyFilter();
-        syncExplorerState({ replaceLocation: false });
-    });
-}
-
-function currentReportExplorerState(root = document, source = null) {
-    const explorer = reportsScopedElement(root, "[data-report-explorer]");
+function reportsExplorerSearchInput(root, config, explorer = null, source = null) {
     const searchSelector =
-        source?.dataset.reportOpenSearchSelector ||
-        explorer?.dataset.reportSearchSelector ||
-        "[data-report-explorer-search]";
-    const searchInput =
+        reportsDatasetValue(source, config.openSearchSelectorDatasetKey) ||
+        reportsDatasetValue(explorer, config.searchSelectorDatasetKey) ||
+        config.searchSelector;
+    return (
         (searchSelector ? reportsScopedElement(root, searchSelector) : null) ||
-        (searchSelector ? document.querySelector(searchSelector) : null);
-    const activeFilter = explorer?.querySelector("[data-report-filter][aria-pressed='true']");
+        (searchSelector ? document.querySelector(searchSelector) : null)
+    );
+}
+
+function currentReportsExplorerState(root, config, source = null) {
+    const explorer = reportsScopedElement(root, config.explorerSelector);
+    const searchInput = reportsExplorerSearchInput(root, config, explorer, source);
+    const activeFilter = explorer?.querySelector(`${config.filterSelector}[aria-pressed='true']`);
     return {
-        filter: activeFilter?.dataset.reportFilter || "all",
+        filter: activeFilter?.dataset[config.filterKey] || "all",
         search: searchInput?.value || "",
     };
 }
 
-function setupReportOpenControls(root = document) {
-    root.querySelectorAll("[data-report-open-control]").forEach((control) => {
-        if (control.dataset.reportOpenReady === "true") {
+function reportsOpenControlNoResultsText(control, config) {
+    return reportsTranslate(reportsDatasetValue(control, config.noResultsDatasetKey) || config.noResultsText);
+}
+
+function setupReportsOpenControls(root, config) {
+    root.querySelectorAll(config.controlSelector).forEach((control) => {
+        if (control.dataset[config.openReadyKey] === "true") {
             return;
         }
 
-        const input = control.querySelector("[data-report-open-input]");
-        const menu = control.querySelector("[data-report-open-menu]");
-        const optionsScript = control.querySelector("[data-report-open-options]");
+        const input = control.querySelector(config.openInputSelector);
+        const menu = control.querySelector(config.openMenuSelector);
+        const optionsScript = control.querySelector(config.openOptionsSelector);
         if (!input || !menu || !optionsScript) {
             return;
         }
@@ -484,21 +277,32 @@ function setupReportOpenControls(root = document) {
             return;
         }
 
-        control.dataset.reportOpenReady = "true";
+        control.dataset[config.openReadyKey] = "true";
         let activeIndex = -1;
         let suggestions = [];
         let debounceId = 0;
         const suggestionsLimit = Math.max(1, Number(control.dataset.suggestionsLimit || 8) || 8);
-        const filterParam = control.dataset.reportOpenFilterParam || "entity_filter";
-        const searchParam = control.dataset.reportOpenSearchParam || "entity_search";
-        const noResultsText =
-            window.financeTranslate?.(control.dataset.noResultsText || "No report targets found.") ||
-            control.dataset.noResultsText ||
-            "No report targets found.";
+        const { filterParam, searchParam } = reportsExplorerParams(control, config, "open");
+        const noResultsText = reportsOpenControlNoResultsText(control, config);
+
+        function reportsOpenOptionId(index) {
+            return `${menu.id || input.id || "reports-open"}-option-${index}`;
+        }
+
+        function setActiveDescendant(activeOption) {
+            if (activeOption?.id) {
+                input.setAttribute("aria-activedescendant", activeOption.id);
+            } else {
+                input.removeAttribute("aria-activedescendant");
+            }
+        }
 
         function setExpanded(expanded) {
             input.setAttribute("aria-expanded", expanded ? "true" : "false");
             menu.hidden = !expanded;
+            if (!expanded) {
+                setActiveDescendant(null);
+            }
         }
 
         function clearMenu() {
@@ -509,6 +313,7 @@ function setupReportOpenControls(root = document) {
         }
 
         function renderStatus(message) {
+            setActiveDescendant(null);
             const status = document.createElement("div");
             status.className = "merchant-autocomplete-status";
             status.setAttribute("role", "option");
@@ -519,18 +324,23 @@ function setupReportOpenControls(root = document) {
         }
 
         function updateActiveOption() {
-            const options = Array.from(menu.querySelectorAll("[data-report-open-option]"));
+            const options = Array.from(menu.querySelectorAll(config.openOptionSelector));
+            let activeOption = null;
             options.forEach((option, index) => {
                 const active = index === activeIndex;
                 option.classList.toggle("active", active);
                 option.setAttribute("aria-selected", active ? "true" : "false");
+                if (active) {
+                    activeOption = option;
+                }
             });
+            setActiveDescendant(activeOption);
         }
 
         function targetUrl(target) {
             return reportsUrlWithExplorerState(
                 target.url || "",
-                currentReportExplorerState(root, control),
+                currentReportsExplorerState(root, config, control),
                 filterParam,
                 searchParam
             );
@@ -547,6 +357,7 @@ function setupReportOpenControls(root = document) {
             suggestions = items;
             activeIndex = -1;
             menu.replaceChildren();
+            setActiveDescendant(null);
             if (!items.length) {
                 renderStatus(noResultsText);
                 return;
@@ -555,11 +366,12 @@ function setupReportOpenControls(root = document) {
             items.forEach((target, index) => {
                 const option = document.createElement("button");
                 option.type = "button";
+                option.tabIndex = -1;
                 option.className = "merchant-autocomplete-option reports-taxonomy-open-option";
-                option.id = `${menu.id || input.id}-option-${index}`;
+                option.id = reportsOpenOptionId(index);
                 option.setAttribute("role", "option");
                 option.setAttribute("aria-selected", "false");
-                option.dataset.reportOpenOption = "true";
+                option.dataset[config.openOptionKey] = "true";
 
                 const label = document.createElement("span");
                 label.className = "reports-taxonomy-open-label";
@@ -636,22 +448,18 @@ function setupReportOpenControls(root = document) {
             }
         });
 
-        document.addEventListener("click", (event) => {
-            if (!control.contains(event.target)) {
-                clearMenu();
-            }
-        });
+        control.addEventListener(reportsOpenControlCloseEvent, clearMenu);
     });
 }
 
-function setupReportTargetSwitchers(root = document) {
-    root.querySelectorAll("[data-report-target-switcher]").forEach((switcher) => {
-        if (switcher.dataset.reportSwitcherReady === "true") {
+function setupReportsTargetSwitchers(root, config) {
+    root.querySelectorAll(config.switcherSelector).forEach((switcher) => {
+        if (switcher.dataset[config.switcherReadyKey] === "true") {
             return;
         }
 
-        const search = switcher.querySelector("[data-report-target-search]");
-        const options = Array.from(switcher.querySelectorAll("[data-report-target-option]"));
+        const search = switcher.querySelector(config.switcherSearchSelector);
+        const options = Array.from(switcher.querySelectorAll(config.switcherOptionSelector));
         if (!search || options.length === 0) {
             return;
         }
@@ -664,7 +472,7 @@ function setupReportTargetSwitchers(root = document) {
             });
         }
 
-        switcher.dataset.reportSwitcherReady = "true";
+        switcher.dataset[config.switcherReadyKey] = "true";
         search.addEventListener("input", applySearch);
         switcher.addEventListener("shown.bs.dropdown", () => {
             search.focus();
@@ -674,29 +482,25 @@ function setupReportTargetSwitchers(root = document) {
     });
 }
 
-function setupReportExplorers(root = document) {
-    root.querySelectorAll("[data-report-explorer]").forEach((explorer) => {
-        if (explorer.dataset.reportExplorerReady === "true") {
+function setupReportsExplorer(root, config) {
+    root.querySelectorAll(config.explorerSelector).forEach((explorer) => {
+        if (explorer.dataset[config.explorerReadyKey] === "true") {
             return;
         }
 
         const table = explorer.querySelector("table");
-        const body = explorer.querySelector("[data-report-explorer-body]");
-        const filterButtons = Array.from(explorer.querySelectorAll("[data-report-filter]"));
-        const searchSelector = explorer.dataset.reportSearchSelector || "[data-report-explorer-search]";
-        const searchInput =
-            reportsScopedElement(root, searchSelector) ||
-            (searchSelector ? document.querySelector(searchSelector) : null);
+        const body = explorer.querySelector(config.explorerBodySelector);
+        const filterButtons = Array.from(explorer.querySelectorAll(config.filterSelector));
+        const searchInput = reportsExplorerSearchInput(root, config, explorer);
         if (!table || !body || filterButtons.length === 0) {
             return;
         }
 
-        const rows = Array.from(body.querySelectorAll("[data-report-explorer-row]"));
+        const rows = Array.from(body.querySelectorAll(config.explorerRowSelector));
         const activeButton =
             filterButtons.find((button) => button.getAttribute("aria-pressed") === "true") || filterButtons[0];
-        const state = { filter: activeButton?.dataset.reportFilter || "all" };
-        const filterParam = explorer.dataset.reportFilterParam || "entity_filter";
-        const searchParam = explorer.dataset.reportSearchParam || "entity_search";
+        const state = { filter: activeButton?.dataset[config.filterKey] || "all" };
+        const { filterParam, searchParam } = reportsExplorerParams(explorer, config);
 
         function explorerState() {
             return {
@@ -709,9 +513,8 @@ function setupReportExplorers(root = document) {
             const currentState = explorerState();
             rows.forEach((row) => {
                 const baseRowHref = row.dataset.baseRowHref || row.dataset.rowHref || "";
-                const rowHref = reportsUrlWithExplorerState(baseRowHref, currentState, filterParam, searchParam);
-                row.dataset.rowHref = rowHref;
-                row.querySelectorAll("[data-report-link]").forEach((link) => {
+                row.dataset.rowHref = reportsUrlWithExplorerState(baseRowHref, currentState, filterParam, searchParam);
+                row.querySelectorAll(config.linkSelector).forEach((link) => {
                     const baseUrl = link.dataset.baseUrl || link.getAttribute("href") || "";
                     link.setAttribute(
                         "href",
@@ -741,15 +544,6 @@ function setupReportExplorers(root = document) {
             }
         }
 
-        function rowMatchesFilter(row) {
-            if (state.filter === "has-income") return row.dataset.hasIncome === "true";
-            if (state.filter === "has-spending") return row.dataset.hasSpending === "true";
-            if (state.filter === "all") return true;
-            return String(row.dataset.filterTokens || "")
-                .split(/\s+/)
-                .includes(state.filter);
-        }
-
         function rowMatchesSearch(row) {
             const query = normalizeReportsSearchText(searchInput?.value || "");
             return !query || normalizeReportsSearchText(row.dataset.searchText).includes(query);
@@ -757,7 +551,7 @@ function setupReportExplorers(root = document) {
 
         function applyFilter() {
             rows.forEach((row) => {
-                if (rowMatchesFilter(row) && rowMatchesSearch(row)) {
+                if (config.rowMatchesFilter(row, state.filter) && rowMatchesSearch(row)) {
                     delete row.dataset.tableFilteredOut;
                 } else {
                     row.dataset.tableFilteredOut = "true";
@@ -767,7 +561,7 @@ function setupReportExplorers(root = document) {
         }
 
         function setActiveFilter(button) {
-            state.filter = button.dataset.reportFilter || "all";
+            state.filter = button.dataset[config.filterKey] || "all";
             filterButtons.forEach((filterButton) => {
                 const isActive = filterButton === button;
                 filterButton.classList.toggle("btn-primary", isActive);
@@ -778,7 +572,7 @@ function setupReportExplorers(root = document) {
             syncExplorerState();
         }
 
-        explorer.dataset.reportExplorerReady = "true";
+        explorer.dataset[config.explorerReadyKey] = "true";
         filterButtons.forEach((button) => {
             button.addEventListener("click", () => setActiveFilter(button));
         });
@@ -1063,12 +857,12 @@ function setupReportsPage(root = document) {
     }
     setupReportsCustomRange(root);
     setupReportsScopeRefiners(root);
-    setupTaxonomyOpenControls(root);
-    setupTaxonomyTargetSwitchers(root);
-    setupTaxonomyExplorer(root);
-    setupReportOpenControls(root);
-    setupReportTargetSwitchers(root);
-    setupReportExplorers(root);
+    setupReportsOpenControls(root, taxonomyExplorerConfig);
+    setupReportsTargetSwitchers(root, taxonomyExplorerConfig);
+    setupReportsExplorer(root, taxonomyExplorerConfig);
+    setupReportsOpenControls(root, reportExplorerConfig);
+    setupReportsTargetSwitchers(root, reportExplorerConfig);
+    setupReportsExplorer(root, reportExplorerConfig);
     setupReportPinButtons(root);
     setupPinnedReports(root);
 }
@@ -1076,6 +870,7 @@ function setupReportsPage(root = document) {
 window.financeApp?.registerInitializer("reports.page", setupReportsPage);
 window.financeApp?.registerInitializer("reports.pin-buttons", setupReportPinButtons);
 window.financeApp?.registerInitializer("reports.pinned", setupPinnedReports);
+setupReportsOpenControlGlobalListeners();
 
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => setupReportsPage());

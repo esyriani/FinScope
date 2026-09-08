@@ -1,12 +1,13 @@
 {% set page_stylesheets = [
-    "css/home-dashboard.css",
+    "css/analytics-components.css",
     "css/tables.css",
     "css/rules-list.css",
     "css/exports.css"
 ] %}
-{% set page_scripts = ["js/tables.js", "js/exports.js"] %}
+{% set page_scripts = ["js/tables.js", "js/xlsx-writer.js", "js/exports.js"] %}
 {% extends "base.html" %}
 {% from "_sort_controls.html" import client_sort_header with context %}
+{% from "_table_primitives.html" import empty_state with context %}
 
 {% block content %}
 <div class="page-header">
@@ -16,7 +17,7 @@
             {{ _(preview.action_label) }}{% if preview.rule %}: {{ preview.rule.label }}{% elif preview.proposed_rule %}: {{ preview.proposed_rule.label }}{% endif %}
         </p>
     </div>
-    <div class="home-actions">
+    <div class="page-actions">
         {% if preview.rule %}
         <a
             class="btn btn-outline-secondary"
@@ -367,12 +368,12 @@
         </div>
     </div>
     {% else %}
-    <div class="empty-state compact">{{ _("No transactions in this group.") }}</div>
+    {{ empty_state("No transactions in this group.") }}
     {% endif %}
 </section>
 {% else %}
 <section class="card mb-4">
-    <div class="empty-state compact">{{ _("No transaction-level changes found.") }}</div>
+    {{ empty_state("No transaction-level changes found.") }}
 </section>
 {% endfor %}
 {% endblock %}

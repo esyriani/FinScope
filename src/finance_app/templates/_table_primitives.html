@@ -1,0 +1,131 @@
+{% from "_pagination.html" import pagination with context %}
+
+{% macro client_table_search(input_id, table_id, placeholder="Search", wrapper_class="input-group input-group-sm table-search", input_class="form-control") -%}
+<div class="{{ wrapper_class }}">
+    <label class="visually-hidden" for="{{ input_id }}">{{ _(placeholder) }}</label>
+    <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+    <input
+        id="{{ input_id }}"
+        class="{{ input_class }}"
+        type="search"
+        placeholder="{{ _(placeholder) }}"
+        aria-label="{{ _(placeholder) }}"
+        data-table-search
+        data-table-search-target="#{{ table_id }}"
+    >
+</div>
+{%- endmacro %}
+
+{% macro server_table_search(action_url, input_id, name, value="", placeholder="Search", preserved_query=none, form_class="table-search", data_ajax_refresh=false, button_label="Search", input_class="form-control") -%}
+<form class="{{ form_class }}" method="get" action="{{ action_url }}"{% if data_ajax_refresh %} data-ajax-refresh-form{% endif %}>
+    {% if preserved_query %}
+        {% for field, query in preserved_query.items() %}
+            {% if field != name and query %}
+                <input type="hidden" name="{{ field }}" value="{{ query }}">
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+    <label class="visually-hidden" for="{{ input_id }}">{{ _(placeholder) }}</label>
+    <div class="input-group input-group-sm">
+        <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+        <input
+            id="{{ input_id }}"
+            class="{{ input_class }}"
+            type="search"
+            name="{{ name }}"
+            value="{{ value }}"
+            placeholder="{{ _(placeholder) }}"
+            aria-label="{{ _(placeholder) }}"
+        >
+        <button class="btn btn-outline-secondary" type="submit">{{ _(button_label) }}</button>
+    </div>
+</form>
+{%- endmacro %}
+
+{% macro export_toolbar(class_name="table-export-actions") -%}
+<div class="{{ class_name }}" data-table-export-toolbar></div>
+{%- endmacro %}
+
+{% macro table_card_header(title, detail="", controls="", header_class="card-header", row_class="", heading_class="", title_class="card-title", title_id="", detail_tag="span", detail_class="text-muted small", controls_class="", translate_title=true, translate_detail=true) -%}
+<div class="{{ header_class }}">
+    {% if row_class %}
+    <div class="{{ row_class }}">
+    {% endif %}
+        <div{% if heading_class %} class="{{ heading_class }}"{% endif %}>
+            <h5{% if title_id %} id="{{ title_id }}"{% endif %} class="{{ title_class }}">{{ _(title) if translate_title else title }}</h5>
+            {% if detail %}
+                <{{ detail_tag }} class="{{ detail_class }}">{{ _(detail) if translate_detail else detail }}</{{ detail_tag }}>
+            {% endif %}
+        </div>
+        {% if controls | trim %}
+            {% if controls_class %}
+            <div class="{{ controls_class }}">
+                {{ controls }}
+            </div>
+            {% else %}
+                {{ controls }}
+            {% endif %}
+        {% endif %}
+    {% if row_class %}
+    </div>
+    {% endif %}
+</div>
+{%- endmacro %}
+
+{% macro collapsible_table_header(target_id, title, description="", controls="", expanded=false, header_class="card-body border-bottom collapse-panel-header", row_class="d-flex flex-wrap align-items-start justify-content-between gap-3", heading_class="collapse-panel-heading", title_class="mb-1", title_id="", description_class="text-muted mb-0", controls_class="d-flex flex-wrap align-items-center justify-content-end gap-3", translate_title=true, translate_description=true) -%}
+<div
+    class="{{ header_class }}"
+    data-collapse-panel-header-toggle
+    data-collapse-panel-target="#{{ target_id }}"
+>
+    <div class="{{ row_class }}">
+        <div
+            class="{{ heading_class }}"
+            role="button"
+            tabindex="0"
+            aria-expanded="{{ 'true' if expanded else 'false' }}"
+            aria-controls="{{ target_id }}"
+            data-collapse-panel-heading-toggle
+            data-collapse-panel-target="#{{ target_id }}"
+        >
+            <h5{% if title_id %} id="{{ title_id }}"{% endif %} class="{{ title_class }}">{{ _(title) if translate_title else title }}</h5>
+            {% if description %}
+            <p class="{{ description_class }}">{{ _(description) if translate_description else description }}</p>
+            {% endif %}
+        </div>
+        {% if controls | trim %}
+        <div class="{{ controls_class }}">
+            {{ controls }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{%- endmacro %}
+
+{% macro table_result_status(message, show=true, class_name="text-muted small") -%}
+{% if show %}
+<div class="{{ class_name }}">{{ message }}</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro pagination_controls(table, label, ajax=false) -%}
+{{ pagination(table.page, table.total_pages, table.page_url, label, ajax=ajax) }}
+{%- endmacro %}
+
+{% macro pagination_footer(table, label, ajax=false, class_name="card-footer d-flex justify-content-end") -%}
+{% if table.total_pages > 1 %}
+<div class="{{ class_name }}">
+    {{ pagination_controls(table, label, ajax) }}
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro empty_state(message, class_name="empty-state compact", translate=true) -%}
+<div class="{{ class_name }}">{{ _(message) if translate else message }}</div>
+{%- endmacro %}
+
+{% macro empty_table_row(message, colspan, row_class="", cell_class="text-center text-muted py-4", translate=true) -%}
+<tr data-sort-ignore{% if row_class %} class="{{ row_class }}"{% endif %}>
+    <td colspan="{{ colspan }}" class="{{ cell_class }}">{{ _(message) if translate else message }}</td>
+</tr>
+{%- endmacro %}

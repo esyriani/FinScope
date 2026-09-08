@@ -7,7 +7,7 @@
     "vendor/flatpickr/4.6.13/plugins/monthSelect/index.js",
     "vendor/echarts/5.6.0/echarts.min.js"
 ] %}
-{% set page_stylesheets = ["css/home-dashboard.css"] %}
+{% set page_stylesheets = ["css/analytics-components.css", "css/dashboard.css"] %}
 {% set page_scripts = [
     "js/dates.js",
     "js/merchant-autocomplete.js",
@@ -17,41 +17,16 @@
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel with context %}
-{% from "_filter_controls.html" import account_filter, date_range_filters, filter_actions, filter_summary, merchant_filter, period_filter, period_summary with context %}
+{% from "_filter_controls.html" import account_filter, date_range_filters, filter_actions, filter_summary, merchant_filter, period_filter with context %}
 {% from "_help.html" import help_tip with context %}
 
 {% block content %}
 {% set account_options = account_options | default([]) %}
-{% set account_filter_visible = account_options | length > 1 %}
 {% set merchant_query = merchant_query | default(merchant_search | default("")) %}
 {% set selected_merchant_id = selected_merchant_id | default(none) %}
-{% set selected_merchant_label = selected_merchant_label | default(merchant_query) %}
 {% set merchant_suggestion_limit = merchant_suggestion_limit | default(5) %}
-{% set dashboard_merchant_filter_label = selected_merchant_label if selected_merchant_id else merchant_query %}
-{% set dashboard_account_label = namespace(value=_("All accounts")) %}
-{% for account in account_options %}
-    {% if selected_account_id == account.id %}
-        {% set dashboard_account_label.value = account.name %}
-    {% endif %}
-{% endfor %}
-{% set dashboard_classification_label = namespace(value=_("All")) %}
-{% for option in classification_scope_options %}
-    {% if option.active %}
-        {% set dashboard_classification_label.value = _(option.label) %}
-    {% endif %}
-{% endfor %}
-{% set dashboard_filter_summary_items = [
-    {
-        "label": "Period",
-        "value": period_summary(period_label, selected_period, period_custom, selected_date_from, selected_date_to),
-    },
-] %}
-{% if account_filter_visible %}
-    {% set dashboard_filter_summary_append = dashboard_filter_summary_items.append({"label": "Account", "value": dashboard_account_label.value}) %}
-{% endif %}
-{% set dashboard_filter_summary_append = dashboard_filter_summary_items.append({"label": "Merchant", "value": dashboard_merchant_filter_label if dashboard_merchant_filter_label else _("All")}) %}
-{% set dashboard_filter_summary_append = dashboard_filter_summary_items.append({"label": "Scope", "value": dashboard_classification_label.value}) %}
-{% set dashboard_filter_summary = filter_summary(dashboard_filter_summary_items) %}
+{% set dashboard_merchant_filter_label = dashboard_merchant_filter_label | default(merchant_query) %}
+{% set dashboard_filter_summary = filter_summary(dashboard_filter_summary_items | default([])) %}
 
 <div id="dashboard-page" data-ajax-refresh-target="dashboard-page">
 <div class="page-header">

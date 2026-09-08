@@ -41,6 +41,18 @@ def test_reports_overview_uses_categorized_reportable_cash_flow_by_default(app, 
     assert context["selected_basis"] == "cash_flow"
     assert context["selected_measure"] == "spending"
     assert context["quick_view"] == "categorized"
+    assert context["reports_merchant_filter_label"] == ""
+    assert context["reports_filter_summary_items"] == [
+        {
+            "label": "Period",
+            "value": "01-Jan-2026 to 28-Feb-2026 (2026-01-01 to 2026-02-28)",
+        },
+        {"label": "Measure", "value": "Spending"},
+        {"label": "Basis", "value": "Reportable cash flow"},
+        {"label": "Account", "value": "All accounts"},
+        {"label": "Merchant", "value": "All"},
+        {"label": "Quick view", "value": "Categorized"},
+    ]
     assert context["total_spending"] == 260.00
     assert context["total_income"] == 1000.00
     assert context["net_cashflow"] == 740.00

@@ -1,0 +1,93 @@
+{% macro reports_chart_card(title, chart_id, wide=false, exportable=true) -%}
+<section class="card chart-card reports-chart-card{% if wide %} reports-chart-card-wide{% endif %}" {% if exportable %}data-chart-export-scope{% endif %}>
+    <div class="card-body">
+        <div class="section-title">
+            <h5 class="card-title">{{ _(title) }}</h5>
+        </div>
+        <div id="{{ chart_id }}" class="chart-viewport reports-chart" {% if exportable %}data-chart-export data-export-title="{{ _(title) }}"{% endif %}></div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro reports_insight_card(tone, label, value, detail, url) -%}
+<a class="insight-card insight-card-{{ tone }} text-decoration-none" href="{{ url }}">
+    <div class="insight-top">
+        <div class="insight-heading">
+            <div class="metric-label">{{ _(label) }}</div>
+            <div class="insight-title">{{ _(detail) }}</div>
+        </div>
+    </div>
+    <div class="insight-focus">
+        <span class="insight-summary">{{ value }}</span>
+    </div>
+</a>
+{%- endmacro %}
+
+{% macro reports_key_insights(transaction_url) -%}
+<section class="page-block reports-key-insights" aria-labelledby="reports-key-insights-heading">
+    <div class="page-block-header">
+        <h6 id="reports-key-insights-heading" class="card-title mb-0">{{ _("Key insights") }}</h6>
+    </div>
+    <div class="insight-grid reports-insight-grid">
+        {{ reports_insight_card("danger", "Spending", total_spending | moneyfmt, cash_flow_summary.spending_detail, transaction_url) }}
+        {{ reports_insight_card("success", "Income and credits", total_income | moneyfmt, cash_flow_summary.income_detail, transaction_url) }}
+        {{ reports_insight_card("success" if net_cashflow >= 0 else "danger", "Net cash flow", net_cashflow | moneyfmt, cash_flow_summary.net_detail, transaction_url) }}
+        {{ reports_insight_card("accent", "Transactions", transaction_count, "Report rows in this view", transaction_url) }}
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro reports_income_key_insights(transaction_url) -%}
+<section class="page-block reports-key-insights" aria-labelledby="reports-key-insights-heading">
+    <div class="page-block-header">
+        <h6 id="reports-key-insights-heading" class="card-title mb-0">{{ _("Key insights") }}</h6>
+    </div>
+    <div class="insight-grid reports-insight-grid">
+        {{ reports_insight_card("success", "Income and credits", total_income | moneyfmt, cash_flow_summary.income_detail, transaction_url) }}
+        {{ reports_insight_card("success" if net_cashflow >= 0 else "danger", "Net cash flow", net_cashflow | moneyfmt, cash_flow_summary.net_detail, transaction_url) }}
+        {{ reports_insight_card("accent", "Transactions", transaction_count, "Report rows in this view", transaction_url) }}
+        {{ reports_insight_card("success", "Average credit", average_income_credit | moneyfmt, "Per income or credit row", transaction_url) }}
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro reports_quality_panel() -%}
+<section class="card reports-quality-card reports-quality-{{ data_quality.level }}">
+    <div class="card-body">
+        <div>
+            <div class="metric-label">{{ _("Data reliability") }}</div>
+            <strong>{{ _("{percent}% categorized", percent=data_quality.quality_score) }}</strong>
+            <p>{{ data_quality.message }}</p>
+        </div>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('review.review') }}"><i class="bi bi-check2-square" aria-hidden="true"></i>{{ data_quality.review_label }}</a>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro report_pin_button() -%}
+{% if pin_report_payload is defined and pin_report_payload %}
+<button
+    type="button"
+    class="btn btn-outline-secondary btn-sm"
+    data-report-pin-button
+    data-pin-url="{{ pin_report_url }}"
+    {% if pin_report_is_pinned %}disabled{% endif %}
+>
+    <i class="bi {% if pin_report_is_pinned %}bi-pin-fill{% else %}bi-pin-angle{% endif %}" aria-hidden="true" data-report-pin-icon></i>
+    <span data-report-pin-label>{% if pin_report_is_pinned %}{{ _("Pinned") }}{% else %}{{ _("Pin report") }}{% endif %}</span>
+</button>
+<script type="application/json" data-report-pin-payload>{{ pin_report_payload | tojson }}</script>
+{% endif %}
+{%- endmacro %}
+
+{% macro reports_actions(comparison_url, transaction_url="") -%}
+<div class="reports-actions">
+    {{ report_pin_button() }}
+    {% if transaction_url %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ transaction_url }}"><i class="bi bi-list-ul" aria-hidden="true"></i>{{ _("View transactions") }}</a>
+    {% endif %}
+    {% if comparison_url %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ comparison_url }}"><i class="bi bi-layout-split" aria-hidden="true"></i>{{ _("Compare") }}</a>
+    {% endif %}
+</div>
+{%- endmacro %}

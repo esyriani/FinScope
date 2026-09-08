@@ -12,6 +12,7 @@ _CLIENT_TRANSLATION_MESSAGES: dict[str, None] = {}
 
 SHARED_CLIENT_TRANSLATION_MESSAGES = (
     "Cancel",
+    "Cancel export ({current}/{total})",
     "Chart {number}",
     "Choose which rows to export from this table.",
     "Close",
@@ -32,9 +33,14 @@ SHARED_CLIENT_TRANSLATION_MESSAGES = (
     "Q3",
     "Max",
     "n/a",
+    "Page refresh failed.",
+    "Page refresh returned no content.",
+    "Refresh target was not found.",
     "Remove {label}",
     "Showing {start}-{end} of {total} rows",
     "Table {number}",
+    "The action could not be completed.",
+    "The page section could not be refreshed.",
     "Total",
     "{count} selected",
 )

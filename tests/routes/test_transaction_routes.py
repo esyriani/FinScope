@@ -1,5 +1,8 @@
 """Route tests for transaction mutation endpoints."""
 
+import json
+from pathlib import Path
+
 from sqlalchemy import text
 from tests.support.database import insert_transaction as insert_test_transaction
 from tests.support.database import set_owner_setting
@@ -21,6 +24,8 @@ from finance_app.modules.transactions.controller import (
     TRANSACTION_AI_RESULT_REFERENCE,
     TRANSACTION_AI_SUGGESTION_REFERENCE,
 )
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def insert_route_transaction(conn, fingerprint="route-tx", category="UNKNOWN", needs_review=1):
@@ -122,6 +127,51 @@ def test_transactions_custom_range_filter_renders_date_fields(owner_client):
     assert "vendor/flatpickr" in body
     assert "js/dates.js" in body
     assert "js/transactions.js" in body
+
+
+def test_transactions_batch_selection_labels_current_page_scope(owner_client, core_conn):
+    """Verify transaction batch checkboxes describe page scope and row identity."""
+    set_owner_setting(core_conn, "default_table_page_size", 1)
+    first_id = insert_test_transaction(
+        core_conn,
+        description="Coffee Shop",
+        amount=4.56,
+        tx_date="2026-01-01",
+        fingerprint="route-batch-accessibility-1",
+    )
+    insert_test_transaction(
+        core_conn,
+        description="Book Store",
+        amount=7.89,
+        tx_date="2026-01-02",
+        fingerprint="route-batch-accessibility-2",
+    )
+
+    response = owner_client.get("/transactions?period=all&sort=date&direction=asc&page=1")
+    document = parse_html(response)
+    transaction_table = document.find_all("table", attrs={"data-transaction-batch-table": True})[0]
+
+    assert response.status_code == 200
+    assert json.loads(transaction_table.attrs["data-all-transaction-ids"]) == [first_id]
+    template = (ROOT / "src" / "finance_app" / "templates" / "transactions.html").read_text(encoding="utf-8")
+    assert 'data-all-transaction-ids="{{ all_transaction_ids | tojson | forceescape }}"' in template
+    assert_has_element(
+        response,
+        "input",
+        attrs={
+            "data-transaction-select-all": True,
+            "aria-label": "Select all transactions on this page",
+        },
+    )
+    row_checkbox = document.find_all(
+        "input",
+        attrs={"data-transaction-row-checkbox": True, "value": str(first_id)},
+    )[0]
+    row_label = row_checkbox.attrs["aria-label"]
+
+    assert row_label.startswith("Select transaction on 2026-01-01: Coffee Shop,")
+    assert "4.56" in row_label
+    assert "Select transaction" != row_label
 
 
 def test_transactions_route_exposes_active_sort_direction(owner_client, core_conn):

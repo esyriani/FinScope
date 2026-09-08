@@ -392,6 +392,7 @@ def test_comparison_context_filters_year_and_period_by_merchant(app, core_conn, 
 
     assert exact_context["selected_merchant_id"] == metro_id
     assert exact_context["selected_merchant_label"] == "METRO GROCERY"
+    assert exact_context["comparison_merchant_filter_label"] == "METRO GROCERY"
     assert exact_context["available_years"] == [2026, 2025]
     assert exact_context["monthly_spending"][2025][4] == 60.00
     assert exact_context["monthly_spending"][2026][3] == 25.00
@@ -409,6 +410,7 @@ def test_comparison_context_filters_year_and_period_by_merchant(app, core_conn, 
 
     assert partial_context["selected_merchant_id"] is None
     assert partial_context["selected_merchant_label"] == "metro grocery"
+    assert partial_context["comparison_merchant_filter_label"] == "metro grocery"
     assert partial_food["totals"] == {2025: 60.00, 2026: 125.00}
     assert partial_period_totals["Spending"]["current"] == 100.00
     assert partial_period_totals["Spending"]["previous"] == 25.00

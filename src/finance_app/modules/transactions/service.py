@@ -14,6 +14,14 @@ from finance_app.background.runner import (
 )
 from finance_app.core.config import settings
 from finance_app.core.constants import CATEGORY_RULE_SOURCE_MANUAL, UNKNOWN_CATEGORY
+from finance_app.core.filter_summary import (
+    filter_summary_item,
+    period_summary_value,
+    selected_account_label,
+    selected_option_label,
+    selected_values_label,
+    value_or_default,
+)
 from finance_app.core.money import MoneyValue
 from finance_app.core.periods import DATE_PERIOD_OPTIONS, PERIOD_CUSTOM
 from finance_app.database.engine import db_core_transaction
@@ -33,6 +41,7 @@ from finance_app.modules.categories.service import (
     save_category_rule,
 )
 from finance_app.modules.categories.sources import utc_timestamp
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import (
     get_category_description_map,
     get_tag_color_map,
@@ -146,6 +155,7 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         category_options = get_category_options(conn)
         category_descriptions = get_category_description_map(conn)
         tag_display_options = get_tag_option_rows(conn)
+        transaction_filter_summary_items = build_transaction_filter_summary_items(filters, account_options)
         run_transaction_ai_enabled = get_bool_setting(
             conn,
             RUN_TRANSACTION_AI_SETTING_KEY,
@@ -169,6 +179,7 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "selected_period": filters["period"],
         "selected_date_from": filters["date_from"],
         "selected_date_to": filters["date_to"],
+        "transaction_filter_summary_items": transaction_filter_summary_items,
         "period_options": DATE_PERIOD_OPTIONS,
         "period_custom": PERIOD_CUSTOM,
         "review_filter_options": REVIEW_FILTER_OPTIONS,
@@ -190,6 +201,55 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "run_transaction_ai_enabled": run_transaction_ai_enabled,
         "confirm_ai_token_usage_enabled": confirm_ai_token_usage,
     }
+
+
+def build_transaction_filter_summary_items(
+    filters: Mapping[str, Any],
+    account_options: Sequence[Mapping[str, Any]],
+) -> list[dict[str, str]]:
+    """Return selected transaction-list filters as template-ready summary items."""
+    period_label = selected_option_label(DATE_PERIOD_OPTIONS, filters["period"], "All time")
+    return [
+        filter_summary_item("Search", value_or_default(filters["search"])),
+        filter_summary_item(
+            "Period",
+            period_summary_value(
+                period_label,
+                filters["period"],
+                PERIOD_CUSTOM,
+                filters["date_from"],
+                filters["date_to"],
+            ),
+        ),
+        filter_summary_item(
+            "Account",
+            selected_account_label(account_options, filters["account_id"]),
+        ),
+        filter_summary_item(
+            "Categories",
+            selected_values_label(filters["selected_categories"], "All categories"),
+        ),
+        filter_summary_item(
+            "Tags",
+            selected_values_label(
+                filters["selected_tags"],
+                "All tags",
+                translated_value_labels={UNTAGGED_TAG_FILTER: "Untagged"},
+            ),
+        ),
+        filter_summary_item(
+            "Status",
+            selected_option_label(REVIEW_FILTER_OPTIONS, filters["review"], "All statuses"),
+        ),
+        filter_summary_item(
+            "Ignored",
+            selected_option_label(IGNORED_FILTER_OPTIONS, filters["ignored"], "All"),
+        ),
+        filter_summary_item(
+            "How categorized",
+            selected_option_label(CATEGORY_SOURCE_FILTER_OPTIONS, filters["category_source"], "All methods"),
+        ),
+    ]
 
 
 def update_transaction_category_from_form(transaction_id: int, form: Any) -> dict[str, Any]:

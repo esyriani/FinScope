@@ -60,12 +60,45 @@ function setupRecurringActivityDetailModal() {
     const dayModalList = dayModalElement?.querySelector("[data-recurring-calendar-day-list]");
     // Display fallback only; current recurrence rows include the configured tolerance in matchDetails.
     const fallbackDateToleranceDays = 5;
+    const recurringDynamicSelector = "[data-recurring-dynamic]";
     let activeRecurringId = "";
     const ignoredRecurringIds = new Set();
     const interactiveSelector = "a, button, input, select, textarea, form, [data-row-action]";
 
+    function recurringDynamic() {
+        return document.querySelector(recurringDynamicSelector);
+    }
+
+    function recurringActionUrl(action) {
+        const routes = recurringDynamic()?.dataset || {};
+        if (action === "confirm") return routes.recurringConfirmUrl || "";
+        if (action === "remove") return routes.recurringIgnoreUrl || "";
+        if (action === "edit") return routes.recurringEditUrl || "";
+        return "";
+    }
+
+    function moneyNumber(value) {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        if (typeof value !== "number" && typeof value !== "string") {
+            return null;
+        }
+        if (typeof value === "string" && value.trim() === "") {
+            return null;
+        }
+
+        const numberValue = Number(value);
+        return Number.isFinite(numberValue) ? numberValue : null;
+    }
+
     function formatMoneyLocal(value) {
-        return window.financeFormatMoney ? window.financeFormatMoney(value) : Number(value || 0).toFixed(2);
+        if (window.financeFormatMoney) {
+            return window.financeFormatMoney(value);
+        }
+
+        const numberValue = moneyNumber(value);
+        return numberValue === null ? "" : numberValue.toFixed(2);
     }
 
     function formatDateLocal(value) {
@@ -380,10 +413,12 @@ function setupRecurringActivityDetailModal() {
         const item = recurringData[id];
         if (!item) return null;
 
-        const result = await postRecurringPattern(
-            action === "confirm" ? "/recurring/patterns/confirm" : "/recurring/patterns/ignore",
-            patternPayload(item)
-        );
+        const actionUrl = recurringActionUrl(action);
+        if (!actionUrl) {
+            throw new Error(financeTranslate("Could not save recurring pattern."));
+        }
+
+        const result = await postRecurringPattern(actionUrl, patternPayload(item));
         recurringPatternItems(item).forEach((patternItem) => {
             patternItem.userStatus = result.userStatus;
             patternItem.active = result.active;
@@ -543,7 +578,12 @@ function setupRecurringActivityDetailModal() {
             active: editActive?.value || "active",
         };
         try {
-            const result = await postRecurringPattern("/recurring/patterns/edit", payload);
+            const actionUrl = recurringActionUrl("edit");
+            if (!actionUrl) {
+                throw new Error(financeTranslate("Could not save recurring pattern."));
+            }
+
+            const result = await postRecurringPattern(actionUrl, payload);
             item.userStatus = "edited";
             item.active = result.active;
             item.frequency = payload.frequency;
@@ -757,18 +797,7 @@ function setupRecurringAjaxNavigation() {
     document.body.dataset.recurringAjaxReady = "true";
 
     const dynamicSelector = "[data-recurring-dynamic]";
-
-    function recurringUrl(value) {
-        const url = new URL(value, window.location.href);
-        return url.origin === window.location.origin && url.pathname === "/recurring" ? url : null;
-    }
-
-    function setDynamicBusy(busy) {
-        const dynamic = document.querySelector(dynamicSelector);
-        if (!dynamic) return;
-        dynamic.setAttribute("aria-busy", busy ? "true" : "false");
-        dynamic.classList.toggle("recurring-dynamic-loading", busy);
-    }
+    let dynamicRefresh = null;
 
     function closeOpenRecurringModals() {
         document.querySelectorAll(".modal.show").forEach((modalElement) => {
@@ -781,10 +810,6 @@ function setupRecurringAjaxNavigation() {
             input.financeFlatpickr?.destroy();
             delete input.financeFlatpickr;
         });
-    }
-
-    function initializeRecurringDynamic(dynamic) {
-        window.financeApp?.runInitializers(dynamic);
     }
 
     function setHiddenField(form, name, value) {
@@ -814,71 +839,53 @@ function setupRecurringAjaxNavigation() {
         });
     }
 
-    async function replaceRecurringDynamic(url, pushState = true) {
-        const currentDynamic = document.querySelector(dynamicSelector);
-        if (!currentDynamic) {
-            window.location.href = url.toString();
-            return;
-        }
-
-        setDynamicBusy(true);
-        try {
-            const response = await fetch(url.toString(), {
-                headers: { "X-Requested-With": "XMLHttpRequest" },
+    function recurringRefresh() {
+        if (!dynamicRefresh && typeof window.financeApp?.createDynamicPageRefresh === "function") {
+            dynamicRefresh = window.financeApp.createDynamicPageRefresh({
+                selector: dynamicSelector,
+                routeDatasetKey: "recurringUrl",
+                loadingClass: "recurring-dynamic-loading",
+                historyState: { recurringAjax: true },
+                errorMessage: financeTranslate("Recurring refresh failed."),
+                missingMessage: financeTranslate("Recurring refresh returned no content."),
+                beforeReplace: ({ currentTarget }) => {
+                    closeOpenRecurringModals();
+                    destroyDynamicFlatpickr(currentTarget);
+                },
+                afterReplace: ({ url }) => syncRecurringFilterForm(url),
             });
-            if (!response.ok) throw new Error("Recurring refresh failed.");
-
-            const documentText = await response.text();
-            const nextDocument = new DOMParser().parseFromString(documentText, "text/html");
-            const nextDynamic = nextDocument.querySelector(dynamicSelector);
-            if (!nextDynamic) throw new Error("Recurring refresh returned no content.");
-
-            closeOpenRecurringModals();
-            destroyDynamicFlatpickr(currentDynamic);
-            currentDynamic.replaceWith(document.importNode(nextDynamic, true));
-            if (pushState) {
-                window.history.pushState({ recurringAjax: true }, "", url.toString());
-            }
-            syncRecurringFilterForm(url);
-            initializeRecurringDynamic(document.querySelector(dynamicSelector));
-        } catch (_error) {
-            window.location.href = url.toString();
-        } finally {
-            setDynamicBusy(false);
         }
-    }
-
-    function formUrl(form) {
-        const url = new URL(form.getAttribute("action") || window.location.href, window.location.href);
-        url.search = new URLSearchParams(new FormData(form)).toString();
-        return url;
+        return dynamicRefresh;
     }
 
     document.addEventListener("click", (event) => {
         const link = event.target.closest("[data-recurring-ajax-link]");
         if (!link) return;
 
-        const url = recurringUrl(link.href);
+        const refresh = recurringRefresh();
+        const url = refresh?.url(link.href);
         if (!url) return;
 
         event.preventDefault();
-        replaceRecurringDynamic(url);
+        refresh.replace(url);
     });
 
     document.addEventListener("submit", (event) => {
         const form = event.target.closest("[data-recurring-ajax-form]");
         if (!form) return;
 
-        const url = recurringUrl(formUrl(form));
+        const refresh = recurringRefresh();
+        const url = refresh?.url(refresh.formUrl(form));
         if (!url) return;
 
         event.preventDefault();
-        replaceRecurringDynamic(url);
+        refresh.replace(url);
     });
 
     window.addEventListener("popstate", () => {
-        const url = recurringUrl(window.location.href);
-        if (url) replaceRecurringDynamic(url, false);
+        const refresh = recurringRefresh();
+        const url = refresh?.url(window.location.href);
+        if (url) refresh.replace(url, { pushState: false });
     });
 }
 

@@ -1,0 +1,252 @@
+<script type="application/json" data-reimbursement-match-items>
+    {{ reimbursement_match_modal_items | default([]) | tojson }}
+</script>
+<script type="application/json" data-reimbursement-expense-items>
+    {{ expense_detail_modal_items | default([]) | tojson }}
+</script>
+
+<div
+    class="modal fade reimbursement-match-modal"
+    id="reimbursement-match-modal"
+    tabindex="-1"
+    aria-labelledby="reimbursement-match-modal-label"
+    aria-hidden="true"
+    data-reimbursement-match-modal
+    data-paid-label="{{ _('Paid') }}"
+    data-reimbursed-label="{{ _('Reimbursed') }}"
+    data-still-to-reimburse-label="{{ _('Still to reimburse') }}"
+    data-match-amount-label="{{ _('Match amount') }}"
+>
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <form
+                method="post"
+                action="{{ url_for('reimbursements.add_allocation') }}"
+                data-reimbursement-match-form
+                data-ajax-refresh-form
+                data-match-remaining="0"
+                data-reimbursement-remaining="0"
+            >
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="reimbursement-match-modal-label">{{ _("Match reimbursement") }}</h5>
+                        <div class="small text-muted" data-reimbursement-match-subtitle></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="match_mode" value="multiple">
+                    <input type="hidden" name="reimbursement_transaction_id" data-reimbursement-match-id>
+
+                    <div class="reimbursement-amount-grid reimbursement-modal-amounts">
+                        <div class="reimbursement-amount-fact reimbursement-amount-received">
+                            <span>{{ _("Received amount") }}</span>
+                            <strong data-reimbursement-match-amount-label></strong>
+                        </div>
+                        <div class="reimbursement-amount-fact reimbursement-amount-matched">
+                            <span>{{ _("Already matched") }}</span>
+                            <strong data-reimbursement-match-allocated-label></strong>
+                        </div>
+                        <div class="reimbursement-amount-fact reimbursement-amount-unmatched">
+                            <span>{{ _("Unmatched") }}</span>
+                            <strong data-reimbursement-match-remaining-label></strong>
+                        </div>
+                    </div>
+
+                    <div class="reimbursement-panel-title reimbursement-modal-candidates-title">
+                        <h5>{{ _("Candidate expenses") }}</h5>
+                        <span data-reimbursement-match-candidate-count></span>
+                    </div>
+                    <div class="reimbursement-candidate-list" data-reimbursement-match-candidates></div>
+                    <div class="reimbursement-list-note" data-reimbursement-match-note hidden></div>
+                    <div class="reimbursement-empty-state" data-reimbursement-match-empty hidden>
+                        {{ _("No expenses are available for this reimbursement yet.") }}
+                    </div>
+                    <div class="reimbursement-match-review" data-reimbursement-match-review>
+                        <div class="reimbursement-review-matched">
+                            <span>{{ _("Selected to match") }}</span>
+                            <strong data-match-total>{{ 0|moneyfmt }}</strong>
+                        </div>
+                        <div class="reimbursement-review-unmatched">
+                            <span>{{ _("Remaining after this match") }}</span>
+                            <strong data-match-remaining>{{ 0|moneyfmt }}</strong>
+                        </div>
+                        <div class="reimbursement-match-error" data-match-error hidden>
+                            {{ _("Selected amount exceeds unmatched reimbursement money.") }}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}
+                    </button>
+                    <button class="btn btn-primary" type="submit" data-match-submit>
+                        <i class="bi bi-check2" aria-hidden="true"></i>{{ _("Save selected matches") }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div
+    class="modal fade reimbursement-expense-modal"
+    id="reimbursement-expense-modal"
+    tabindex="-1"
+    aria-labelledby="reimbursement-expense-modal-label"
+    aria-hidden="true"
+    data-reimbursement-expense-modal
+    data-no-tags-label="-"
+    data-reimbursement-label="{{ _('Reimbursement') }}"
+    data-received-amount-label="{{ _('Received amount') }}"
+    data-already-matched-label="{{ _('Already matched') }}"
+    data-unmatched-label="{{ _('Unmatched') }}"
+    data-match-amount-label="{{ _('Match amount') }}"
+    data-remove-reimbursable-tag-label="{{ _('Remove reimbursable tag') }}"
+    data-set-reimbursable-tag-label="{{ _('Set reimbursable tag') }}"
+    data-resume-tracking-label="{{ _('Resume tracking') }}"
+    data-mark-complete-label="{{ _('Mark complete') }}"
+>
+    <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-fit-content">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="reimbursement-expense-modal-label">{{ _("Expense details") }}</h5>
+                    <div class="small text-muted" data-reimbursement-expense-subtitle></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+            </div>
+            <div class="modal-body transaction-rule-modal reimbursement-expense-detail">
+                <dl class="rule-summary">
+                    <div>
+                        <dt>{{ _("Description") }}</dt>
+                        <dd data-reimbursement-expense-description></dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Date") }}</dt>
+                        <dd data-reimbursement-expense-date></dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Category") }}</dt>
+                        <dd data-reimbursement-expense-category></dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Tags") }}</dt>
+                        <dd data-reimbursement-expense-tags></dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Account") }}</dt>
+                        <dd data-reimbursement-expense-account></dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Amount") }}</dt>
+                        <dd data-reimbursement-expense-amount></dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Status") }}</dt>
+                        <dd><span class="badge" data-reimbursement-expense-status></span></dd>
+                    </div>
+                    <div>
+                        <dt>{{ _("Reimbursable tag") }}</dt>
+                        <dd data-reimbursement-expense-tag-state></dd>
+                    </div>
+                </dl>
+
+                <div class="reimbursement-amount-grid reimbursement-modal-amounts">
+                    <div class="reimbursement-amount-fact reimbursement-amount-paid">
+                        <span>{{ _("Paid") }}</span>
+                        <strong data-reimbursement-expense-paid-label></strong>
+                    </div>
+                    <div class="reimbursement-amount-fact reimbursement-amount-matched">
+                        <span>{{ _("Reimbursed") }}</span>
+                        <strong data-reimbursement-expense-allocated-label></strong>
+                    </div>
+                    <div class="reimbursement-amount-fact reimbursement-amount-owed">
+                        <span>{{ _("Still to reimburse") }}</span>
+                        <strong data-reimbursement-expense-remaining-label></strong>
+                    </div>
+                </div>
+
+                <section class="reimbursement-expense-candidates" aria-labelledby="reimbursement-expense-candidates-title">
+                    <div class="reimbursement-panel-title reimbursement-modal-candidates-title">
+                        <h5 id="reimbursement-expense-candidates-title">{{ _("Candidate reimbursements") }}</h5>
+                        <span data-reimbursement-expense-candidate-count></span>
+                    </div>
+                    <form
+                        method="post"
+                        action="{{ url_for('reimbursements.add_allocation') }}"
+                        data-reimbursement-expense-match-form
+                        data-reimbursement-match-form
+                        data-ajax-refresh-form
+                        data-match-remaining="0"
+                    >
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="match_mode" value="expense_multiple">
+                        <input type="hidden" name="expense_transaction_id" data-reimbursement-expense-id>
+                        <div class="reimbursement-candidate-list" data-reimbursement-expense-candidates></div>
+                        <div class="reimbursement-list-note" data-reimbursement-expense-note hidden></div>
+                        <div class="reimbursement-match-review">
+                            <div class="reimbursement-review-matched">
+                                <span>{{ _("Selected to match") }}</span>
+                                <strong data-match-total>{{ 0|moneyfmt }}</strong>
+                            </div>
+                            <div class="reimbursement-review-unmatched">
+                                <span>{{ _("Remaining after this match") }}</span>
+                                <strong data-match-remaining>{{ 0|moneyfmt }}</strong>
+                            </div>
+                            <div class="reimbursement-match-error" data-match-error hidden>
+                                {{ _("Selected amount exceeds expense amount still to reimburse.") }}
+                            </div>
+                            <button class="btn btn-primary" type="submit" data-match-submit>
+                                <i class="bi bi-check2" aria-hidden="true"></i>{{ _("Save selected matches") }}
+                            </button>
+                        </div>
+                    </form>
+                    <div class="reimbursement-empty-state" data-reimbursement-expense-empty hidden>
+                        {{ _("No reimbursements are available for this expense yet.") }}
+                    </div>
+                </section>
+
+                <section class="reimbursement-expense-matches" aria-labelledby="reimbursement-expense-matches-title">
+                    <div class="reimbursement-panel-title reimbursement-modal-candidates-title">
+                        <h5 id="reimbursement-expense-matches-title">{{ _("Matched reimbursements") }}</h5>
+                        <span data-reimbursement-expense-match-count></span>
+                    </div>
+                    <div class="table-responsive reimbursement-expense-match-table-wrapper" data-reimbursement-expense-match-table>
+                        <table class="table table-sm align-middle reimbursement-expense-match-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ _("Reimbursement") }}</th>
+                                    <th class="text-end">{{ _("Matched amount") }}</th>
+                                </tr>
+                            </thead>
+                            <tbody data-reimbursement-expense-matches></tbody>
+                        </table>
+                    </div>
+                    <div class="reimbursement-empty-state" data-reimbursement-expense-matches-empty hidden>
+                        {{ _("No reimbursements are matched to this expense.") }}
+                    </div>
+                </section>
+            </div>
+            <div class="modal-footer reimbursement-expense-modal-actions">
+                <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}
+                </button>
+                <form method="post" action="" data-reimbursement-expense-tag-form data-ajax-refresh-form>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="reimbursable" data-reimbursement-expense-tag-value>
+                    <button class="btn" type="submit" data-reimbursement-expense-tag-button>
+                        <i class="bi bi-tag" aria-hidden="true"></i><span data-reimbursement-expense-tag-action></span>
+                    </button>
+                </form>
+                <form method="post" action="" data-reimbursement-expense-state-form data-ajax-refresh-form>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-primary" type="submit" data-reimbursement-expense-state-button>
+                        <i class="bi" aria-hidden="true" data-reimbursement-expense-state-icon></i><span data-reimbursement-expense-state-action></span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

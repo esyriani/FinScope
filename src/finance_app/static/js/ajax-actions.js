@@ -1,3 +1,10 @@
+const ajaxRefreshRequests = new Map();
+let ajaxRefreshSequence = 0;
+
+function ajaxRefreshTranslate(message, variables) {
+    return window.financeTranslate ? window.financeTranslate(message, variables) : message;
+}
+
 function ajaxRefreshTargetSelector(element) {
     const explicitSelector = element.dataset.ajaxRefreshTarget;
     if (explicitSelector) {
@@ -25,6 +32,56 @@ function ajaxRefreshTargetSelector(element) {
     return `[data-ajax-refresh-target="${key.replaceAll('"', '\\"')}"]`;
 }
 
+function ajaxRefreshAbortController() {
+    return typeof AbortController === "function" ? new AbortController() : null;
+}
+
+function beginAjaxRefreshRequest(selector, options = {}) {
+    const previousRequest = ajaxRefreshRequests.get(selector);
+    previousRequest?.controller?.abort();
+
+    const request = {
+        controller: options.abortable === false ? null : ajaxRefreshAbortController(),
+        selector,
+        sequence: (ajaxRefreshSequence += 1),
+    };
+    ajaxRefreshRequests.set(selector, request);
+    return request;
+}
+
+function prepareAjaxRefreshRequestForGet(request) {
+    if (!request.controller) {
+        request.controller = ajaxRefreshAbortController();
+    }
+}
+
+function ajaxRefreshIsCurrentRequest(request) {
+    const currentRequest = ajaxRefreshRequests.get(request.selector);
+    return currentRequest?.sequence === request.sequence;
+}
+
+function finishAjaxRefreshRequest(request) {
+    if (ajaxRefreshIsCurrentRequest(request)) {
+        ajaxRefreshRequests.delete(request.selector);
+    }
+}
+
+function ajaxRefreshStaleResult(request) {
+    return {
+        applied: false,
+        selector: request.selector,
+        stale: true,
+    };
+}
+
+function ajaxRefreshAppliedResult(request) {
+    return {
+        applied: true,
+        selector: request.selector,
+        stale: false,
+    };
+}
+
 function ajaxRefreshTargetElements(selector) {
     if (!selector) {
         return [];
@@ -35,6 +92,16 @@ function ajaxRefreshTargetElements(selector) {
     } catch (_error) {
         return [];
     }
+}
+
+function setAjaxRefreshTargetsBusy(selector, busy) {
+    ajaxRefreshTargetElements(selector).forEach((target) => {
+        if (busy) {
+            target.setAttribute("aria-busy", "true");
+        } else {
+            target.removeAttribute("aria-busy");
+        }
+    });
 }
 
 function disposeAjaxRefreshTooltips(target) {
@@ -108,7 +175,7 @@ function replaceAjaxRefreshTargets(selector, html, responseUrl) {
     const freshTargets = Array.from(doc.querySelectorAll(selector));
 
     if (!currentTargets.length || currentTargets.length !== freshTargets.length) {
-        throw new Error("Refresh target was not found.");
+        throw new Error(ajaxRefreshTranslate("Refresh target was not found."));
     }
 
     const replacements = [];
@@ -152,48 +219,183 @@ function showAjaxRefreshError(form, selector, message) {
     alert.textContent = message;
 }
 
-async function ajaxRefreshFromUrl(url, selector) {
-    const response = await fetch(url, {
-        method: "GET",
-        headers: {
-            "X-Requested-With": "fetch",
-        },
-        credentials: "same-origin",
-    });
-    const html = await response.text();
-    if (!response.ok) {
-        throw new Error("The page section could not be refreshed.");
+async function ajaxRefreshFromUrl(url, selector, options = {}) {
+    const request = options.request || beginAjaxRefreshRequest(selector);
+    if (!ajaxRefreshIsCurrentRequest(request)) {
+        return ajaxRefreshStaleResult(request);
     }
-    replaceAjaxRefreshTargets(selector, html, response.url);
+
+    prepareAjaxRefreshRequestForGet(request);
+    setAjaxRefreshTargetsBusy(selector, true);
+
+    try {
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                "X-Requested-With": "fetch",
+            },
+            credentials: "same-origin",
+            signal: request.controller?.signal,
+        });
+        const html = await response.text();
+        if (!response.ok) {
+            throw new Error(ajaxRefreshTranslate("The page section could not be refreshed."));
+        }
+        if (!ajaxRefreshIsCurrentRequest(request)) {
+            return ajaxRefreshStaleResult(request);
+        }
+
+        replaceAjaxRefreshTargets(selector, html, response.url);
+        return ajaxRefreshAppliedResult(request);
+    } catch (error) {
+        if (error?.name === "AbortError" || !ajaxRefreshIsCurrentRequest(request)) {
+            return ajaxRefreshStaleResult(request);
+        }
+        throw error;
+    } finally {
+        if (ajaxRefreshIsCurrentRequest(request)) {
+            setAjaxRefreshTargetsBusy(selector, false);
+            finishAjaxRefreshRequest(request);
+        }
+    }
 }
 
-async function handleAjaxRefreshResponse(response, form, selector) {
+function ajaxRefreshDynamicTarget(selector) {
+    return ajaxRefreshTargetElements(selector)[0] || null;
+}
+
+function setAjaxRefreshDynamicBusy(selector, loadingClass, busy) {
+    ajaxRefreshTargetElements(selector).forEach((target) => {
+        target.setAttribute("aria-busy", busy ? "true" : "false");
+        if (loadingClass) {
+            target.classList.toggle(loadingClass, busy);
+        }
+    });
+}
+
+function ajaxRefreshDynamicBasePath(options) {
+    const routeUrl = ajaxRefreshDynamicTarget(options.selector)?.dataset[options.routeDatasetKey] || "";
+    return routeUrl ? new URL(routeUrl, window.location.href).pathname : "";
+}
+
+function ajaxRefreshDynamicUrl(value, options) {
+    let url;
+    try {
+        url = new URL(value, window.location.href);
+    } catch (_error) {
+        return null;
+    }
+
+    const basePath = ajaxRefreshDynamicBasePath(options);
+    return url.origin === window.location.origin && basePath && url.pathname === basePath ? url : null;
+}
+
+function ajaxRefreshFormUrl(form) {
+    const url = new URL(form.getAttribute("action") || window.location.href, window.location.href);
+    url.search = new URLSearchParams(new FormData(form)).toString();
+    return url;
+}
+
+async function ajaxRefreshDynamicPage(url, options, replaceOptions = {}) {
+    const currentTarget = ajaxRefreshDynamicTarget(options.selector);
+    if (!currentTarget) {
+        window.location.href = url.toString();
+        return { applied: false, redirected: true, selector: options.selector, stale: false };
+    }
+
+    const request = beginAjaxRefreshRequest(options.selector);
+    setAjaxRefreshDynamicBusy(options.selector, options.loadingClass, true);
+
+    try {
+        const response = await fetch(url.toString(), {
+            headers: { "X-Requested-With": options.requestedWith || "XMLHttpRequest" },
+            signal: request.controller?.signal,
+        });
+        if (!response.ok) {
+            throw new Error(ajaxRefreshTranslate(options.errorMessage || "Page refresh failed."));
+        }
+
+        const documentText = await response.text();
+        const nextDocument = new DOMParser().parseFromString(documentText, "text/html");
+        const nextTarget = nextDocument.querySelector(options.selector);
+        if (!nextTarget) {
+            throw new Error(ajaxRefreshTranslate(options.missingMessage || "Page refresh returned no content."));
+        }
+        if (!ajaxRefreshIsCurrentRequest(request)) {
+            return ajaxRefreshStaleResult(request);
+        }
+
+        options.beforeReplace?.({ currentTarget, nextDocument, nextTarget, url });
+        const replacement = document.importNode(nextTarget, true);
+        currentTarget.replaceWith(replacement);
+        if (replaceOptions.pushState !== false) {
+            window.history.pushState(options.historyState || {}, "", url.toString());
+        }
+        options.afterReplace?.({ nextDocument, target: replacement, url });
+        runAjaxRefreshInitializers(replacement);
+        return ajaxRefreshAppliedResult(request);
+    } catch (error) {
+        if (error?.name === "AbortError" || !ajaxRefreshIsCurrentRequest(request)) {
+            return ajaxRefreshStaleResult(request);
+        }
+        if (replaceOptions.fallback !== false) {
+            window.location.href = url.toString();
+            return { applied: false, redirected: true, selector: options.selector, stale: false };
+        }
+        throw error;
+    } finally {
+        if (ajaxRefreshIsCurrentRequest(request)) {
+            setAjaxRefreshDynamicBusy(options.selector, options.loadingClass, false);
+            finishAjaxRefreshRequest(request);
+        }
+    }
+}
+
+function createAjaxDynamicPageRefresh(options = {}) {
+    return {
+        element: () => ajaxRefreshDynamicTarget(options.selector),
+        formUrl: ajaxRefreshFormUrl,
+        replace: (url, replaceOptions = {}) => ajaxRefreshDynamicPage(url, options, replaceOptions),
+        url: (value) => ajaxRefreshDynamicUrl(value, options),
+    };
+}
+
+async function handleAjaxRefreshResponse(response, form, selector, request) {
     const contentType = response.headers.get("content-type") || "";
 
     if (contentType.includes("application/json")) {
         const data = await response.json();
         if (!response.ok || data.ok === false) {
-            throw new Error(data.message || "The action could not be completed.");
+            throw new Error(data.message || ajaxRefreshTranslate("The action could not be completed."));
         }
 
         const refreshUrl = data.refresh_url || data.redirect_url || response.url || window.location.href;
         await hideAjaxRefreshModal(form);
-        await ajaxRefreshFromUrl(refreshUrl, selector);
+        const refreshResult = await ajaxRefreshFromUrl(refreshUrl, selector, { request });
+        if (refreshResult.stale) {
+            return refreshResult;
+        }
+
         document.dispatchEvent(
             new CustomEvent("finance:ajax-action-complete", {
                 detail: { form, selector, data, refreshUrl },
             })
         );
-        return;
+        return refreshResult;
     }
 
     const html = await response.text();
     if (!response.ok) {
-        throw new Error("The action could not be completed.");
+        throw new Error(ajaxRefreshTranslate("The action could not be completed."));
     }
 
     await hideAjaxRefreshModal(form);
+    if (!ajaxRefreshIsCurrentRequest(request)) {
+        return ajaxRefreshStaleResult(request);
+    }
+
     replaceAjaxRefreshTargets(selector, html, response.url);
+    return ajaxRefreshAppliedResult(request);
 }
 
 async function submitAjaxRefreshForm(form, submitter) {
@@ -212,12 +414,14 @@ async function submitAjaxRefreshForm(form, submitter) {
         formData.append(submitter.name, submitter.value);
     }
 
+    const method = (form.method || "POST").toUpperCase();
+    const request = beginAjaxRefreshRequest(selector, { abortable: method === "GET" });
     const controls = Array.from(form.querySelectorAll("button, input, select, textarea"));
     controls.forEach((control) => {
         control.disabled = true;
     });
     form.setAttribute("aria-busy", "true");
-    const method = (form.method || "POST").toUpperCase();
+    setAjaxRefreshTargetsBusy(selector, true);
     const busyToken = window.showBusyOverlayForElement?.(form, submitter);
 
     try {
@@ -234,20 +438,30 @@ async function submitAjaxRefreshForm(form, submitter) {
 
         if (method === "GET") {
             actionUrl.search = new URLSearchParams(formData).toString();
+            await ajaxRefreshFromUrl(actionUrl, selector, { request });
         } else {
             fetchOptions.body = formData;
+            const response = await fetch(actionUrl, fetchOptions);
+            await handleAjaxRefreshResponse(response, form, selector, request);
         }
-
-        const response = await fetch(actionUrl, fetchOptions);
-        await handleAjaxRefreshResponse(response, form, selector);
     } catch (error) {
-        showAjaxRefreshError(form, selector, error?.message || "The action could not be completed.");
+        if (ajaxRefreshIsCurrentRequest(request)) {
+            showAjaxRefreshError(
+                form,
+                selector,
+                error?.message || ajaxRefreshTranslate("The action could not be completed.")
+            );
+        }
     } finally {
         if (document.body.contains(form)) {
             controls.forEach((control) => {
                 control.disabled = false;
             });
             form.removeAttribute("aria-busy");
+        }
+        if (ajaxRefreshIsCurrentRequest(request)) {
+            setAjaxRefreshTargetsBusy(selector, false);
+            finishAjaxRefreshRequest(request);
         }
         window.hideBusyOverlay?.(busyToken);
     }
@@ -276,6 +490,11 @@ function setupAjaxRefreshLinks(root = document) {
                 return;
             }
 
+            if (link.dataset.ajaxRefreshInFlight === "true") {
+                event.preventDefault();
+                return;
+            }
+
             const selector = link.dataset.ajaxRefreshTarget || ajaxRefreshTargetSelector(link);
             if (!selector) {
                 return;
@@ -288,7 +507,7 @@ function setupAjaxRefreshLinks(root = document) {
 
             event.preventDefault();
             const target = link.closest("[data-ajax-refresh-target]") || ajaxRefreshTargetElements(selector)[0];
-            target?.setAttribute("aria-busy", "true");
+            link.dataset.ajaxRefreshInFlight = "true";
             link.setAttribute("aria-disabled", "true");
             const busyToken = window.showBusyOverlayForElement?.(link);
 
@@ -298,14 +517,12 @@ function setupAjaxRefreshLinks(root = document) {
                 showAjaxRefreshError(
                     target || link,
                     selector,
-                    error?.message || "The page section could not be refreshed."
+                    error?.message || ajaxRefreshTranslate("The page section could not be refreshed.")
                 );
             } finally {
                 if (document.body.contains(link)) {
+                    delete link.dataset.ajaxRefreshInFlight;
                     link.removeAttribute("aria-disabled");
-                }
-                if (target && document.body.contains(target)) {
-                    target.removeAttribute("aria-busy");
                 }
                 window.hideBusyOverlay?.(busyToken);
             }
@@ -328,6 +545,11 @@ function setupAjaxRefreshForms(root = document) {
         });
     });
 }
+
+window.financeApp = {
+    ...(window.financeApp || {}),
+    createDynamicPageRefresh: createAjaxDynamicPageRefresh,
+};
 
 setupAjaxRefreshForms();
 setupAjaxRefreshLinks();

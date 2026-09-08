@@ -24,6 +24,25 @@ def test_normalize_language_accepts_supported_languages_and_locales():
 def test_translate_uses_catalog_and_falls_back_to_source_text():
     """Verify catalog lookup, formatting, and fallback behavior."""
     assert translate("Settings", "fr") == "Paramètres"
+    assert translate("Daily summaries.", "fr") == "Résumés quotidiens."
+    assert translate("Next month", "fr") == "Mois suivant"
+    assert translate("Previous month", "fr") == "Mois précédent"
+    assert translate("Review {date} transactions", "fr", date="2026-05-01") == (
+        "Consulter les transactions du 2026-05-01"
+    )
+    assert (
+        translate("Select all transactions on this page", "fr") == "Sélectionner toutes les transactions de cette page"
+    )
+    assert (
+        translate(
+            "Select transaction on {date}: {description}, {amount}",
+            "fr",
+            date="2026-01-01",
+            description="Coffee Shop",
+            amount="4.56 €",
+        )
+        == "Sélectionner la transaction du 2026-01-01 : Coffee Shop, 4.56 €"
+    )
     assert translate("Upload", "en") == "Upload"
     assert translate("Missing source", "fr") == "Missing source"
     assert translate("Table {number}", "fr", number=3) == "Table 3"

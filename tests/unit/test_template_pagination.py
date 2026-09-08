@@ -24,6 +24,12 @@ def test_pagination_markup_lives_in_shared_partial():
 
 def test_paginated_templates_import_shared_partial():
     """Verify server-rendered pagination pages import the shared macro."""
+    pagination_import = 'from "_pagination.html" import pagination with context'
+    table_primitives_import = 'from "_table_primitives.html" import'
+    table_primitives_template = (TEMPLATES / "_table_primitives.html").read_text(encoding="utf-8")
+
+    assert pagination_import in table_primitives_template
+
     paginated_templates = [
         "jobs.html",
         "review.html",
@@ -36,7 +42,10 @@ def test_paginated_templates_import_shared_partial():
 
     for template_name in paginated_templates:
         template = (TEMPLATES / template_name).read_text(encoding="utf-8")
-        assert 'from "_pagination.html" import pagination with context' in template
+        assert pagination_import in template or (
+            table_primitives_import in template
+            and ("pagination_controls" in template or "pagination_footer" in template)
+        )
 
 
 def render_pagination(app, page):

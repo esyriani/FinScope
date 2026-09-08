@@ -1,92 +1,3 @@
-@media (max-width: 1100px) {
-    .metric-grid,
-    .quick-links,
-    .home-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .command-pulse-layout {
-        grid-template-areas:
-            "summary"
-            "support";
-        grid-template-columns: 1fr;
-    }
-
-    .cockpit-panel-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .shortcut-strip {
-        grid-template-columns: 1fr;
-    }
-
-    .command-primary-action {
-        justify-self: start;
-    }
-
-    .calendar-control-row {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-            "account"
-            "categories"
-            "tags"
-            "actions"
-            "navigation";
-    }
-
-    .recurring-control-row {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-            "account"
-            "categories"
-            "tags"
-            "confidence"
-            "actions";
-    }
-
-    .calendar-filter-actions,
-    .recurring-filter-actions {
-        justify-content: flex-end;
-    }
-
-    .rule-audit-search-row {
-        grid-template-areas:
-            "search"
-            "conflicts"
-            "actions";
-        grid-template-columns: 1fr;
-    }
-
-    .rule-audit-filter-actions {
-        justify-content: flex-end;
-    }
-}
-
-@media (max-width: 1100px) {
-    .dashboard-breakdown-grid,
-    .dashboard-action-bar,
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@container dashboard-page (max-width: 90rem) {
-    .dashboard-breakdown-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@container dashboard-page (max-width: 72rem) {
-    .readiness-chip-grid,
-    .readiness-detail-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
 @media (max-width: 850px) {
     .app-layout {
         display: block;
@@ -169,31 +80,17 @@
         padding: 1rem;
     }
 
-    .page-header,
-    .period-form,
-    .dashboard-breakdown-bar,
-    .home-actions,
-    .section-title {
+    .page-header {
         align-items: stretch;
         flex-direction: column;
     }
 
-    .home-actions {
-        display: grid;
-        grid-template-columns: 1fr;
-        width: 100%;
-    }
-
-    .home-actions .btn,
-    .home-actions form,
-    .home-actions form .btn,
     .page-header > .btn,
     .page-header > a.btn {
         width: 100%;
     }
 
-    .page-header > div,
-    .section-title > div {
+    .page-header > div {
         width: 100%;
     }
 
@@ -203,63 +100,6 @@
         width: 100%;
     }
 
-    .metric-grid,
-    .command-pulse-layout,
-    .cockpit-panel-grid,
-    .pulse-facts,
-    .shortcut-strip,
-    .dashboard-breakdown-grid,
-    .dashboard-grid,
-    .quick-links,
-    .home-grid,
-    .home-facts {
-        grid-template-columns: 1fr;
-    }
-
-    .theme-mode-options {
-        grid-template-columns: 1fr;
-    }
-
-    .rule-summary > div,
-    .quality-panel-head,
-    .dashboard-action-bar,
-    .rule-form-row,
-    .rule-keyword-row {
-        align-items: stretch;
-        grid-template-columns: 1fr;
-    }
-
-    .quality-panel-head {
-        grid-template-areas:
-            "summary"
-            "highlights"
-            "actions";
-    }
-
-    .quality-actions,
-    .dashboard-action-list {
-        justify-content: flex-start;
-    }
-
-    .rule-choice-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .amount-rule-modes,
-    .amount-range-fields,
-    .rule-preview-row,
-    .review-example {
-        grid-template-columns: 1fr;
-    }
-
-    .review-example-description {
-        white-space: normal;
-    }
-
-    .calendar-month-controls,
-    .dashboard-breakdown-actions,
-    .calendar-filter-actions,
-    .recurring-filter-actions,
     .filter-actions {
         align-items: stretch;
         display: grid;
@@ -270,28 +110,6 @@
 
     .filter-actions .btn {
         min-width: 0;
-    }
-
-    .dashboard-breakdown-actions .btn-group {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        width: 100%;
-    }
-
-    .dashboard-breakdown-actions > .btn {
-        width: 100%;
-    }
-
-    .calendar-month-field {
-        grid-column: 1 / -1;
-    }
-
-    .calendar-month-controls {
-        width: 100%;
-    }
-
-    .calendar-month-controls .btn {
-        justify-content: center;
     }
 
     .sidebar-collapsed .app-layout {
@@ -313,35 +131,8 @@
         display: none;
     }
 
-    .attention-item,
-    .activity-item {
-        align-items: start;
-        grid-template-columns: auto minmax(0, 1fr);
-    }
-
-    .attention-item .badge,
-    .activity-amount {
-        grid-column: 2;
-        justify-self: start;
-    }
-
-    .command-pulse-summary p,
-    .metric-detail,
-    .attention-detail,
-    .attention-latest,
-    .activity-label,
-    .activity-meta,
     .text-muted {
         overflow-wrap: anywhere;
-    }
-
-    .attention-detail,
-    .attention-latest,
-    .activity-label,
-    .activity-meta {
-        overflow: visible;
-        text-overflow: clip;
-        white-space: normal;
     }
 
     .btn,
@@ -383,46 +174,11 @@
         display: none;
     }
 
-    .metric-value,
-    .quality-score,
-    .insight-summary {
-        font-size: 1.3rem;
-    }
-
-    .metric-detail,
-    .pulse-fact span,
-    .pulse-fact strong,
-    .attention-title,
-    .activity-name {
-        white-space: normal;
-    }
-
     .card-body {
         padding: 1rem;
     }
 
-    .calendar-filter-actions,
-    .recurring-filter-actions,
-    .filter-actions,
-    .calendar-month-controls,
-    .dashboard-breakdown-actions,
-    .dashboard-breakdown-actions .btn-group {
+    .filter-actions {
         grid-template-columns: 1fr;
-    }
-
-    .chart-card {
-        min-height: 300px;
-    }
-
-    .chart-card-tall {
-        min-height: 340px;
-    }
-
-    .chart-card .chart-viewport {
-        height: 250px !important;
-    }
-
-    .chart-card-tall .chart-viewport {
-        height: 290px !important;
     }
 }

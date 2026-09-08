@@ -321,6 +321,7 @@ def test_calendar_route_renders_bookmarkable_merchant_filter(owner_client):
     assert_markup(
         response,
         "data-calendar-dynamic",
+        'data-calendar-url="/calendar"',
         "data-calendar-ajax-form",
         "data-calendar-ajax-link",
         "data-flatpickr-submit-on-change",

@@ -194,6 +194,10 @@
         grid-template-columns: 1fr;
     }
 
+    .theme-mode-options {
+        grid-template-columns: 1fr;
+    }
+
     .theme-mode-field,
     .language-mode-field,
     .settings-field-model {

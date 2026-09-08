@@ -124,6 +124,16 @@ def test_transactions_context_paginates_and_sorts(core_conn):
     assert first_page["page_end"] == 2
     assert descriptions(first_page) == ["Hydro Quebec", "Unknown Shop"]
     assert descriptions(second_page) == ["Metro Grocery", "Cafe Bistro"]
+    assert first_page["transaction_filter_summary_items"] == [
+        {"label": "Search", "value": "All"},
+        {"label": "Period", "value": "All time"},
+        {"label": "Account", "value": "All accounts"},
+        {"label": "Categories", "value": "All categories"},
+        {"label": "Tags", "value": "All tags"},
+        {"label": "Status", "value": "All"},
+        {"label": "Ignored", "value": "Active only"},
+        {"label": "How categorized", "value": "All methods"},
+    ]
     assert first_page["all_transaction_ids"] == [
         ids["Hydro Quebec"],
         ids["Unknown Shop"],
