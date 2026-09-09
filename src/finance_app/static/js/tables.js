@@ -25,9 +25,9 @@ function setupTableRowInteractions(root = document) {
         }
 
         if (typeof window.financeApp?.showModalAfterExpandedExportCloses === "function") {
-            window.financeApp.showModalAfterExpandedExportCloses(modalElement);
+            window.financeApp.showModalAfterExpandedExportCloses(modalElement, row);
         } else {
-            window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+            window.bootstrap.Modal.getOrCreateInstance(modalElement).show(row);
         }
         return true;
     }
@@ -222,141 +222,6 @@ function transactionBatchIds(table, rowCheckboxes) {
     return rowCheckboxes.map((checkbox) => String(checkbox.value));
 }
 
-const collapsePanelHeaderInteractiveSelector = [
-    "a",
-    "button",
-    "input",
-    "select",
-    "textarea",
-    "label",
-    "summary",
-    "[role='button']",
-    "[data-bs-toggle]",
-].join(", ");
-
-function collapseTargetForToggle(toggle) {
-    const targetSelector =
-        toggle.dataset.collapsePanelTarget ||
-        toggle.dataset.filterPanelTarget ||
-        toggle.getAttribute("data-bs-target") ||
-        "";
-    return targetSelector ? document.querySelector(targetSelector) : null;
-}
-
-const collapsePanelHeadingSelector = "[data-filter-panel-heading-toggle], [data-collapse-panel-heading-toggle]";
-const collapsePanelHeaderSelector = "[data-filter-panel-header-toggle], [data-collapse-panel-header-toggle]";
-
-function filterPanelHeadingToggles(target) {
-    if (!target?.id) return [];
-    return Array.from(document.querySelectorAll(collapsePanelHeadingSelector)).filter(
-        (heading) => heading.getAttribute("aria-controls") === target.id
-    );
-}
-
-function setFilterPanelHeadingExpanded(target, expanded) {
-    filterPanelHeadingToggles(target).forEach((heading) => {
-        heading.setAttribute("aria-expanded", expanded ? "true" : "false");
-    });
-}
-
-function toggleFilterPanelTarget(target) {
-    if (!target) return;
-
-    if (window.bootstrap?.Collapse) {
-        window.bootstrap.Collapse.getOrCreateInstance(target, { toggle: false }).toggle();
-        return;
-    }
-
-    target.classList.toggle("show");
-    setFilterPanelHeadingExpanded(target, target.classList.contains("show"));
-}
-
-function setupCollapsePanelStateSync(target) {
-    if (!target || target.dataset.collapsePanelStateReady === "true") {
-        return;
-    }
-
-    target.dataset.collapsePanelStateReady = "true";
-    setFilterPanelHeadingExpanded(target, target.classList.contains("show"));
-    target.addEventListener("shown.bs.collapse", () => setFilterPanelHeadingExpanded(target, true));
-    target.addEventListener("hidden.bs.collapse", () => setFilterPanelHeadingExpanded(target, false));
-}
-
-function setupFilterPanelHeaderToggles(root = document) {
-    root.querySelectorAll(collapsePanelHeaderSelector).forEach((header) => {
-        if (header.dataset.collapsePanelHeaderReady === "true") {
-            return;
-        }
-
-        const target = collapseTargetForToggle(header);
-        if (!target) return;
-        setupCollapsePanelStateSync(target);
-
-        header.dataset.collapsePanelHeaderReady = "true";
-        header.addEventListener("click", (event) => {
-            const headingToggle = event.target.closest(collapsePanelHeadingSelector);
-            const interactiveElement = event.target.closest(collapsePanelHeaderInteractiveSelector);
-            if (interactiveElement && !headingToggle?.contains(interactiveElement)) {
-                return;
-            }
-
-            toggleFilterPanelTarget(target);
-        });
-    });
-
-    root.querySelectorAll(collapsePanelHeadingSelector).forEach((heading) => {
-        if (heading.dataset.collapsePanelHeadingReady === "true") {
-            return;
-        }
-
-        const target = collapseTargetForToggle(heading);
-        if (!target) return;
-        setupCollapsePanelStateSync(target);
-
-        heading.dataset.collapsePanelHeadingReady = "true";
-        heading.addEventListener("keydown", (event) => {
-            if (event.key !== "Enter" && event.key !== " ") {
-                return;
-            }
-
-            event.preventDefault();
-            toggleFilterPanelTarget(target);
-        });
-    });
-}
-
-function setupCollapseToggleLabels(root = document) {
-    root.querySelectorAll("[data-collapse-label-toggle]").forEach((button) => {
-        if (button.dataset.collapseLabelReady === "true") {
-            return;
-        }
-
-        button.dataset.collapseLabelReady = "true";
-        const targetSelector = button.getAttribute("data-bs-target") || button.getAttribute("href");
-        const target = targetSelector ? document.querySelector(targetSelector) : null;
-        const icon = button.querySelector("[data-collapse-toggle-icon]");
-        const label = button.querySelector("[data-collapse-toggle-label]");
-        const showLabel = button.dataset.showLabel || "Show table";
-        const hideLabel = button.dataset.hideLabel || "Hide table";
-
-        function setExpanded(expanded) {
-            button.setAttribute("aria-expanded", expanded ? "true" : "false");
-            setFilterPanelHeadingExpanded(target, expanded);
-            if (label) {
-                label.textContent = expanded ? hideLabel : showLabel;
-            }
-            if (icon) {
-                icon.classList.toggle("bi-chevron-down", !expanded);
-                icon.classList.toggle("bi-chevron-up", expanded);
-            }
-        }
-
-        setExpanded(target?.classList.contains("show") || button.getAttribute("aria-expanded") === "true");
-        target?.addEventListener("shown.bs.collapse", () => setExpanded(true));
-        target?.addEventListener("hidden.bs.collapse", () => setExpanded(false));
-    });
-}
-
 function setupAuditSectionLinks(root = document) {
     root.querySelectorAll("[data-audit-open-section]").forEach((link) => {
         if (link.dataset.auditOpenSectionReady === "true") {
@@ -405,8 +270,6 @@ function openAuditSectionFromLocation(root = document) {
 
 setupTableRowInteractions();
 setupTransactionBatchActions();
-setupFilterPanelHeaderToggles();
-setupCollapseToggleLabels();
 setupAuditSectionLinks();
 openAuditSectionFromLocation();
 
@@ -733,8 +596,6 @@ setupPaginatedTables();
 
 window.financeApp?.registerInitializer("tables.row-interactions", setupTableRowInteractions);
 window.financeApp?.registerInitializer("tables.transaction-batch-actions", setupTransactionBatchActions);
-window.financeApp?.registerInitializer("tables.filter-panel-header-toggles", setupFilterPanelHeaderToggles);
-window.financeApp?.registerInitializer("tables.collapse-toggle-labels", setupCollapseToggleLabels);
 window.financeApp?.registerInitializer("tables.audit-section-links", setupAuditSectionLinks);
 window.financeApp?.registerInitializer("tables.open-audit-section", openAuditSectionFromLocation);
 window.financeApp?.registerInitializer("tables.sortable", setupSortableTables);

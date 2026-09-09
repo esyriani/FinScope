@@ -1,0 +1,112 @@
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_reports_explorers.html" import evidence_preview, render_taxonomy_detail_subnav, taxonomy_breadcrumb_nav, taxonomy_detail_header, taxonomy_related_reports with context %}
+{% from "_reports_filters.html" import reports_filter_form with context %}
+{% from "_reports_summary_cards.html" import reports_chart_card, reports_key_insights, reports_quality_panel with context %}
+{% from "_reports_tables.html" import reports_table with context %}
+{% from "_table_primitives.html" import empty_state with context %}
+
+<div data-reports-page data-reports-taxonomy-detail>
+{{ taxonomy_breadcrumb_nav(taxonomy_breadcrumbs) }}
+{% call collapsible_filter_panel("reports-taxonomy-detail-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+{{ taxonomy_detail_header(taxonomy_target, taxonomy_target_options, transaction_url, comparison_url, taxonomy_back_url) }}
+
+{% if transaction_count > 0 %}
+{{ render_taxonomy_detail_subnav(taxonomy_detail_subnav) }}
+
+<section id="taxonomy-summary" class="reports-detail-section">
+    <div class="reports-detail-section-grid {% if not taxonomy_panel %}reports-detail-section-grid-single{% endif %}">
+        <div>
+            {{ reports_key_insights(transaction_url) }}
+            {{ reports_quality_panel() }}
+            {% if taxonomy_notes %}
+            <div class="reports-note-stack">
+                {% for note in taxonomy_notes %}
+                <div class="reports-note reports-note-{{ note.level }}">
+                    {{ _(note.message) }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if taxonomy_panel %}
+        <aside class="card reports-semantic-panel">
+            <div class="card-body">
+                <div class="section-title">
+                    <h5 class="card-title">{{ _(taxonomy_panel.title) }}</h5>
+                </div>
+                <p>{{ _(taxonomy_panel.description) }}</p>
+                <dl class="reports-metric-list">
+                    {% for metric in taxonomy_panel.metrics %}
+                    <div>
+                        <dt>{{ _(metric.label) }}</dt>
+                        <dd>
+                            {% if metric.is_money %}
+                                {{ metric.value | moneyfmt }}
+                            {% else %}
+                                {{ metric.value }}
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ taxonomy_panel.action_url }}"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>{{ _(taxonomy_panel.action_label) }}</a>
+            </div>
+        </aside>
+        {% endif %}
+    </div>
+</section>
+
+<section id="taxonomy-monthly" class="reports-detail-section" aria-labelledby="taxonomy-monthly-heading">
+    <div class="page-block-header">
+        <h5 id="taxonomy-monthly-heading" class="card-title mb-0">{{ _("Monthly") }}</h5>
+    </div>
+    <div class="reports-chart-grid">
+        {{ reports_chart_card("Monthly statement", "reportsMonthlyChart", true, false) }}
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Monthly statement", monthly_rows, "Month", "reports-taxonomy-monthly-table", false, false) }}
+    </div>
+</section>
+
+<section id="taxonomy-composition" class="reports-detail-section" aria-labelledby="taxonomy-composition-heading">
+    <div class="page-block-header">
+        <h5 id="taxonomy-composition-heading" class="card-title mb-0">{{ _("Composition") }}</h5>
+    </div>
+    {% if taxonomy_has_composition_chart %}
+    <div class="reports-chart-grid">
+        {{ reports_chart_card(taxonomy_target.composition_title, "reportsCompositionChart", false, false) }}
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table(taxonomy_target.composition_title, taxonomy_visible_composition_rows, taxonomy_target.composition_label_heading, "reports-taxonomy-composition-table", false, false) }}
+    </div>
+    {% else %}
+    {{ empty_state(taxonomy_composition_empty_message) }}
+    {% endif %}
+</section>
+
+<section id="taxonomy-merchants" class="reports-detail-section" aria-labelledby="taxonomy-merchants-heading">
+    <div class="page-block-header">
+        <h5 id="taxonomy-merchants-heading" class="card-title mb-0">{{ _("Merchants") }}</h5>
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Merchants", merchant_rows, "Merchant", "reports-taxonomy-merchant-table", false, false) }}
+        {{ reports_table("Account breakdown", account_rows, "Account", "reports-taxonomy-account-table", false, false) }}
+    </div>
+</section>
+
+{{ taxonomy_related_reports(taxonomy_related_links) }}
+{{ evidence_preview(taxonomy_evidence_rows, "reports-taxonomy-evidence-table", transaction_url) }}
+
+<script id="reports-overview-chart-data" type="application/json">
+{{ chart_data | tojson }}
+</script>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>

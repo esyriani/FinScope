@@ -1,0 +1,81 @@
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_reports_explorers.html" import entity_detail_header, evidence_preview, render_taxonomy_detail_subnav, taxonomy_breadcrumb_nav, taxonomy_related_reports with context %}
+{% from "_reports_filters.html" import reports_filter_form with context %}
+{% from "_reports_summary_cards.html" import reports_chart_card, reports_key_insights, reports_quality_panel with context %}
+{% from "_reports_tables.html" import reports_table with context %}
+
+<div data-reports-page data-reports-entity-detail>
+{{ taxonomy_breadcrumb_nav(entity_breadcrumbs) }}
+{% call collapsible_filter_panel("reports-entity-detail-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+{% set entity_back_label = "Back to accounts" if entity_target.kind == "account" else "Back to merchants" %}
+{{ entity_detail_header(entity_target, entity_target_options, transaction_url, comparison_url, entity_back_url, entity_back_label, entity_search_placeholder) }}
+
+{% if transaction_count > 0 %}
+{{ render_taxonomy_detail_subnav(entity_detail_subnav) }}
+
+<section id="entity-summary" class="reports-detail-section">
+    {{ reports_key_insights(transaction_url) }}
+    {{ reports_quality_panel() }}
+</section>
+
+<section id="entity-monthly" class="reports-detail-section" aria-labelledby="entity-monthly-heading">
+    <div class="page-block-header">
+        <h5 id="entity-monthly-heading" class="card-title mb-0">{{ _("Monthly") }}</h5>
+    </div>
+    <div class="reports-chart-grid">
+        {{ reports_chart_card("Monthly statement", "reportsMonthlyChart", true, false) }}
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Monthly statement", monthly_rows, "Month", "reports-entity-monthly-table", false, false) }}
+    </div>
+</section>
+
+<section id="entity-composition" class="reports-detail-section" aria-labelledby="entity-composition-heading">
+    <div class="page-block-header">
+        <h5 id="entity-composition-heading" class="card-title mb-0">{{ _("Composition") }}</h5>
+    </div>
+    <div class="reports-chart-grid">
+        {{ reports_chart_card("Category breakdown", "reportsCategoryChart", false, false) }}
+        {{ reports_chart_card("Tag breakdown", "reportsTagChart", false, false) }}
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Category breakdown", category_rows, "Category", "reports-entity-category-table", false, false) }}
+        {{ reports_table("Tag breakdown", tag_rows, "Tag", "reports-entity-tag-table", false, false) }}
+    </div>
+</section>
+
+{% if entity_target.kind == "account" %}
+<section id="entity-merchants" class="reports-detail-section" aria-labelledby="entity-merchants-heading">
+    <div class="page-block-header">
+        <h5 id="entity-merchants-heading" class="card-title mb-0">{{ _("Merchants") }}</h5>
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Merchants", merchant_rows, "Merchant", "reports-entity-merchant-table", false, false) }}
+    </div>
+</section>
+{% else %}
+<section id="entity-accounts" class="reports-detail-section" aria-labelledby="entity-accounts-heading">
+    <div class="page-block-header">
+        <h5 id="entity-accounts-heading" class="card-title mb-0">{{ _("Accounts") }}</h5>
+    </div>
+    <div class="reports-table-grid">
+        {{ reports_table("Account breakdown", account_rows, "Account", "reports-entity-account-table", false, false) }}
+    </div>
+</section>
+{% endif %}
+
+{{ taxonomy_related_reports(entity_related_links) }}
+{{ evidence_preview(entity_evidence_rows, "reports-entity-evidence-table", transaction_url, "entity-transactions") }}
+
+<script id="reports-overview-chart-data" type="application/json">
+{{ chart_data | tojson }}
+</script>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>

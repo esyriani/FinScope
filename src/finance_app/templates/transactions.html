@@ -17,12 +17,13 @@
     "js/tag-multiselect.js",
     "js/tables.js",
     "js/ai-token-estimate.js",
+    "js/xlsx-writer.js",
     "js/exports.js",
     "js/transactions.js"
 ] %}
 {% extends "base.html" %}
-{% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
-{% from "_filter_controls.html" import account_filter, date_range_filters, filter_actions, filter_summary, period_filter, period_summary with context %}
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_filter_controls.html" import account_filter, date_range_filters, filter_actions, filter_summary, period_filter with context %}
 {% from "_help.html" import help_tip with context %}
 {% from "_rule_controls.html" import amount_rule_control, rule_category_control, rule_keyword_control, rule_save_mode_control, rule_tag_control with context %}
 {% from "_sort_controls.html" import server_sort_header with context %}
@@ -54,55 +55,7 @@
 {% set transaction_ai_result = transaction_ai_result | default(none) %}
 {% set all_transaction_ids = all_transaction_ids | default([]) %}
 {% set can_edit_transactions = current_user_can('edit_transactions') %}
-{% set transaction_period_label = namespace(value=_("All time")) %}
-{% for period_value, period_text in period_options %}
-    {% if selected_period == period_value %}
-        {% set transaction_period_label.value = _(period_text) %}
-    {% endif %}
-{% endfor %}
-{% set transaction_account_label = namespace(value=_("All accounts")) %}
-{% for account in account_options %}
-    {% if selected_account_id == account.id %}
-        {% set transaction_account_label.value = account.name %}
-    {% endif %}
-{% endfor %}
-{% set transaction_review_label = namespace(value=_("All statuses")) %}
-{% for review_value, review_text in review_filter_options %}
-    {% if selected_review == review_value %}
-        {% set transaction_review_label.value = _(review_text) %}
-    {% endif %}
-{% endfor %}
-{% set transaction_ignored_label = namespace(value=_("All")) %}
-{% for ignored_value, ignored_text in ignored_filter_options %}
-    {% if selected_ignored == ignored_value %}
-        {% set transaction_ignored_label.value = _(ignored_text) %}
-    {% endif %}
-{% endfor %}
-{% set transaction_source_label = namespace(value=_("All methods")) %}
-{% for source_value, source_text in category_source_filter_options %}
-    {% if selected_category_source == source_value %}
-        {% set transaction_source_label.value = _(source_text) %}
-    {% endif %}
-{% endfor %}
-{% set transaction_filter_summary = filter_summary([
-    {"label": "Search", "value": search if search else _("All")},
-    {
-        "label": "Period",
-        "value": period_summary(
-            transaction_period_label.value,
-            selected_period,
-            period_custom,
-            selected_date_from,
-            selected_date_to
-        ),
-    },
-    {"label": "Account", "value": transaction_account_label.value},
-    {"label": "Categories", "value": selected_filter_values(selected_categories, "All categories")},
-    {"label": "Tags", "value": selected_filter_values(selected_tags, "All tags")},
-    {"label": "Status", "value": transaction_review_label.value},
-    {"label": "Ignored", "value": transaction_ignored_label.value},
-    {"label": "How categorized", "value": transaction_source_label.value},
-]) %}
+{% set transaction_filter_summary = filter_summary(transaction_filter_summary_items | default([])) %}
 
 {% macro transaction_pagination(label) %}
 {{ pagination(page, total_pages, page_url, label) }}
@@ -330,7 +283,7 @@
 
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle transactions-table" data-transaction-batch-table data-all-transaction-ids="{{ all_transaction_ids | tojson }}">
+            <table class="table table-hover align-middle transactions-table" data-transaction-batch-table data-all-transaction-ids="{{ all_transaction_ids | tojson | forceescape }}">
                 <thead>
                     <tr>
                         {% if can_edit_transactions %}
@@ -339,7 +292,7 @@
                                 class="form-check-input"
                                 type="checkbox"
                                 data-transaction-select-all
-                                aria-label="{{ _('Select all transactions') }}"
+                                aria-label="{{ _('Select all transactions on this page') }}"
                             >
                         </th>
                         {% endif %}
@@ -363,7 +316,7 @@
                                 type="checkbox"
                                 value="{{ tx['id'] }}"
                                 data-transaction-row-checkbox
-                                aria-label="{{ _('Select transaction') }}"
+                                aria-label="{{ _('Select transaction on {date}: {description}, {amount}', date=tx['tx_date'], description=tx['description'], amount=tx['amount'] | moneyfmt) }}"
                             >
                         </td>
                         {% endif %}

@@ -110,3 +110,13 @@
     max-width: 18rem;
     overflow-wrap: anywhere;
 }
+
+@media (max-width: 850px) {
+    .review-example {
+        grid-template-columns: 1fr;
+    }
+
+    .review-example-description {
+        white-space: normal;
+    }
+}

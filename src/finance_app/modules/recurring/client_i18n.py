@@ -38,6 +38,8 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Recurring activity",
     "Recurring items - {date}",
     "Recurring pattern changes saved.",
+    "Recurring refresh failed.",
+    "Recurring refresh returned no content.",
     "Remove",
     "Review this pattern before relying on it.",
     "This pattern has missed multiple expected cycles.",

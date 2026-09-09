@@ -1,13 +1,13 @@
 {% set page_stylesheets = [
-    "css/home-dashboard.css",
+    "css/analytics-components.css",
     "css/tables.css",
     "css/rules-list.css",
     "css/exports.css"
 ] %}
-{% set page_scripts = ["js/tables.js", "js/exports.js"] %}
+{% set page_scripts = ["js/tables.js", "js/xlsx-writer.js", "js/exports.js"] %}
 {% extends "base.html" %}
-{% from "_pagination.html" import pagination with context %}
 {% from "_sort_controls.html" import server_sort_header with context %}
+{% from "_table_primitives.html" import empty_state, pagination_controls, pagination_footer, table_card_header, table_result_status with context %}
 
 {% block content %}
 {% set transaction_table = transaction_table | default({}) %}
@@ -39,10 +39,6 @@
 <div class="small text-muted">{{ _("Tags") }}: {{ match.tag_label }}</div>
 <div class="small text-muted">{{ _("Confidence level") }}: {{ "%.3f"|format(match.confidence) }}</div>
 <div class="small text-muted">{{ _("Match score") }}: {{ "%.3f"|format(match.match_score) }}</div>
-{% endmacro %}
-
-{% macro detail_pagination(table, label) %}
-{{ pagination(table.page, table.total_pages, table.page_url, label) }}
 {% endmacro %}
 
 {% macro sort_header(table, sort_name, label, header_class="") %}
@@ -97,30 +93,12 @@
 </form>
 {% endmacro %}
 
-{% macro preview_delete_button(rule) %}
-<form
-    method="post"
-    action="{{ url_for('rules.audit_rule_preview') }}"
-    class="d-inline"
-    data-busy-overlay
-    data-busy-delay-ms="0"
-    data-busy-message="{{ _('Preparing rule health check preview...') }}"
->
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="action" value="delete_rule">
-    <input type="hidden" name="rule_id" value="{{ rule.id }}">
-    <button class="btn btn-sm btn-outline-danger" type="submit">
-        <i class="bi bi-trash" aria-hidden="true"></i>{{ _("Preview delete") }}
-    </button>
-</form>
-{% endmacro %}
-
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Shared matching transactions") }}</h2>
         <p class="text-muted mb-0">{{ _("Every row below is matched by both rules.") }}</p>
     </div>
-    <div class="home-actions">
+    <div class="page-actions">
         <a
             class="btn btn-outline-secondary"
             href="{{ url_for('rules.audit_rules') }}"
@@ -229,22 +207,24 @@
 </div>
 
 <section class="card">
-    <div class="card-body border-bottom">
-        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-            <div>
-                <h5 class="mb-1">{{ _("Shared transactions") }}</h5>
-                <p class="text-muted mb-0">{{ _("The applied rule is selected by confidence level, then match score, then precision.") }}</p>
-            </div>
-            <div class="d-flex flex-wrap align-items-center justify-content-end gap-3">
-                {% if transaction_table.total_count %}
-                <div class="text-muted small">
-                    {{ _("Showing {start}-{end} of {total} transactions", start=transaction_table.page_start, end=transaction_table.page_end, total=transaction_table.total_count) }}
-                </div>
-                {% endif %}
-                {{ detail_pagination(transaction_table, _("Shared transaction pages")) }}
-            </div>
-        </div>
-    </div>
+    {% set transaction_controls %}
+        {{ table_result_status(
+            _("Showing {start}-{end} of {total} transactions", start=transaction_table.page_start, end=transaction_table.page_end, total=transaction_table.total_count),
+            transaction_table.total_count
+        ) }}
+        {{ pagination_controls(transaction_table, _("Shared transaction pages")) }}
+    {% endset %}
+    {{ table_card_header(
+        "Shared transactions",
+        "The applied rule is selected by confidence level, then match score, then precision.",
+        transaction_controls,
+        header_class="card-body border-bottom",
+        row_class="d-flex flex-wrap align-items-start justify-content-between gap-3",
+        title_class="mb-1",
+        detail_tag="p",
+        detail_class="text-muted mb-0",
+        controls_class="d-flex flex-wrap align-items-center justify-content-end gap-3"
+    ) }}
     {% if transaction_table.total_count %}
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -293,13 +273,9 @@
             </table>
         </div>
     </div>
-    {% if transaction_table.total_pages > 1 %}
-    <div class="card-footer d-flex justify-content-end">
-        {{ detail_pagination(transaction_table, _("Shared transaction pages bottom")) }}
-    </div>
-    {% endif %}
+    {{ pagination_footer(transaction_table, _("Shared transaction pages bottom")) }}
     {% else %}
-    <div class="empty-state compact">{{ _("No shared transactions found.") }}</div>
+    {{ empty_state("No shared transactions found.") }}
     {% endif %}
 </section>
 {% endblock %}

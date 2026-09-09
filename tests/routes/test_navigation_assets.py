@@ -102,6 +102,7 @@ def test_base_template_keeps_feature_assets_page_scoped(owner_client):
         "js/dates.js",
         "js/calendar.js",
         "js/recurring.js",
+        "js/xlsx-writer.js",
         "js/exports.js",
         "js/tag-multiselect.js",
         "css/comparison.css",
@@ -111,6 +112,7 @@ def test_base_template_keeps_feature_assets_page_scoped(owner_client):
         "css/rules-list.css",
         "css/settings.css",
         "css/review.css",
+        "css/dashboard.css",
     ):
         assert_no_asset_reference(response, snippet)
 
@@ -122,6 +124,8 @@ def test_dashboard_route_loads_dashboard_assets(owner_client):
     assert response.status_code == 200
     for pattern in (
         r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}",
+        r"/static/css/analytics-components\.css\?v=[0-9a-f]{12}",
+        r"/static/css/dashboard\.css\?v=[0-9a-f]{12}",
         r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}",
         r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}",
         r"/static/js/dashboard\.js\?v=[0-9a-f]{12}",
@@ -140,11 +144,12 @@ def test_reports_route_loads_reports_assets(owner_client):
 
     assert response.status_code == 200
     assert_asset_reference(response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
-    assert_asset_reference(response, r"/static/css/home-dashboard\.css\?v=[0-9a-f]{12}")
-    assert_asset_reference(response, r"/static/css/comparison\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/css/analytics-components\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/css/reports\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/css/tables\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/css/exports\.css\?v=[0-9a-f]{12}")
+    assert_no_asset_reference(response, "css/home-dashboard.css")
+    assert_no_asset_reference(response, "css/comparison.css")
     assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/vendor/echarts/5\.6\.0/echarts\.min\.js\?v=[0-9a-f]{12}")
@@ -152,12 +157,17 @@ def test_reports_route_loads_reports_assets(owner_client):
     assert_asset_reference(response, r"/static/js/tables\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/js/chart-utils\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/js/reports-charts\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/xlsx-writer\.js\?v=[0-9a-f]{12}")
     assert_asset_reference(response, r"/static/js/exports\.js\?v=[0-9a-f]{12}")
     assert asset_reference_index(response, r"/static/js/chart-utils\.js") < asset_reference_index(
         response,
         r"/static/js/reports-charts\.js",
     )
     assert asset_reference_index(response, r"/static/js/reports-charts\.js") < asset_reference_index(
+        response,
+        r"/static/js/xlsx-writer\.js",
+    )
+    assert asset_reference_index(response, r"/static/js/xlsx-writer\.js") < asset_reference_index(
         response,
         r"/static/js/exports\.js",
     )
@@ -199,7 +209,7 @@ def test_tabbed_pages_load_shared_tab_stylesheet(owner_client):
     )
     assert asset_reference_index(reports_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         reports_response,
-        r"/static/css/home-dashboard\.css",
+        r"/static/css/analytics-components\.css",
     )
     assert asset_reference_index(recurring_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         recurring_response,
@@ -211,5 +221,5 @@ def test_tabbed_pages_load_shared_tab_stylesheet(owner_client):
     )
     assert asset_reference_index(taxonomy_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         taxonomy_response,
-        r"/static/css/home-dashboard\.css",
+        r"/static/css/analytics-components\.css",
     )

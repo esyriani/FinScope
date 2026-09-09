@@ -1,0 +1,137 @@
+{% from "_sort_controls.html" import client_sort_header with context %}
+{% from "_table_primitives.html" import client_table_search, collapsible_table_header, empty_state, export_toolbar with context %}
+
+{% macro sort_header(label, column, sort_type="text", class_name="") -%}
+{{ client_sort_header(column, label, sort_type, class_name, button_class="sort-link") }}
+{%- endmacro %}
+
+{% macro reports_table_header(title, table_id, summary, show_controls=true) -%}
+{% set panel_id = table_id ~ "-panel" %}
+{% set controls %}
+    {{ client_table_search(
+        table_id ~ "-search",
+        table_id,
+        wrapper_class="input-group input-group-sm reports-table-search"
+    ) }}
+    {{ export_toolbar("reports-table-export-actions") }}
+{% endset %}
+{{ collapsible_table_header(
+    panel_id,
+    title,
+    summary,
+    controls if show_controls else "",
+    header_class="card-body border-bottom reports-table-header collapse-panel-header",
+    heading_class="reports-table-heading collapse-panel-heading",
+    title_id=table_id ~ "-heading",
+    title_class="card-title mb-1",
+    description_class="text-muted mb-0 reports-table-summary",
+    controls_class="reports-table-controls",
+    translate_description=false
+) }}
+{%- endmacro %}
+
+{% macro reports_table(title, rows, label_heading, table_id, show_controls=true, exportable=true) -%}
+{% set panel_id = table_id ~ "-panel" %}
+{% set transaction_total = rows | sum(attribute="transaction_count") %}
+<section class="card reports-table-card" aria-labelledby="{{ table_id }}-heading" {% if exportable %}data-table-export-scope{% endif %}>
+    {{ reports_table_header(title, table_id, _("Transactions") ~ ": " ~ transaction_total, show_controls) }}
+    <div class="collapse reports-table-collapse" id="{{ panel_id }}">
+    {% if rows %}
+    <div class="table-responsive">
+        <table
+            id="{{ table_id }}"
+            class="table table-hover align-middle mb-0 reports-table"
+            data-sortable-table
+            data-paginated-table
+            data-page-size="{{ reports_table_page_size | default(25) }}"
+            data-pagination-label="{{ _(title) }}"
+            data-export-title="{{ _(title) }}"
+        >
+            <thead>
+                <tr>
+                    {{ sort_header(label_heading, 0) }}
+                    {{ sort_header("Spending", 1, "number", "text-end") }}
+                    {{ sort_header("Income and credits", 2, "number", "text-end") }}
+                    {{ sort_header("Net cash flow", 3, "number", "text-end") }}
+                    {{ sort_header("Transactions", 4, "number", "text-end") }}
+                    {{ sort_header("Share", 5, "number", "text-end") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr {% if row.url | default("") %}data-row-href="{{ row.url }}" data-row-drilldown="dblclick"{% endif %}>
+                    <td data-sort-value="{{ row.label }}">
+                        <span class="fw-semibold">{{ row.label }}</span>
+                    </td>
+                    <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ row.net }}">{{ row.net | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.transaction_count }}">{{ row.transaction_count }}</td>
+                    <td class="text-end" data-sort-value="{{ row.share }}">
+                        <span>{{ row.share }}%</span>
+                        <span class="reports-bar-track" aria-hidden="true"><span style="width: {{ row.bar_width }}%;"></span></span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {{ empty_state("No rows available for this report.") }}
+    {% endif %}
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro evidence_table(rows, table_id) -%}
+{% set panel_id = table_id ~ "-panel" %}
+<section class="card reports-table-card reports-evidence-card" aria-labelledby="{{ table_id }}-heading" data-table-export-scope>
+    {{ reports_table_header("Evidence preview", table_id, _("Transactions") ~ ": " ~ (rows | length)) }}
+    <div class="collapse reports-table-collapse" id="{{ panel_id }}">
+    {% if rows %}
+    <div class="table-responsive">
+        <table
+            id="{{ table_id }}"
+            class="table table-hover align-middle mb-0 reports-table"
+            data-sortable-table
+            data-paginated-table
+            data-page-size="{{ reports_table_page_size | default(25) }}"
+            data-pagination-label="{{ _('Evidence preview') }}"
+            data-export-title="{{ _('Evidence preview') }}"
+        >
+            <thead>
+                <tr>
+                    {{ sort_header("Date", 0) }}
+                    {{ sort_header("Description", 1) }}
+                    {{ sort_header("Account", 2) }}
+                    {{ sort_header("Merchant", 3) }}
+                    {{ sort_header("Category", 4) }}
+                    {{ sort_header("Amount", 5, "number", "text-end") }}
+                    {{ sort_header("Spending", 6, "number", "text-end") }}
+                    {{ sort_header("Income and credits", 7, "number", "text-end") }}
+                    {{ sort_header("Net cash flow", 8, "number", "text-end") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td data-sort-value="{{ row.date }}">{{ row.date | datefmt }}</td>
+                    <td data-sort-value="{{ row.description }}">{{ row.description }}</td>
+                    <td data-sort-value="{{ row.account_name or _('No account') }}">{{ row.account_name or _("No account") }}</td>
+                    <td data-sort-value="{{ row.merchant_label }}">{{ row.merchant_label }}</td>
+                    <td data-sort-value="{{ row.category }}">{{ row.category }}</td>
+                    <td class="text-end" data-sort-value="{{ row.amount }}">{{ row.amount | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
+                    <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>
+                    <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ row.net }}">{{ row.net | moneyfmt }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {{ empty_state("No evidence rows available for this report.") }}
+    {% endif %}
+    </div>
+</section>
+{%- endmacro %}

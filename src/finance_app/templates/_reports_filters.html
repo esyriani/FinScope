@@ -1,0 +1,127 @@
+{% from "_filter_controls.html" import account_filter, date_range_filters, filter_actions, merchant_filter, period_filter with context %}
+{% from "_tag_multiselect.html" import tag_multiselect with context %}
+
+{% macro reports_filter_form(clear_url) -%}
+<form method="get" class="row g-3 align-items-end">
+    {{ period_filter("reports-period", selected_period, period_options, "col-md-3") }}
+    {{ date_range_filters(
+        "reports",
+        selected_period,
+        period_custom,
+        selected_date_from,
+        selected_date_to,
+        "col-md-2",
+        "data-reports-custom-range"
+    ) }}
+
+    <div class="col-md-2">
+        <label class="form-label" for="reports-measure">{{ _("Measure") }}</label>
+        <select id="reports-measure" class="form-select" name="measure">
+            {% for option in measure_options %}
+                <option value="{{ option.value }}" {% if selected_measure == option.value %}selected{% endif %}>{{ _(option.label) }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label" for="reports-basis">{{ _("Basis") }}</label>
+        <select id="reports-basis" class="form-select" name="basis">
+            {% for option in basis_options %}
+                <option value="{{ option.value }}" {% if selected_basis == option.value %}selected{% endif %}>{{ _(option.label) }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    {% if reports_show_account_filter %}
+        {{ account_filter("reports-account", selected_account_id, account_options, "col-md-3") }}
+    {% endif %}
+
+    {% if reports_show_merchant_filter %}
+        {{ merchant_filter(
+            "reports-merchant-search",
+            selected_merchant_id,
+            selected_merchant_label,
+            reports_merchant_filter_label,
+            merchant_suggestion_limit,
+            "col-md-4",
+            "reports-merchant-suggestions"
+        ) }}
+    {% endif %}
+
+    {% if quick_view_options %}
+    <div class="col-md-6 col-xl-4" data-reports-scope-controls data-categorized-scope="{{ categorized_quick_view_value }}">
+        <label class="form-label">{{ _(reports_scope_label) }}</label>
+        <div class="app-toggle-group d-flex flex-wrap gap-1" role="radiogroup" aria-label="{{ _(reports_scope_label) }}">
+            {% for option in quick_view_options %}
+            <input
+                class="btn-check"
+                type="radio"
+                name="quick_view"
+                id="reports-quick-view-{{ option.value }}"
+                value="{{ option.value }}"
+                autocomplete="off"
+                {% if option.active %}checked{% endif %}
+            >
+            <label
+                class="app-toggle-option btn btn-sm btn-outline-secondary text-nowrap"
+                for="reports-quick-view-{{ option.value }}"
+            >
+                {{ _(option.label) }}{% if option.count is defined %}: {{ option.count }}{% endif %}
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if reports_taxonomy_filter_controls_available %}
+    {% set reports_refiners_disabled = not reports_taxonomy_filter_controls_visible %}
+    <div class="col-md-6 col-xl-4 {% if reports_refiners_disabled %}d-none{% endif %}" data-reports-scope-refiner>
+        <label class="form-label" id="reports-categories-label">{{ _("Category") }}</label>
+        {% call tag_multiselect(
+            "reports-categories-label",
+            _("All categories"),
+            select_all_label=_("Select all categories")
+        ) %}
+            {% for option in category_options %}
+                <label class="tag-multiselect-option">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        name="categories"
+                        value="{{ option }}"
+                        {% if option in selected_categories %}checked{% endif %}
+                        {% if reports_refiners_disabled %}disabled{% endif %}
+                    >
+                    <span>{{ option }}</span>
+                </label>
+            {% endfor %}
+        {% endcall %}
+    </div>
+
+    <div class="col-md-6 col-xl-4 {% if reports_refiners_disabled %}d-none{% endif %}" data-reports-scope-refiner>
+        <label class="form-label" id="reports-tags-label">{{ _("Tags") }}</label>
+        {% call tag_multiselect(
+            "reports-tags-label",
+            _("All tags"),
+            select_all_label=_("Select all tags")
+        ) %}
+            {% for option in tag_options %}
+                <label class="tag-multiselect-option">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        name="tags"
+                        value="{{ option.name }}"
+                        {% if option.name in selected_tags %}checked{% endif %}
+                        {% if reports_refiners_disabled %}disabled{% endif %}
+                    >
+                    <span>{{ option.name }}</span>
+                </label>
+            {% endfor %}
+        {% endcall %}
+    </div>
+    {% endif %}
+
+    {{ filter_actions(clear_url, "col-md-5 ms-md-auto filter-actions") }}
+</form>
+{%- endmacro %}

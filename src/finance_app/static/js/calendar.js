@@ -17,8 +17,28 @@ function setupCalendarDayModal(root = document) {
     const table = modalElement.querySelector("[data-calendar-modal-table]");
     const transactionBody = modalElement.querySelector("[data-calendar-modal-transactions]");
     const link = modalElement.querySelector("[data-calendar-modal-link]");
+    function moneyNumber(value) {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        if (typeof value !== "number" && typeof value !== "string") {
+            return null;
+        }
+        if (typeof value === "string" && value.trim() === "") {
+            return null;
+        }
+
+        const numberValue = Number(value);
+        return Number.isFinite(numberValue) ? numberValue : null;
+    }
+
     function formatMoney(value) {
-        return window.financeFormatMoney ? window.financeFormatMoney(value) : Number(value || 0).toFixed(2);
+        if (window.financeFormatMoney) {
+            return window.financeFormatMoney(value);
+        }
+
+        const numberValue = moneyNumber(value);
+        return numberValue === null ? "" : numberValue.toFixed(2);
     }
 
     function transactionRow(item) {
@@ -62,18 +82,18 @@ function setupCalendarDayModal(root = document) {
         modal.show();
     }
 
+    root.querySelectorAll("[data-calendar-day-open]").forEach((button) => {
+        if (button.dataset.calendarDayOpenReady === "true") return;
+        button.dataset.calendarDayOpenReady = "true";
+        button.addEventListener("click", () => openDay(button.dataset.calendarDayOpen));
+    });
+
     root.querySelectorAll("[data-calendar-day]").forEach((day) => {
         if (day.dataset.calendarDayReady === "true") return;
         day.dataset.calendarDayReady = "true";
         day.addEventListener("dblclick", (event) => {
             if (event.target.closest("a, button")) return;
             openDay(day.dataset.calendarDay);
-        });
-        day.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                openDay(day.dataset.calendarDay);
-            }
         });
     });
 }
@@ -132,18 +152,7 @@ function setupCalendarAjaxNavigation() {
     document.body.dataset.calendarAjaxReady = "true";
 
     const dynamicSelector = "[data-calendar-dynamic]";
-
-    function calendarUrl(value) {
-        const url = new URL(value, window.location.href);
-        return url.origin === window.location.origin && url.pathname === "/calendar" ? url : null;
-    }
-
-    function setDynamicBusy(busy) {
-        const dynamic = document.querySelector(dynamicSelector);
-        if (!dynamic) return;
-        dynamic.setAttribute("aria-busy", busy ? "true" : "false");
-        dynamic.classList.toggle("calendar-dynamic-loading", busy);
-    }
+    let dynamicRefresh = null;
 
     function closeOpenCalendarModals() {
         document.querySelectorAll(".modal.show").forEach((modalElement) => {
@@ -158,74 +167,52 @@ function setupCalendarAjaxNavigation() {
         });
     }
 
-    function initializeCalendarDynamic(dynamic) {
-        window.financeApp?.runInitializers(dynamic);
-    }
-
-    async function replaceCalendarDynamic(url, pushState = true) {
-        const currentDynamic = document.querySelector(dynamicSelector);
-        if (!currentDynamic) {
-            window.location.href = url.toString();
-            return;
-        }
-
-        setDynamicBusy(true);
-        try {
-            const response = await fetch(url.toString(), {
-                headers: { "X-Requested-With": "XMLHttpRequest" },
+    function calendarRefresh() {
+        if (!dynamicRefresh && typeof window.financeApp?.createDynamicPageRefresh === "function") {
+            dynamicRefresh = window.financeApp.createDynamicPageRefresh({
+                selector: dynamicSelector,
+                routeDatasetKey: "calendarUrl",
+                loadingClass: "calendar-dynamic-loading",
+                historyState: { calendarAjax: true },
+                errorMessage: financeTranslate("Calendar refresh failed."),
+                missingMessage: financeTranslate("Calendar refresh returned no content."),
+                beforeReplace: ({ currentTarget }) => {
+                    closeOpenCalendarModals();
+                    destroyDynamicFlatpickr(currentTarget);
+                },
             });
-            if (!response.ok) throw new Error("Calendar refresh failed.");
-
-            const documentText = await response.text();
-            const nextDocument = new DOMParser().parseFromString(documentText, "text/html");
-            const nextDynamic = nextDocument.querySelector(dynamicSelector);
-            if (!nextDynamic) throw new Error("Calendar refresh returned no content.");
-
-            closeOpenCalendarModals();
-            destroyDynamicFlatpickr(currentDynamic);
-            currentDynamic.replaceWith(document.importNode(nextDynamic, true));
-            if (pushState) {
-                window.history.pushState({ calendarAjax: true }, "", url.toString());
-            }
-            initializeCalendarDynamic(document.querySelector(dynamicSelector));
-        } catch (_error) {
-            window.location.href = url.toString();
-        } finally {
-            setDynamicBusy(false);
         }
-    }
-
-    function formUrl(form) {
-        const url = new URL(form.getAttribute("action") || window.location.href, window.location.href);
-        url.search = new URLSearchParams(new FormData(form)).toString();
-        return url;
+        return dynamicRefresh;
     }
 
     document.addEventListener("click", (event) => {
         const link = event.target.closest("[data-calendar-ajax-link]");
         if (!link) return;
 
-        const url = calendarUrl(link.href);
+        const refresh = calendarRefresh();
+        const url = refresh?.url(link.href);
         if (!url) return;
 
         event.preventDefault();
-        replaceCalendarDynamic(url);
+        refresh.replace(url);
     });
 
     document.addEventListener("submit", (event) => {
         const form = event.target.closest("[data-calendar-ajax-form]");
         if (!form) return;
 
-        const url = calendarUrl(formUrl(form));
+        const refresh = calendarRefresh();
+        const url = refresh?.url(refresh.formUrl(form));
         if (!url) return;
 
         event.preventDefault();
-        replaceCalendarDynamic(url);
+        refresh.replace(url);
     });
 
     window.addEventListener("popstate", () => {
-        const url = calendarUrl(window.location.href);
-        if (url) replaceCalendarDynamic(url, false);
+        const refresh = calendarRefresh();
+        const url = refresh?.url(window.location.href);
+        if (url) refresh.replace(url, { pushState: false });
     });
 }
 

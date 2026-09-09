@@ -234,18 +234,18 @@ function setupJobsAutoRefresh(root = document) {
         }
 
         const state = captureJobsRefreshState(selector);
-        const activeTarget = document.querySelector(selector);
         refreshing = true;
         button.setAttribute("aria-disabled", "true");
-        activeTarget?.setAttribute("aria-busy", "true");
 
         try {
-            await window.ajaxRefreshFromUrl(window.location.href, selector);
-            restoreJobsRefreshState(state);
+            const refreshResult = await window.ajaxRefreshFromUrl(window.location.href, selector);
+            if (refreshResult?.applied !== false) {
+                restoreJobsRefreshState(state);
+            }
         } catch (_error) {
             if (window.showAjaxRefreshError) {
                 window.showAjaxRefreshError(
-                    activeTarget || button,
+                    document.querySelector(selector) || button,
                     selector,
                     translateJobsMessage("The processing table could not be refreshed.")
                 );
@@ -253,7 +253,6 @@ function setupJobsAutoRefresh(root = document) {
         } finally {
             refreshing = false;
             button.removeAttribute("aria-disabled");
-            document.querySelector(selector)?.removeAttribute("aria-busy");
             resetCountdown();
         }
     }

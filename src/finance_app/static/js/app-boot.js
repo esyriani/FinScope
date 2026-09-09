@@ -21,6 +21,32 @@ function financeBootSidebarCollapsed() {
     }
 }
 
+function financeMoneyNumber(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    if (typeof value !== "number" && typeof value !== "string") {
+        return null;
+    }
+    if (typeof value === "string" && value.trim() === "") {
+        return null;
+    }
+
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function financeFormatNumberParts(formatter, numberValue) {
+    if (typeof formatter.formatToParts !== "function") {
+        return formatter.format(numberValue);
+    }
+
+    return formatter
+        .formatToParts(numberValue)
+        .map((part) => (part.type === "group" ? " " : part.value))
+        .join("");
+}
+
 window.financeLocale = financeDocument.dataset.financeLocale || "en-CA";
 window.financeCurrencySymbol = financeDocument.dataset.financeCurrencySymbol || "$";
 window.financeI18n = financeBootJsonDataset("financeI18n", {});
@@ -38,8 +64,12 @@ window.financeFormatMoney = function financeFormatMoney(value, options = {}) {
         minimumFractionDigits,
         maximumFractionDigits,
     });
-    const numberValue = Number(value) || 0;
-    const formatted = formatter.format(numberValue).replace(/,/g, " ");
+    const numberValue = financeMoneyNumber(value);
+    if (numberValue === null) {
+        return "";
+    }
+
+    const formatted = financeFormatNumberParts(formatter, numberValue);
     return `${formatted} ${window.financeCurrencySymbol || "$"}`.trim();
 };
 window.financeFormatAxisMoney = function financeFormatAxisMoney(value) {

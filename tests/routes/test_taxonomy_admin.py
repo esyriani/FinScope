@@ -3,7 +3,14 @@
 import io
 
 from sqlalchemy import select
-from tests.support.html import assert_has_element, assert_not_visible_text, assert_visible_text, parse_html
+from tests.support.html import (
+    assert_asset_reference,
+    assert_has_element,
+    assert_no_element,
+    assert_not_visible_text,
+    assert_visible_text,
+    parse_html,
+)
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
@@ -52,6 +59,7 @@ def test_taxonomy_page_exposes_yaml_import_and_export_controls(owner_client):
     assert_has_element(response, "a", attrs={"href": "/taxonomy/export.yml"}, text="Export YAML")
     assert_has_element(response, "div", attrs={"id": "import-taxonomy-modal"})
     assert_has_element(response, "input", attrs={"name": "taxonomy_file"})
+    assert_asset_reference(response, r"/static/js/taxonomy\.js\?v=[0-9a-f]{12}")
     assert_has_element(
         response,
         "div",
@@ -113,6 +121,78 @@ def test_taxonomy_page_exposes_yaml_import_and_export_controls(owner_client):
     )
     assert_has_element(response, "button", attrs={"data-bs-target": "#create-category-modal"}, text="Add")
     assert_has_element(response, "button", attrs={"data-bs-target": "#create-tag-modal"}, text="Add")
+
+
+def test_taxonomy_page_uses_shared_row_modal_shells(owner_client, core_conn):
+    """Verify taxonomy rows target shared modal shells instead of per-row dialogs."""
+    category_id = core_conn.execute(
+        categories_table.insert().values(
+            name="Shared shell category",
+            description="Category details",
+            instruction="Use the shared category modal.",
+        )
+    ).inserted_primary_key[0]
+    tag_id = core_conn.execute(
+        tags_table.insert().values(
+            name="Shared shell tag",
+            color="#123abc",
+            description="Tag details",
+            instruction="Use the shared tag modal.",
+        )
+    ).inserted_primary_key[0]
+    core_conn.commit()
+
+    response = owner_client.get("/taxonomy")
+
+    assert response.status_code == 200
+    assert_has_element(response, "div", attrs={"id": "edit-category-modal"})
+    assert_has_element(response, "div", attrs={"id": "view-category-modal"})
+    assert_has_element(response, "div", attrs={"id": "delete-category-modal"})
+    assert_has_element(response, "div", attrs={"id": "edit-tag-modal"})
+    assert_has_element(response, "div", attrs={"id": "view-tag-modal"})
+    assert_has_element(response, "div", attrs={"id": "delete-tag-modal"})
+    assert_has_element(
+        response,
+        "tr",
+        attrs={
+            "data-row-edit-target": "#edit-category-modal",
+            "data-taxonomy-item": True,
+        },
+        text="Shared shell category",
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={"data-bs-target": "#edit-category-modal"},
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={"data-bs-target": "#delete-category-modal"},
+    )
+    assert_has_element(
+        response,
+        "tr",
+        attrs={
+            "data-row-edit-target": "#edit-tag-modal",
+            "data-taxonomy-item": True,
+        },
+        text="Shared shell tag",
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={"data-bs-target": "#edit-tag-modal"},
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={"data-bs-target": "#delete-tag-modal"},
+    )
+    assert_no_element(response, "div", attrs={"id": f"edit-category-{category_id}"})
+    assert_no_element(response, "div", attrs={"id": f"delete-category-{category_id}"})
+    assert_no_element(response, "div", attrs={"id": f"edit-tag-{tag_id}"})
+    assert_no_element(response, "div", attrs={"id": f"delete-tag-{tag_id}"})
 
 
 def test_taxonomy_tables_export_description_and_llm_instruction_separately(owner_client, core_conn):

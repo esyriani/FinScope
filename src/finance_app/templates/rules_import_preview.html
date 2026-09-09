@@ -1,10 +1,10 @@
 {% set page_stylesheets = [
-    "css/home-dashboard.css",
+    "css/analytics-components.css",
     "css/tables.css",
     "css/rules-list.css",
     "css/exports.css"
 ] %}
-{% set page_scripts = ["js/tables.js", "js/exports.js"] %}
+{% set page_scripts = ["js/tables.js", "js/xlsx-writer.js", "js/exports.js"] %}
 {% extends "base.html" %}
 {% from "_sort_controls.html" import client_sort_header with context %}
 
@@ -14,7 +14,7 @@
         <h2 class="mb-1">{{ _("Rule import preview") }}</h2>
         <p class="text-muted mb-0">{{ import_preview.filename }} - {{ _(import_preview.mode_label) }}</p>
     </div>
-    <div class="home-actions">
+    <div class="page-actions">
         <a class="btn btn-outline-secondary" href="{{ url_for('rules.rules') }}">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>{{ _("Rules") }}
         </a>

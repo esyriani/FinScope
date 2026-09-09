@@ -64,6 +64,15 @@ def test_reports_overview_route_renders_read_only_analysis(owner_client, core_co
         "Recategorize selected",
     )
     assert 'class="reports-section-tabs page-tabs nav nav-tabs"' in body
+    assert_has_element(
+        response,
+        "nav",
+        attrs={"class": "reports-section-tabs", "aria-label": "Reports sections", "role": False},
+    )
+    assert_has_element(response, "a", attrs={"class": "nav-link", "href": "/reports", "aria-current": "page"})
+    assert_no_element(response, "nav", attrs={"class": "reports-section-tabs", "role": "tablist"})
+    assert_no_element(response, "a", attrs={"role": "tab"})
+    assert_no_element(response, "a", attrs={"aria-selected": True})
     assert "reports-chart-card reports-chart-card-wide" in body
     assert "data-chart-export-scope" in body
     assert "data-table-export-scope" in body

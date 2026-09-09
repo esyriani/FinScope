@@ -1,5 +1,5 @@
 {% set page_stylesheets = [
-    "css/home-dashboard.css",
+    "css/analytics-components.css",
     "css/tables.css",
     "css/rules-list.css",
     "css/rule-forms.css",
@@ -85,7 +85,7 @@
         </h2>
         <p class="text-muted mb-0">{{ _("Manual rules are applied before automatic suggestions.") }}</p>
     </div>
-    <div class="home-actions">
+    <div class="page-actions">
         <a
             class="btn btn-outline-secondary"
             href="{{ url_for('rules.audit_rules') }}"
@@ -328,7 +328,7 @@
                 method="post"
                 action="{{ url_for('rules.add_rule') }}"
                 data-rule-editor
-                data-rule-preview-url="/rules/preview"
+                data-rule-preview-url="{{ url_for('rules.preview_rule') }}"
                 data-busy-overlay
                 data-busy-delay-ms="0"
                 data-busy-message="{{ _('Saving rule...') }}"
@@ -526,7 +526,7 @@
                 method="post"
                 action="{{ url_for('rules.update_rule', rule_id=rule['id']) }}"
                 data-rule-editor
-                data-rule-preview-url="/rules/preview"
+                data-rule-preview-url="{{ url_for('rules.preview_rule') }}"
                 data-busy-overlay
                 data-busy-delay-ms="0"
                 data-busy-message="{{ _('Saving rule...') }}"

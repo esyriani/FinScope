@@ -41,18 +41,54 @@ function financeChartTheme(overrides = {}) {
     };
 }
 
+function financeChartMoneyNumber(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    if (typeof value !== "number" && typeof value !== "string") {
+        return null;
+    }
+    if (typeof value === "string" && value.trim() === "") {
+        return null;
+    }
+
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 function financeChartFormatMoney(value) {
-    return window.financeFormatMoney ? window.financeFormatMoney(value) : Number(value || 0).toFixed(2);
+    if (window.financeFormatMoney) {
+        return window.financeFormatMoney(value);
+    }
+
+    const numberValue = financeChartMoneyNumber(value);
+    return numberValue === null ? "" : numberValue.toFixed(2);
 }
 
 function financeChartFormatAxisMoney(value) {
-    return window.financeFormatAxisMoney
-        ? window.financeFormatAxisMoney(value)
-        : String(Math.round(Number(value) || 0));
+    if (window.financeFormatAxisMoney) {
+        return window.financeFormatAxisMoney(value);
+    }
+
+    const numberValue = financeChartMoneyNumber(value);
+    return numberValue === null ? "" : String(Math.round(numberValue));
 }
 
 function financeChartTranslate(message, variables) {
     return window.financeTranslate ? window.financeTranslate(message, variables) : message;
+}
+
+function financeChartEscapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function financeChartTooltipLine(label, value, marker = "") {
+    return `${marker || ""}${financeChartEscapeHtml(label)}: ${financeChartEscapeHtml(value)}`;
 }
 
 function financeChartAxisLine(theme) {
@@ -214,6 +250,7 @@ window.financeCharts = {
     create: financeChartCreate,
     dispose: financeChartDispose,
     element: financeChartElement,
+    escapeHtml: financeChartEscapeHtml,
     formatAxisMoney: financeChartFormatAxisMoney,
     formatMoney: financeChartFormatMoney,
     forceResize: financeChartForceResize,
@@ -225,5 +262,6 @@ window.financeCharts = {
     splitLine: financeChartSplitLine,
     theme: financeChartTheme,
     tooltip: financeChartTooltip,
+    tooltipLine: financeChartTooltipLine,
     translate: financeChartTranslate,
 };

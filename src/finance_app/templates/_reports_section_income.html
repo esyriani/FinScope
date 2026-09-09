@@ -1,0 +1,40 @@
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_reports_filters.html" import reports_filter_form with context %}
+{% from "_reports_summary_cards.html" import reports_actions, reports_chart_card, reports_income_key_insights, reports_quality_panel with context %}
+{% from "_reports_tables.html" import evidence_table, reports_table with context %}
+
+<div data-reports-page data-reports-income>
+{% call collapsible_filter_panel("reports-income-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+{{ reports_actions(comparison_url) }}
+
+{% if transaction_count > 0 %}
+{{ reports_income_key_insights(transaction_url) }}
+{{ reports_quality_panel() }}
+
+<div class="reports-chart-grid">
+    {{ reports_chart_card("Monthly statement", "reportsMonthlyChart", true) }}
+    {{ reports_chart_card("Income and credit sources", "reportsCategoryChart") }}
+    {{ reports_chart_card("Tag breakdown", "reportsTagChart") }}
+</div>
+
+<div class="reports-table-grid">
+    {{ reports_table("Monthly statement", monthly_rows, "Month", "reports-income-monthly-table") }}
+    {{ reports_table("Income and credit sources", category_rows, "Category", "reports-income-category-table") }}
+    {{ reports_table("Tag breakdown", tag_rows, "Tag", "reports-income-tag-table") }}
+    {{ reports_table("Account breakdown", account_rows, "Account", "reports-income-account-table") }}
+    {{ reports_table("Merchants", merchant_rows, "Merchant", "reports-income-merchant-table") }}
+    {{ evidence_table(income_evidence_rows, "reports-income-evidence-table") }}
+</div>
+
+<script id="reports-overview-chart-data" type="application/json">
+{{ chart_data | tojson }}
+</script>
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>

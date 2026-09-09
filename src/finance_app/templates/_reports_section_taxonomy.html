@@ -1,0 +1,20 @@
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
+{% from "_reports_explorers.html" import taxonomy_explorer, taxonomy_target_typeahead with context %}
+{% from "_reports_filters.html" import reports_filter_form with context %}
+{% from "_reports_summary_cards.html" import reports_quality_panel with context %}
+
+<div data-reports-page data-reports-taxonomy>
+{% call collapsible_filter_panel("reports-taxonomy-filters", reports_filter_summary | trim) %}
+    {{ reports_filter_form(reports_clear_url) }}
+{% endcall %}
+
+{% if transaction_count > 0 %}
+{{ reports_quality_panel() }}
+{{ taxonomy_target_typeahead(taxonomy_target_options, taxonomy_explorer_search) }}
+{{ taxonomy_explorer(taxonomy_explorer_rows, taxonomy_filter_chips, taxonomy_explorer_filter) }}
+{% else %}
+<div class="empty-state">
+    {{ _("No transaction data is available for this report.") }}
+</div>
+{% endif %}
+</div>

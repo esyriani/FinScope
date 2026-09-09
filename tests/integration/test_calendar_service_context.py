@@ -319,6 +319,15 @@ def test_calendar_context_combines_account_merchant_category_and_tag_filters(app
     assert context["selected_merchant_id"] == netflix_id
     assert context["merchant_query"] == "NETFLIX"
     assert context["selected_merchant_label"] == "NETFLIX"
+    assert context["calendar_merchant_filter_label"] == "NETFLIX"
+    assert context["calendar_filter_summary_items"] == [
+        {"label": "Month", "value": "May 2026"},
+        {"label": "Account", "value": "Visa"},
+        {"label": "Merchant", "value": "NETFLIX"},
+        {"label": "Heatmap", "value": "Spending"},
+        {"label": "Categories", "value": "Entertainment"},
+        {"label": "Tags", "value": "Subscription"},
+    ]
     assert context["summary"]["spending"] == 18.99
     assert context["summary"]["transaction_count"] == 1
     assert context["summary"]["recurring_count"] == 1
@@ -503,6 +512,16 @@ def test_recurring_page_context_combines_account_and_exact_merchant_filters(app,
 
     assert context["selected_account_id"] == visa_id
     assert context["selected_merchant_id"] == netflix_id
+    assert context["recurring_merchant_filter_label"] == "NETFLIX"
+    assert context["recurring_filter_summary_items"] == [
+        {"label": "Month", "value": "2026-05"},
+        {"label": "Account", "value": "Visa"},
+        {"label": "Merchant", "value": "NETFLIX"},
+        {"label": "Categories", "value": "All categories"},
+        {"label": "Tags", "value": "All tags"},
+        {"label": "Status", "value": "All statuses"},
+        {"label": "Confidence level", "value": "All confidence"},
+    ]
     assert [item["merchant"] for item in context["recurring_items"]] == ["NETFLIX"]
     assert context["recurring_summary"]["occurred_count"] == 1
     assert f"account_id={visa_id}" in context["calendar_view_url"]

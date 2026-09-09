@@ -4,6 +4,8 @@ const comparisonPalette = comparisonChartUtils.palette.slice(0, 5);
 const comparisonTheme = comparisonChartUtils.theme();
 const formatComparisonMoney = comparisonChartUtils.formatMoney;
 const formatComparisonAxisMoney = comparisonChartUtils.formatAxisMoney;
+const comparisonChartEscapeHtml = comparisonChartUtils.escapeHtml;
+const comparisonTooltipLine = comparisonChartUtils.tooltipLine;
 
 function comparisonChartOption(chartType = "line") {
     const isBarChart = chartType === "bar";
@@ -17,10 +19,10 @@ function comparisonChartOption(chartType = "line") {
         tooltip: comparisonChartUtils.tooltip(comparisonTheme, {
             trigger: "axis",
             formatter(items) {
-                const rows = items.map(
-                    (item) => `${item.marker}${item.seriesName}: ${formatComparisonMoney(item.value)}`
+                const rows = items.map((item) =>
+                    comparisonTooltipLine(item.seriesName, formatComparisonMoney(item.value), item.marker)
                 );
-                return [items[0]?.axisValue, ...rows].join("<br>");
+                return [comparisonChartEscapeHtml(items[0]?.axisValue), ...rows].join("<br>");
             },
         }),
         grid: comparisonChartUtils.baseGrid(),
@@ -165,10 +167,10 @@ function comparisonBoxplotOption() {
                 ];
                 const rows = labels
                     .filter(([, value]) => value !== null && value !== undefined)
-                    .map(
-                        ([label, value]) => `${comparisonChartUtils.translate(label)}: ${formatComparisonMoney(value)}`
+                    .map(([label, value]) =>
+                        comparisonTooltipLine(comparisonChartUtils.translate(label), formatComparisonMoney(value))
                     );
-                return [params.name, ...rows].join("<br>");
+                return [comparisonChartEscapeHtml(params.name), ...rows].join("<br>");
             },
         }),
         grid: comparisonChartUtils.baseGrid({ top: 24 }),

@@ -4,6 +4,8 @@ from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
+from finance_app.core.filters import format_date, format_money
+from finance_app.core.i18n import gettext
 from finance_app.core.money import money_to_decimal
 from finance_app.modules.reimbursements.constants import REIMBURSABLE_TAG
 
@@ -43,6 +45,8 @@ def build_reimbursements_view_model(
     expense_options = active_reimbursable_expenses(expenses)
     reimbursement_match_items = build_reimbursement_match_items(reimbursement_options, expense_options, allocations)
     expenses = with_expense_reimbursement_candidates(expenses, reimbursement_options, allocations)
+    reimbursement_match_modal_items = build_reimbursement_match_modal_payloads(reimbursement_match_items)
+    expense_detail_modal_items = build_expense_detail_modal_payloads(expenses)
     expense_options = active_reimbursable_expenses(expenses)
     action_reimbursements = search_rows(
         reimbursement_match_items,
@@ -59,6 +63,8 @@ def build_reimbursements_view_model(
         "expense_options": expense_options,
         "reimbursement_match_items": reimbursement_match_items,
         "expense_detail_rows": expenses,
+        "reimbursement_match_modal_items": reimbursement_match_modal_items,
+        "expense_detail_modal_items": expense_detail_modal_items,
         "search": search,
         "action_needed": build_action_needed(
             action_reimbursements,
@@ -365,6 +371,162 @@ def build_expense_match_candidate_summary(
         "reimbursement_candidate_count": candidate_count,
         "hidden_reimbursement_candidate_count": max(0, candidate_count - len(candidates)),
     }
+
+
+def build_reimbursement_match_modal_payloads(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return JSON-ready reimbursement match modal payloads."""
+    return [build_reimbursement_match_modal_payload(row) for row in rows]
+
+
+def build_reimbursement_match_modal_payload(row: dict[str, Any]) -> dict[str, Any]:
+    """Return one JSON-ready payload for the shared reimbursement match modal."""
+    candidates = [build_reimbursement_expense_candidate_payload(candidate) for candidate in row["match_candidates"]]
+    return {
+        "id": row["id"],
+        "date": date_key(row.get("date")),
+        "date_label": format_date(row.get("date")),
+        "description": row["description"],
+        "amount": decimal_string(row["amount"]),
+        "amount_label": format_money(row["amount"]),
+        "allocated": decimal_string(row["allocated"]),
+        "allocated_label": format_money(row["allocated"]),
+        "remaining": decimal_string(row["remaining"]),
+        "remaining_label": format_money(row["remaining"]),
+        "candidate_count": row["match_candidate_count"],
+        "candidate_count_label": gettext("{count} expenses", count=row["match_candidate_count"]),
+        "hidden_candidate_count": row["hidden_match_candidate_count"],
+        "hidden_candidate_message": hidden_reimbursement_candidate_message(
+            row["match_candidates"],
+            row["match_candidate_count"],
+        ),
+        "candidates": candidates,
+    }
+
+
+def build_reimbursement_expense_candidate_payload(row: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON-ready expense candidate for a reimbursement match modal."""
+    return {
+        "id": row["id"],
+        "date": date_key(row.get("date")),
+        "date_label": format_date(row.get("date")),
+        "category": row["category"],
+        "description": row["description"],
+        "amount": decimal_string(row["amount"]),
+        "amount_label": format_money(row["amount"]),
+        "allocated": decimal_string(row["allocated"]),
+        "allocated_label": format_money(row["allocated"]),
+        "pending_remaining": decimal_string(row["pending_remaining"]),
+        "pending_remaining_label": format_money(row["pending_remaining"]),
+        "default_amount": decimal_string(row["default_amount"]),
+        "max_amount": decimal_string(row["max_amount"]),
+    }
+
+
+def hidden_reimbursement_candidate_message(
+    candidates: Sequence[dict[str, Any]],
+    candidate_count: int,
+) -> str:
+    """Return the hidden-candidate note for a reimbursement match modal."""
+    if candidate_count <= len(candidates):
+        return ""
+    return gettext(
+        "Showing {shown} of {total} candidate expenses. Use the Expenses tab to review all.",
+        shown=len(candidates),
+        total=candidate_count,
+    )
+
+
+def build_expense_detail_modal_payloads(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return JSON-ready expense detail modal payloads."""
+    return [build_expense_detail_modal_payload(row) for row in rows]
+
+
+def build_expense_detail_modal_payload(row: dict[str, Any]) -> dict[str, Any]:
+    """Return one JSON-ready payload for the shared expense detail modal."""
+    reimbursement_candidates = [
+        build_expense_reimbursement_candidate_payload(candidate) for candidate in row["reimbursement_candidates"]
+    ]
+    matched_reimbursements = [
+        {
+            "date": date_key(match.get("date")),
+            "date_label": format_date(match.get("date")),
+            "description": match["description"],
+            "amount": decimal_string(match["amount"]),
+            "amount_label": format_money(match["amount"]),
+        }
+        for match in row["matched_reimbursements"]
+    ]
+    return {
+        "id": row["id"],
+        "date": date_key(row.get("date")),
+        "date_label": format_date(row.get("date")),
+        "description": row["description"],
+        "category": row["category"],
+        "account_name": row["account_name"] or gettext("Personal"),
+        "amount": decimal_string(row["amount"]),
+        "amount_label": format_money(row["amount"]),
+        "allocated": decimal_string(row["allocated"]),
+        "allocated_label": format_money(row["allocated"]),
+        "pending_remaining": decimal_string(row["pending_remaining"]),
+        "pending_remaining_label": format_money(row["pending_remaining"]),
+        "status_label": gettext(row["status_label"]),
+        "status_class": row["status_class"],
+        "has_reimbursable_tag": bool(row["has_reimbursable_tag"]),
+        "has_reimbursable_tag_label": gettext("Yes") if row["has_reimbursable_tag"] else gettext("No"),
+        "is_complete": bool(row["is_complete"]),
+        "tags": [{"name": tag["name"], "color": tag["color"]} for tag in row["tag_pills"]],
+        "reimbursement_candidate_count": row["reimbursement_candidate_count"],
+        "reimbursement_candidate_count_label": gettext(
+            "{count} credits",
+            count=row["reimbursement_candidate_count"],
+        ),
+        "hidden_reimbursement_candidate_count": row["hidden_reimbursement_candidate_count"],
+        "hidden_reimbursement_candidate_message": hidden_expense_candidate_message(
+            row["reimbursement_candidates"],
+            row["reimbursement_candidate_count"],
+        ),
+        "reimbursement_candidates": reimbursement_candidates,
+        "matched_reimbursement_count": row["matched_reimbursement_count"],
+        "matched_reimbursement_count_label": gettext("{count} matches", count=row["matched_reimbursement_count"]),
+        "matched_reimbursements": matched_reimbursements,
+    }
+
+
+def build_expense_reimbursement_candidate_payload(row: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON-ready reimbursement candidate for an expense detail modal."""
+    return {
+        "id": row["id"],
+        "date": date_key(row.get("date")),
+        "date_label": format_date(row.get("date")),
+        "description": row["description"],
+        "amount": decimal_string(row["amount"]),
+        "amount_label": format_money(row["amount"]),
+        "allocated": decimal_string(row["allocated"]),
+        "allocated_label": format_money(row["allocated"]),
+        "remaining": decimal_string(row["remaining"]),
+        "remaining_label": format_money(row["remaining"]),
+        "default_amount": decimal_string(row["default_amount"]),
+        "max_amount": decimal_string(row["max_amount"]),
+    }
+
+
+def hidden_expense_candidate_message(
+    candidates: Sequence[dict[str, Any]],
+    candidate_count: int,
+) -> str:
+    """Return the hidden-candidate note for an expense detail modal."""
+    if candidate_count <= len(candidates):
+        return ""
+    return gettext(
+        "Showing {shown} of {total} candidate reimbursements. Use the Received reimbursements tab to review all.",
+        shown=len(candidates),
+        total=candidate_count,
+    )
+
+
+def decimal_string(value: Any) -> str:
+    """Return a JSON-safe decimal string for form values and limits."""
+    return format(money_to_decimal(value), "f")
 
 
 def normalize_search_queries(search_queries: Mapping[str, object] | None) -> dict[str, str]:

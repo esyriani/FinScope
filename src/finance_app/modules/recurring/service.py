@@ -8,10 +8,19 @@ from urllib.parse import urlencode
 
 from flask import url_for
 
+from finance_app.core.filter_summary import (
+    filter_summary_item,
+    merchant_filter_input_label,
+    selected_account_label,
+    selected_option_label,
+    selected_values_label,
+    value_or_default,
+)
 from finance_app.core.i18n import format_month_year, gettext, weekday_abbreviation_labels
 from finance_app.core.money import format_money_display
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.accounts.filters import parse_account_id
+from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.merchants.filters import parse_merchant_id, parse_merchant_query
 
 from .activity import build_recurring_activity_context
@@ -85,10 +94,16 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
         recurring_context["month_start"],
         recurring_context["month_end"],
     )
+    recurring_merchant_filter_label = merchant_filter_input_label(
+        selected_merchant_id,
+        merchant_query,
+        recurring_context["selected_merchant_label"],
+    )
+    month_label = format_month_year(recurring_context["month_start"])
 
     return {
         "selected_month": recurring_context["month_start"].isoformat()[:7],
-        "month_label": format_month_year(recurring_context["month_start"]),
+        "month_label": month_label,
         "selected_categories": selected_categories,
         "category_options": recurring_context["category_options"],
         "selected_tags": selected_tags,
@@ -98,6 +113,7 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
         "selected_merchant_id": selected_merchant_id,
         "merchant_query": merchant_query,
         "selected_merchant_label": recurring_context["selected_merchant_label"],
+        "recurring_merchant_filter_label": recurring_merchant_filter_label,
         "merchant_suggestion_limit": recurring_context["merchant_suggestion_limit"],
         "selected_recurring_view": selected_recurring_view,
         "selected_statuses": selected_statuses,
@@ -175,6 +191,16 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
             selected_recurring_view,
             recurring_context["month_start"],
         ),
+        "recurring_filter_summary_items": build_recurring_filter_summary_items(
+            recurring_context["month_start"].isoformat()[:7],
+            selected_account_id,
+            recurring_context["account_options"],
+            recurring_merchant_filter_label,
+            selected_categories,
+            selected_tags,
+            selected_statuses,
+            selected_confidence,
+        ),
         "recurring_summary": build_recurring_summary(recurring_items),
         "recurring_items": recurring_items,
         "all_recurring_ids": [item["id"] for item in recurring_items],
@@ -192,6 +218,57 @@ def build_recurring_page_context(args: Any) -> dict[str, Any]:
         "recurring_calendar_legend": build_recurring_calendar_legend(recurring_items),
         "weekday_labels": weekday_abbreviation_labels(),
     }
+
+
+def build_recurring_filter_summary_items(
+    month_label: str,
+    selected_account_id: int | None,
+    account_options: list[dict[str, Any]],
+    merchant_filter_label: str,
+    selected_categories: list[str],
+    selected_tags: list[str],
+    selected_statuses: list[str],
+    selected_confidence: str,
+) -> list[dict[str, str]]:
+    """Return selected Recurring filters as template-ready summary items."""
+    return [
+        filter_summary_item("Month", month_label),
+        filter_summary_item(
+            "Account",
+            selected_account_label(account_options, selected_account_id),
+        ),
+        filter_summary_item("Merchant", value_or_default(merchant_filter_label)),
+        filter_summary_item(
+            "Categories",
+            selected_values_label(selected_categories, "All categories"),
+        ),
+        filter_summary_item(
+            "Tags",
+            selected_values_label(
+                selected_tags,
+                "All tags",
+                translated_value_labels={UNTAGGED_TAG_FILTER: "Untagged"},
+            ),
+        ),
+        filter_summary_item(
+            "Status",
+            recurring_status_summary_value(selected_statuses),
+        ),
+        filter_summary_item(
+            "Confidence level",
+            gettext(selected_confidence) if selected_confidence else gettext("All confidence"),
+        ),
+    ]
+
+
+def recurring_status_summary_value(selected_statuses: list[str]) -> str:
+    """Return a display summary for selected recurring status filters."""
+    status_labels = [
+        selected_option_label(STATUS_OPTIONS, status, "", value_key="value", label_key="label")
+        for status in selected_statuses
+    ]
+    status_labels = [label for label in status_labels if label]
+    return ", ".join(status_labels) if status_labels else gettext("All statuses")
 
 
 def confirm_recurring_pattern_action(payload: Mapping[str, Any]) -> dict[str, Any]:

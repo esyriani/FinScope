@@ -183,6 +183,16 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(owner_cl
 
     assert response.status_code == 200
     assert "data-recurring-dynamic" in body
+    assert document.has_element(
+        "div",
+        attrs={
+            "id": "recurring-dynamic",
+            "data-recurring-url": "/recurring",
+            "data-recurring-confirm-url": "/recurring/patterns/confirm",
+            "data-recurring-ignore-url": "/recurring/patterns/ignore",
+            "data-recurring-edit-url": "/recurring/patterns/edit",
+        },
+    )
     assert "recurring-summary-layout" in body
     assert "recurring-metric-carousel" in body
     assert 'id="recurring-month"' in body
@@ -277,14 +287,18 @@ def test_table_export_script_fetches_all_server_pages_for_entire_table():
 def test_table_export_script_builds_real_xlsx_tables_with_totals():
     """Verify shared Excel exports build real workbooks with typed table totals."""
     body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
+    writer = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "xlsx-writer.js").read_text(encoding="utf-8")
 
-    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in body
-    assert "TableStyleLight1" in body
-    assert 'totalsRowFunction="sum"' in body
-    assert "SUBTOTAL(109," in body
+    assert "createTableExportXlsxBlob(buildTableExportWorkbookSource(table, scope, exportTables), sheetName)" in body
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in writer
+    assert "TableStyleLight1" in writer
+    assert 'totalsRowFunction="sum"' in writer
+    assert "SUBTOTAL(109," in writer
     assert "${filenameBase}.xlsx" in body
     assert "application/vnd.ms-excel" not in body
     assert "<?mso-application" not in body
+    assert "application/vnd.ms-excel" not in writer
+    assert "<?mso-application" not in writer
 
 
 def test_table_export_script_removes_action_columns_from_downloads():

@@ -5,6 +5,8 @@ const reportsTheme = reportsChartUtils.theme();
 const formatReportsMoney = reportsChartUtils.formatMoney;
 const formatReportsAxisMoney = reportsChartUtils.formatAxisMoney;
 const reportsChartsTranslate = reportsChartUtils.translate;
+const reportsChartEscapeHtml = reportsChartUtils.escapeHtml;
+const reportsTooltipLine = reportsChartUtils.tooltipLine;
 
 function reportsMonthName(monthIndex) {
     return new Date(Date.UTC(2000, monthIndex, 1)).toLocaleString(window.financeLocale || "en-CA", {
@@ -38,8 +40,10 @@ function reportsMonthlyOption() {
         tooltip: reportsChartUtils.tooltip(reportsTheme, {
             trigger: "axis",
             formatter(items) {
-                const rows = items.map((item) => `${item.marker}${item.seriesName}: ${formatReportsMoney(item.value)}`);
-                return [items[0]?.axisValue, ...rows].join("<br>");
+                const rows = items.map((item) =>
+                    reportsTooltipLine(item.seriesName, formatReportsMoney(item.value), item.marker)
+                );
+                return [reportsChartEscapeHtml(items[0]?.axisValue), ...rows].join("<br>");
             },
         }),
         grid: reportsChartUtils.baseGrid(),
@@ -98,7 +102,7 @@ function reportsBreakdownOption(labels, values, name) {
             color: reportsTheme.text,
         },
         tooltip: reportsChartUtils.tooltip(reportsTheme, {
-            formatter: (params) => `${params.name}: ${formatReportsMoney(params.value)}`,
+            formatter: (params) => reportsTooltipLine(params.name, formatReportsMoney(params.value)),
         }),
         grid: reportsChartUtils.baseGrid({ top: 12 }),
         xAxis: {

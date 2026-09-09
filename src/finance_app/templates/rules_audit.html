@@ -1,14 +1,14 @@
 {% set page_stylesheets = [
-    "css/home-dashboard.css",
+    "css/analytics-components.css",
     "css/tables.css",
     "css/rules-list.css",
     "css/exports.css"
 ] %}
-{% set page_scripts = ["js/tables.js", "js/exports.js"] %}
+{% set page_scripts = ["js/tables.js", "js/xlsx-writer.js", "js/exports.js"] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel with context %}
-{% from "_pagination.html" import pagination with context %}
 {% from "_sort_controls.html" import server_sort_header with context %}
+{% from "_table_primitives.html" import collapsible_table_header, empty_state, pagination_controls, pagination_footer, table_result_status with context %}
 
 {% block content %}
 {% set overlap_table = audit_tables.overlaps %}
@@ -68,16 +68,12 @@
 </{{ tag }}>
 {% endmacro %}
 
-{% macro audit_pagination(table, label) %}
-{{ pagination(table.page, table.total_pages, table.page_url, label, ajax=true) }}
-{% endmacro %}
-
-{% macro table_status(table) %}
-{% if table.total_count %}
-<div class="text-muted small">
-    {{ _("Showing {start}-{end} of {total} findings", start=table.page_start, end=table.page_end, total=table.total_count) }}
-</div>
-{% endif %}
+{% macro audit_table_controls(table, label) %}
+{{ table_result_status(
+    _("Showing {start}-{end} of {total} findings", start=table.page_start, end=table.page_end, total=table.total_count),
+    table.total_count
+) }}
+{{ pagination_controls(table, label, true) }}
 {% endmacro %}
 
 {% macro sort_header(table, sort_name, label, header_class="") %}
@@ -160,39 +156,8 @@
 {% endif %}
 {% endmacro %}
 
-{% macro table_footer(table, label) %}
-{% if table.total_pages > 1 %}
-<div class="card-footer d-flex justify-content-end">
-    {{ audit_pagination(table, label) }}
-</div>
-{% endif %}
-{% endmacro %}
-
-{% macro collapsible_header(target_id, title, description, table, label, expanded=false) %}
-<div
-    class="card-body border-bottom collapse-panel-header"
-    data-collapse-panel-header-toggle
-    data-collapse-panel-target="#{{ target_id }}"
->
-    <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-        <div
-            class="collapse-panel-heading"
-            role="button"
-            tabindex="0"
-            aria-expanded="{{ 'true' if expanded else 'false' }}"
-            aria-controls="{{ target_id }}"
-            data-collapse-panel-heading-toggle
-            data-collapse-panel-target="#{{ target_id }}"
-        >
-            <h5 class="mb-1">{{ _(title) }}</h5>
-            <p class="text-muted mb-0">{{ _(description) }}</p>
-        </div>
-        <div class="d-flex flex-wrap align-items-center justify-content-end gap-3">
-            {{ table_status(table) }}
-            {{ audit_pagination(table, label) }}
-        </div>
-    </div>
-</div>
+{% macro audit_collapsible_header(target_id, title, description, table, label, expanded=false) %}
+{{ collapsible_table_header(target_id, title, description, audit_table_controls(table, label), expanded) }}
 {% endmacro %}
 
 <div data-ajax-refresh-target="rule-audit">
@@ -201,7 +166,7 @@
         <h2 class="mb-1">{{ _("Rule health check") }}</h2>
         <p class="text-muted mb-0">{{ _("Inspect overlapping rules, conflicts, rules skipped by priority, and unused rules.") }}</p>
     </div>
-    <div class="home-actions">
+    <div class="page-actions">
         <form
             method="post"
             action="{{ url_for('rules.audit_rule_preview') }}"
@@ -312,7 +277,7 @@
 {% endcall %}
 
 <section class="card mb-4">
-    {{ collapsible_header(
+    {{ audit_collapsible_header(
         "rule-overlap-findings",
         "Rule overlap findings",
         "Pairs below match at least one same historical transaction. Double-click a row to open details.",
@@ -366,15 +331,15 @@
                 </table>
             </div>
         </div>
-        {{ table_footer(overlap_table, _("Overlap pages bottom")) }}
+        {{ pagination_footer(overlap_table, _("Overlap pages bottom"), ajax=true) }}
         {% else %}
-        <div class="empty-state compact">{{ _("No overlapping rules found.") }}</div>
+        {{ empty_state("No overlapping rules found.") }}
         {% endif %}
     </div>
 </section>
 
 <section class="card mb-4">
-    {{ collapsible_header(
+    {{ audit_collapsible_header(
         "specificity-warning-findings",
         "Precision and priority warnings",
         "A broader applied rule can hide a more constrained overlapping rule.",
@@ -431,15 +396,15 @@
             </table>
         </div>
     </div>
-    {{ table_footer(specificity_warning_table, _("Precision warning pages bottom")) }}
+    {{ pagination_footer(specificity_warning_table, _("Precision warning pages bottom"), ajax=true) }}
     {% else %}
-    <div class="empty-state compact">{{ _("No precision warnings found.") }}</div>
+    {{ empty_state("No precision warnings found.") }}
     {% endif %}
     </div>
 </section>
 
 <section class="card mb-4">
-    {{ collapsible_header(
+    {{ audit_collapsible_header(
         "shadowed-rule-findings",
         "Rules skipped by priority",
         "These rules match transactions, but another rule is applied first.",
@@ -497,15 +462,15 @@
             </table>
         </div>
     </div>
-    {{ table_footer(shadowed_rule_table, _("Skipped rule pages bottom")) }}
+    {{ pagination_footer(shadowed_rule_table, _("Skipped rule pages bottom"), ajax=true) }}
     {% else %}
-    <div class="empty-state compact">{{ _("No rules skipped by priority found.") }}</div>
+    {{ empty_state("No rules skipped by priority found.") }}
     {% endif %}
     </div>
 </section>
 
 <section class="card">
-    {{ collapsible_header(
+    {{ audit_collapsible_header(
         "stale-rule-findings",
         "Stale and unused rules",
         "Rules with no historical matches are candidates for review.",
@@ -559,9 +524,9 @@
             </table>
         </div>
     </div>
-    {{ table_footer(stale_rule_table, _("Stale rule pages bottom")) }}
+    {{ pagination_footer(stale_rule_table, _("Stale rule pages bottom"), ajax=true) }}
     {% else %}
-    <div class="empty-state compact">{{ _("No stale or unused rules found.") }}</div>
+    {{ empty_state("No stale or unused rules found.") }}
     {% endif %}
     </div>
 </section>

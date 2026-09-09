@@ -1,3 +1,5 @@
+const merchantAutocompleteCloseEvent = "finance:merchant-autocomplete-close";
+
 function merchantAutocompleteTranslate(message) {
     if (typeof window.financeTranslate === "function") {
         return window.financeTranslate(message);
@@ -10,6 +12,26 @@ function merchantAutocompleteControls(root = document) {
         ...(root.matches?.("[data-merchant-autocomplete]") ? [root] : []),
         ...Array.from(root.querySelectorAll("[data-merchant-autocomplete]")),
     ];
+}
+
+function merchantAutocompleteControlForEvent(event) {
+    return typeof event.target?.closest === "function" ? event.target.closest("[data-merchant-autocomplete]") : null;
+}
+
+function setupMerchantAutocompleteGlobalListeners() {
+    if (window.financeMerchantAutocompleteGlobalReady === "true") {
+        return;
+    }
+
+    window.financeMerchantAutocompleteGlobalReady = "true";
+    document.addEventListener("click", (event) => {
+        const currentControl = merchantAutocompleteControlForEvent(event);
+        document.querySelectorAll("[data-merchant-autocomplete]").forEach((control) => {
+            if (control !== currentControl) {
+                control.dispatchEvent(new CustomEvent(merchantAutocompleteCloseEvent));
+            }
+        });
+    });
 }
 
 function setupMerchantAutocomplete(root = document) {
@@ -29,9 +51,24 @@ function setupMerchantAutocomplete(root = document) {
         let debounceId = 0;
         let abortController = null;
 
+        function merchantAutocompleteOptionId(index) {
+            return `${menu.id || input.id || "merchant-autocomplete"}-option-${index}`;
+        }
+
+        function setActiveDescendant(activeOption) {
+            if (activeOption?.id) {
+                input.setAttribute("aria-activedescendant", activeOption.id);
+            } else {
+                input.removeAttribute("aria-activedescendant");
+            }
+        }
+
         function setExpanded(expanded) {
             input.setAttribute("aria-expanded", expanded ? "true" : "false");
             menu.hidden = !expanded;
+            if (!expanded) {
+                setActiveDescendant(null);
+            }
         }
 
         function clearMenu() {
@@ -42,6 +79,7 @@ function setupMerchantAutocomplete(root = document) {
         }
 
         function renderStatus(message) {
+            setActiveDescendant(null);
             const status = document.createElement("div");
             status.className = "merchant-autocomplete-status";
             status.setAttribute("role", "option");
@@ -53,11 +91,16 @@ function setupMerchantAutocomplete(root = document) {
 
         function updateActiveOption() {
             const options = Array.from(menu.querySelectorAll("[data-merchant-autocomplete-option]"));
+            let activeOption = null;
             options.forEach((option, index) => {
                 const active = index === activeIndex;
                 option.classList.toggle("active", active);
                 option.setAttribute("aria-selected", active ? "true" : "false");
+                if (active) {
+                    activeOption = option;
+                }
             });
+            setActiveDescendant(activeOption);
         }
 
         function selectSuggestion(suggestion) {
@@ -72,6 +115,7 @@ function setupMerchantAutocomplete(root = document) {
             suggestions = items;
             activeIndex = -1;
             menu.replaceChildren();
+            setActiveDescendant(null);
             if (!items.length) {
                 renderStatus(merchantAutocompleteTranslate("No merchants found."));
                 return;
@@ -80,8 +124,9 @@ function setupMerchantAutocomplete(root = document) {
             items.forEach((suggestion, index) => {
                 const option = document.createElement("button");
                 option.type = "button";
+                option.tabIndex = -1;
                 option.className = "merchant-autocomplete-option";
-                option.id = `${menu.id || input.id}-option-${index}`;
+                option.id = merchantAutocompleteOptionId(index);
                 option.setAttribute("role", "option");
                 option.setAttribute("aria-selected", "false");
                 option.dataset.merchantAutocompleteOption = "true";
@@ -111,7 +156,7 @@ function setupMerchantAutocomplete(root = document) {
                     signal: abortController.signal,
                 });
                 if (!response.ok) {
-                    throw new Error("Merchant suggestions request failed.");
+                    throw new Error(merchantAutocompleteTranslate("Merchant suggestions request failed."));
                 }
                 const payload = await response.json();
                 renderSuggestions(Array.isArray(payload.suggestions) ? payload.suggestions : []);
@@ -153,16 +198,12 @@ function setupMerchantAutocomplete(root = document) {
                 selectSuggestion(suggestions[activeIndex]);
             }
         });
-
-        document.addEventListener("click", (event) => {
-            if (!control.contains(event.target)) {
-                clearMenu();
-            }
-        });
+        control.addEventListener(merchantAutocompleteCloseEvent, clearMenu);
     });
 }
 
 window.financeApp?.registerInitializer("merchant.autocomplete", setupMerchantAutocomplete);
+setupMerchantAutocompleteGlobalListeners();
 
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => setupMerchantAutocomplete());

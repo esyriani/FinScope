@@ -1,3 +1,18 @@
+const uploadFileSelectionWindowFocusEvent = "finance:upload-file-selection-window-focus";
+
+function setupUploadFileSelectionGlobalListeners() {
+    if (window.financeUploadFileSelectionGlobalReady === "true") {
+        return;
+    }
+
+    window.financeUploadFileSelectionGlobalReady = "true";
+    window.addEventListener("focus", () => {
+        document.querySelectorAll("[data-upload-form][data-upload-file-selection-ready='true']").forEach((form) => {
+            form.dispatchEvent(new CustomEvent(uploadFileSelectionWindowFocusEvent));
+        });
+    });
+}
+
 function setupUploadAccountBehavior() {
     const form = document.querySelector("[data-upload-form]");
     const statementTypeSelect = form?.querySelector("[data-statement-type-select]");
@@ -162,7 +177,7 @@ function setupUploadFileSelectionFeedback(root = document) {
     });
 
     fileInput.addEventListener("cancel", () => hideSelectionBusy(250));
-    window.addEventListener("focus", () => {
+    form.addEventListener(uploadFileSelectionWindowFocusEvent, () => {
         if (selectionBusyToken) {
             hideSelectionBusy(650);
         }
@@ -451,6 +466,7 @@ window.financeApp?.registerInitializer("upload.account-behavior", setupUploadAcc
 window.financeApp?.registerInitializer("upload.file-selection-feedback", setupUploadFileSelectionFeedback);
 window.financeApp?.registerInitializer("upload.preview", setupUploadPreview);
 
+setupUploadFileSelectionGlobalListeners();
 setupUploadAccountBehavior();
 setupUploadFileSelectionFeedback();
 setupUploadPreview();

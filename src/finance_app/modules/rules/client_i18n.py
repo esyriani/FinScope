@@ -6,6 +6,8 @@ CLIENT_TRANSLATION_MESSAGES = (
     "Loading preview...",
     "No active transactions match this rule.",
     "Preview unavailable.",
+    "Rule updated.",
+    "The rule action could not be completed.",
     "{count} active matching transaction.",
     "{count} active matching transactions.",
 )

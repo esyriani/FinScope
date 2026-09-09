@@ -7,7 +7,7 @@
     "vendor/flatpickr/4.6.13/plugins/monthSelect/index.js"
 ] %}
 {% set page_stylesheets = [
-    "css/home-dashboard.css",
+    "css/analytics-components.css",
     "css/calendar-recurring.css",
     "css/tables.css",
     "css/tag-multiselect.css",
@@ -19,10 +19,11 @@
     "js/merchant-autocomplete.js",
     "js/calendar.js",
     "js/tables.js",
+    "js/xlsx-writer.js",
     "js/exports.js"
 ] %}
 {% extends "base.html" %}
-{% from "_collapsible.html" import collapsible_filter_panel, selected_filter_values with context %}
+{% from "_collapsible.html" import collapsible_filter_panel with context %}
 {% from "_filter_controls.html" import account_filter, filter_actions, filter_summary, merchant_filter with context %}
 {% from "_tag_multiselect.html" import tag_multiselect with context %}
 
@@ -33,29 +34,9 @@
 {% set account_options = account_options | default([]) %}
 {% set merchant_query = merchant_query | default("") %}
 {% set selected_merchant_id = selected_merchant_id | default(none) %}
-{% set selected_merchant_label = selected_merchant_label | default(merchant_query) %}
 {% set merchant_suggestion_limit = merchant_suggestion_limit | default(5) %}
-{% set calendar_merchant_filter_label = selected_merchant_label if selected_merchant_id else merchant_query %}
-{% set calendar_account_label = namespace(value=_("All accounts")) %}
-{% for account in account_options %}
-    {% if selected_account_id == account.id %}
-        {% set calendar_account_label.value = account.name %}
-    {% endif %}
-{% endfor %}
-{% set calendar_heatmap_label = namespace(value=_("Spending")) %}
-{% for option in heatmap_options %}
-    {% if option.value == heatmap_metric %}
-        {% set calendar_heatmap_label.value = _(option.label) %}
-    {% endif %}
-{% endfor %}
-{% set calendar_filter_summary = filter_summary([
-    {"label": "Month", "value": month_label},
-    {"label": "Account", "value": calendar_account_label.value},
-    {"label": "Merchant", "value": calendar_merchant_filter_label if calendar_merchant_filter_label else _("All")},
-    {"label": "Heatmap", "value": calendar_heatmap_label.value},
-    {"label": "Categories", "value": selected_filter_values(selected_categories, "All categories")},
-    {"label": "Tags", "value": selected_filter_values(selected_tags, "All tags")},
-]) %}
+{% set calendar_merchant_filter_label = calendar_merchant_filter_label | default(merchant_query) %}
+{% set calendar_filter_summary = filter_summary(calendar_filter_summary_items | default([])) %}
 <div class="page-header">
     <div>
         <h2 class="mb-1">{{ _("Calendar") }}</h2>
@@ -63,7 +44,11 @@
     </div>
 </div>
 
-<div id="calendar-dynamic" data-calendar-dynamic>
+<div
+    id="calendar-dynamic"
+    data-calendar-dynamic
+    data-calendar-url="{{ url_for('calendar_page.calendar_view') }}"
+>
 {% call collapsible_filter_panel("calendar-filters", calendar_filter_summary | trim) %}
 <form method="get" class="calendar-control-row">
     <input type="hidden" name="month" value="{{ selected_month }}">
@@ -208,12 +193,12 @@
         {% if merchant_query %}
             <input type="hidden" name="merchant_query" value="{{ merchant_query }}">
         {% endif %}
-        <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ previous_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link aria-label="{{ _('Previous month') }}"><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
         <div class="calendar-month-field">
             <label class="form-label" for="calendar-month">{{ _("Month") }}</label>
             <input id="calendar-month" class="form-control form-control-sm" type="text" name="month" value="{{ selected_month }}" data-flatpickr-month data-flatpickr-submit-on-change>
         </div>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ next_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link aria-label="{{ _('Next month') }}"><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
         <a class="btn btn-outline-secondary btn-sm" href="{{ current_month_url }}" data-calendar-preserve-heatmap data-calendar-ajax-link><i class="bi bi-calendar-event" aria-hidden="true"></i>{{ _("Current") }}</a>
     </form>
 </div>
@@ -223,7 +208,7 @@
         <div class="section-title">
             <div>
                 <h5 class="card-title mb-1">{{ month_label }}</h5>
-                <div class="text-muted small">{{ _("Daily summaries. Double-click a day to review its transactions.") }}</div>
+                <div class="text-muted small">{{ _("Daily summaries.") }}</div>
             </div>
             <div class="d-flex flex-wrap gap-1" role="group" aria-label="{{ _('Heatmap') }}" data-calendar-heatmap-controls>
                 {% for option in heatmap_options %}
@@ -251,8 +236,6 @@
                 <section
                     class="calendar-day {{ day.heatmap_class }} {% if not day.in_month %}calendar-day-muted{% endif %} {% if day.is_today %}calendar-day-today{% endif %}"
                     style="--calendar-heat-alpha: {{ day.heatmap_alpha }};"
-                    tabindex="0"
-                    role="button"
                     data-calendar-day="{{ day.date }}"
                     data-heatmap-spending-alpha="{{ day.heatmap.spending.alpha }}"
                     data-heatmap-spending-class="{{ day.heatmap.spending.class }}"
@@ -263,7 +246,17 @@
                 >
                 <div class="calendar-day-head">
                     <span>{{ day.day_number }}</span>
-                    <a class="calendar-day-link" href="{{ day.url }}" aria-label="{{ _('Open {date} transactions', date=day.date) }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+                    <div class="calendar-day-actions">
+                        <button
+                            class="calendar-day-action"
+                            type="button"
+                            data-calendar-day-open="{{ day.date }}"
+                            aria-label="{{ _('Review {date} transactions', date=day.date) }}"
+                        >
+                            <i class="bi bi-card-list" aria-hidden="true"></i>
+                        </button>
+                        <a class="calendar-day-link" href="{{ day.url }}" aria-label="{{ _('Open {date} transactions', date=day.date) }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+                    </div>
                 </div>
 
                 <div class="calendar-day-summary">

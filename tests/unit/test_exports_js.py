@@ -9,7 +9,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXPORTS_JS = PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js"
+XLSX_WRITER_JS = PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "xlsx-writer.js"
 EXPORTS_CSS = PROJECT_ROOT / "src" / "finance_app" / "static" / "css" / "exports.css"
+TEMPLATES = PROJECT_ROOT / "src" / "finance_app" / "templates"
 
 
 def function_body(source, name):
@@ -53,7 +55,7 @@ def test_export_toolbars_include_expand_modal_actions():
     assert "ensureExportExpandModal" in source
     assert "restoreExpandedExportContent" in source
     assert "function closeExpandedExportModal()" in source
-    assert "function showModalAfterExpandedExportCloses(modalElement)" in source
+    assert "function showModalAfterExpandedExportCloses(modalElement, relatedTarget)" in source
     assert "window.financeApp.closeExpandedExportModal = closeExpandedExportModal;" in source
     assert "window.financeApp.showModalAfterExpandedExportCloses = showModalAfterExpandedExportCloses;" in source
     assert "function tableVisibleSource(table)" in source
@@ -69,3 +71,81 @@ def test_export_toolbars_include_expand_modal_actions():
     assert ".export-expanded-chart.chart-viewport" in styles
     assert ".export-expanded-table" in styles
     assert "min-width: max-content;" not in styles
+
+
+def test_server_paginated_table_exports_fetch_pages_sequentially_with_cancellation():
+    """Verify all-page table exports do not fetch every server page concurrently."""
+    source = EXPORTS_JS.read_text(encoding="utf-8")
+    fetch_body = function_body(source, "fetchExportTablePage")
+    tables_body = function_body(source, "tableExportTablesForScope")
+    csv_body = function_body(source, "exportTableCsv")
+    excel_body = function_body(source, "exportTableExcel")
+    setup_body = function_body(source, "setupTableExports")
+
+    assert "const tableExportOperations = new WeakMap();" in source
+    assert "function beginTableExportOperation(table, button)" in source
+    assert "cancelTableExportOperation(tableExportOperations.get(table));" in source
+    assert "function cancelTableExportFromButton(table, button)" in source
+    assert "function updateTableExportProgress(operation, current, total)" in source
+    assert 'financeTranslate("Cancel export ({current}/{total})", { current, total })' in source
+    assert "function yieldTableExportWork()" in source
+
+    assert "signal," in fetch_body
+    assert "Promise.all" not in tables_body
+    assert "for (const { pageNumber, url } of plan.pageUrls)" in tables_body
+    assert "throwIfTableExportCancelled(options.operation);" in tables_body
+    assert "options.onProgress?.({ currentPage, pageNumber, totalPages });" in tables_body
+    assert "await fetchExportTablePage(url, table, sourceIndex, options.operation?.controller?.signal)" in tables_body
+    assert "await yieldTableExportWork();" in tables_body
+
+    assert "cancelTableExportFromButton(table, button)" in csv_body
+    assert "cancelTableExportFromButton(table, button)" in excel_body
+    assert "updateTableExportProgress(operation, currentPage, totalPages);" in csv_body
+    assert "updateTableExportProgress(operation, currentPage, totalPages);" in excel_body
+    assert "tableExportIsAbortError(error)" in csv_body
+    assert "tableExportIsAbortError(error)" in excel_body
+    assert "event.currentTarget" in setup_body
+
+
+def test_xlsx_file_format_writer_is_isolated_from_dom_table_exports():
+    """Verify XLSX packaging logic lives outside the generic DOM export script."""
+    source = EXPORTS_JS.read_text(encoding="utf-8")
+    writer = XLSX_WRITER_JS.read_text(encoding="utf-8")
+    excel_body = function_body(source, "exportTableExcel")
+
+    assert "function buildTableExportWorkbookSource" in source
+    assert "function createTableExportXlsxBlob" in source
+    assert "buildTableExportWorkbookSource(table, scope, exportTables)" in excel_body
+    assert "writer.createXlsxBlob(source, sheetName)" in source
+
+    for snippet in (
+        "const XLSX_MIME_TYPE",
+        "const XLSX_MONEY_FORMAT",
+        "const XLSX_CRC32_TABLE",
+        "function buildXlsxTableModel",
+        "function createXlsxZipBlob",
+        "function xlsxWorksheetXml",
+        "function xlsxTableXml",
+        "SUBTOTAL(109,",
+        "window.financeXlsxWriter =",
+    ):
+        assert snippet in writer
+        assert snippet not in source
+
+    assert "DOMParser" in source
+    assert "querySelector" in source
+    assert "DOMParser" not in writer
+    assert "querySelector" not in writer
+
+
+def test_export_pages_load_xlsx_writer_before_table_exports():
+    """Verify export-enabled templates load the XLSX writer before exports.js."""
+    export_templates = [
+        path for path in TEMPLATES.glob("*.html") if '"js/exports.js"' in path.read_text(encoding="utf-8")
+    ]
+
+    assert export_templates
+    for template_path in export_templates:
+        source = template_path.read_text(encoding="utf-8")
+        assert '"js/xlsx-writer.js"' in source
+        assert source.index('"js/xlsx-writer.js"') < source.index('"js/exports.js"')

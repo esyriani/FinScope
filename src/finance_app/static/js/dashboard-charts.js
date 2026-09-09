@@ -4,6 +4,8 @@ const dashboardTheme = dashboardChartUtils.theme();
 const formatDashboardMoney = dashboardChartUtils.formatMoney;
 const formatDashboardAxisMoney = dashboardChartUtils.formatAxisMoney;
 const dashboardTranslate = dashboardChartUtils.translate;
+const dashboardChartEscapeHtml = dashboardChartUtils.escapeHtml;
+const dashboardTooltipLine = dashboardChartUtils.tooltipLine;
 
 function dashboardMonthName(monthIndex) {
     return new Date(Date.UTC(2000, monthIndex, 1)).toLocaleString(window.financeLocale || "en-CA", {
@@ -67,10 +69,10 @@ function dashboardSpendingIncomeOption() {
         tooltip: dashboardChartUtils.tooltip(dashboardTheme, {
             trigger: "axis",
             formatter(items) {
-                const rows = items.map(
-                    (item) => `${item.marker}${item.seriesName}: ${formatDashboardMoney(item.value)}`
+                const rows = items.map((item) =>
+                    dashboardTooltipLine(item.seriesName, formatDashboardMoney(item.value), item.marker)
                 );
-                return [items[0]?.axisValue, ...rows].join("<br>");
+                return [dashboardChartEscapeHtml(items[0]?.axisValue), ...rows].join("<br>");
             },
         }),
         grid: dashboardChartUtils.baseGrid(),
@@ -136,7 +138,7 @@ function dashboardNetCashflowOption() {
             color: dashboardTheme.text,
         },
         tooltip: dashboardChartUtils.tooltip(dashboardTheme, {
-            formatter: (params) => `${params.name}: ${formatDashboardMoney(params.value)}`,
+            formatter: (params) => dashboardTooltipLine(params.name, formatDashboardMoney(params.value)),
         }),
         grid: dashboardChartUtils.baseGrid(),
         xAxis: {
