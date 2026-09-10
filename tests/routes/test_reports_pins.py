@@ -145,6 +145,7 @@ def test_save_pinned_reports_edits_order_title_and_removal(csrf_client, core_con
     """Verify edit mode persists order, titles, and unpin choices."""
     seed_reporting_data(core_conn)
     user_id = int(csrf_client.client.test_user["id"])
+    markup_title = "<img src=x onerror=alert(1)>"
     csrf_client.post("/reports/pins", json=overview_pin_payload())
     csrf_client.post(
         "/reports/pins",
@@ -156,19 +157,24 @@ def test_save_pinned_reports_edits_order_title_and_removal(csrf_client, core_con
         "/reports/pins/edit",
         json={
             "pins": [
-                {"id": rows[1]["id"], "short_title": "Credits", "remove": False},
+                {"id": rows[1]["id"], "short_title": markup_title, "remove": False},
                 {"id": rows[0]["id"], "short_title": "", "remove": True},
             ]
         },
     )
     remaining = list_pins(core_conn, user_id)
+    data = response.get_json()
 
     assert response.status_code == 200
-    assert response.get_json()["message"] == "Pinned reports saved."
-    assert "reports-pinned-section" in response.get_json()["html"]
+    assert data["message"] == "Pinned reports saved."
+    assert "html" not in data
+    assert data["pinned_reports"][0]["title"] == markup_title
+    assert data["pinned_reports"][0]["short_title"] == markup_title
+    assert data["pinned_reports"][0]["filter_summary"]
+    assert data["pinned_reports"][0]["primary_value_label"]
     assert len(remaining) == 1
     assert remaining[0]["report_type"] == REPORT_INCOME
-    assert remaining[0]["short_title"] == "Credits"
+    assert remaining[0]["short_title"] == markup_title
     assert remaining[0]["sort_order"] == 0
 
 

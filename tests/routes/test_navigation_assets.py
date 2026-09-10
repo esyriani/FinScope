@@ -202,6 +202,8 @@ def test_tabbed_pages_load_shared_tab_stylesheet(owner_client):
     assert_asset_reference(reports_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(recurring_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(settings_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(settings_response, r"/static/css/settings\.css\?v=[0-9a-f]{12}")
+    assert_no_asset_reference(settings_response, r"/static/css/rules-list\.css\?v=[0-9a-f]{12}")
     assert_asset_reference(taxonomy_response, r"/static/css/page-tabs\.css\?v=[0-9a-f]{12}")
     assert asset_reference_index(comparison_response, r"/static/css/page-tabs\.css") < asset_reference_index(
         comparison_response,

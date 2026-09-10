@@ -5,6 +5,10 @@ function setupTableRowInteractions(root = document) {
         return row.getAttribute("data-row-href") || "";
     }
 
+    function usesDoubleClickDrilldown(row) {
+        return row.dataset.rowDrilldown === "dblclick";
+    }
+
     function rowEditTarget(row) {
         const targetSelector = row.getAttribute("data-row-edit-target");
         return targetSelector ? document.querySelector(targetSelector) : null;
@@ -45,7 +49,7 @@ function setupTableRowInteractions(root = document) {
     function activateRowFromClick(row) {
         const href = rowHref(row);
         if (href) {
-            if (row.dataset.rowDrilldown === "dblclick") {
+            if (usesDoubleClickDrilldown(row)) {
                 if (typeof selectDashboardDrilldownItem === "function") {
                     selectDashboardDrilldownItem(row);
                 } else {
@@ -63,7 +67,7 @@ function setupTableRowInteractions(root = document) {
 
     function activateRowFromKeyboard(row) {
         const href = rowHref(row);
-        if (href) {
+        if (href && !usesDoubleClickDrilldown(row)) {
             navigateRow(row, href);
             return;
         }
@@ -76,7 +80,9 @@ function setupTableRowInteractions(root = document) {
     }
 
     function prepareInteractiveRow(row) {
-        if (!rowHref(row) && !row.getAttribute("data-row-edit-target")) {
+        const hasSingleActivation = rowHref(row) && !usesDoubleClickDrilldown(row);
+        const hasEditTarget = Boolean(row.getAttribute("data-row-edit-target"));
+        if (!hasSingleActivation && !hasEditTarget) {
             return;
         }
 
@@ -113,7 +119,7 @@ function setupTableRowInteractions(root = document) {
             }
 
             const href = rowHref(row);
-            if (href && row.dataset.rowDrilldown === "dblclick") {
+            if (href && usesDoubleClickDrilldown(row)) {
                 navigateRow(row, href);
                 return;
             }

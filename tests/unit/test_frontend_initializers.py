@@ -84,7 +84,14 @@ def test_dynamic_page_ajax_navigation_uses_shared_refresh_helper():
     assert "const request = beginAjaxRefreshRequest(options.selector);" in ajax_actions
     assert "if (!ajaxRefreshIsCurrentRequest(request))" in ajax_actions
     assert "const nextTarget = nextDocument.querySelector(options.selector);" in ajax_actions
+    assert "function disposeAjaxRefreshDynamicTarget(currentTarget, context, options)" in ajax_actions
+    assert "disposeAjaxRefreshTargetWidgets(currentTarget);" in ajax_actions
+    assert "await hideAjaxRefreshTargetModals(currentTarget);" in ajax_actions
+    assert "await disposeAjaxRefreshDynamicTarget(currentTarget" in ajax_actions
     assert "currentTarget.replaceWith(replacement);" in ajax_actions
+    assert "cleanupAjaxRefreshModals();" in ajax_actions
+    assert "window.bootstrap.Tooltip.getInstance(element)?.dispose();" in ajax_actions
+    assert 'ajaxRefreshTargetAndDescendants(target, ".modal.show")' in ajax_actions
     assert "runAjaxRefreshInitializers(replacement);" in ajax_actions
     assert "createDynamicPageRefresh: createAjaxDynamicPageRefresh" in ajax_actions
 
@@ -98,7 +105,9 @@ def test_dynamic_page_ajax_navigation_uses_shared_refresh_helper():
         assert f'routeDatasetKey: "{route_dataset_key}"' in script
         assert f'loadingClass: "{loading_class}"' in script
         assert f"historyState: {{ {history_key}: true }}" in script
-        assert "beforeReplace: ({ currentTarget }) =>" in script
+        assert "disposeTarget: ({ currentTarget }) =>" in script
+        assert "closeOpenCalendarModals" not in script
+        assert "closeOpenRecurringModals" not in script
         assert "refresh.replace(url" in script
         assert "let dynamicRefreshRequest = null;" not in script
         assert "let dynamicRefreshSequence = 0;" not in script
@@ -692,6 +701,34 @@ def test_calendar_day_modal_uses_native_button_triggers():
     assert ".calendar-day-action:focus-visible" in calendar_css
 
 
+def test_drilldown_rows_use_explicit_activation_controls():
+    """Verify double-click drilldown rows do not expose mismatched button semantics."""
+    tables_js = read_script("tables.js")
+    recurring_js = read_script("recurring.js")
+    recurring_template = (TEMPLATES / "_recurring_activity.html").read_text(encoding="utf-8")
+    reports_table_template = (TEMPLATES / "_reports_tables.html").read_text(encoding="utf-8")
+    rules_audit_template = (TEMPLATES / "rules_audit.html").read_text(encoding="utf-8")
+    wire_detail_body = recurring_js.split("function wireDetailTrigger(element)", 1)[1].split(
+        "function openRecurringDay", 1
+    )[0]
+
+    assert "function usesDoubleClickDrilldown(row)" in tables_js
+    assert "const hasSingleActivation = rowHref(row) && !usesDoubleClickDrilldown(row);" in tables_js
+    assert "if (href && !usesDoubleClickDrilldown(row))" in tables_js
+    assert "if (href && usesDoubleClickDrilldown(row))" in tables_js
+    assert 'data-row-drilldown="dblclick"' in reports_table_template
+    assert '<a class="fw-semibold reports-taxonomy-name-link" href="{{ row.url }}" data-row-action>' in (
+        reports_table_template
+    )
+    assert "data-recurring-detail-trigger" in recurring_template
+    assert 'role="button"' not in recurring_template
+    assert 'tabindex="0"' not in recurring_template
+    assert "Double-click to view recurring activity details" not in recurring_template
+    assert 'element.querySelectorAll("[data-recurring-detail-trigger]")' in recurring_js
+    assert 'element.addEventListener("keydown"' not in wire_detail_body
+    assert "Use Details to open each pair; double-click a row as a shortcut." in rules_audit_template
+
+
 def test_sortable_tables_publish_accessible_sort_state():
     """Verify sortable table headers expose and update assistive sort state."""
     sort_controls_template = (TEMPLATES / "_sort_controls.html").read_text(encoding="utf-8")
@@ -890,7 +927,15 @@ def test_shared_analytics_css_owns_cross_page_primitives():
 
 def test_dynamic_user_rows_avoid_inner_html_builders():
     """Verify dynamic user/import values are rendered through DOM APIs."""
-    dynamic_scripts = ["rules.js", "recurring.js", "jobs.js", "upload.js", "calendar.js", "reimbursements.js"]
+    dynamic_scripts = [
+        "rules.js",
+        "recurring.js",
+        "jobs.js",
+        "upload.js",
+        "calendar.js",
+        "reimbursements.js",
+        "reports.js",
+    ]
 
     for script_name in dynamic_scripts:
         script = read_script(script_name)

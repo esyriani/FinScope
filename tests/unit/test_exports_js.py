@@ -42,6 +42,19 @@ def test_csv_escape_neutralizes_spreadsheet_formula_prefixes():
     assert 'String(value ?? "")' not in csv_escape_body
 
 
+def test_blob_download_urls_are_revoked_after_a_task_boundary():
+    """Verify browser downloads can consume generated blob URLs before revocation."""
+    source = EXPORTS_JS.read_text(encoding="utf-8")
+    download_body = function_body(source, "downloadBlob")
+
+    assert "const DOWNLOAD_URL_REVOKE_DELAY_MS = 1000;" in source
+    assert "link.click();" in download_body
+    assert "link.remove();" in download_body
+    assert "window.setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_REVOKE_DELAY_MS);" in download_body
+    assert download_body.index("link.click();") < download_body.index("link.remove();")
+    assert download_body.index("link.remove();") < download_body.index("window.setTimeout")
+
+
 def test_export_toolbars_include_expand_modal_actions():
     """Verify table and chart export toolbars include reusable expand controls."""
     source = EXPORTS_JS.read_text(encoding="utf-8")
@@ -73,37 +86,27 @@ def test_export_toolbars_include_expand_modal_actions():
     assert "min-width: max-content;" not in styles
 
 
-def test_server_paginated_table_exports_fetch_pages_sequentially_with_cancellation():
-    """Verify all-page table exports do not fetch every server page concurrently."""
+def test_table_exports_are_limited_to_displayed_dom_rows():
+    """Verify generic table exports do not fetch or parse server pagination pages."""
     source = EXPORTS_JS.read_text(encoding="utf-8")
-    fetch_body = function_body(source, "fetchExportTablePage")
-    tables_body = function_body(source, "tableExportTablesForScope")
+    rows_body = function_body(source, "tableRowsForExport")
     csv_body = function_body(source, "exportTableCsv")
     excel_body = function_body(source, "exportTableExcel")
     setup_body = function_body(source, "setupTableExports")
 
-    assert "const tableExportOperations = new WeakMap();" in source
-    assert "function beginTableExportOperation(table, button)" in source
-    assert "cancelTableExportOperation(tableExportOperations.get(table));" in source
-    assert "function cancelTableExportFromButton(table, button)" in source
-    assert "function updateTableExportProgress(operation, current, total)" in source
-    assert 'financeTranslate("Cancel export ({current}/{total})", { current, total })' in source
-    assert "function yieldTableExportWork()" in source
+    assert "function tableRowsForExport(table)" in source
+    assert "visibleExportSourceIds(table)" in rows_body
+    assert "isDisplayedExportRow(row)" in rows_body
+    assert "serverPaginationPlan" not in source
+    assert "fetchExportTablePage" not in source
+    assert "fetch(" not in source
+    assert "DOMParser" not in source
+    assert "tableExportTablesForScope" not in source
+    assert "tableRowsForExportTables" not in source
 
-    assert "signal," in fetch_body
-    assert "Promise.all" not in tables_body
-    assert "for (const { pageNumber, url } of plan.pageUrls)" in tables_body
-    assert "throwIfTableExportCancelled(options.operation);" in tables_body
-    assert "options.onProgress?.({ currentPage, pageNumber, totalPages });" in tables_body
-    assert "await fetchExportTablePage(url, table, sourceIndex, options.operation?.controller?.signal)" in tables_body
-    assert "await yieldTableExportWork();" in tables_body
-
-    assert "cancelTableExportFromButton(table, button)" in csv_body
-    assert "cancelTableExportFromButton(table, button)" in excel_body
-    assert "updateTableExportProgress(operation, currentPage, totalPages);" in csv_body
-    assert "updateTableExportProgress(operation, currentPage, totalPages);" in excel_body
-    assert "tableExportIsAbortError(error)" in csv_body
-    assert "tableExportIsAbortError(error)" in excel_body
+    assert "const csv = tableMatrix(table)" in csv_body
+    assert "buildTableExportWorkbookSource(table)" in excel_body
+    assert 'financeTranslate("The table could not be exported.")' in source
     assert "event.currentTarget" in setup_body
 
 
@@ -115,7 +118,7 @@ def test_xlsx_file_format_writer_is_isolated_from_dom_table_exports():
 
     assert "function buildTableExportWorkbookSource" in source
     assert "function createTableExportXlsxBlob" in source
-    assert "buildTableExportWorkbookSource(table, scope, exportTables)" in excel_body
+    assert "buildTableExportWorkbookSource(table)" in excel_body
     assert "writer.createXlsxBlob(source, sheetName)" in source
 
     for snippet in (
@@ -132,8 +135,8 @@ def test_xlsx_file_format_writer_is_isolated_from_dom_table_exports():
         assert snippet in writer
         assert snippet not in source
 
-    assert "DOMParser" in source
     assert "querySelector" in source
+    assert "DOMParser" not in source
     assert "DOMParser" not in writer
     assert "querySelector" not in writer
 

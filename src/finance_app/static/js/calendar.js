@@ -154,12 +154,6 @@ function setupCalendarAjaxNavigation() {
     const dynamicSelector = "[data-calendar-dynamic]";
     let dynamicRefresh = null;
 
-    function closeOpenCalendarModals() {
-        document.querySelectorAll(".modal.show").forEach((modalElement) => {
-            window.bootstrap?.Modal.getInstance(modalElement)?.hide();
-        });
-    }
-
     function destroyDynamicFlatpickr(dynamic) {
         dynamic.querySelectorAll("[data-flatpickr-date], [data-flatpickr-month]").forEach((input) => {
             input.financeFlatpickr?.destroy();
@@ -176,8 +170,7 @@ function setupCalendarAjaxNavigation() {
                 historyState: { calendarAjax: true },
                 errorMessage: financeTranslate("Calendar refresh failed."),
                 missingMessage: financeTranslate("Calendar refresh returned no content."),
-                beforeReplace: ({ currentTarget }) => {
-                    closeOpenCalendarModals();
+                disposeTarget: ({ currentTarget }) => {
                     destroyDynamicFlatpickr(currentTarget);
                 },
             });

@@ -28,7 +28,7 @@ from finance_app.core.analytics import (
 from finance_app.core.config import settings as app_settings
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.i18n import gettext
-from finance_app.core.money import rounded_money_float
+from finance_app.core.money import format_money_display, rounded_money_float
 from finance_app.core.periods import PERIOD_CUSTOM, get_period_label
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import accounts as accounts_table
@@ -302,6 +302,33 @@ def pinned_reports_overview_context() -> dict[str, Any]:
         "pinned_reports": cards,
         "pinned_report_limit": limit,
         "pinned_reports_save_url": url_for("reports.save_pinned_reports"),
+    }
+
+
+def pinned_reports_overview_payload() -> dict[str, Any]:
+    """Return JSON-safe pinned report card data for browser DOM updates."""
+    context = pinned_reports_overview_context()
+    return {
+        "pinned_reports": [pinned_report_card_payload(card) for card in context["pinned_reports"]],
+        "pinned_report_limit": context["pinned_report_limit"],
+        "pinned_reports_save_url": context["pinned_reports_save_url"],
+    }
+
+
+def pinned_report_card_payload(card: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one pinned report card as display text and attributes, not HTML."""
+    return {
+        "id": int(card["id"]),
+        "title": str(card["title"]),
+        "short_title": str(card.get("short_title") or ""),
+        "filter_summary": str(card["filter_summary"]),
+        "is_missing": bool(card["is_missing"]),
+        "missing_message": gettext(str(card["missing_message"])),
+        "open_url": str(card.get("open_url") or ""),
+        "primary_label": gettext(str(card["primary_label"])),
+        "primary_value_label": format_money_display(card["primary_value"]),
+        "transaction_count": int(card["transaction_count"]),
+        "transactions_label": gettext("transactions"),
     }
 
 

@@ -11,21 +11,13 @@ _CLIENT_TRANSLATION_MESSAGES: dict[str, None] = {}
 
 
 SHARED_CLIENT_TRANSLATION_MESSAGES = (
-    "Cancel",
-    "Cancel export ({current}/{total})",
     "Chart {number}",
-    "Choose which rows to export from this table.",
     "Close",
     "CSV",
-    "Could not load every table page for export.",
-    "Displayed rows",
     "Excel",
-    "Entire table",
     "Expand",
     "Expand {label}",
     "Export {label}",
-    "Export displayed rows only? Choose Cancel to export the entire table.",
-    "Export rows",
     "Min",
     "Q1",
     "Median",
@@ -41,6 +33,7 @@ SHARED_CLIENT_TRANSLATION_MESSAGES = (
     "Table {number}",
     "The action could not be completed.",
     "The page section could not be refreshed.",
+    "The table could not be exported.",
     "Total",
     "{count} selected",
 )

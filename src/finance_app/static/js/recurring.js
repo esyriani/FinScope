@@ -488,21 +488,23 @@ function setupRecurringActivityDetailModal() {
 
     function wireDetailTrigger(element) {
         const isTableRow = element.matches("tr[data-recurring-id]");
+        const openDetail = () => openRecurringDetail(element.dataset.recurringId);
+        element.querySelectorAll("[data-recurring-detail-trigger]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openDetail();
+            });
+        });
+
         if (isTableRow) {
             element.addEventListener("dblclick", (event) => {
                 if (event.target.closest(interactiveSelector)) return;
-                openRecurringDetail(element.dataset.recurringId);
+                openDetail();
             });
         } else {
-            element.addEventListener("click", () => openRecurringDetail(element.dataset.recurringId));
+            element.addEventListener("click", openDetail);
         }
-        element.addEventListener("keydown", (event) => {
-            if (event.target.closest(interactiveSelector)) return;
-            if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                openRecurringDetail(element.dataset.recurringId);
-            }
-        });
     }
 
     function openRecurringDay(date) {
@@ -799,12 +801,6 @@ function setupRecurringAjaxNavigation() {
     const dynamicSelector = "[data-recurring-dynamic]";
     let dynamicRefresh = null;
 
-    function closeOpenRecurringModals() {
-        document.querySelectorAll(".modal.show").forEach((modalElement) => {
-            window.bootstrap?.Modal.getInstance(modalElement)?.hide();
-        });
-    }
-
     function destroyDynamicFlatpickr(dynamic) {
         dynamic.querySelectorAll("[data-flatpickr-date], [data-flatpickr-month]").forEach((input) => {
             input.financeFlatpickr?.destroy();
@@ -848,8 +844,7 @@ function setupRecurringAjaxNavigation() {
                 historyState: { recurringAjax: true },
                 errorMessage: financeTranslate("Recurring refresh failed."),
                 missingMessage: financeTranslate("Recurring refresh returned no content."),
-                beforeReplace: ({ currentTarget }) => {
-                    closeOpenRecurringModals();
+                disposeTarget: ({ currentTarget }) => {
                     destroyDynamicFlatpickr(currentTarget);
                 },
                 afterReplace: ({ url }) => syncRecurringFilterForm(url),
