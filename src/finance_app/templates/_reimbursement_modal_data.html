@@ -1,0 +1,6 @@
+<script type="application/json" data-reimbursement-match-items>
+    {{ reimbursement_match_modal_items | default([]) | tojson }}
+</script>
+<script type="application/json" data-reimbursement-expense-items>
+    {{ expense_detail_modal_items | default([]) | tojson }}
+</script>

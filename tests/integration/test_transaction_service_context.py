@@ -124,6 +124,12 @@ def test_transactions_context_paginates_and_sorts(core_conn):
     assert first_page["page_end"] == 2
     assert descriptions(first_page) == ["Hydro Quebec", "Unknown Shop"]
     assert descriptions(second_page) == ["Metro Grocery", "Cafe Bistro"]
+    assert [row["category"] for row in first_page["categories"]] == [
+        "Food",
+        "Income",
+        "UNKNOWN",
+        "Utilities",
+    ]
     assert first_page["transaction_filter_summary_items"] == [
         {"label": "Search", "value": "All"},
         {"label": "Period", "value": "All time"},

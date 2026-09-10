@@ -1,10 +1,3 @@
-<script type="application/json" data-reimbursement-match-items>
-    {{ reimbursement_match_modal_items | default([]) | tojson }}
-</script>
-<script type="application/json" data-reimbursement-expense-items>
-    {{ expense_detail_modal_items | default([]) | tojson }}
-</script>
-
 <div
     class="modal fade reimbursement-match-modal"
     id="reimbursement-match-modal"
@@ -70,7 +63,7 @@
                         </div>
                         <div class="reimbursement-review-unmatched">
                             <span>{{ _("Remaining after this match") }}</span>
-                            <strong data-match-remaining>{{ 0|moneyfmt }}</strong>
+                            <strong data-match-remaining-label>{{ 0|moneyfmt }}</strong>
                         </div>
                         <div class="reimbursement-match-error" data-match-error hidden>
                             {{ _("Selected amount exceeds unmatched reimbursement money.") }}
@@ -193,7 +186,7 @@
                             </div>
                             <div class="reimbursement-review-unmatched">
                                 <span>{{ _("Remaining after this match") }}</span>
-                                <strong data-match-remaining>{{ 0|moneyfmt }}</strong>
+                                <strong data-match-remaining-label>{{ 0|moneyfmt }}</strong>
                             </div>
                             <div class="reimbursement-match-error" data-match-error hidden>
                                 {{ _("Selected amount exceeds expense amount still to reimburse.") }}

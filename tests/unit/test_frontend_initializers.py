@@ -904,6 +904,7 @@ def test_row_level_modals_use_shared_dynamic_shells():
     taxonomy_modals = (TEMPLATES / "_taxonomy_modals.html").read_text(encoding="utf-8")
     taxonomy_js = read_script("taxonomy.js")
     reimbursements_template = (TEMPLATES / "reimbursements.html").read_text(encoding="utf-8")
+    reimbursement_modal_data = (TEMPLATES / "_reimbursement_modal_data.html").read_text(encoding="utf-8")
     reimbursement_modals = (TEMPLATES / "_reimbursement_modals.html").read_text(encoding="utf-8")
     reimbursements_js = read_script("reimbursements.js")
 
@@ -936,11 +937,20 @@ def test_row_level_modals_use_shared_dynamic_shells():
     assert "innerHTML" not in taxonomy_js
 
     assert '{% include "_reimbursement_modals.html" %}' in reimbursements_template
+    assert '{% include "_reimbursement_modal_data.html" %}\n</div>\n{% include "_reimbursement_modals.html" %}' in (
+        reimbursements_template
+    )
     assert 'data-row-edit-target="#reimbursement-match-modal"' in reimbursements_template
     assert 'data-row-edit-target="#reimbursement-expense-modal"' in reimbursements_template
     assert 'data-bs-target="#reimbursement-match-modal"' in reimbursements_template
-    assert "reimbursement_match_modal_items" in reimbursement_modals
-    assert "expense_detail_modal_items" in reimbursement_modals
+    assert "reimbursement_match_modal_items" in reimbursement_modal_data
+    assert "expense_detail_modal_items" in reimbursement_modal_data
+    assert "reimbursement_match_modal_items" not in reimbursement_modals
+    assert "expense_detail_modal_items" not in reimbursement_modals
+    assert 'data-match-remaining="0"' in reimbursement_modals
+    assert "data-match-remaining-label" in reimbursement_modals
+    assert 'querySelector("[data-match-remaining]")' not in reimbursements_js
+    assert 'querySelector("[data-match-remaining-label]")' in reimbursements_js
     assert 'id="reimbursement-match-modal"' in reimbursement_modals
     assert 'id="reimbursement-expense-modal"' in reimbursement_modals
     for row_modal_pattern in (

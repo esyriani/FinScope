@@ -9,6 +9,7 @@ from tests.support.html import (
     assert_no_element,
     assert_not_visible_text,
     assert_visible_text,
+    response_html,
 )
 from tests.support.rules import set_default_table_page_size
 
@@ -80,6 +81,7 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_c
     reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
 
     response = csrf_client.get("/reimbursements")
+    body = response_html(response)
 
     assert response.status_code == 200
     assert_form(response, "/reimbursements/allocations", method="post")
@@ -164,6 +166,10 @@ def test_reimbursements_page_lists_open_credits_and_expenses(csrf_client, core_c
         "div",
         attrs={"id": "reimbursement-expense-modal", "class": "reimbursement-expense-modal"},
     )
+    refresh_target_start = body.index('id="reimbursements-page"')
+    modal_data_index = body.index("data-reimbursement-match-items")
+    modal_shell_index = body.index('<div\n    class="modal fade reimbursement-match-modal"')
+    assert refresh_target_start < modal_data_index < modal_shell_index
     assert_no_element(
         response,
         "div",

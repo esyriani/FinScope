@@ -256,7 +256,7 @@
 
         const matchRemaining = parseAmount(form.dataset.matchRemaining || form.dataset.reimbursementRemaining);
         const total = form.querySelector("[data-match-total]");
-        const remaining = form.querySelector("[data-match-remaining]");
+        const remaining = form.querySelector("[data-match-remaining-label]");
         const error = form.querySelector("[data-match-error]");
         const submit = form.querySelector("[data-match-submit]");
         const candidates = Array.from(form.querySelectorAll("[data-match-candidate]"));
@@ -329,7 +329,7 @@
         setText(modal, "[data-reimbursement-match-allocated-label]", item.allocated_label);
         setText(modal, "[data-reimbursement-match-remaining-label]", item.remaining_label);
         setText(modal, "[data-reimbursement-match-candidate-count]", item.candidate_count_label);
-        setText(modal, "[data-match-remaining]", item.remaining_label);
+        setText(modal, "[data-match-remaining-label]", item.remaining_label);
 
         candidateList?.replaceChildren(
             ...candidates.map((candidate) =>
@@ -472,7 +472,7 @@
         setText(modal, "[data-reimbursement-expense-remaining-label]", item.pending_remaining_label);
         setText(modal, "[data-reimbursement-expense-candidate-count]", item.reimbursement_candidate_count_label);
         setText(modal, "[data-reimbursement-expense-match-count]", item.matched_reimbursement_count_label);
-        setText(modal, "[data-match-remaining]", item.pending_remaining_label);
+        setText(modal, "[data-match-remaining-label]", item.pending_remaining_label);
 
         const status = modal.querySelector("[data-reimbursement-expense-status]");
         if (status) {
