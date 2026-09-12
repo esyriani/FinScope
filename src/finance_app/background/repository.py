@@ -39,7 +39,7 @@ JOB_JSON_KEY_TEXT_LIMIT = 128
 JOB_JSON_VALUE_TEXT_LIMIT = 512
 TEXT_TRUNCATION_SUFFIX = "...[truncated]"
 INTERRUPTED_BACKGROUND_JOB_ERROR = (
-    "The app restarted before this processing job finished. Retry the original action if needed."
+    "The app restarted before this processing finished. Retry the original action if needed."
 )
 
 
@@ -96,7 +96,7 @@ def save_job_event(conn: Any, job_id: str, event: Mapping[str, Any]) -> None:
                 BACKGROUND_JOB_LOG_LEVEL_INFO,
                 JOB_ENUM_TEXT_LIMIT,
             ),
-            message=text_value(event.get("message")) or "Job event.",
+            message=text_value(event.get("message")) or "Processing event.",
             params=json_text(event.get("params") or {}),
         )
     )
@@ -162,7 +162,7 @@ def mark_interrupted_jobs_failed(conn: Any, finished_at: str | None = None) -> i
             {
                 "timestamp": finished_at,
                 "level": "error",
-                "message": "Job failed: {error}",
+                "message": "Processing item failed: {error}",
                 "params": {"error": INTERRUPTED_BACKGROUND_JOB_ERROR},
             },
         )

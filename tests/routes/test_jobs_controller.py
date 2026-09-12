@@ -88,7 +88,7 @@ def test_job_status_json_returns_404_for_missing_job(owner_client):
     response = owner_client.get("/jobs/missing.json")
 
     assert response.status_code == 404
-    assert response.get_json() == {"error": "Job not found."}
+    assert response.get_json() == {"error": "Processing item not found."}
 
 
 def test_job_status_json_formats_progress_log_timestamps(owner_client):
@@ -131,7 +131,7 @@ def test_jobs_page_paginates_and_renders_public_job_data(owner_client, core_conn
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Showing 3-3 of 3 jobs" in body
+    assert "Showing 3-3 of 3 processing items" in body
     assert "Earliest job" in body
     assert "previous" in body
     earliest_created_at = runner.get_background_job(earliest_job_id)["created_at"]
@@ -299,9 +299,9 @@ def test_undo_job_post_handles_runner_error_cases(owner_client):
         follow_redirects=True,
     )
 
-    assert "Job not found." in missing_response.get_data(as_text=True)
-    assert "This job does not have anything to undo." in unavailable_response.get_data(as_text=True)
-    assert "Could not undo job: RuntimeError: cannot undo" in failing_response.get_data(as_text=True)
+    assert "Processing item not found." in missing_response.get_data(as_text=True)
+    assert "This processing item does not have anything to undo." in unavailable_response.get_data(as_text=True)
+    assert "Could not undo processing item: RuntimeError: cannot undo" in failing_response.get_data(as_text=True)
 
 
 def test_cancel_job_post_marks_queued_job_cancelled(owner_client):
@@ -318,7 +318,7 @@ def test_cancel_job_post_marks_queued_job_cancelled(owner_client):
     )
 
     assert response.status_code == 200
-    assert "Job cancelled." in response.get_data(as_text=True)
+    assert "Processing item cancelled." in response.get_data(as_text=True)
     assert runner.get_background_job(job_id)["status"] == "cancelled"
 
 
@@ -476,6 +476,6 @@ def test_cancel_queued_ai_jobs_route_clears_only_ai_queue(owner_client):
     )
 
     assert response.status_code == 200
-    assert "Cancelled 1 queued AI job." in response.get_data(as_text=True)
+    assert "Cancelled 1 queued AI processing item." in response.get_data(as_text=True)
     assert runner.get_background_job(main_job)["status"] == "queued"
     assert runner.get_background_job(ai_job)["status"] == "cancelled"

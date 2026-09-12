@@ -91,14 +91,14 @@ def test_runner_persists_failed_job_when_executor_rejects(app, monkeypatch):
 
     assert job is not None
     assert job["status"] == "failed"
-    assert job["error"] == "Background job could not be queued: RuntimeError: executor stopped"
+    assert job["error"] == "Background processing could not be queued: RuntimeError: executor stopped"
     assert job["can_cancel"] is False
     assert job["can_undo"] is False
     assert job["progress_log"] == [
         {
             "timestamp": job["progress_log"][0]["timestamp"],
             "level": "error",
-            "message": "Background job could not be queued: {detail}",
+            "message": "Background processing could not be queued: {detail}",
             "params": {"detail": "RuntimeError: executor stopped"},
         }
     ]
@@ -196,7 +196,7 @@ def test_job_history_sanitizes_event_values_before_insert(app):
 
     params = json.loads(event["params"])
     assert event["level"] == "info"
-    assert event["message"] == "Job event."
+    assert event["message"] == "Processing event."
     assert len(event["params"]) <= job_repository.JOB_PARAMS_TEXT_LIMIT
     assert params["_truncated"] is True
     assert len(params["detail"]) <= job_repository.JOB_JSON_VALUE_TEXT_LIMIT
@@ -272,7 +272,7 @@ def test_cleanup_old_jobs_removes_terminal_history_and_events(app):
             {
                 "timestamp": "2026-01-01T00:05:00Z",
                 "level": "error",
-                "message": "Job failed: {error}",
+                "message": "Processing item failed: {error}",
                 "params": {"error": "boom"},
             },
         )

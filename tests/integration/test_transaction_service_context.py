@@ -625,7 +625,7 @@ def test_recategorize_selected_transactions_job_skips_rows_changed_after_snapsho
         text("SELECT category, category_source, category_confidence, needs_review FROM transactions WHERE id = :p0"),
         {"p0": other_id},
     ).fetchone()
-    assert message == "1 selected transaction recategorized. Skipped 1 transaction changed after the job started."
+    assert message == "1 selected transaction recategorized. Skipped 1 transaction changed after processing started."
     assert tuple(target) == ("Utilities", "manual", None, 0)
     assert tuple(other) == ("Food", "ai", 0.88, 1)
     assert get_transaction_tag_names(core_conn, target_id) == ["Tax"]

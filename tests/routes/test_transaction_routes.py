@@ -497,7 +497,7 @@ def test_batch_transactions_route_queues_selected_recategorization(owner_client,
 
     assert response.status_code == 200
     assert captured["transaction_ids"] == ["11", "22"]
-    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
+    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Processing item: abcdef12")
 
 
 def test_batch_transactions_route_handles_recategorization_queue_rejection(owner_client, monkeypatch):
@@ -582,7 +582,7 @@ def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(
 
     assert response.status_code == 200
     assert captured == [["11", "22"]]
-    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
+    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Processing item: abcdef12")
 
 
 def test_estimate_batch_transaction_ai_route_returns_json(owner_client, monkeypatch):

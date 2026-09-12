@@ -53,7 +53,7 @@ def apply_review_group() -> ResponseReturnValue:
     review_target = result["target"]
     flash(
         gettext(
-            "Review {target} queued in the background. Track progress on the Processing page. Job: {job_id}",
+            "Review {target} queued in the background. Track progress on the Processing page. Processing item: {job_id}",
             target=gettext(review_target),
             job_id=job_id[:8],
         )
@@ -76,7 +76,7 @@ def review_job_status(job_id: str) -> ResponseReturnValue:
     """Return the minimal background job status needed by the review page."""
     job = get_background_job(job_id)
     if job is None:
-        return jsonify({"ok": False, "message": gettext("Job not found.")}), 404
+        return jsonify({"ok": False, "message": gettext("Processing item not found.")}), 404
 
     return jsonify({"ok": True, "status": job["status"]})
 

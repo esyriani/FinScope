@@ -502,7 +502,7 @@ def test_undo_rules_override_import_rejects_changed_rules(core_conn):
         """))
     core_conn.commit()
 
-    with pytest.raises(ValueError, match="rules changed after the import job"):
+    with pytest.raises(ValueError, match="rules changed after import processing"):
         undo_rules_override_import(undo_state)
 
 

@@ -182,12 +182,12 @@ def parse_taxonomy_yaml(raw_text: object) -> dict[str, list[dict[str, str]]]:
         if not line.startswith(" ") and stripped.endswith(":"):
             current_section = stripped[:-1].strip()
             if current_section not in sections:
-                raise ValueError(f"Line {line_number}: unsupported taxonomy section.")
+                raise ValueError(f"Line {line_number}: unsupported categories and tags section.")
             current_item = None
             continue
 
         if current_section is None:
-            raise ValueError(f"Line {line_number}: expected a taxonomy section.")
+            raise ValueError(f"Line {line_number}: expected a categories or tags section.")
 
         if stripped.startswith("- "):
             current_item = {}
@@ -197,7 +197,7 @@ def parse_taxonomy_yaml(raw_text: object) -> dict[str, list[dict[str, str]]]:
                 continue
 
         if current_item is None:
-            raise ValueError(f"Line {line_number}: expected a taxonomy list item.")
+            raise ValueError(f"Line {line_number}: expected a categories or tags list item.")
 
         key, value = parse_yaml_key_value(stripped, line_number)
         current_item[key] = yaml_scalar_value(value, line_number)
@@ -275,7 +275,7 @@ def validate_unique_taxonomy_names(rows: Sequence[Mapping[str, str]], label: str
     for row in rows:
         normalized = row["name"].casefold()
         if normalized in seen:
-            raise ValueError(f"{label} names in the taxonomy import must be unique.")
+            raise ValueError(f"{label} names in the categories and tags import must be unique.")
         seen.add(normalized)
 
 

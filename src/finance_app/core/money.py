@@ -10,6 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import TypeAlias, cast
 
 from finance_app.core.config import settings
+from finance_app.core.i18n import current_language, normalize_language
 
 MONEY_QUANTUM = Decimal("0.01")
 MoneyValue: TypeAlias = Decimal | int | float | str
@@ -136,19 +137,54 @@ def rounded_money_float(value: MoneyValue | None, default: float = 0.0) -> float
     return float(rounded_money_decimal(value))
 
 
-def format_money_display(value: MoneyValue | None, places: int = 2, symbol: str | None = None) -> str:
+def format_number_display(
+    value: MoneyValue | None,
+    places: int = 2,
+    *,
+    language: object | None = None,
+    signed: bool = False,
+) -> str:
+    """Format a numeric value with grouping and decimal separators for a language."""
+    if value is None:
+        return ""
+
+    amount = cast(Decimal, quantize_display_money(value, places=places))
+    sign = "+" if signed and amount > 0 else "-" if amount < 0 else ""
+    numeric = f"{abs(amount):,.{int(places)}f}"
+    if normalize_language(language or current_language()) == "fr":
+        numeric = numeric.replace(",", " ").replace(".", ",")
+    return f"{sign}{numeric}"
+
+
+def format_money_display(
+    value: MoneyValue | None,
+    places: int = 2,
+    symbol: str | None = None,
+    language: object | None = None,
+) -> str:
     """Format a money value with the configured currency symbol for display."""
     if value is None:
         return ""
 
     amount = cast(Decimal, quantize_display_money(value, places=places))
-    formatted = f"{amount:,.{int(places)}f}".replace(",", " ")
+    active_language = normalize_language(language or current_language())
+    formatted = format_number_display(abs(amount), places=places, language=active_language)
     currency_symbol = settings.currency_symbol if symbol is None else str(symbol)
-    return f"{formatted} {currency_symbol}".strip()
+    sign = "-" if amount < 0 else ""
+    if not currency_symbol:
+        return f"{sign}{formatted}"
+    if active_language == "fr":
+        return f"{sign}{formatted} {currency_symbol}".strip()
+    return f"{sign}{currency_symbol}{formatted}".strip()
 
 
-def format_signed_money_display(value: MoneyValue | None, places: int = 2, symbol: str | None = None) -> str:
+def format_signed_money_display(
+    value: MoneyValue | None,
+    places: int = 2,
+    symbol: str | None = None,
+    language: object | None = None,
+) -> str:
     """Format a signed money value with the configured currency symbol."""
     amount = money_to_decimal(value)
     prefix = "+" if amount > 0 else "-" if amount < 0 else ""
-    return f"{prefix}{format_money_display(abs(amount), places=places, symbol=symbol)}"
+    return f"{prefix}{format_money_display(abs(amount), places=places, symbol=symbol, language=language)}"

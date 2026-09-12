@@ -477,7 +477,7 @@ def test_init_core_db_marks_interrupted_background_jobs_failed():
     assert rows["restart-running-job"]["finished_at"] is not None
     assert rows["restart-running-job"]["undo_status"] == "unavailable"
     assert events["restart-queued-job"]["level"] == "error"
-    assert events["restart-queued-job"]["message"] == "Job failed: {error}"
+    assert events["restart-queued-job"]["message"] == "Processing item failed: {error}"
 
 
 def test_schema_validation_accepts_mysql_reflected_check_sql_and_truncated_names():
