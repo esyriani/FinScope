@@ -117,13 +117,13 @@ def test_submit_background_job_records_failed_job_when_executor_rejects(monkeypa
     assert exc_info.value.detail == "RuntimeError: executor stopped"
     assert job is not None
     assert job["status"] == "failed"
-    assert job["error"] == "Background job could not be queued: RuntimeError: executor stopped"
+    assert job["error"] == "Background processing could not be queued: RuntimeError: executor stopped"
     assert job["finished_at"] is not None
     assert job["undo_status"] == "unavailable"
     assert job["can_cancel"] is False
     assert job["can_undo"] is False
     assert job["progress_log"][0]["level"] == "error"
-    assert job["progress_log"][0]["message"] == "Background job could not be queued: {detail}"
+    assert job["progress_log"][0]["message"] == "Background processing could not be queued: {detail}"
     assert job["progress_log"][0]["params"] == {"detail": "RuntimeError: executor stopped"}
 
 
@@ -306,7 +306,7 @@ def test_undo_background_job_error_cases_restore_public_state():
     assert runner.undo_background_job("missing") is None
     with pytest.raises(ValueError, match="does not have anything to undo"):
         runner.undo_background_job(no_undo_job_id)
-    with pytest.raises(ValueError, match="Only finished jobs can be undone"):
+    with pytest.raises(ValueError, match="Only finished processing items can be undone"):
         runner.undo_background_job(queued_job_id)
     with pytest.raises(RuntimeError, match="undo failed"):
         runner.undo_background_job(failing_undo_job_id)
@@ -326,7 +326,7 @@ def test_undo_background_job_rejects_running_jobs_without_changing_undo_state():
     )
     runner.update_job(job_id, status="running", started_at=runner.utc_now())
 
-    with pytest.raises(ValueError, match="Only finished jobs can be undone"):
+    with pytest.raises(ValueError, match="Only finished processing items can be undone"):
         runner.undo_background_job(job_id)
 
     job = runner.get_background_job(job_id)

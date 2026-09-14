@@ -27,7 +27,7 @@ from finance_app.modules.reports.export import (
 )
 from finance_app.modules.reports.pins import (
     pin_current_report,
-    pinned_reports_overview_context,
+    pinned_reports_overview_payload,
     save_pinned_report_edits,
 )
 from finance_app.modules.reports.service import (
@@ -127,8 +127,7 @@ def save_pinned_reports() -> Response:
         response = jsonify({"ok": False, "message": gettext(str(exc))})
         response.status_code = 400
         return response
-    html = render_template("_reports_pins.html", **pinned_reports_overview_context())
-    return jsonify({**result, "html": html})
+    return jsonify({**result, **pinned_reports_overview_payload()})
 
 
 @reports_bp.route("/reports/export.csv")

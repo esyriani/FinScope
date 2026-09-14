@@ -322,17 +322,17 @@
                         <td>{{ item.category }}</td>
                         <td>{{ _("Income") if item.type == "income" else _("Spending") }}</td>
                         <td>{{ _(item.frequency) }}</td>
-                        <td>{{ item.date }}</td>
-                        <td>{{ matched_date }}</td>
-                        <td>{{ item.last_seen }}</td>
-                        <td>{{ "%.2f"|format(item.amount) }}</td>
-                        <td>{% if actual_amount != "" %}{{ "%.2f"|format(actual_amount) }}{% endif %}</td>
+                        <td>{{ item.date | datefmt }}</td>
+                        <td>{{ matched_date | datefmt if matched_date else "" }}</td>
+                        <td>{{ item.last_seen | datefmt }}</td>
+                        <td>{{ item.amount | moneyfmt }}</td>
+                        <td>{% if actual_amount != "" %}{{ actual_amount | moneyfmt }}{% endif %}</td>
                         <td>{{ _(item.confidence) }}</td>
                         <td>{{ item.observed_months }}</td>
                         <td>
                             {% if item.amount_change %}
-                                {{ "%+.2f"|format(item.amount_change.difference) }}
-                                {% if item.amount_change.percent is not none %}({{ "%+.1f"|format(item.amount_change.percent) }}%){% endif %}
+                                {{ item.amount_change.difference | moneyfmt }}
+                                {% if item.amount_change.percent is not none %}({{ item.amount_change.percent | percentfmt(signed=true) }}){% endif %}
                             {% endif %}
                         </td>
                     </tr>

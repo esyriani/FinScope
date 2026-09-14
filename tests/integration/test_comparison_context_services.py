@@ -110,12 +110,12 @@ def test_comparison_context_year_and_period_metrics(app, core_conn, monkeypatch)
     assert category_insight["tone"] == "danger"
     assert category_insight["icon"] == "bi-graph-up-arrow"
     assert category_insight["title"] == "Food"
-    assert category_insight["value"] == "Food +140.00 $ (+233.3%)"
-    assert category_insight["detail"] == "Prior: 60.00 $. Current: 200.00 $"
-    assert category_insight["summary"] == "+140.00 $"
+    assert category_insight["value"] == "Food +$140.00 (+233.3%)"
+    assert category_insight["detail"] == "Prior: $60.00. Current: $200.00"
+    assert category_insight["summary"] == "+$140.00"
     assert category_insight["badge"] == "+233.3%"
-    assert category_insight["previous_label"] == "60.00 $"
-    assert category_insight["current_label"] == "200.00 $"
+    assert category_insight["previous_label"] == "$60.00"
+    assert category_insight["current_label"] == "$200.00"
     assert category_insight["previous_width"] == 30.0
     assert category_insight["current_width"] == 100.0
     assert category_insight["insight_type"] == "category_increase"
@@ -179,7 +179,7 @@ def test_period_comparison_ranked_insights_include_robust_anomaly_candidates(app
     assert "merchant_spending_high_anomaly" in insight_types
     assert category_anomaly["label"] == "Unusually high category spending"
     assert category_anomaly["title"] == "Food: higher than usual"
-    assert category_anomaly["detail"] == "Food is 220.00 $ this period; typical recent spending is 50.00 $."
+    assert category_anomaly["detail"] == "Food is $220.00 this period; typical recent spending is $50.00."
     assert category_anomaly["robust_anomaly"]["history_count"] == 5
     assert category_anomaly["robust_anomaly"]["is_anomaly"] is True
     assert merchant_anomaly["title"] == "METRO GROCERY: higher than usual"

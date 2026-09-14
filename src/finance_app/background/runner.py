@@ -70,7 +70,7 @@ class BackgroundJobSubmissionError(RuntimeError):
         self.label = label
         self.queue = queue
         self.detail = detail
-        super().__init__(f"Background job could not be queued: {detail}")
+        super().__init__(f"Background processing could not be queued: {detail}")
 
 
 def submit_background_job(
@@ -137,7 +137,7 @@ def submit_background_job(
 
 def mark_job_submission_failed(job_id: str, detail: str) -> None:
     """Record executor rejection as a terminal failed background job."""
-    message = "Background job could not be queued: {detail}"
+    message = "Background processing could not be queued: {detail}"
     snapshot = None
     event = None
     with _lock:
@@ -165,7 +165,7 @@ def mark_job_submission_failed(job_id: str, detail: str) -> None:
 def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> None:
     """Execute a queued job and record its terminal state."""
     if is_job_cancel_requested(job_id):
-        result = "Job cancelled before it started."
+        result = "Processing item cancelled before it started."
         append_background_job_log(result, level="warning", job_id=job_id)
         update_job(job_id, status=BACKGROUND_JOB_STATUS_CANCELLED, result=result, finished_at=utc_now())
         return
@@ -176,9 +176,9 @@ def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs
         _job_context.job_id = job_id
         result = func(*args, **kwargs)
     except JobCancelled as exc:
-        result = str(exc) or "Job cancelled."
+        result = str(exc) or "Processing item cancelled."
         append_background_job_log(
-            "Job cancelled: {result}",
+            "Processing item cancelled: {result}",
             params={"result": result},
             level="warning",
             job_id=job_id,
@@ -193,7 +193,7 @@ def run_job(job_id: str, func: Callable[..., Any], args: tuple[Any, ...], kwargs
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         append_background_job_log(
-            "Job failed: {error}",
+            "Processing item failed: {error}",
             params={"error": error},
             level="error",
             job_id=job_id,
@@ -358,18 +358,18 @@ def cancel_background_job(job_id: str) -> dict[str, Any] | None:
             return None
 
         if job["status"] not in CANCELLABLE_STATUSES:
-            raise ValueError("Only queued or running jobs can be cancelled.")
+            raise ValueError("Only queued or running processing items can be cancelled.")
 
         job["cancel_requested"] = True
         future = job.get("_future")
         cancelled_before_start = job["status"] == "queued" and (future is None or future.cancel())
         if cancelled_before_start:
             job["status"] = BACKGROUND_JOB_STATUS_CANCELLED
-            job["result"] = "Job cancelled before it started."
+            job["result"] = "Processing item cancelled before it started."
             job["finished_at"] = utc_now()
             event = append_job_log_entry(
                 job,
-                "Job cancelled before it started.",
+                "Processing item cancelled before it started.",
                 level=BACKGROUND_JOB_LOG_LEVEL_WARNING,
             )
             snapshot = dict(job)
@@ -459,16 +459,16 @@ def undo_background_job(job_id: str) -> dict[str, Any] | None:
         job = _jobs.get(job_id)
         if job is not None:
             if job.get("_undo_handler") is None:
-                raise ValueError("This job does not have anything to undo.")
+                raise ValueError("This processing item does not have anything to undo.")
 
             if job["status"] not in UNDOABLE_STATUSES:
-                raise ValueError("Only finished jobs can be undone.")
+                raise ValueError("Only finished processing items can be undone.")
 
             if job["undo_status"] == BACKGROUND_JOB_UNDO_STATUS_UNDONE:
-                raise ValueError("This job has already been undone.")
+                raise ValueError("This processing item has already been undone.")
 
             if job["undo_status"] == BACKGROUND_JOB_UNDO_STATUS_UNDOING:
-                raise ValueError("This job is already being undone.")
+                raise ValueError("This processing item is already being undone.")
 
             undo_handler = job["_undo_handler"]
             undo_args = job["_undo_args"]
@@ -480,7 +480,7 @@ def undo_background_job(job_id: str) -> dict[str, Any] | None:
     if job is None:
         if persisted_job(job_id) is None:
             return None
-        raise ValueError("This job does not have anything to undo.")
+        raise ValueError("This processing item does not have anything to undo.")
 
     persist_job_snapshot(snapshot)
 
@@ -541,7 +541,7 @@ def is_job_cancel_requested(job_id: str | None = None) -> bool:
         return bool(job and job.get("cancel_requested"))
 
 
-def raise_if_cancel_requested(message: str = "Job cancelled.") -> None:
+def raise_if_cancel_requested(message: str = "Processing item cancelled.") -> None:
     """Raise ``JobCancelled`` when the current job should stop cooperatively."""
     if is_job_cancel_requested():
         raise JobCancelled(message)

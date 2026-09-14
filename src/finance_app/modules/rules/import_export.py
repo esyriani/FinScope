@@ -470,7 +470,7 @@ def undo_rules_override_import(undo_state: Mapping[str, Any]) -> str:
         # Override undo is intentionally strict: if rule state changed after
         # import, restoring the prior snapshot would discard later user edits.
         if not rule_snapshots_equal(current_rules, after_rules):
-            raise ValueError("Cannot undo this rules import because rules changed after the import job.")
+            raise ValueError("Cannot undo this rules import because rules changed after import processing.")
 
         imported_rule_ids = [rule["id"] for rule in after_rules]
         if imported_rule_ids and rule_reference_count(conn, imported_rule_ids):

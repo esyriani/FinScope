@@ -18,6 +18,7 @@ from finance_app.core.constants import (
     USER_ROLE_VIEWER,
     normalize_user_role,
 )
+from finance_app.core.i18n import gettext
 
 PERMISSION_MANAGE_USERS = "manage_users"
 PERMISSION_MANAGE_GLOBAL_SETTINGS = "manage_global_settings"
@@ -131,7 +132,7 @@ def owner_required(view_func: Callable[..., Any]) -> Callable[..., Any]:
 def forbidden_response() -> Any:
     """Return a 403 response matching the request style."""
     if request.is_json or request.headers.get("X-Requested-With") == "fetch":
-        return jsonify({"ok": False, "message": "Forbidden."}), 403
+        return jsonify({"ok": False, "message": gettext("Forbidden.")}), 403
     abort(403)
 
 

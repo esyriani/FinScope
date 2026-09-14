@@ -61,7 +61,11 @@
                 {% for row in rows %}
                 <tr {% if row.url | default("") %}data-row-href="{{ row.url }}" data-row-drilldown="dblclick"{% endif %}>
                     <td data-sort-value="{{ row.label }}">
-                        <span class="fw-semibold">{{ row.label }}</span>
+                        {% if row.url | default("") %}
+                            <a class="fw-semibold reports-taxonomy-name-link" href="{{ row.url }}" data-row-action>{{ row.label }}</a>
+                        {% else %}
+                            <span class="fw-semibold">{{ row.label }}</span>
+                        {% endif %}
                     </td>
                     <td class="text-end" data-sort-value="{{ row.spending }}">{{ row.spending | moneyfmt }}</td>
                     <td class="text-end" data-sort-value="{{ row.income }}">{{ row.income | moneyfmt }}</td>

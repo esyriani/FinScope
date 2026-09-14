@@ -1,3 +1,5 @@
+const DOWNLOAD_URL_REVOKE_DELAY_MS = 1000;
+
 function normalizeExportText(value) {
     return String(value || "")
         .replace(/\s+/g, " ")
@@ -25,7 +27,7 @@ function downloadBlob(blob, filename) {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_REVOKE_DELAY_MS);
 }
 
 function downloadDataUrl(dataUrl, filename) {
@@ -113,112 +115,27 @@ function createExportToolbar() {
 }
 
 let expandedExportState = null;
-const tableExportOperations = new WeakMap();
 
-function tableExportAbortController() {
-    return typeof AbortController === "function" ? new AbortController() : null;
-}
-
-function tableExportAbortError() {
-    const error = new Error("Table export cancelled.");
-    error.name = "AbortError";
-    return error;
-}
-
-function tableExportIsAbortError(error) {
-    return error?.name === "AbortError";
-}
-
-function tableExportIsCancelled(operation) {
-    return Boolean(operation?.cancelled || operation?.controller?.signal?.aborted);
-}
-
-function throwIfTableExportCancelled(operation) {
-    if (tableExportIsCancelled(operation)) {
-        throw tableExportAbortError();
+function beginTableExport(button) {
+    if (button?.dataset.tableExportBusy === "true") {
+        return false;
     }
-}
-
-function cancelTableExportOperation(operation) {
-    if (!operation) {
-        return;
-    }
-
-    operation.cancelled = true;
-    operation.controller?.abort();
-}
-
-function tableExportButtonLabel(button) {
-    return normalizeExportText(button?.querySelector("span")?.textContent || button?.textContent || "");
-}
-
-function beginTableExportOperation(table, button) {
-    cancelTableExportOperation(tableExportOperations.get(table));
-
-    const operation = {
-        button,
-        cancelled: false,
-        controller: tableExportAbortController(),
-        defaultAriaLabel: button?.getAttribute("aria-label") || "",
-        defaultLabel: tableExportButtonLabel(button),
-        labelElement: button?.querySelector("span") || null,
-        table,
-    };
-    tableExportOperations.set(table, operation);
 
     if (button) {
         button.dataset.tableExportBusy = "true";
         button.setAttribute("aria-busy", "true");
     }
 
-    return operation;
-}
-
-function finishTableExportOperation(operation) {
-    if (operation.button) {
-        if (operation.labelElement) {
-            operation.labelElement.textContent = operation.defaultLabel;
-        }
-        if (operation.defaultAriaLabel) {
-            operation.button.setAttribute("aria-label", operation.defaultAriaLabel);
-        } else {
-            operation.button.removeAttribute("aria-label");
-        }
-        operation.button.removeAttribute("aria-busy");
-        delete operation.button.dataset.tableExportBusy;
-    }
-
-    if (tableExportOperations.get(operation.table) === operation) {
-        tableExportOperations.delete(operation.table);
-    }
-}
-
-function updateTableExportProgress(operation, current, total) {
-    if (!operation.button) {
-        return;
-    }
-
-    const label = financeTranslate("Cancel export ({current}/{total})", { current, total });
-    if (operation.labelElement) {
-        operation.labelElement.textContent = label;
-    }
-    operation.button.setAttribute("aria-label", label);
-}
-
-function cancelTableExportFromButton(table, button) {
-    const operation = tableExportOperations.get(table);
-    if (operation?.button !== button || button?.dataset.tableExportBusy !== "true") {
-        return false;
-    }
-
-    cancelTableExportOperation(operation);
     return true;
 }
 
-function yieldTableExportWork() {
-    return new Promise((resolve) => {
-        window.setTimeout(resolve, 0);
-    });
+function finishTableExport(button) {
+    if (!button) {
+        return;
+    }
+
+    button.removeAttribute("aria-busy");
+    delete button.dataset.tableExportBusy;
 }
 
 function resizeChartElement(element) {
@@ -482,109 +399,8 @@ function visibleExportSourceIds(table) {
     return new Set(ids);
 }
 
-function tableExportRoot(table) {
-    const sourceTable = tableVisibleSource(table) || table;
-    return (
-        sourceTable.closest("[data-table-export-scope]") ||
-        sourceTable.closest(".card") ||
-        sourceTable.closest(".modal-content") ||
-        document
-    );
-}
-
-function clientPaginatedTablePageCount(table) {
-    const sourceTable = tableVisibleSource(table) || table;
-    if (!sourceTable.matches("[data-paginated-table]")) {
-        return 1;
-    }
-
-    const pageSize = Math.max(1, Number(sourceTable.dataset.pageSize || 25) || 25);
-    const rows = Array.from(sourceTable.tBodies[0]?.rows || []).filter((row) => !row.hasAttribute("data-sort-ignore"));
-    return Math.max(1, Math.ceil(rows.length / pageSize));
-}
-
-function numericPaginationLinks(root) {
-    return Array.from(root.querySelectorAll("nav .pagination a.page-link[href]"))
-        .map((link) => {
-            const pageNumber = Number(normalizeExportText(link.textContent));
-            if (!Number.isInteger(pageNumber) || pageNumber <= 0) {
-                return null;
-            }
-
-            const url = new URL(link.href, window.location.href);
-            if (url.origin !== window.location.origin) {
-                return null;
-            }
-
-            return { pageNumber, url };
-        })
-        .filter(Boolean);
-}
-
-function activePaginationPage(root) {
-    const activeLink = root.querySelector("nav .pagination .page-item.active .page-link");
-    const pageNumber = Number(normalizeExportText(activeLink?.textContent || ""));
-    return Number.isInteger(pageNumber) && pageNumber > 0 ? pageNumber : 1;
-}
-
-function inferPaginationPageParameter(pageLinks) {
-    const scores = new Map();
-    pageLinks.forEach(({ pageNumber, url }) => {
-        url.searchParams.forEach((value, name) => {
-            if (Number(value) === pageNumber) {
-                scores.set(name, (scores.get(name) || 0) + 1);
-            }
-        });
-    });
-
-    return (
-        Array.from(scores.entries()).sort((left, right) => {
-            if (right[1] !== left[1]) return right[1] - left[1];
-            if (left[0] === "page") return -1;
-            if (right[0] === "page") return 1;
-            return left[0].localeCompare(right[0]);
-        })[0]?.[0] || ""
-    );
-}
-
-function serverPaginationPlan(table) {
-    const root = tableExportRoot(table);
-    const pageLinks = numericPaginationLinks(root);
-    if (!pageLinks.length) {
-        return null;
-    }
-
-    const pageNumbers = pageLinks.map((link) => link.pageNumber);
-    const totalPages = Math.max(...pageNumbers);
-    if (totalPages <= 1) {
-        return null;
-    }
-
-    const pageParameter = inferPaginationPageParameter(pageLinks);
-    const template = pageLinks.find((link) => link.pageNumber === totalPages) || pageLinks[0];
-    if (!pageParameter || !template) {
-        return null;
-    }
-
-    return {
-        activePage: Math.min(totalPages, activePaginationPage(root)),
-        pageUrls: Array.from({ length: totalPages }, (_value, index) => {
-            const pageNumber = index + 1;
-            const url = new URL(template.url.href);
-            url.searchParams.set(pageParameter, String(pageNumber));
-            return { pageNumber, url: url.href };
-        }),
-    };
-}
-
-function tableHasMultipleExportPages(table) {
-    return clientPaginatedTablePageCount(table) > 1 || Boolean(serverPaginationPlan(table));
-}
-
-function tableRowsForExport(table, scope) {
+function tableRowsForExport(table) {
     const rows = Array.from(table.querySelectorAll("tr"));
-    if (scope !== "displayed") return rows;
-
     const visibleSourceIds = visibleExportSourceIds(table);
     return rows.filter((row) => {
         if (isExportHeaderRow(row)) return true;
@@ -593,88 +409,12 @@ function tableRowsForExport(table, scope) {
     });
 }
 
-function exportableTablesIn(root) {
-    return Array.from(root.querySelectorAll("table")).filter((table) => !table.hasAttribute("data-no-export"));
-}
-
-function matchingTableInDocument(documentRoot, sourceTable, sourceIndex) {
-    if (sourceTable.id) {
-        return documentRoot.getElementById(sourceTable.id);
-    }
-
-    return exportableTablesIn(documentRoot)[sourceIndex] || null;
-}
-
-async function fetchExportTablePage(url, sourceTable, sourceIndex, signal) {
-    const response = await fetch(url, {
-        credentials: "same-origin",
-        headers: { Accept: "text/html" },
-        signal,
-    });
-    if (!response.ok) {
-        throw new Error(`Table export page request failed: ${response.status}`);
-    }
-
-    const parsed = new DOMParser().parseFromString(await response.text(), "text/html");
-    const table = matchingTableInDocument(parsed, sourceTable, sourceIndex);
-    if (!table) {
-        throw new Error("Table export page did not contain the expected table.");
-    }
-    return table;
-}
-
-async function tableExportTablesForScope(table, scope, options = {}) {
-    if (scope !== "all") {
-        return [table];
-    }
-
-    const plan = serverPaginationPlan(table);
-    if (!plan) {
-        return [table];
-    }
-
-    const sourceIndex = exportableTablesIn(document).indexOf(table);
-    if (sourceIndex < 0) {
-        return [table];
-    }
-
-    const tables = [];
-    const totalPages = plan.pageUrls.length;
-    for (const { pageNumber, url } of plan.pageUrls) {
-        throwIfTableExportCancelled(options.operation);
-        const currentPage = tables.length + 1;
-        options.onProgress?.({ currentPage, pageNumber, totalPages });
-
-        tables.push(
-            pageNumber === plan.activePage
-                ? table
-                : await fetchExportTablePage(url, table, sourceIndex, options.operation?.controller?.signal)
-        );
-        throwIfTableExportCancelled(options.operation);
-        await yieldTableExportWork();
-    }
-
-    return tables;
-}
-
-function tableRowsForExportTables(primaryTable, tables, scope) {
-    if (tables.length <= 1) {
-        return tableRowsForExport(primaryTable, scope);
-    }
-
-    return [
-        ...Array.from(primaryTable.tHead?.rows || []),
-        ...tables.flatMap((table) => Array.from(table.tBodies).flatMap((body) => Array.from(body.rows))),
-        ...Array.from(primaryTable.tFoot?.rows || []),
-    ];
-}
-
-function tableMatrix(table, scope = "all", exportTables = [table]) {
-    const columnPlan = tableExportColumnPlan(table, scope, exportTables);
+function tableMatrix(table) {
+    const columnPlan = tableExportColumnPlan(table);
     const headers = tableHeaderNames(table, columnPlan);
     const headerRow = table.tHead?.rows[0] || table.querySelector("tr");
 
-    return tableRowsForExportTables(table, exportTables, scope)
+    return tableRowsForExport(table)
         .map((row) => {
             if (row === headerRow) {
                 return headers;
@@ -686,126 +426,24 @@ function tableMatrix(table, scope = "all", exportTables = [table]) {
         .filter((row) => row.some((value) => value !== ""));
 }
 
-function ensureTableExportChoiceModal() {
-    const existing = document.getElementById("table-export-choice-modal");
-    if (existing) return existing;
-
-    const modal = document.createElement("div");
-    modal.className = "modal fade";
-    modal.id = "table-export-choice-modal";
-    modal.tabIndex = -1;
-    modal.setAttribute("aria-labelledby", "table-export-choice-title");
-    modal.setAttribute("aria-hidden", "true");
-    modal.innerHTML = `
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="table-export-choice-title">${financeTranslate("Export rows")}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${financeTranslate("Close")}"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="mb-0">${financeTranslate("Choose which rows to export from this table.")}</p>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
-                        <i class="bi bi-x-circle" aria-hidden="true"></i>${financeTranslate("Cancel")}
-                    </button>
-                    <button class="btn btn-outline-primary" type="button" data-export-choice="all">
-                        <i class="bi bi-table" aria-hidden="true"></i>${financeTranslate("Entire table")}
-                    </button>
-                    <button class="btn btn-primary" type="button" data-export-choice="displayed">
-                        <i class="bi bi-eye" aria-hidden="true"></i>${financeTranslate("Displayed rows")}
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    return modal;
-}
-
-function chooseTableExportScope() {
-    const modalElement = ensureTableExportChoiceModal();
-    if (!window.bootstrap?.Modal) {
-        return Promise.resolve(
-            window.confirm(financeTranslate("Export displayed rows only? Choose Cancel to export the entire table."))
-                ? "displayed"
-                : "all"
-        );
-    }
-
-    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-    return new Promise((resolve) => {
-        let resolved = false;
-
-        function finish(value) {
-            if (resolved) return;
-            resolved = true;
-            modalElement.querySelectorAll("[data-export-choice]").forEach((button) => {
-                button.removeEventListener("click", onChoiceClick);
-            });
-            modalElement.removeEventListener("hidden.bs.modal", onHidden);
-            modal.hide();
-            resolve(value);
-        }
-
-        function onChoiceClick(event) {
-            finish(event.currentTarget.dataset.exportChoice || "");
-        }
-
-        function onHidden() {
-            finish("");
-        }
-
-        modalElement.querySelectorAll("[data-export-choice]").forEach((button) => {
-            button.addEventListener("click", onChoiceClick);
-        });
-        modalElement.addEventListener("hidden.bs.modal", onHidden, { once: true });
-        modal.show();
-    });
-}
-
-async function tableExportScope(table) {
-    if (!tableHasMultipleExportPages(table)) {
-        return "all";
-    }
-
-    return chooseTableExportScope();
-}
-
 function notifyTableExportError(error) {
     console.error(error);
-    window.alert?.(financeTranslate("Could not load every table page for export."));
+    window.alert?.(financeTranslate("The table could not be exported."));
 }
 
-async function exportTableCsv(table, filenameBase, button = null) {
-    if (cancelTableExportFromButton(table, button)) {
-        return;
-    }
+function exportTableCsv(table, filenameBase, button = null) {
+    if (!beginTableExport(button)) return;
 
-    const scope = await tableExportScope(table);
-    if (!scope) return;
-
-    const operation = beginTableExportOperation(table, button);
     try {
-        const exportTables = await tableExportTablesForScope(table, scope, {
-            operation,
-            onProgress: ({ currentPage, totalPages }) => {
-                updateTableExportProgress(operation, currentPage, totalPages);
-            },
-        });
-        throwIfTableExportCancelled(operation);
-        const csv = tableMatrix(table, scope, exportTables)
+        const csv = tableMatrix(table)
             .map((row) => row.map(csvEscape).join(","))
             .join("\r\n");
 
         downloadBlob(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), `${filenameBase}.csv`);
     } catch (error) {
-        if (!tableExportIsAbortError(error)) {
-            notifyTableExportError(error);
-        }
+        notifyTableExportError(error);
     } finally {
-        finishTableExportOperation(operation);
+        finishTableExport(button);
     }
 }
 
@@ -901,8 +539,8 @@ function isActionExportColumn(columnIndex, expandedRows) {
     return ACTION_HEADER_RE.test(headerText) || hasActionBodyCell;
 }
 
-function tableExportColumnPlan(table, scope, exportTables = [table]) {
-    const rows = tableRowsForExportTables(table, exportTables, scope);
+function tableExportColumnPlan(table) {
+    const rows = tableRowsForExport(table);
     const expandedRows = rows.map(rowCellsExpanded);
     const columnCount = Math.max(1, ...expandedRows.map((row) => row.length));
 
@@ -968,10 +606,8 @@ function tableColumnSortTypes(table) {
     return sortTypes;
 }
 
-function tableBodyRowsForExcel(table, scope, exportTables = [table]) {
-    return tableRowsForExportTables(table, exportTables, scope).filter(
-        (row) => row.closest("tbody") && !row.hasAttribute("data-sort-ignore")
-    );
+function tableBodyRowsForExcel(table) {
+    return tableRowsForExport(table).filter((row) => row.closest("tbody") && !row.hasAttribute("data-sort-ignore"));
 }
 
 function rowExportMetadata(row, columnPlan, sortTypes) {
@@ -989,15 +625,13 @@ function rowExportMetadata(row, columnPlan, sortTypes) {
     });
 }
 
-function buildTableExportWorkbookSource(table, scope, exportTables = [table]) {
-    const columnPlan = tableExportColumnPlan(table, scope, exportTables);
+function buildTableExportWorkbookSource(table) {
+    const columnPlan = tableExportColumnPlan(table);
     const sortTypes = tableColumnSortTypes(table);
 
     return {
         headers: tableHeaderNames(table, columnPlan),
-        rows: tableBodyRowsForExcel(table, scope, exportTables).map((row) =>
-            rowExportMetadata(row, columnPlan, sortTypes)
-        ),
+        rows: tableBodyRowsForExcel(table).map((row) => rowExportMetadata(row, columnPlan, sortTypes)),
         sortTypes: columnPlan.map((column) => sortTypes.get(column.sourceIndex) || ""),
         totalLabel: financeTranslate("Total"),
     };
@@ -1012,33 +646,18 @@ function createTableExportXlsxBlob(source, sheetName) {
     return writer.createXlsxBlob(source, sheetName);
 }
 
-async function exportTableExcel(table, filenameBase, sheetName, button = null) {
-    if (cancelTableExportFromButton(table, button)) {
-        return;
-    }
+function exportTableExcel(table, filenameBase, sheetName, button = null) {
+    if (!beginTableExport(button)) return;
 
-    const scope = await tableExportScope(table);
-    if (!scope) return;
-
-    const operation = beginTableExportOperation(table, button);
     try {
-        const exportTables = await tableExportTablesForScope(table, scope, {
-            operation,
-            onProgress: ({ currentPage, totalPages }) => {
-                updateTableExportProgress(operation, currentPage, totalPages);
-            },
-        });
-        throwIfTableExportCancelled(operation);
         downloadBlob(
-            createTableExportXlsxBlob(buildTableExportWorkbookSource(table, scope, exportTables), sheetName),
+            createTableExportXlsxBlob(buildTableExportWorkbookSource(table), sheetName),
             `${filenameBase}.xlsx`
         );
     } catch (error) {
-        if (!tableExportIsAbortError(error)) {
-            notifyTableExportError(error);
-        }
+        notifyTableExportError(error);
     } finally {
-        finishTableExportOperation(operation);
+        finishTableExport(button);
     }
 }
 

@@ -68,7 +68,7 @@ def test_reimbursement_match_candidates_must_precede_reimbursement_date():
     modal_candidates = view_model["reimbursement_match_modal_items"][0]["candidates"]
     assert [row["id"] for row in candidates] == [prior_expense["id"]]
     assert [row["id"] for row in modal_candidates] == [prior_expense["id"]]
-    assert modal_candidates[0]["date_label"] == "09-May-2026"
+    assert modal_candidates[0]["date_label"] == "May 9, 2026"
     assert modal_candidates[0]["default_amount"] == "100.00"
 
 
@@ -90,7 +90,7 @@ def test_expense_match_candidates_must_follow_expense_date():
     modal_candidates = view_model["expense_detail_modal_items"][0]["reimbursement_candidates"]
     assert [row["id"] for row in candidates] == [next_reimbursement["id"], later_reimbursement["id"]]
     assert [row["id"] for row in modal_candidates] == [next_reimbursement["id"], later_reimbursement["id"]]
-    assert modal_candidates[0]["date_label"] == "11-May-2026"
+    assert modal_candidates[0]["date_label"] == "May 11, 2026"
     assert modal_candidates[0]["default_amount"] == "100.00"
 
 

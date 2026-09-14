@@ -255,33 +255,32 @@ def test_recurring_page_all_confidence_filter_is_explicit(owner_client):
     assert "No recurring activity matches the current filters." in body
 
 
-def test_table_export_script_prompts_for_displayed_or_entire_table():
-    """Verify shared table export asks for row scope only when pages exist."""
+def test_table_export_script_uses_displayed_rows_without_scope_prompt():
+    """Verify shared table export is limited to rows already displayed in the DOM."""
     body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
 
-    assert "tableHasMultipleExportPages" in body
-    assert "tableExportScope(table)" in body
-    assert 'return "all"' in body
-    assert "chooseTableExportScope" in body
-    assert "Displayed rows" in body
-    assert "Entire table" in body
-    assert "Export rows" in body
+    assert "function tableRowsForExport(table)" in body
+    assert "visibleExportSourceIds(table)" in body
+    assert "isDisplayedExportRow(row)" in body
+    assert "chooseTableExportScope" not in body
+    assert "Displayed rows" not in body
+    assert "Entire table" not in body
+    assert "Export rows" not in body
 
 
-def test_table_export_script_fetches_all_server_pages_for_entire_table():
-    """Verify entire-table exports can combine server-rendered pagination pages."""
+def test_table_export_script_does_not_scrape_server_pagination_pages():
+    """Verify generic table export does not crawl server-rendered pagination pages."""
     body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
 
-    assert "serverPaginationPlan" in body
-    assert "numericPaginationLinks" in body
-    assert "inferPaginationPageParameter" in body
-    assert "fetchExportTablePage" in body
-    assert "DOMParser" in body
-    assert "tableExportTablesForScope" in body
-    assert "tableRowsForExportTables" in body
-    assert "transactions" not in body
-    assert "dashboard" not in body
-    assert "taxonomy" not in body
+    assert "serverPaginationPlan" not in body
+    assert "numericPaginationLinks" not in body
+    assert "inferPaginationPageParameter" not in body
+    assert "fetchExportTablePage" not in body
+    assert "fetch(" not in body
+    assert "DOMParser" not in body
+    assert "tableExportTablesForScope" not in body
+    assert "tableRowsForExportTables" not in body
+    assert "page-link[href]" not in body
 
 
 def test_table_export_script_builds_real_xlsx_tables_with_totals():
@@ -289,7 +288,7 @@ def test_table_export_script_builds_real_xlsx_tables_with_totals():
     body = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "exports.js").read_text(encoding="utf-8")
     writer = (PROJECT_ROOT / "src" / "finance_app" / "static" / "js" / "xlsx-writer.js").read_text(encoding="utf-8")
 
-    assert "createTableExportXlsxBlob(buildTableExportWorkbookSource(table, scope, exportTables), sheetName)" in body
+    assert "createTableExportXlsxBlob(buildTableExportWorkbookSource(table), sheetName)" in body
     assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in writer
     assert "TableStyleLight1" in writer
     assert 'totalsRowFunction="sum"' in writer

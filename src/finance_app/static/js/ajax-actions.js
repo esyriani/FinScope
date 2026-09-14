@@ -104,14 +104,30 @@ function setAjaxRefreshTargetsBusy(selector, busy) {
     });
 }
 
+function ajaxRefreshTargetAndDescendants(target, selector) {
+    const elements = [];
+    if (target.matches(selector)) {
+        elements.push(target);
+    }
+    elements.push(...target.querySelectorAll(selector));
+    return elements;
+}
+
 function disposeAjaxRefreshTooltips(target) {
     if (!window.bootstrap?.Tooltip) {
         return;
     }
 
-    target.querySelectorAll("[data-bs-tooltip]").forEach((element) => {
-        window.bootstrap.Tooltip.getInstance(element)?.dispose();
-    });
+    ajaxRefreshTargetAndDescendants(target, "[data-bs-tooltip], [data-bs-original-title], [aria-describedby]").forEach(
+        (element) => {
+            window.bootstrap.Tooltip.getInstance(element)?.dispose();
+        }
+    );
+}
+
+function disposeAjaxRefreshTargetWidgets(target) {
+    disposeAjaxRefreshTooltips(target);
+    window.disposeDashboardCharts?.(target);
 }
 
 function cleanupAjaxRefreshModals() {
@@ -125,8 +141,7 @@ function cleanupAjaxRefreshModals() {
     document.body.style.removeProperty("padding-right");
 }
 
-function hideAjaxRefreshModal(form) {
-    const modal = form.closest(".modal");
+function hideAjaxRefreshModalElement(modal) {
     if (!modal || !modal.classList.contains("show") || !window.bootstrap?.Modal) {
         cleanupAjaxRefreshModals();
         return Promise.resolve();
@@ -144,9 +159,22 @@ function hideAjaxRefreshModal(form) {
         };
 
         modal.addEventListener("hidden.bs.modal", finish, { once: true });
-        bootstrap.Modal.getOrCreateInstance(modal).hide();
+        window.bootstrap.Modal.getOrCreateInstance(modal).hide();
         window.setTimeout(finish, 350);
     });
+}
+
+function hideAjaxRefreshModal(form) {
+    return hideAjaxRefreshModalElement(form.closest(".modal"));
+}
+
+async function hideAjaxRefreshTargetModals(target) {
+    const openModals = ajaxRefreshTargetAndDescendants(target, ".modal.show");
+    if (!openModals.length) {
+        return;
+    }
+
+    await Promise.all(openModals.map((modal) => hideAjaxRefreshModalElement(modal)));
 }
 
 function updateAjaxRefreshUrl(url) {
@@ -180,8 +208,7 @@ function replaceAjaxRefreshTargets(selector, html, responseUrl) {
 
     const replacements = [];
     currentTargets.forEach((target, index) => {
-        disposeAjaxRefreshTooltips(target);
-        window.disposeDashboardCharts?.(target);
+        disposeAjaxRefreshTargetWidgets(target);
         const replacement = document.importNode(freshTargets[index], true);
         target.replaceWith(replacement);
         replacements.push(replacement);
@@ -296,6 +323,13 @@ function ajaxRefreshFormUrl(form) {
     return url;
 }
 
+async function disposeAjaxRefreshDynamicTarget(currentTarget, context, options) {
+    disposeAjaxRefreshTargetWidgets(currentTarget);
+    await hideAjaxRefreshTargetModals(currentTarget);
+    await options.disposeTarget?.(context);
+    await options.beforeReplace?.(context);
+}
+
 async function ajaxRefreshDynamicPage(url, options, replaceOptions = {}) {
     const currentTarget = ajaxRefreshDynamicTarget(options.selector);
     if (!currentTarget) {
@@ -325,9 +359,14 @@ async function ajaxRefreshDynamicPage(url, options, replaceOptions = {}) {
             return ajaxRefreshStaleResult(request);
         }
 
-        options.beforeReplace?.({ currentTarget, nextDocument, nextTarget, url });
+        await disposeAjaxRefreshDynamicTarget(currentTarget, { currentTarget, nextDocument, nextTarget, url }, options);
+        if (!ajaxRefreshIsCurrentRequest(request)) {
+            return ajaxRefreshStaleResult(request);
+        }
+
         const replacement = document.importNode(nextTarget, true);
         currentTarget.replaceWith(replacement);
+        cleanupAjaxRefreshModals();
         if (replaceOptions.pushState !== false) {
             window.history.pushState(options.historyState || {}, "", url.toString());
         }

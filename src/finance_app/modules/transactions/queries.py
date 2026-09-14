@@ -5,9 +5,12 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from finance_app.core.category_sql import transaction_category_label_expression
+from finance_app.core.category_sql import transaction_category_join_condition, transaction_category_label_expression
 from finance_app.database.tables import (
     accounts as accounts_table,
+)
+from finance_app.database.tables import (
+    categories as categories_table,
 )
 from finance_app.database.tables import (
     transactions as transactions_table,
@@ -78,14 +81,24 @@ def fetch_transactions(
 
 def fetch_distinct_categories(conn: Any) -> Any:
     """Fetch distinct categories."""
-    category_label = transaction_category_label_expression(None)
+    return conn.execute(distinct_categories_select()).mappings().fetchall()
+
+
+def distinct_categories_select() -> Any:
+    """Return the transaction category filter option query."""
+    category_label = transaction_category_label_expression(
+        None,
+        joined_category_name=categories_table.c.name,
+    )
     return (
-        conn.execute(
-            select(category_label.label("category"))
-            .where(category_label.is_not(None))
-            .distinct()
-            .order_by(category_label)
+        select(category_label.label("category"))
+        .select_from(
+            transactions_table.outerjoin(
+                categories_table,
+                transaction_category_join_condition(),
+            )
         )
-        .mappings()
-        .fetchall()
+        .where(category_label.is_not(None))
+        .distinct()
+        .order_by(category_label)
     )

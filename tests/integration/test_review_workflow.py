@@ -206,7 +206,7 @@ def test_apply_review_group_job_and_undo_restore_transactions_and_rule(app, core
 
 
 def test_undo_review_group_job_skips_changed_transactions(app, core_conn):
-    """Verify review undo does not overwrite transactions changed after the job."""
+    """Verify review undo does not overwrite transactions changed after processing."""
     tx_id = insert_review_transaction(core_conn, "Metro Grocery", 12.34, "review-skip")
     undo_state = {}
     apply_review_group_job(
@@ -225,5 +225,5 @@ def test_undo_review_group_job_skips_changed_transactions(app, core_conn):
 
     message = undo_review_group_job(undo_state)
 
-    assert message == "Restored 0 reviewed transactions. Skipped 1 transaction changed after the job."
+    assert message == "Restored 0 reviewed transactions. Skipped 1 transaction changed after processing."
     assert transaction_state(core_conn, tx_id)["category"] == "Personal"

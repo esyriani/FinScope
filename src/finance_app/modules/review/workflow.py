@@ -106,7 +106,9 @@ def undo_review_group_job(undo_state: Mapping[str, Any]) -> str:
     message += "" if restored_count == 1 else "s"
     message += "."
     if skipped_count:
-        message += f" Skipped {skipped_count} transaction" f"{'' if skipped_count == 1 else 's'} changed after the job."
+        message += (
+            f" Skipped {skipped_count} transaction" f"{'' if skipped_count == 1 else 's'} changed after processing."
+        )
     if rule_result:
         message += f" {rule_result}"
     return message
@@ -307,7 +309,7 @@ def undo_review_rule(conn: Any, rule_change: Mapping[str, Any] | None) -> str:
         return "Rule already removed."
 
     if not rule_snapshots_match(current_rule, new_rule):
-        return "Rule changed after the job; left it in place."
+        return "Rule changed after processing; left it in place."
 
     if previous_rule is None:
         conn.execute(delete(category_rules_table).where(category_rules_table.c.id == rule_id))

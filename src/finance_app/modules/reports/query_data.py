@@ -347,7 +347,7 @@ def fetch_reports_taxonomy_detail_query_data(
         unknown_category = get_unknown_category(conn) or UNKNOWN_CATEGORY
         target = resolve_taxonomy_report_target(conn, kind, target_id)
         if target is None:
-            raise LookupError("Taxonomy report target was not found.")
+            raise LookupError("Category or tag report target was not found.")
 
         base_filters = reports_base_filters(report_request).criteria()
         target_scope_filters = [*base_filters, taxonomy_target_condition(target, unknown_category)]

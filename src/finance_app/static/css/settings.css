@@ -83,6 +83,72 @@
     max-width: 27rem;
 }
 
+.theme-mode-options {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.theme-mode-option {
+    align-items: center;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    color: var(--app-text);
+    cursor: pointer;
+    display: flex;
+    gap: 0.75rem;
+    min-height: 64px;
+    padding: 0.75rem;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease,
+        transform 120ms ease;
+}
+
+.theme-mode-option:hover {
+    border-color: rgba(var(--app-accent-rgb), 0.55);
+    transform: translateY(-1px);
+}
+
+.theme-mode-icon {
+    align-items: center;
+    display: grid;
+    flex: 0 0 auto;
+    height: 44px;
+    overflow: hidden;
+    place-items: center;
+    width: 44px;
+}
+
+.theme-mode-icon img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.theme-mode-title {
+    color: var(--app-heading);
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.btn-check:checked + .theme-mode-option {
+    background: var(--app-accent-soft);
+    border-color: var(--app-accent);
+    box-shadow: 0 0 0 1px rgba(var(--app-accent-rgb), 0.18);
+}
+
+.btn-check:checked + .theme-mode-option .theme-mode-icon {
+    border-color: var(--app-accent);
+}
+
+.btn-check:focus-visible + .theme-mode-option {
+    box-shadow: var(--focus-shadow);
+}
+
 .settings-field-model {
     grid-column: span 2;
     max-width: 34rem;

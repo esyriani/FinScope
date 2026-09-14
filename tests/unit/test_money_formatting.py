@@ -30,15 +30,15 @@ def test_quantize_money_rounds_half_up_at_cent_boundaries(raw_value, expected):
 @pytest.mark.parametrize(
     ("raw_value", "places", "expected"),
     [
-        ("1234.444", 2, "1 234.44 CAD"),
-        ("1234.445", 2, "1 234.45 CAD"),
-        ("1234.5", 0, "1 235 CAD"),
-        ("-42.505", 2, "-42.51 CAD"),
+        ("1234.444", 2, "$1,234.44"),
+        ("1234.445", 2, "$1,234.45"),
+        ("1234.5", 0, "$1,235"),
+        ("-42.505", 2, "-$42.51"),
     ],
 )
 def test_format_money_display_table_driven_rounding(raw_value, places, expected):
     """Verify display formatting rounds and groups values consistently."""
-    assert money.format_money_display(Decimal(raw_value), places=places, symbol="CAD") == expected
+    assert money.format_money_display(Decimal(raw_value), places=places, symbol="$", language="en") == expected
 
 
 def test_quantize_money_is_idempotent_and_sign_symmetric_for_generated_values():
@@ -62,10 +62,17 @@ def test_rounded_money_decimal_uses_default_for_blank_values():
 
 def test_money_formatting_uses_configured_currency_symbol(monkeypatch):
     """Verify Python money display helpers use the configured currency symbol."""
-    monkeypatch.setattr(money, "settings", SimpleNamespace(currency_symbol="€"))
+    monkeypatch.setattr(money, "settings", SimpleNamespace(currency_symbol="$"))
 
-    assert money.format_money_display(Decimal("1234.5")) == "1 234.50 €"
-    assert money.format_money_display(Decimal("1234.5"), places=0) == "1 235 €"
-    assert money.format_signed_money_display(Decimal("-12.3")) == "-12.30 €"
-    assert format_money(Decimal("12.3")) == "12.30 €"
-    assert recurring_service.recurring_signed_amount_label({"type": "income", "amount": 42}) == "+42.00 €"
+    assert money.format_money_display(Decimal("1234.5")) == "$1,234.50"
+    assert money.format_money_display(Decimal("1234.5"), places=0) == "$1,235"
+    assert money.format_signed_money_display(Decimal("-12.3")) == "-$12.30"
+    assert format_money(Decimal("12.3")) == "$12.30"
+    assert recurring_service.recurring_signed_amount_label({"type": "income", "amount": 42}) == "+$42.00"
+
+
+def test_money_formatting_uses_french_canadian_number_style():
+    """Verify French display keeps decimal comma and trailing currency symbol."""
+    assert money.format_money_display(Decimal("1234.5"), symbol="$", language="fr") == "1 234,50 $"
+    assert money.format_money_display(Decimal("1234.5"), places=0, symbol="$", language="fr") == "1 235 $"
+    assert money.format_signed_money_display(Decimal("-12.3"), symbol="$", language="fr") == "-12,30 $"

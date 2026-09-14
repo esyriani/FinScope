@@ -6,6 +6,8 @@ from typing import Any
 
 from flask import abort, jsonify, request, session
 
+from finance_app.core.i18n import gettext
+
 CSRF_SESSION_KEY = "_csrf_token"
 CSRF_FIELD_NAME = "csrf_token"
 CSRF_HEADER_NAME = "X-CSRF-Token"
@@ -51,6 +53,6 @@ def register_csrf(app: Any) -> None:
             return None
 
         if request.is_json or request.headers.get("X-Requested-With") == "fetch":
-            return jsonify({"ok": False, "message": "Invalid CSRF token."}), 403
+            return jsonify({"ok": False, "message": gettext("Invalid CSRF token.")}), 403
 
         abort(403, description="Invalid CSRF token.")

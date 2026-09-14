@@ -7,6 +7,7 @@ regressing back to broad database reads followed by Python-only filtering.
 from contextlib import contextmanager
 
 from sqlalchemy import event, insert, select
+from sqlalchemy.dialects import mysql
 from tests.support.database import insert_transaction
 from werkzeug.datastructures import MultiDict
 
@@ -24,6 +25,7 @@ from finance_app.modules.transactions.filters import (
     build_transaction_core_filters,
     parse_transaction_filters,
 )
+from finance_app.modules.transactions.queries import distinct_categories_select
 
 
 @contextmanager
@@ -84,6 +86,15 @@ def test_transaction_merchant_filter_builds_sql_candidate_predicate(core_conn):
     assert "upper(transactions.description) like" in sql
     assert "transactions.id in" not in sql
     assert "transactions.ignored" in sql
+
+
+def test_transaction_distinct_categories_query_is_anchored_for_mysql():
+    """Verify category filter options compile with a transaction row source."""
+    sql = str(distinct_categories_select().compile(dialect=mysql.dialect())).lower()
+
+    assert "from dual" not in sql
+    assert "from transactions" in sql
+    assert "left outer join categories" in sql
 
 
 def test_rule_candidate_filter_builds_sql_amount_and_description_predicates(core_conn):
