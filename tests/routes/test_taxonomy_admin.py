@@ -328,7 +328,7 @@ tags:
     )
 
     assert response.status_code == 200
-    assert "Imported 1 categories and 1 tags." in response.get_data(as_text=True)
+    assert_visible_text(response, "Imported 1 categories and 1 tags.")
     assert category["description"] == "Administrative category from YAML"
     assert category["instruction"] == "Use for custom admin rows."
     assert tag["description"] == "Imported tag"

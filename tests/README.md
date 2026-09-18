@@ -6,6 +6,8 @@ Tests are organized by the layer they primarily exercise:
 - [integration/](integration/): database-backed workflows, repositories, services, and cross-module behavior.
 - [routes/](routes/): Flask route/controller tests using the test client.
 - [smoke/](smoke/): high-value happy-path workflows across routes, background jobs, and persistence.
+- [optional/](optional/): opt-in environment-specific or long-running checks excluded from default pytest runs.
+- [frontend/](frontend/): Vitest/jsdom browser-behavior tests for first-party static JavaScript.
 - [support/](support/): shared test helpers for CSRF setup, database row factories, background job capture, and deterministic LLM stubs.
 
 This file is intentionally scoped to test-suite structure, pytest selection,
@@ -29,6 +31,8 @@ Use the lowest layer that can prove the behavior:
   workflows.
 - Route tests cover HTTP behavior, authentication and authorization, redirects,
   submitted payloads, JSON responses, and rendered state visible to users.
+- Frontend tests execute selected browser-side JavaScript in jsdom and should
+  cover dynamic DOM behavior that static source assertions cannot prove.
 - Smoke tests cover end-to-end happy paths only. One smoke test should usually
   replace many duplicated route-level happy-path checks.
 
@@ -97,6 +101,14 @@ full-suite command enforces strict markers, warnings as errors, parallel
 execution, collection from [tests/](./), and no coverage run.
 The suite also blocks socket connections globally; LLM and other external
 integration tests should inject fake clients or request functions.
+Prompt-quality checks that intentionally call a provider live outside pytest in
+[../evals/llm_categorization](../evals/llm_categorization); use dry-run mode for
+local harness validation and opt in to real provider runs explicitly.
+Live MySQL checks live in [optional/mysql](optional/mysql/) and require
+`FINSCOPE_TEST_MYSQL_URL`; run them with `pytest -n 0 -m "optional and mysql"`.
+Future expensive pytest-backed lanes, such as mutation-testing checks, should
+also live under [optional](optional/) and use `optional` plus a narrower
+capability marker.
 
 Quality gates in [tests/unit](unit/) keep the curated structure from drifting. They
 verify pytest defaults, documented layer directories, the remaining catch-all
@@ -113,6 +125,7 @@ selected architecture boundaries.
 .\.venv\Scripts\python.exe -B -m pytest -m route
 .\.venv\Scripts\python.exe -B -m pytest -m "not slow"
 .\.venv\Scripts\python.exe -B -m pytest tests\smoke
+.\.venv\Scripts\python.exe -B -m pytest -n 0 -m "optional and mysql"
 ```
 
 </details>
@@ -127,6 +140,7 @@ selected architecture boundaries.
 .venv\Scripts\python.exe -B -m pytest -m route
 .venv\Scripts\python.exe -B -m pytest -m "not slow"
 .venv\Scripts\python.exe -B -m pytest tests\smoke
+.venv\Scripts\python.exe -B -m pytest -n 0 -m "optional and mysql"
 ```
 
 </details>
@@ -141,6 +155,7 @@ selected architecture boundaries.
 .venv/bin/python -B -m pytest -m route
 .venv/bin/python -B -m pytest -m "not slow"
 .venv/bin/python -B -m pytest tests/smoke
+.venv/bin/python -B -m pytest -n 0 -m "optional and mysql"
 ```
 
 </details>
@@ -155,6 +170,7 @@ selected architecture boundaries.
 .venv/bin/python -B -m pytest -m route
 .venv/bin/python -B -m pytest -m "not slow"
 .venv/bin/python -B -m pytest tests/smoke
+.venv/bin/python -B -m pytest -n 0 -m "optional and mysql"
 ```
 
 </details>
@@ -164,3 +180,6 @@ Capability markers are also added automatically:
 - `db`: tests using the database fixture.
 - `flask`: tests using the Flask app, request context, or test client.
 - `slow`: currently applied to smoke tests.
+- `optional`: opt-in tests excluded from default local and pull request runs.
+- `mysql`: live MySQL runtime tests requiring `FINSCOPE_TEST_MYSQL_URL`.
+- `mutation`: reserved for optional future mutation-testing checks.

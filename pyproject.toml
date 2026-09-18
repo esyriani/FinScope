@@ -25,6 +25,7 @@ dependencies = [
 # pip-compatible editable-install wrapper around this extra.
 dev = [
     "black>=26.5",
+    "cosmic-ray>=8.7",
     "djlint>=1.39",
     "mypy>=2.1",
     "pytest>=9.0",
@@ -65,6 +66,11 @@ extend-exclude = '''
 profile = "jinja"
 max_line_length = 120
 ignore = "H020,H021,H023,H025,H030,H031,T003,T028"
+
+[tool.coverage.run]
+# finance_app/app.py is the console-script/local development server entry point.
+# App construction and behavior are covered through the factory, routes, and services.
+omit = ["src/finance_app/app.py"]
 
 [tool.ruff]
 line-length = 120

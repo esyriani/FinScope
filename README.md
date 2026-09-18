@@ -81,14 +81,17 @@ Development uses Python 3.10+ and Node.js 20+ with npm. See [Developer guide](do
 
 ## Testing
 
-The default pytest configuration runs the suite in parallel with strict markers, warnings as errors, collection from [tests/](tests/), and no coverage slowdown by default.
+The default pytest configuration runs the suite in parallel with strict markers, warnings as errors, collection from [tests/](tests/), no coverage slowdown, and opt-in tests excluded by default.
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE = "1"
 .\.venv\Scripts\python.exe -B -m pytest
 ```
 
-See [Testing](docs/testing.md) for marker-specific runs, coverage, formatting, linting, type checking, and frontend quality checks.
+See [Testing](docs/testing.md) for marker-specific runs, optional MySQL tests, coverage, formatting, linting, type checking, and frontend quality checks.
+
+Optional lanes are available for backend or long-running checks that should not slow the everyday SQLite suite. For example, live MySQL coverage can be run with `FINSCOPE_TEST_MYSQL_URL` and `pytest -n 0 -m "optional and mysql"`.
+The first mutation-testing experiment is also opt-in: see [Testing](docs/testing.md#rule-engine-mutation-experiment) for the Cosmic Ray rule-engine campaign.
 
 Before broad changes or release work, run the same local quality gate as GitHub Actions; the command list is in [Developer guide](docs/developer-guide.md#quality-checks).
 

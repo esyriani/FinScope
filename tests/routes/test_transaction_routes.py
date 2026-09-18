@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import text
 from tests.support.database import insert_transaction as insert_test_transaction
 from tests.support.database import set_owner_setting
-from tests.support.html import assert_has_element, assert_visible_text, parse_html
+from tests.support.html import assert_asset_reference, assert_has_element, assert_visible_text, parse_html
 from tests.support.jobs import reject_background_jobs
 from tests.support.web import set_csrf_token
 
@@ -110,7 +110,6 @@ def test_transactions_table_exports_category_method_and_score_separately(owner_c
 def test_transactions_custom_range_filter_renders_date_fields(owner_client):
     """Verify custom period filtering exposes bookmarkable date fields."""
     response = owner_client.get("/transactions?period=custom&date_from=2026-01-01&date_to=2026-01-31")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert_has_element(
@@ -123,10 +122,11 @@ def test_transactions_custom_range_filter_renders_date_fields(owner_client):
         "input",
         attrs={"id": "transaction-date-to", "name": "date_to", "value": "2026-01-31"},
     )
-    assert "data-transactions-custom-range" in body
-    assert "vendor/flatpickr" in body
-    assert "js/dates.js" in body
-    assert "js/transactions.js" in body
+    assert_has_element(response, None, attrs={"data-transactions-custom-range": True})
+    assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/dates\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/transactions\.js\?v=[0-9a-f]{12}")
 
 
 def test_transactions_batch_selection_labels_current_page_scope(owner_client, core_conn):

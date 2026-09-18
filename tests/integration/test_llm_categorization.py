@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from sqlalchemy import text
 from tests.support.database import set_owner_setting
 from tests.support.llm import (
@@ -16,8 +17,9 @@ from tests.support.llm import (
     unknown_transaction,
 )
 
-from finance_app.modules.categories import llm, llm_estimation
+from finance_app.modules.categories import llm, llm_estimation, llm_results
 from finance_app.modules.categories import service as category_service
+from finance_app.modules.categories.decision import FinalCategoryDecision
 from finance_app.modules.categories.llm_tokens import DEFAULT_EXPECTED_OUTPUT_TOKENS
 from finance_app.modules.categories.llm_workflow import (
     PreparedTransactionLlmCategorization,
@@ -38,6 +40,206 @@ class CharacterEncoding:
     def encode(self, value):
         """Return one fake token per character."""
         return list(str(value))
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (0, 0.0),
+        (1, 1.0),
+        ("0.42", 0.42),
+        (-0.01, None),
+        (1.01, None),
+        ("not-a-number", None),
+    ],
+)
+def test_clamp_llm_evidence_confidence_accepts_only_probability_values(value, expected):
+    """Verify LLM evidence confidence keeps only inclusive probability values."""
+    assert llm_results.clamp_llm_evidence_confidence(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (True, True),
+        (False, False),
+        (0, False),
+        (2, True),
+        (" yes ", True),
+        ("off", False),
+        (None, False),
+    ],
+)
+def test_parse_bool_accepts_boolean_numeric_and_text_values(value, expected):
+    """Verify LLM boolean parsing accepts provider-friendly representations."""
+    assert llm_results.parse_bool(value) is expected
+
+
+def test_llm_review_policy_preserves_exact_threshold_boundaries():
+    """Verify LLM review thresholds are inclusive at their documented edges."""
+    reviewable = llm_results.apply_llm_review_policy("Food", ["Tax"], 0.60, "UNKNOWN", 0.60, 0.90)
+    verified = llm_results.apply_llm_review_policy("Food", ["Tax"], 0.90, "UNKNOWN", 0.60, 0.90)
+    below_review = llm_results.apply_llm_review_policy("Food", ["Tax"], 0.5999, "UNKNOWN", 0.60, 0.90)
+
+    assert reviewable.category == "Food"
+    assert reviewable.confidence == 0.60
+    assert reviewable.needs_review == 1
+    assert verified.category == "Food"
+    assert verified.confidence == 0.90
+    assert verified.needs_review == 0
+    assert below_review.category == "UNKNOWN"
+    assert below_review.confidence is None
+    assert below_review.assigned_unknown is True
+
+
+def test_collect_evidence_agreement_keeps_medium_disagreement_boundary():
+    """Verify exact medium-confidence evidence still counts as disagreement."""
+    agreement_confidences = []
+    disagreement_confidences = []
+
+    llm_results.collect_evidence_agreement(
+        {"category": "Utilities", "confidence": 0.85},
+        "Food",
+        agreement_confidences,
+        disagreement_confidences,
+    )
+
+    assert agreement_confidences == []
+    assert disagreement_confidences == [0.85]
+
+
+def test_parse_llm_tag_ids_tracks_invalid_and_duplicate_values_without_stopping():
+    """Verify tag parsing keeps later valid tags after invalid and duplicate values."""
+    rows = [{"id": 1, "name": "Tax"}, {"id": 2, "name": "Service"}]
+
+    assert llm_results.parse_llm_tag_ids([1, 999, 1, 2], rows) == (
+        ["Tax", "Service"],
+        [1, 2],
+        [999],
+        True,
+    )
+    assert llm_results.parse_llm_tag_ids(None, rows) == ([], [], [], False)
+    assert llm_results.parse_llm_tag_ids("1", rows) == ([], [], ["1"], False)
+
+
+def test_llm_result_forced_review_ignores_unknown_assignments():
+    """Verify malformed taxonomy output only forces review for known assignments."""
+    known = FinalCategoryDecision("Food", (), 0.91, 0, "Food", 0.91, False)
+    unknown = FinalCategoryDecision("UNKNOWN", (), None, 1, "Food", 0.20, True)
+
+    assert (
+        llm_results.llm_result_needs_forced_review(
+            known,
+            category_outside_candidate_taxonomy=False,
+            tag_ids_outside_candidate_taxonomy=[],
+            invalid_tag_ids=[999],
+            tag_ids_payload_is_valid=True,
+            dropped_tag_ids_outside_candidate_taxonomy=[],
+        )
+        is True
+    )
+    assert (
+        llm_results.llm_result_needs_forced_review(
+            unknown,
+            category_outside_candidate_taxonomy=False,
+            tag_ids_outside_candidate_taxonomy=[],
+            invalid_tag_ids=[999],
+            tag_ids_payload_is_valid=False,
+            dropped_tag_ids_outside_candidate_taxonomy=[3],
+        )
+        is False
+    )
+
+
+def test_llm_category_metadata_records_taxonomy_warnings_and_value_agreement():
+    """Verify audit metadata records malformed taxonomy output and value equality."""
+    category = "Utilities and rent"
+    evidence_category = "".join(["Utilities", " and ", "rent"])
+    assert evidence_category == category
+    assert evidence_category is not category
+    decision = FinalCategoryDecision(category, ("Shared",), 0.91, 1, category, 0.91, False)
+
+    metadata = llm_results.llm_category_metadata(
+        {
+            "rule_evidence": {"rule_id": 42, "category": evidence_category, "confidence": 0.88},
+            "historical_evidence": {
+                "category": evidence_category,
+                "confidence": 0.90,
+                "evidence_ids": [7, 8],
+            },
+        },
+        {"reason": "provider explanation", "supported_by_similar_transactions": "true"},
+        decision,
+        llm_confidence=0.91,
+        final_confidence=0.91,
+        rule_id=42,
+        category_id=5,
+        tag_ids=[3],
+        candidate_category_ids=[1, 2],
+        candidate_tag_ids=[4],
+        category_outside_candidate_taxonomy=True,
+        tag_ids_outside_candidate_taxonomy=[3],
+        dropped_invalid_tag_ids=[999],
+        dropped_tag_ids_outside_candidate_taxonomy=[6],
+        tag_ids_payload_is_valid=False,
+    )
+
+    assert metadata["full_taxonomy_fallback_used"] is True
+    assert metadata["full_taxonomy_fallback_rejected"] is False
+    assert metadata["tag_ids_outside_candidate_taxonomy"] == [3]
+    assert metadata["dropped_invalid_tag_ids"] == [999]
+    assert metadata["dropped_tag_ids_outside_candidate_taxonomy"] == [6]
+    assert metadata["tag_ids_payload_is_valid"] is False
+    assert metadata["rule_agreed_with_llm"] is True
+    assert metadata["retrieval_agreed_with_llm"] is True
+    assert metadata["similar_transaction_ids"] == [7, 8]
+    assert metadata["supported_by_similar_transactions"] is True
+
+
+def test_llm_failure_reason_distinguishes_unknown_from_low_confidence():
+    """Verify conservative LLM failure reasons identify the underlying cause."""
+    unknown_decision = FinalCategoryDecision("UNKNOWN", (), None, 1, "UNKNOWN", 0.91, True)
+    low_confidence_decision = FinalCategoryDecision("UNKNOWN", (), None, 1, "Food", 0.20, True)
+
+    assert llm_results.llm_failure_reason("UNKNOWN", "UNKNOWN", True, True, unknown_decision) == "llm_unknown_category"
+    assert (
+        llm_results.llm_failure_reason("Food", "UNKNOWN", True, True, low_confidence_decision)
+        == "confidence_below_review_threshold"
+    )
+    assert llm_results.llm_failure_reason("Food", "UNKNOWN", False, True, low_confidence_decision) == (
+        "invalid_category_id"
+    )
+    assert llm_results.llm_failure_reason("Food", "UNKNOWN", True, False, low_confidence_decision) == (
+        "invalid_confidence"
+    )
+
+
+def test_normalize_llm_category_maps_unknown_alias_and_invalid_values():
+    """Verify service-facing LLM category normalization preserves configured unknowns."""
+    assert llm_results.normalize_llm_category("UNKNOWN", ["Food"], "Needs review") == "Needs review"
+    assert llm_results.normalize_llm_category(" food ", ["Food"], "Needs review") == "Food"
+    assert llm_results.normalize_llm_category("Not in taxonomy", ["Food"], "Needs review") == "Needs review"
+
+
+def test_cleanup_llm_candidate_taxonomies_removes_transient_prompt_fields():
+    """Verify compact candidate prompt hints are removed after request processing."""
+    transactions = [
+        {"llm_candidate_categories": ["Food"], "llm_candidate_tags": ["Tax"], "category": "UNKNOWN"},
+        {"llm_candidate_categories": ["Utilities"], "category": "UNKNOWN"},
+    ]
+
+    llm_results.cleanup_llm_candidate_taxonomies(transactions)
+
+    assert transactions == [{"category": "UNKNOWN"}, {"category": "UNKNOWN"}]
+
+
+def test_sanitize_openai_error_redacts_keys_and_limits_length():
+    """Verify provider error metadata does not leak keys or unbounded text."""
+    sanitized = llm_results.sanitize_openai_error(RuntimeError(f"bad sk-test_secret {'x' * 700}"))
+
+    assert "sk-test_secret" not in sanitized
+    assert "sk-***" in sanitized
+    assert len(sanitized) == 500
 
 
 def run_llm_categorization_phases(

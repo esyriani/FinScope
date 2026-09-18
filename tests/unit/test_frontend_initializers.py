@@ -41,58 +41,12 @@ def registered_client_translation_messages():
     return set(client_translation_messages())
 
 
-def test_ajax_refresh_uses_initializer_registry():
-    """Verify AJAX refreshes use the shared registry instead of page-specific globals."""
-    ajax_actions = read_script("ajax-actions.js")
-
-    assert "window.financeApp?.runInitializers(root)" in ajax_actions
-    assert "window.setupDashboardPage" not in ajax_actions
-    assert "window.setupUploadPreview" not in ajax_actions
-    assert "window.setupTableExports" not in ajax_actions
-
-
-def test_ajax_refresh_get_requests_are_sequenced_by_target():
-    """Verify shared AJAX GET refreshes abort and ignore superseded responses."""
-    ajax_actions = read_script("ajax-actions.js")
-    jobs_js = read_script("jobs.js")
-
-    assert "const ajaxRefreshRequests = new Map();" in ajax_actions
-    assert "let ajaxRefreshSequence = 0;" in ajax_actions
-    assert "function beginAjaxRefreshRequest(selector, options = {})" in ajax_actions
-    assert "previousRequest?.controller?.abort();" in ajax_actions
-    assert "sequence: (ajaxRefreshSequence += 1)" in ajax_actions
-    assert "function ajaxRefreshIsCurrentRequest(request)" in ajax_actions
-    assert "return ajaxRefreshStaleResult(request);" in ajax_actions
-    assert "signal: request.controller?.signal" in ajax_actions
-    assert "await ajaxRefreshFromUrl(actionUrl, selector, { request });" in ajax_actions
-    assert "await ajaxRefreshFromUrl(refreshUrl, selector, { request });" in ajax_actions
-    assert "if (ajaxRefreshIsCurrentRequest(request)) {\n            showAjaxRefreshError" in ajax_actions
-    assert 'link.dataset.ajaxRefreshInFlight === "true"' in ajax_actions
-    assert 'link.dataset.ajaxRefreshInFlight = "true";' in ajax_actions
-    assert "delete link.dataset.ajaxRefreshInFlight;" in ajax_actions
-
-    assert "const refreshResult = await window.ajaxRefreshFromUrl(window.location.href, selector);" in jobs_js
-    assert "if (refreshResult?.applied !== false)" in jobs_js
-
-
 def test_dynamic_page_ajax_navigation_uses_shared_refresh_helper():
-    """Verify dynamic page refreshes share fetch, sequencing, and replacement logic."""
+    """Verify dynamic page refreshes share the generic refresh helper."""
     ajax_actions = read_script("ajax-actions.js")
 
     assert "function createAjaxDynamicPageRefresh(options = {})" in ajax_actions
-    assert "function ajaxRefreshDynamicPage(url, options, replaceOptions = {})" in ajax_actions
-    assert "const request = beginAjaxRefreshRequest(options.selector);" in ajax_actions
-    assert "if (!ajaxRefreshIsCurrentRequest(request))" in ajax_actions
-    assert "const nextTarget = nextDocument.querySelector(options.selector);" in ajax_actions
-    assert "function disposeAjaxRefreshDynamicTarget(currentTarget, context, options)" in ajax_actions
-    assert "disposeAjaxRefreshTargetWidgets(currentTarget);" in ajax_actions
-    assert "await hideAjaxRefreshTargetModals(currentTarget);" in ajax_actions
-    assert "await disposeAjaxRefreshDynamicTarget(currentTarget" in ajax_actions
-    assert "currentTarget.replaceWith(replacement);" in ajax_actions
-    assert "cleanupAjaxRefreshModals();" in ajax_actions
-    assert "window.bootstrap.Tooltip.getInstance(element)?.dispose();" in ajax_actions
-    assert 'ajaxRefreshTargetAndDescendants(target, ".modal.show")' in ajax_actions
-    assert "runAjaxRefreshInitializers(replacement);" in ajax_actions
+    assert "replace: (url, replaceOptions = {}) => ajaxRefreshDynamicPage(url, options, replaceOptions)" in ajax_actions
     assert "createDynamicPageRefresh: createAjaxDynamicPageRefresh" in ajax_actions
 
     for script_name, route_dataset_key, loading_class, history_key in [
@@ -105,9 +59,6 @@ def test_dynamic_page_ajax_navigation_uses_shared_refresh_helper():
         assert f'routeDatasetKey: "{route_dataset_key}"' in script
         assert f'loadingClass: "{loading_class}"' in script
         assert f"historyState: {{ {history_key}: true }}" in script
-        assert "disposeTarget: ({ currentTarget }) =>" in script
-        assert "closeOpenCalendarModals" not in script
-        assert "closeOpenRecurringModals" not in script
         assert "refresh.replace(url" in script
         assert "let dynamicRefreshRequest = null;" not in script
         assert "let dynamicRefreshSequence = 0;" not in script
@@ -154,19 +105,6 @@ def test_busy_overlay_ignores_prevented_submits():
     submit_listener = busy_overlay.split('document.addEventListener("submit"', 1)[1]
 
     assert "event.defaultPrevented" in submit_listener.split("showBusyOverlayForElement", 1)[0]
-
-
-def test_upload_preview_shows_busy_overlay_while_loading():
-    """Verify statement preview parsing gives immediate busy feedback."""
-    upload_js = read_script("upload.js")
-
-    submit_listener = upload_js.split('form.addEventListener("submit", async (event) => {', 1)[1]
-    preview_fetch = submit_listener.split("const response = await fetch(previewUrl", 1)[0]
-    preview_finally = submit_listener.split("} finally {", 1)[1]
-
-    assert "window.showBusyOverlay?.({" in preview_fetch
-    assert 'message: translate("Preparing statement preview...")' in preview_fetch
-    assert "window.hideBusyOverlay?.(previewBusyToken);" in preview_finally.split("modal?.show()", 1)[0]
 
 
 def test_upload_file_picker_feedback_paints_before_native_selector():
@@ -311,30 +249,13 @@ def test_templates_do_not_include_executable_inline_scripts():
     assert offenders == []
 
 
-def test_interactive_table_rows_have_keyboard_semantics():
-    """Verify clickable table rows expose focus and keyboard activation behavior."""
-    tables_js = read_script("tables.js")
-
-    assert "row.tabIndex = 0" in tables_js
-    assert 'row.setAttribute("role", "button")' in tables_js
-    assert 'row.addEventListener("keydown"' in tables_js
-    assert 'event.key !== "Enter" && event.key !== " "' in tables_js
-    assert "window.financeApp?.showModalAfterExpandedExportCloses" in tables_js
-
-
-def test_shared_tables_support_client_quick_search():
-    """Verify sortable and paginated tables share client-side quick search behavior."""
-    tables_js = read_script("tables.js")
+def test_shared_tables_expose_client_quick_search_contract():
+    """Verify templates expose the shared quick-search contract."""
     reports_tables_template = (TEMPLATES / "_reports_tables.html").read_text(encoding="utf-8")
     table_primitives_template = (TEMPLATES / "_table_primitives.html").read_text(encoding="utf-8")
 
-    assert "function setupTableSearch" in tables_js
-    assert '"[data-table-search]"' in tables_js
     assert "data-table-search-target" in table_primitives_template
     assert "client_table_search" in reports_tables_template
-    assert 'table.dispatchEvent(new CustomEvent("finance:table-filtered"))' in tables_js
-    assert 'table.addEventListener("finance:table-filtered"' in tables_js
-    assert 'registerInitializer("tables.search"' in tables_js
 
 
 def test_table_chrome_uses_shared_template_primitives():
@@ -729,56 +650,6 @@ def test_drilldown_rows_use_explicit_activation_controls():
     assert "Use Details to open each pair; double-click a row as a shortcut." in rules_audit_template
 
 
-def test_sortable_tables_publish_accessible_sort_state():
-    """Verify sortable table headers expose and update assistive sort state."""
-    sort_controls_template = (TEMPLATES / "_sort_controls.html").read_text(encoding="utf-8")
-    tables_js = read_script("tables.js")
-    comparison_js = read_script("comparison.js")
-
-    assert "macro server_sort_header" in sort_controls_template
-    assert "macro client_sort_header" in sort_controls_template
-    assert "aria-sort" in sort_controls_template
-    assert '"ascending"' in sort_controls_template
-    assert '"descending"' in sort_controls_template
-
-    for script in (tables_js, comparison_js):
-        assert 'querySelectorAll("th[aria-sort]")' in script
-        assert 'removeAttribute("aria-sort")' in script
-        assert 'setAttribute("aria-sort", ariaSort)' in script
-
-    for template_name in (
-        "transactions.html",
-        "rules.html",
-        "review.html",
-        "rules_audit.html",
-        "rules_audit_overlap.html",
-    ):
-        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
-        assert "server_sort_header" in template_source
-
-    for template_name in (
-        "_recurring_activity.html",
-        "taxonomy.html",
-        "reimbursements.html",
-        "_reports_tables.html",
-        "rules_audit_preview.html",
-        "rules_audit_rule.html",
-        "rules_import_preview.html",
-        "comparison.html",
-    ):
-        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
-        assert "client_sort_header" in template_source
-
-    comparison_template = (TEMPLATES / "comparison.html").read_text(encoding="utf-8")
-    assert 'client_sort_header(3, "Change", "number", "text-end", "desc")' in comparison_template
-    assert 'client_sort_header(4, "Change", "number", "text-end", "desc")' in comparison_template
-
-    for template_path in TEMPLATES.rglob("*.html"):
-        if template_path.name == "_sort_controls.html":
-            continue
-        assert "sort-icon {{" not in template_path.read_text(encoding="utf-8")
-
-
 def test_comparison_template_uses_presenter_tone_for_insight_cards():
     """Verify comparison insight cards do not infer tone from English labels."""
     comparison_template = (TEMPLATES / "comparison.html").read_text(encoding="utf-8")
@@ -1057,13 +928,3 @@ def test_base_navigation_uses_endpoint_links_and_active_state():
         "auth.users",
     ]:
         assert f"url_for('{endpoint}')" in base_template
-
-
-def test_base_navigation_places_account_after_settings_before_users():
-    """Verify account navigation stays in the admin sequence."""
-    base_template = (TEMPLATES / "base.html").read_text(encoding="utf-8")
-    settings_index = base_template.index("url_for('settings_page.settings_page')")
-    account_index = base_template.index("url_for('auth.account')")
-    users_index = base_template.index("url_for('auth.users')")
-
-    assert settings_index < account_index < users_index

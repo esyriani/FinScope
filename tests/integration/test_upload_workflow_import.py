@@ -1,7 +1,8 @@
 """Tests for upload transaction import workflow edge cases."""
 
 import pytest
-from sqlalchemy import event, insert, select, text
+from sqlalchemy import delete, event, func, insert, select, text, update
+from tests.support.database import default_statement_type_id, insert_account, insert_statement, insert_transaction
 from tests.support.upload import queue_statement_import_attempt
 
 from finance_app.database.engine import db_core_transaction
@@ -31,28 +32,14 @@ from finance_app.modules.upload.repository import new_statement_import_token, re
 
 def create_statement(conn, filename="workflow.csv", account_name="Personal"):
     """Create an account and statement for upload workflow tests."""
-    account_id = conn.execute(
-        text("""
-        INSERT INTO accounts (name)
-        VALUES (:p0)
-        """),
-        {"p0": account_name},
-    ).lastrowid
-    statement_type_id = conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    statement_id = conn.execute(
-        text("""
-        INSERT INTO statements (account_id, statement_type_id, filename, checksum, raw_text)
-        VALUES (:p0, :p1, :p2, :p3, '')
-        """),
-        {"p0": account_id, "p1": statement_type_id, "p2": filename, "p3": f"checksum-{filename}"},
-    ).lastrowid
-    conn.commit()
+    account_id = insert_account(conn, account_name)
+    statement_id = insert_statement(
+        conn,
+        account_id=account_id,
+        statement_type_id=default_statement_type_id(conn),
+        filename=filename,
+        checksum=f"checksum-{filename}",
+    )
     return account_id, statement_id
 
 
@@ -127,6 +114,13 @@ def run_statement_import_job(conn, statement_id, account_id, statement_type, ext
         import_token,
         **kwargs,
     )
+
+
+def statement_transaction_count(conn, statement_id):
+    """Return imported transaction count for a statement."""
+    return conn.execute(
+        select(func.count()).select_from(transactions_table).where(transactions_table.c.statement_id == statement_id)
+    ).scalar_one()
 
 
 def test_import_transactions_counts_ignored_csv_rows(app, monkeypatch):
@@ -506,18 +500,7 @@ def test_import_statement_job_rolls_back_inserted_rows_when_finalization_fails(c
         """),
         {"p0": statement_id},
     ).fetchone()
-    transaction_count = (
-        core_conn.execute(
-            text("""
-        SELECT COUNT(*) AS count
-        FROM transactions
-        WHERE statement_id = :p0
-        """),
-            {"p0": statement_id},
-        )
-        .fetchone()
-        ._mapping["count"]
-    )
+    transaction_count = statement_transaction_count(core_conn, statement_id)
 
     assert statement._mapping["import_status"] == "failed"
     assert statement._mapping["import_error"] == "RuntimeError: counter broke"
@@ -556,18 +539,7 @@ def test_failed_import_retry_does_not_leave_orphan_transactions(core_conn, monke
             raw_csv,
         )
 
-    failed_count = (
-        core_conn.execute(
-            text("""
-        SELECT COUNT(*) AS count
-        FROM transactions
-        WHERE statement_id = :p0
-        """),
-            {"p0": statement_id},
-        )
-        .fetchone()
-        ._mapping["count"]
-    )
+    failed_count = statement_transaction_count(core_conn, statement_id)
     failed_statement = core_conn.execute(
         text("""
         SELECT import_status, imported_count
@@ -633,18 +605,7 @@ def test_import_statement_job_noops_when_attempt_is_already_claimed(core_conn):
         import_token,
     )
 
-    transaction_count = (
-        core_conn.execute(
-            text("""
-        SELECT COUNT(*) AS count
-        FROM transactions
-        WHERE statement_id = :p0
-        """),
-            {"p0": statement_id},
-        )
-        .fetchone()
-        ._mapping["count"]
-    )
+    transaction_count = statement_transaction_count(core_conn, statement_id)
     statement = core_conn.execute(
         text("""
         SELECT import_status, imported_count
@@ -788,52 +749,34 @@ def test_statement_import_queue_claim_prevents_duplicate_retry_reprocess(core_co
     """Verify only one retry/reprocess submission can queue a statement."""
     account_id, statement_id = create_statement(core_conn, "retry-reprocess-race.csv")
     core_conn.execute(
-        text("""
-        UPDATE statements
-        SET raw_text = 'Date,Description,Amount\n2026-01-02,RACE SHOP,12.34',
-            import_status = 'completed',
-            imported_count = 1
-        WHERE id = :p0
-        """),
-        {"p0": statement_id},
-    )
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            statement_id,
-            account_id,
-            tx_date,
-            description,
-            amount,
-            category,
-            fingerprint
+        update(statements_table)
+        .where(statements_table.c.id == statement_id)
+        .values(
+            raw_text="Date,Description,Amount\n2026-01-02,RACE SHOP,12.34",
+            import_status="completed",
+            imported_count=1,
         )
-        VALUES (:p0, :p1, '2026-01-01', 'REPLACED RACE SHOP', 5.00, 'UNKNOWN', 'retry-reprocess-race-existing')
-        """),
-        {"p0": statement_id, "p1": account_id},
     )
-    core_conn.commit()
+    insert_transaction(
+        core_conn,
+        statement_id=statement_id,
+        account_id=account_id,
+        tx_date="2026-01-01",
+        description="REPLACED RACE SHOP",
+        amount=5.00,
+        category="UNKNOWN",
+        fingerprint="retry-reprocess-race-existing",
+    )
     retry_token = new_statement_import_token()
     reprocess_token = new_statement_import_token()
 
     retry_queued = reset_statement_import_state(core_conn, statement_id, retry_token)
     reprocess_queued = reset_statement_import_state(core_conn, statement_id, reprocess_token)
     if reprocess_queued:
-        core_conn.execute(text("DELETE FROM transactions WHERE statement_id = :p0"), {"p0": statement_id})
+        core_conn.execute(delete(transactions_table).where(transactions_table.c.statement_id == statement_id))
     core_conn.commit()
 
-    transaction_count = (
-        core_conn.execute(
-            text("""
-        SELECT COUNT(*) AS count
-        FROM transactions
-        WHERE statement_id = :p0
-        """),
-            {"p0": statement_id},
-        )
-        .fetchone()
-        ._mapping["count"]
-    )
+    transaction_count = statement_transaction_count(core_conn, statement_id)
     statement = core_conn.execute(
         text("""
         SELECT import_status, import_token
@@ -905,13 +848,20 @@ def test_multi_account_retry_keeps_account_scoped_deduplication(core_conn, monke
         raw_csv,
     )
 
-    rows = core_conn.execute(text("""
-        SELECT accounts.name, transactions.fingerprint, transactions.statement_id
-        FROM transactions
-        JOIN accounts ON accounts.id = transactions.account_id
-        WHERE transactions.description = 'Shared Retry Merchant'
-        ORDER BY accounts.name
-        """)).mappings().fetchall()
+    rows = (
+        core_conn.execute(
+            select(
+                accounts_table.c.name,
+                transactions_table.c.fingerprint,
+                transactions_table.c.statement_id,
+            )
+            .join(accounts_table, accounts_table.c.id == transactions_table.c.account_id)
+            .where(transactions_table.c.description == "Shared Retry Merchant")
+            .order_by(accounts_table.c.name)
+        )
+        .mappings()
+        .fetchall()
+    )
 
     assert [(row["name"], row["statement_id"]) for row in rows] == [
         ("Account A", statement_a_id),

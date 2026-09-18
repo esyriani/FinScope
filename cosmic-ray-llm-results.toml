@@ -1,0 +1,8 @@
+[cosmic-ray]
+module-path = "src/finance_app/modules/categories/llm_results.py"
+timeout = 45.0
+excluded-modules = []
+test-command = "python -B tools/cosmic_ray_profile_tests.py llm-results"
+
+[cosmic-ray.distributor]
+name = "local"

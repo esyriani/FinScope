@@ -390,20 +390,24 @@ def test_rules_audit_overlap_route_paginates_and_sorts_shared_transactions(owner
         f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}"
         "?shared_sort=description&shared_direction=asc&shared_page=2"
     )
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Showing 2-2 of 2 transactions" in body
-    assert "Metro Grocery Z" in body
-    assert "Metro Grocery A" not in body
-    assert (
-        f'href="/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}?'
-        'shared_sort=description&amp;shared_direction=asc&amp;shared_page=1"'
-    ) in body
-    assert (
-        f'href="/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}?'
-        'shared_sort=amount&amp;shared_direction=desc&amp;shared_page=1"'
-    ) in body
+    assert_visible_text(response, "Showing 2-2 of 2 transactions", "Metro Grocery Z")
+    assert_not_visible_text(response, "Metro Grocery A")
+    assert_link(
+        response,
+        (
+            f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}?"
+            "shared_sort=description&shared_direction=asc&shared_page=1"
+        ),
+    )
+    assert_link(
+        response,
+        (
+            f"/rules/audit/overlap/{broad_rule_id}/{specific_rule_id}?"
+            "shared_sort=amount&shared_direction=desc&shared_page=1"
+        ),
+    )
 
 
 def test_rules_audit_route_renders_specificity_warnings(owner_client, core_conn):
@@ -754,13 +758,18 @@ def test_rules_audit_preview_route_marks_impact_tables_paginated_and_sortable(ow
             "direction": "any",
         },
     )
-    body = response.get_data(as_text=True)
     document = parse_html(response)
 
     assert response.status_code == 200
-    assert "data-paginated-table" in body
-    assert 'data-page-size="1"' in body
-    assert 'data-pagination-label="Preview impact pages"' in body
+    assert_has_element(
+        response,
+        None,
+        attrs={
+            "data-paginated-table": True,
+            "data-page-size": "1",
+            "data-pagination-label": "Preview impact pages",
+        },
+    )
     assert document.has_element(
         "button",
         attrs={"data-sort-column": "0", "data-sort-type": "text"},
@@ -771,8 +780,7 @@ def test_rules_audit_preview_route_marks_impact_tables_paginated_and_sortable(ow
         attrs={"data-sort-column": "3", "data-sort-type": "number"},
         text="Amount",
     )
-    assert "Metro Pharmacy A" in body
-    assert "Metro Pharmacy B" in body
+    assert_visible_text(response, "Metro Pharmacy A", "Metro Pharmacy B")
 
 
 def test_rules_audit_rule_route_renders_rule_diagnostics(owner_client, core_conn):

@@ -1,6 +1,8 @@
 """Tests for the transaction categorization workflow."""
 
 import json
+from decimal import Decimal
+from types import SimpleNamespace
 
 from tests.support.database import insert_rule, insert_transaction
 from tests.support.llm import LLMRequestStub, llm_response_scenario, llm_result
@@ -8,6 +10,7 @@ from tests.support.llm import LLMRequestStub, llm_response_scenario, llm_result
 from finance_app.modules.categories import categorization
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.categorization import categorize_transactions
+from finance_app.modules.categories.history import HistoricalDecision
 from finance_app.modules.categories.llm_workflow import (
     prepare_transaction_llm_categorization,
     request_prepared_transaction_llm_categorization,
@@ -45,6 +48,26 @@ def insert_historical_transaction(
     )
 
 
+def scored_rule_fixture(*, rule_id="9001", category="Food", confidence=0.95):
+    """Build scored rule evidence for categorization boundary tests."""
+    return SimpleNamespace(
+        rule={
+            "id": rule_id,
+            "keyword": "BOUNDARY",
+            "category": category,
+            "amount_min": None,
+            "amount_max": None,
+            "account_id": None,
+            "direction": "any",
+            "source": "manual",
+        },
+        match_score=confidence,
+        confidence=confidence,
+        category=category,
+        tags=("Shared",),
+    )
+
+
 def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(core_conn):
     """Verify amount-aware rule matches do not leak to different amounts."""
     metro_rule_id = insert_rule(
@@ -67,6 +90,7 @@ def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(
     categorized = categorize_transactions(transactions, conn=core_conn)
 
     metro_match, metro_out_of_range, payroll_income, payroll_positive, unknown = categorized
+    assert metro_match["amount"] == Decimal("12.34")
     assert metro_match["merchant_key"] == "METRO GROCERY"
     assert metro_match["category"] == "Food"
     assert metro_match["needs_review"] == 0
@@ -82,6 +106,10 @@ def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(
     assert metro_out_of_range["category_source"] == "unknown"
     assert metro_out_of_range["category_rule_id"] is None
     assert metro_out_of_range["tags"] == []
+    metadata = json.loads(metro_out_of_range["category_metadata"])
+    assert metadata["decision_source"] == "unknown"
+    assert metadata["reason"] == "insufficient_rule_or_history_evidence"
+    assert metadata["review_required"] is True
 
     assert payroll_income["category"] == "Income"
     assert payroll_income["needs_review"] == 0
@@ -98,6 +126,155 @@ def test_categorize_transactions_matches_rules_without_cross_amount_cache_bleed(
     assert unknown["category_confidence"] is None
     assert unknown["categorized_at"] is None
     assert unknown["tags"] == []
+    metadata = json.loads(unknown["category_metadata"])
+    assert metadata["review_required"] is True
+
+
+def test_high_confidence_rule_boundary_does_not_consult_history(core_conn, monkeypatch):
+    """Verify the exact high-confidence threshold finalizes rule evidence."""
+
+    def fail_history(*args, **kwargs):
+        """Fail if exact high-confidence rule decisions ask for history."""
+        del args, kwargs
+        raise AssertionError("history should not be consulted at the high threshold")
+
+    monkeypatch.setattr(categorization, "retrieve_historical_decision", fail_history)
+
+    state = categorization.category_state_from_evidence(
+        core_conn,
+        {},
+        scored_rule_fixture(confidence=0.95),
+        ["UNKNOWN", "Food"],
+        "UNKNOWN",
+    )
+
+    assert state.category == "Food"
+    assert state.needs_review == 0
+    assert state.assignment.category_source == "rule"
+    assert state.assignment.category_confidence == 0.95
+
+
+def test_medium_confidence_rule_boundary_is_still_useful(core_conn, monkeypatch):
+    """Verify the exact medium-confidence threshold applies for local review."""
+    monkeypatch.setattr(
+        categorization,
+        "retrieve_historical_decision",
+        lambda *args, **kwargs: HistoricalDecision(None, (), 0.0, (), ()),
+    )
+
+    state = categorization.category_state_from_evidence(
+        core_conn,
+        {},
+        scored_rule_fixture(confidence=0.85),
+        ["UNKNOWN", "Food"],
+        "UNKNOWN",
+        prefer_llm_fallback=False,
+    )
+
+    assert state.category == "Food"
+    assert state.needs_review == 1
+    assert state.assignment.category_source == "rule"
+    assert state.assignment.category_confidence == 0.85
+
+
+def test_evidence_categorization_defaults_to_llm_fallback(core_conn):
+    """Verify direct evidence categorization defaults to the split LLM policy."""
+    rule_id = insert_rule(core_conn, "MARKET", "Food")
+    transactions = [{"description": "Market Lane", "amount": 30.00}]
+
+    categorization.categorize_transactions_from_evidence(transactions, core_conn)
+
+    assert transactions[0]["category"] == "UNKNOWN"
+    assert transactions[0]["category_source"] == "unknown"
+    assert transactions[0]["needs_review"] == 1
+    assert transactions[0]["rule_evidence"]["rule_id"] == rule_id
+    metadata = json.loads(transactions[0]["category_metadata"])
+    assert metadata["reason"] == "medium_confidence_rule_needs_llm"
+    assert metadata["matched_rule_id"] == rule_id
+
+
+def test_unknown_category_metadata_preserves_historical_evidence_ids():
+    """Verify unresolved audit metadata keeps retrieval context intact."""
+    metadata = categorization.unknown_category_metadata(
+        "needs_more_evidence",
+        historical_evidence={
+            "category": None,
+            "tags": [],
+            "confidence": 0.86,
+            "evidence_ids": [101, 102],
+            "examples": [],
+        },
+    )
+
+    assert metadata["review_required"] is True
+    assert metadata["retrieval_confidence"] == 0.86
+    assert metadata["similar_transaction_ids"] == [101, 102]
+
+
+def test_historical_metadata_uses_value_equality_for_rule_agreement():
+    """Verify audit metadata treats distinct but equal category strings as agreeing."""
+    category = "Utilities and rent"
+    rule_category = "".join(["Utilities", " and ", "rent"])
+    assert rule_category == category
+    assert rule_category is not category
+
+    metadata = categorization.historical_category_metadata(
+        HistoricalDecision(category, (), 0.95, (77,), ()),
+        category,
+        (),
+        0.95,
+        "UNKNOWN",
+        scored_rule=scored_rule_fixture(rule_id="42", category=rule_category),
+        rule_category=rule_category,
+    )
+
+    assert metadata["rule_agreed_with_retrieval"] is True
+
+
+def test_medium_confidence_rule_is_applied_for_review_in_local_categorization(core_conn):
+    """Verify ordinary local categorization keeps useful broad rules reviewable."""
+    rule_id = insert_rule(core_conn, "MARKET", "Food")
+
+    categorized = categorize_transactions(
+        [{"description": "Market Lane", "amount": 30.00}],
+        conn=core_conn,
+    )
+
+    assert categorized[0]["category"] == "Food"
+    assert categorized[0]["category_source"] == "rule"
+    assert 0.85 <= categorized[0]["category_confidence"] < 0.95
+    assert categorized[0]["needs_review"] == 1
+    assert categorized[0]["category_rule_id"] == rule_id
+    assert categorized[0]["category_id"] is not None
+    metadata = json.loads(categorized[0]["category_metadata"])
+    assert metadata["decision_source"] == "rule"
+    assert metadata["final_category"] == "Food"
+    assert metadata["review_required"] is True
+    assert metadata["matched_rule_id"] == rule_id
+    assert metadata["rule"]["confidence"] == categorized[0]["category_confidence"]
+
+
+def test_medium_confidence_rule_is_deferred_for_split_llm_workflow(core_conn):
+    """Verify LLM preparation leaves useful broad rules for provider arbitration."""
+    rule_id = insert_rule(core_conn, "MARKET", "Food")
+    transactions = [{"description": "Market Lane", "amount": 30.00}]
+
+    prepared = prepare_transaction_llm_categorization(transactions)
+
+    assert prepared.request_context is not None
+    assert transactions[0]["category"] == "UNKNOWN"
+    assert transactions[0]["category_source"] == "unknown"
+    assert transactions[0]["needs_review"] == 1
+    assert transactions[0]["category_id"] is not None
+    assert transactions[0]["rule_evidence"]["rule_id"] == rule_id
+    assert transactions[0]["rule_evidence"]["category"] == "Food"
+    assert 0.85 <= transactions[0]["rule_evidence"]["confidence"] < 0.95
+    metadata = json.loads(transactions[0]["category_metadata"])
+    assert metadata["decision_source"] == "unknown"
+    assert metadata["reason"] == "medium_confidence_rule_needs_llm"
+    assert metadata["review_required"] is True
+    assert metadata["matched_rule_id"] == rule_id
+    assert metadata["rule"]["category"] == "Food"
 
 
 def test_manual_prefix_rule_auto_applies_location_suffix(core_conn):

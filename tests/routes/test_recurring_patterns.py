@@ -8,7 +8,16 @@ from pathlib import Path
 import pytest
 from flask import render_template
 from sqlalchemy import text
-from tests.support.html import parse_html
+from tests.support.html import (
+    assert_has_element,
+    assert_input,
+    assert_markup,
+    assert_no_element,
+    assert_not_markup,
+    assert_option,
+    assert_visible_text,
+    parse_html,
+)
 from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_HEADER_NAME
@@ -147,42 +156,33 @@ def test_recurring_page_uses_shared_status_filter_links(owner_client):
     response = owner_client.get(
         "/recurring?view=list&statuses=overdue&account_id=12&merchant_id=34&merchant_query=NETFLIX"
     )
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'aria-label="Status filter"' in body
-    assert 'class="recurring-tabs page-tabs nav nav-tabs mb-4"' in body
-    assert 'id="recurring-list-tab"' in body
-    assert 'role="tab"' in body
-    assert 'href="/recurring?month=' in body
-    assert "view=list" in body
-    assert 'id="recurring-calendar-tab"' in body
-    assert "view=calendar" in body
-    assert 'aria-selected="true"' in body
-    assert 'data-recurring-status-filter="overdue"' in body
-    assert "data-recurring-ajax-link" in body
-    assert 'name="statuses" value="overdue"' in body
-    assert 'name="account_id" value="12"' in body
-    assert 'name="merchant_id" value="34"' in body
-    assert 'name="merchant_query" value="NETFLIX"' in body
-    assert "account_id=12" in body
-    assert "merchant_id=34" in body
-    assert "merchant_query=NETFLIX" in body
-    assert "Merchant: NETFLIX" in body
-    assert 'aria-pressed="true"' in body
-    assert 'id="recurring-status"' not in body
-    assert "data-recurring-activity-filter" not in body
+    assert_has_element(response, None, attrs={"aria-label": "Status filter"})
+    assert_has_element(response, None, attrs={"class": "recurring-tabs"})
+    assert_has_element(response, "a", attrs={"id": "recurring-list-tab", "role": "tab"})
+    assert_has_element(response, "a", attrs={"id": "recurring-calendar-tab", "role": "tab"})
+    assert_has_element(response, "a", attrs={"data-recurring-status-filter": "overdue", "aria-pressed": "true"})
+    assert_has_element(response, "a", attrs={"data-recurring-ajax-link": True})
+    assert_input(response, name="statuses", value="overdue")
+    assert_input(response, name="account_id", value="12")
+    assert_input(response, name="merchant_id", value="34")
+    assert_input(response, name="merchant_query", value="NETFLIX")
+    assert_markup(response, 'href="/recurring?month=', "view=list", "view=calendar")
+    assert_markup(response, "account_id=12", "merchant_id=34", "merchant_query=NETFLIX")
+    assert_visible_text(response, "Merchant: NETFLIX")
+    assert_no_element(response, None, attrs={"id": "recurring-status"})
+    assert_not_markup(response, "data-recurring-activity-filter")
 
 
 def test_recurring_page_exposes_compact_table_and_export_status_details(owner_client):
     """Verify recurring list and export columns expose compact status context."""
     response = owner_client.get("/recurring?view=list")
-    body = response.get_data(as_text=True)
     document = parse_html(response)
     activity_table = document.find_all("table", attrs={"id": "recurring-activity-table"})[0]
 
     assert response.status_code == 200
-    assert "data-recurring-dynamic" in body
+    assert_has_element(response, None, attrs={"data-recurring-dynamic": True})
     assert document.has_element(
         "div",
         attrs={
@@ -193,33 +193,51 @@ def test_recurring_page_exposes_compact_table_and_export_status_details(owner_cl
             "data-recurring-edit-url": "/recurring/patterns/edit",
         },
     )
-    assert "recurring-summary-layout" in body
-    assert "recurring-metric-carousel" in body
-    assert 'id="recurring-month"' in body
-    assert "data-flatpickr-month" in body
-    assert "data-flatpickr-submit-on-change" in body
-    assert "Repeating merchants detected for the selected month." in body
-    assert "No recurring activity detected for this month." in body
-    assert "Confidence level: High" in body
-    assert '<option value="High" selected>High</option>' in body
+    assert_has_element(response, None, attrs={"class": "recurring-summary-layout"})
+    assert_has_element(response, None, attrs={"class": "recurring-metric-carousel"})
+    assert_has_element(
+        response,
+        "input",
+        attrs={
+            "id": "recurring-month",
+            "data-flatpickr-month": True,
+            "data-flatpickr-submit-on-change": True,
+        },
+    )
+    assert_visible_text(
+        response,
+        "Repeating merchants detected for the selected month.",
+        "No recurring activity detected for this month.",
+        "Confidence level: High",
+    )
+    assert_option(response, value="High", text="High", selected=True)
     assert document.has_element(
         "button",
         attrs={"data-sort-column": "8", "data-sort-type": "number"},
         text="Observed months",
     )
-    assert "data-paginated-table" in body
-    assert 'data-pagination-label="Recurring activity pages"' in body
-    assert 'data-export-visible-source="#recurring-activity-table"' in body
-    assert 'data-export-excel-extension="xlsx"' not in body
-    assert "data-recurring-batch-table" in body
+    assert_has_element(
+        response,
+        None,
+        attrs={
+            "data-paginated-table": True,
+            "data-pagination-label": "Recurring activity pages",
+        },
+    )
+    assert_has_element(response, None, attrs={"data-export-visible-source": "#recurring-activity-table"})
+    assert_no_element(response, None, attrs={"data-export-excel-extension": "xlsx"})
+    assert_has_element(response, None, attrs={"data-recurring-batch-table": True})
     assert json.loads(activity_table.attrs["data-all-recurring-ids"]) == []
-    assert "data-recurring-select-all" in body
-    assert "Confirm selected" in body
-    assert "Remove selected" in body
-    assert 'colspan="10"' in body
-    assert "Status detail" in body
-    assert "Matched date" in body
-    assert "Actual amount" in body
+    assert_has_element(response, None, attrs={"data-recurring-select-all": True})
+    assert_has_element(response, "td", attrs={"colspan": "10"})
+    assert_visible_text(
+        response,
+        "Confirm selected",
+        "Remove selected",
+        "Status detail",
+        "Matched date",
+        "Actual amount",
+    )
 
 
 def test_recurring_activity_template_serializes_string_batch_ids_as_json(app):
@@ -245,14 +263,16 @@ def test_recurring_activity_template_serializes_string_batch_ids_as_json(app):
 def test_recurring_page_all_confidence_filter_is_explicit(owner_client):
     """Verify All confidence is opt-in now that High confidence is the default."""
     response = owner_client.get("/recurring?view=list&confidence=all")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Confidence level: All confidence" in body
-    assert '<option value="all" selected>All confidence</option>' in body
-    assert 'name="confidence" value="all"' in body
-    assert "confidence=all" in body
-    assert "No recurring activity matches the current filters." in body
+    assert_visible_text(
+        response,
+        "Confidence level: All confidence",
+        "No recurring activity matches the current filters.",
+    )
+    assert_option(response, value="all", text="All confidence", selected=True)
+    assert_input(response, name="confidence", value="all")
+    assert_markup(response, "confidence=all")
 
 
 def test_table_export_script_uses_displayed_rows_without_scope_prompt():
@@ -325,21 +345,22 @@ def test_table_export_script_splits_multi_value_cells_into_export_columns():
 def test_recurring_page_explains_filtered_empty_states(owner_client):
     """Verify recurring empty states distinguish filtered views from no detections."""
     response = owner_client.get("/recurring?view=list&statuses=overdue")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "No recurring activity matches the current filters." in body
+    assert_visible_text(response, "No recurring activity matches the current filters.")
 
 
 def test_recurring_calendar_exposes_empty_state_context(owner_client):
     """Verify an empty recurring calendar explains why no chips are visible."""
     response = owner_client.get("/recurring?view=calendar")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "data-recurring-ajax-form" in body
-    assert "Matched items use the transaction date; unmatched items stay on the expected date." in body
-    assert "No recurring activity detected for this month." in body
+    assert_has_element(response, None, attrs={"data-recurring-ajax-form": True})
+    assert_visible_text(
+        response,
+        "Matched items use the transaction date; unmatched items stay on the expected date.",
+        "No recurring activity detected for this month.",
+    )
 
 
 def test_recurring_activity_template_keeps_post_action_state_hooks():
@@ -371,16 +392,13 @@ def test_recurring_calendar_template_places_amount_on_its_own_chip_line():
 def test_recurring_detail_modal_exposes_decision_summary_hooks(owner_client):
     """Verify recurring details surface status, evidence, and recommendation hooks."""
     response = owner_client.get("/recurring?view=list")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "data-recurring-detail-status-pill" in body
-    assert "data-recurring-detail-status-detail" in body
-    assert "data-recurring-detail-user-status" in body
-    assert "data-recurring-detail-recommendation" in body
-    assert "Your decision" in body
-    assert "Why detected" in body
-    assert "Current-month evidence" in body
+    assert_has_element(response, None, attrs={"data-recurring-detail-status-pill": True})
+    assert_has_element(response, None, attrs={"data-recurring-detail-status-detail": True})
+    assert_has_element(response, None, attrs={"data-recurring-detail-user-status": True})
+    assert_has_element(response, None, attrs={"data-recurring-detail-recommendation": True})
+    assert_visible_text(response, "Your decision", "Why detected", "Current-month evidence")
 
 
 def test_recurring_status_detail_explains_list_statuses():

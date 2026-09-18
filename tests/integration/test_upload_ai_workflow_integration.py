@@ -5,6 +5,7 @@ from contextlib import contextmanager
 
 from sqlalchemy import text
 from tests.support.database import set_owner_setting
+from tests.support.html import assert_visible_text
 from tests.support.llm import result_payload
 from tests.support.upload import (
     assert_llm_progress_log_entries,
@@ -562,7 +563,7 @@ def test_categorize_statement_unknowns_route_queues_statement_ai(owner_client, c
 
     assert response.status_code == 200
     assert submitted == [statement_id]
-    assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
+    assert_visible_text(response, "AI categorization queued for 1 unknown transaction.")
 
 
 def test_automatic_categorization_message_reports_source_breakdown():

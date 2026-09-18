@@ -1,7 +1,7 @@
 """Route tests for the settings feature."""
 
 from sqlalchemy import text
-from tests.support.html import assert_has_element, assert_no_element, assert_visible_text
+from tests.support.html import assert_has_element, assert_no_element, assert_not_markup, assert_visible_text
 from tests.support.web import set_csrf_token
 
 from finance_app.core.constants import USER_ROLE_VIEWER
@@ -100,7 +100,7 @@ def test_settings_page_uses_dark_theme_by_default(owner_client):
     assert_has_element(response, "input", attrs={"id": "pinned_report_limit", "max": "12"})
     assert_has_element(response, "input", attrs={"id": "merchant_suggestion_limit", "value": "5"})
     assert_visible_text(response, "Limits", "Merchant comparison table limit")
-    assert "auto_llm_categorization_enabled" not in response.get_data(as_text=True)
+    assert_not_markup(response, "auto_llm_categorization_enabled")
 
 
 def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_types(owner_client, core_conn):

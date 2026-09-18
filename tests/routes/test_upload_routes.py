@@ -2,28 +2,54 @@
 
 import io
 
-from sqlalchemy import text
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
-from tests.support.database import set_owner_setting
+from tests.support.database import (
+    default_statement_type_id,
+    insert_account,
+    insert_statement,
+    insert_transaction,
+    set_owner_setting,
+    statement_type_id_for_parser,
+)
 from tests.support.html import assert_has_element, assert_markup, assert_visible_text
 from tests.support.jobs import capture_background_jobs
 from tests.support.web import set_csrf_token
 
 from finance_app.background import runner
+from finance_app.core.constants import (
+    ACCOUNT_TYPE_CHECKING,
+    ACCOUNT_TYPE_CREDIT_CARD,
+    STATEMENT_TYPE_PARSER_CREDIT_CARD,
+    STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
+)
 from finance_app.core.csrf import CSRF_FIELD_NAME
-from finance_app.modules.categories.repository import resolve_category_id
+from finance_app.database.tables import accounts as accounts_table
+from finance_app.database.tables import statements as statements_table
 from finance_app.modules.upload import service as upload_service
+
+
+def statement_count(conn):
+    """Return the number of persisted statement rows."""
+    return conn.execute(select(func.count()).select_from(statements_table)).scalar_one()
+
+
+def account_settings(conn, account_id):
+    """Return account reporting settings for assertions."""
+    return (
+        conn.execute(
+            select(accounts_table.c.account_type, accounts_table.c.paid_from_account_id).where(
+                accounts_table.c.id == account_id
+            )
+        )
+        .mappings()
+        .one()
+    )
 
 
 def test_upload_route_rejects_missing_file_without_statement_insert(owner_client, core_conn):
     """Verify that upload validation exits before creating a statement row."""
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
+    statement_type_id = default_statement_type_id(core_conn)
 
     response = owner_client.post(
         "/upload",
@@ -35,26 +61,15 @@ def test_upload_route_rejects_missing_file_without_statement_insert(owner_client
         follow_redirects=True,
     )
 
-    statement_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM statements")).fetchone()._mapping["count"]
     assert response.status_code == 200
     assert_visible_text(response, "Please choose a statement file.")
-    assert statement_count == 0
+    assert statement_count(core_conn) == 0
 
 
 def test_upload_route_rejects_existing_account_role_mismatch(owner_client, core_conn):
     """Verify uploads cannot silently rewrite an existing account role."""
-    account_id = core_conn.execute(text("""
-        INSERT INTO accounts (name, account_type)
-        VALUES ('Travel card', 'credit_card')
-        """)).lastrowid
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    core_conn.commit()
+    account_id = insert_account(core_conn, "Travel card", account_type=ACCOUNT_TYPE_CREDIT_CARD)
+    statement_type_id = default_statement_type_id(core_conn)
 
     response = owner_client.post(
         "/upload",
@@ -69,15 +84,7 @@ def test_upload_route_rejects_existing_account_role_mismatch(owner_client, core_
         follow_redirects=True,
     )
 
-    account = (
-        core_conn.execute(
-            text("SELECT account_type, paid_from_account_id FROM accounts WHERE id = :account_id"),
-            {"account_id": account_id},
-        )
-        .fetchone()
-        ._mapping
-    )
-    statement_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM statements")).fetchone()._mapping["count"]
+    account = account_settings(core_conn, account_id)
 
     assert response.status_code == 200
     assert_visible_text(
@@ -87,34 +94,20 @@ def test_upload_route_rejects_existing_account_role_mismatch(owner_client, core_
     )
     assert account["account_type"] == "credit_card"
     assert account["paid_from_account_id"] is None
-    assert statement_count == 0
+    assert statement_count(core_conn) == 0
 
 
 def test_upload_route_rejects_existing_account_funding_mismatch(owner_client, core_conn):
     """Verify uploads cannot silently rewrite a credit-card funding account."""
-    main_checking_id = core_conn.execute(text("""
-        INSERT INTO accounts (name, account_type)
-        VALUES ('Main checking', 'checking')
-        """)).lastrowid
-    core_conn.execute(text("""
-        INSERT INTO accounts (name, account_type)
-        VALUES ('Other checking', 'checking')
-        """))
-    card_id = core_conn.execute(
-        text("""
-        INSERT INTO accounts (name, account_type, paid_from_account_id)
-        VALUES ('Travel card', 'credit_card', :paid_from_account_id)
-        """),
-        {"paid_from_account_id": main_checking_id},
-    ).lastrowid
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE parser_type = 'credit_card'
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    core_conn.commit()
+    main_checking_id = insert_account(core_conn, "Main checking", account_type=ACCOUNT_TYPE_CHECKING)
+    insert_account(core_conn, "Other checking", account_type=ACCOUNT_TYPE_CHECKING)
+    card_id = insert_account(
+        core_conn,
+        "Travel card",
+        account_type=ACCOUNT_TYPE_CREDIT_CARD,
+        paid_from_account_id=main_checking_id,
+    )
+    statement_type_id = statement_type_id_for_parser(core_conn, STATEMENT_TYPE_PARSER_CREDIT_CARD)
 
     response = owner_client.post(
         "/upload",
@@ -130,15 +123,7 @@ def test_upload_route_rejects_existing_account_funding_mismatch(owner_client, co
         follow_redirects=True,
     )
 
-    card = (
-        core_conn.execute(
-            text("SELECT account_type, paid_from_account_id FROM accounts WHERE id = :card_id"),
-            {"card_id": card_id},
-        )
-        .fetchone()
-        ._mapping
-    )
-    statement_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM statements")).fetchone()._mapping["count"]
+    card = account_settings(core_conn, card_id)
 
     assert response.status_code == 200
     assert_visible_text(
@@ -148,91 +133,49 @@ def test_upload_route_rejects_existing_account_funding_mismatch(owner_client, co
     )
     assert card["account_type"] == "credit_card"
     assert card["paid_from_account_id"] == main_checking_id
-    assert statement_count == 0
+    assert statement_count(core_conn) == 0
 
 
 def test_upload_route_renders_statement_detail_modal(owner_client, core_conn):
     """Verify uploaded statement rows open processed details by double-click target."""
-    paid_from_account_id = core_conn.execute(text("""
-        INSERT INTO accounts (name, account_type)
-        VALUES ('Main checking', 'checking')
-        """)).lastrowid
-    account_id = core_conn.execute(
-        text("""
-        INSERT INTO accounts (name, account_type, paid_from_account_id)
-        VALUES ('RBC Visa', 'credit_card', :p0)
-        """),
-        {"p0": paid_from_account_id},
-    ).lastrowid
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE parser_type = 'credit_card'
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    statement_id = core_conn.execute(
-        text("""
-        INSERT INTO statements (
-            account_id,
-            statement_type_id,
-            filename,
-            checksum,
-            extension,
-            raw_text,
-            import_status,
-            import_started_at,
-            import_finished_at,
-            imported_count,
-            skipped_count,
-            ignored_count,
-            llm_candidate_count,
-            uploaded_at
-        )
-        VALUES (
-            :p0, :p1, 'visa.csv', 'statement-detail-route',
-            'csv', 'Date,Description,Amount\n2026-01-02,Corner store,12.34',
-            'completed', '2026-05-11T10:00:00Z', '2026-05-11T10:00:02Z',
-            2, 1, 3, 4, '2026-05-11T09:59:59Z'
-        )
-        """),
-        {"p0": account_id, "p1": statement_type_id},
-    ).lastrowid
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            statement_id,
-            account_id,
-            tx_date,
-            description,
-            amount,
-            category,
-            category_id,
-            fingerprint
-        )
-        VALUES (:p0, :p1, :p2, :p3, :p4, 'Food', :category_id, :p5)
-        """),
-        [
-            {
-                "p0": statement_id,
-                "p1": account_id,
-                "p2": "2026-01-02",
-                "p3": "Corner store",
-                "p4": 12.34,
-                "category_id": resolve_category_id(core_conn, "Food"),
-                "p5": "statement-detail-1",
-            },
-            {
-                "p0": statement_id,
-                "p1": account_id,
-                "p2": "2026-01-03",
-                "p3": "Cafe",
-                "p4": 4.56,
-                "category_id": resolve_category_id(core_conn, "Food"),
-                "p5": "statement-detail-2",
-            },
-        ],
+    paid_from_account_id = insert_account(core_conn, "Main checking", account_type=ACCOUNT_TYPE_CHECKING)
+    account_id = insert_account(
+        core_conn,
+        "RBC Visa",
+        account_type=ACCOUNT_TYPE_CREDIT_CARD,
+        paid_from_account_id=paid_from_account_id,
     )
-    core_conn.commit()
+    statement_id = insert_statement(
+        core_conn,
+        account_id=account_id,
+        statement_type_id=statement_type_id_for_parser(core_conn, STATEMENT_TYPE_PARSER_CREDIT_CARD),
+        filename="visa.csv",
+        checksum="statement-detail-route",
+        extension="csv",
+        raw_text="Date,Description,Amount\n2026-01-02,Corner store,12.34",
+        import_status="completed",
+        import_started_at="2026-05-11T10:00:00Z",
+        import_finished_at="2026-05-11T10:00:02Z",
+        imported_count=2,
+        skipped_count=1,
+        ignored_count=3,
+        llm_candidate_count=4,
+        uploaded_at="2026-05-11T09:59:59Z",
+    )
+    for description, tx_date, amount, fingerprint in (
+        ("Corner store", "2026-01-02", 12.34, "statement-detail-1"),
+        ("Cafe", "2026-01-03", 4.56, "statement-detail-2"),
+    ):
+        insert_transaction(
+            core_conn,
+            statement_id=statement_id,
+            account_id=account_id,
+            tx_date=tx_date,
+            description=description,
+            amount=amount,
+            category="Food",
+            fingerprint=fingerprint,
+        )
 
     response = owner_client.get("/upload")
 
@@ -323,40 +266,21 @@ def test_upload_preview_table_is_not_exportable(owner_client):
 
 def test_upload_route_renders_interac_import_guidance(owner_client, core_conn):
     """Verify Interac uploads explain ordering and skipped or ignored rows."""
-    account_id = core_conn.execute(text("""
-        INSERT INTO accounts (name, account_type)
-        VALUES ('TD Interac Sent', 'checking')
-        """)).lastrowid
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE parser_type = 'interac_etransfer'
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    core_conn.execute(
-        text("""
-        INSERT INTO statements (
-            account_id,
-            statement_type_id,
-            filename,
-            checksum,
-            extension,
-            raw_text,
-            import_status,
-            imported_count,
-            skipped_count,
-            ignored_count,
-            uploaded_at
-        )
-        VALUES (
-            :p0, :p1, 'interac-sent.csv', 'interac-guidance-route',
-            'csv', 'Date Sent,Recipient,Amount,Method,Status',
-            'completed', 29, 1, 76, '2026-05-14T17:41:24Z'
-        )
-        """),
-        {"p0": account_id, "p1": statement_type_id},
+    account_id = insert_account(core_conn, "TD Interac Sent", account_type=ACCOUNT_TYPE_CHECKING)
+    insert_statement(
+        core_conn,
+        account_id=account_id,
+        statement_type_id=statement_type_id_for_parser(core_conn, STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER),
+        filename="interac-sent.csv",
+        checksum="interac-guidance-route",
+        extension="csv",
+        raw_text="Date Sent,Recipient,Amount,Method,Status",
+        import_status="completed",
+        imported_count=29,
+        skipped_count=1,
+        ignored_count=76,
+        uploaded_at="2026-05-14T17:41:24Z",
     )
-    core_conn.commit()
 
     response = owner_client.get("/upload")
 
@@ -372,37 +296,16 @@ def test_upload_route_renders_interac_import_guidance(owner_client, core_conn):
 
 def test_estimate_categorize_statement_unknowns_returns_json(owner_client, core_conn, monkeypatch):
     """Verify the statement AI estimate route returns JSON."""
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    statement_id = core_conn.execute(
-        text("""
-        INSERT INTO statements (
-            statement_type_id,
-            filename,
-            checksum,
-            extension,
-            raw_text,
-            import_status,
-            uploaded_at
-        )
-        VALUES (
-            :p0,
-            'statement.csv',
-            'statement-estimate-route',
-            'csv',
-            'Date,Description,Amount',
-            'completed',
-            '2026-05-11T09:59:59Z'
-        )
-        """),
-        {"p0": statement_type_id},
-    ).lastrowid
-    core_conn.commit()
+    statement_id = insert_statement(
+        core_conn,
+        statement_type_id=default_statement_type_id(core_conn),
+        filename="statement.csv",
+        checksum="statement-estimate-route",
+        extension="csv",
+        raw_text="Date,Description,Amount",
+        import_status="completed",
+        uploaded_at="2026-05-11T09:59:59Z",
+    )
 
     monkeypatch.setattr(upload_service.upload_workflow, "count_statement_unknown_transactions", lambda conn, sid: 2)
     monkeypatch.setattr(
@@ -427,52 +330,26 @@ def test_estimate_categorize_statement_unknowns_returns_json(owner_client, core_
 
 def test_categorize_statement_unknowns_requires_token_estimate_confirmation(owner_client, core_conn, monkeypatch):
     """Verify statement AI categorization does not queue without confirmation."""
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    statement_id = core_conn.execute(
-        text("""
-        INSERT INTO statements (
-            statement_type_id,
-            filename,
-            checksum,
-            extension,
-            raw_text,
-            import_status,
-            uploaded_at
-        )
-        VALUES (
-            :p0,
-            'statement-ai-unconfirmed.csv',
-            'statement-ai-unconfirmed',
-            'csv',
-            'Date,Description,Amount',
-            'completed',
-            '2026-05-11T09:59:59Z'
-        )
-        """),
-        {"p0": statement_type_id},
-    ).lastrowid
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            statement_id,
-            tx_date,
-            description,
-            amount,
-            category,
-            needs_review,
-            fingerprint
-        )
-        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'statement-ai-unconfirmed-tx')
-        """),
-        {"p0": statement_id},
+    statement_id = insert_statement(
+        core_conn,
+        statement_type_id=default_statement_type_id(core_conn),
+        filename="statement-ai-unconfirmed.csv",
+        checksum="statement-ai-unconfirmed",
+        extension="csv",
+        raw_text="Date,Description,Amount",
+        import_status="completed",
+        uploaded_at="2026-05-11T09:59:59Z",
     )
-    core_conn.commit()
+    insert_transaction(
+        core_conn,
+        statement_id=statement_id,
+        tx_date="2026-01-02",
+        description="UNKNOWN SHOP",
+        amount=12.34,
+        category="UNKNOWN",
+        needs_review=1,
+        fingerprint="statement-ai-unconfirmed-tx",
+    )
     submitted = []
 
     def queue_for_test(queued_statement_id):
@@ -499,52 +376,26 @@ def test_categorize_statement_unknowns_runs_without_confirmation_when_setting_di
     monkeypatch,
 ):
     """Verify statement AI can queue without modal confirmation when the setting is off."""
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    statement_id = core_conn.execute(
-        text("""
-        INSERT INTO statements (
-            statement_type_id,
-            filename,
-            checksum,
-            extension,
-            raw_text,
-            import_status,
-            uploaded_at
-        )
-        VALUES (
-            :p0,
-            'statement-ai-confirm-disabled.csv',
-            'statement-ai-confirm-disabled',
-            'csv',
-            'Date,Description,Amount',
-            'completed',
-            '2026-05-11T09:59:59Z'
-        )
-        """),
-        {"p0": statement_type_id},
-    ).lastrowid
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            statement_id,
-            tx_date,
-            description,
-            amount,
-            category,
-            needs_review,
-            fingerprint
-        )
-        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'statement-ai-confirm-disabled-tx')
-        """),
-        {"p0": statement_id},
+    statement_id = insert_statement(
+        core_conn,
+        statement_type_id=default_statement_type_id(core_conn),
+        filename="statement-ai-confirm-disabled.csv",
+        checksum="statement-ai-confirm-disabled",
+        extension="csv",
+        raw_text="Date,Description,Amount",
+        import_status="completed",
+        uploaded_at="2026-05-11T09:59:59Z",
     )
-    core_conn.commit()
+    insert_transaction(
+        core_conn,
+        statement_id=statement_id,
+        tx_date="2026-01-02",
+        description="UNKNOWN SHOP",
+        amount=12.34,
+        category="UNKNOWN",
+        needs_review=1,
+        fingerprint="statement-ai-confirm-disabled-tx",
+    )
     set_owner_setting(core_conn, "confirm_ai_token_usage_enabled", "0")
     submitted = []
 
@@ -568,52 +419,26 @@ def test_categorize_statement_unknowns_runs_without_confirmation_when_setting_di
 
 def test_categorize_statement_unknowns_handles_queue_rejection(owner_client, core_conn, monkeypatch):
     """Verify statement AI queue rejection returns a normal route message."""
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    statement_id = core_conn.execute(
-        text("""
-        INSERT INTO statements (
-            statement_type_id,
-            filename,
-            checksum,
-            extension,
-            raw_text,
-            import_status,
-            uploaded_at
-        )
-        VALUES (
-            :p0,
-            'statement-ai-rejected.csv',
-            'statement-ai-rejected',
-            'csv',
-            'Date,Description,Amount',
-            'completed',
-            '2026-05-11T09:59:59Z'
-        )
-        """),
-        {"p0": statement_type_id},
-    ).lastrowid
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            statement_id,
-            tx_date,
-            description,
-            amount,
-            category,
-            needs_review,
-            fingerprint
-        )
-        VALUES (:p0, '2026-01-02', 'UNKNOWN SHOP', 12.34, 'UNKNOWN', 1, 'statement-ai-rejected-tx')
-        """),
-        {"p0": statement_id},
+    statement_id = insert_statement(
+        core_conn,
+        statement_type_id=default_statement_type_id(core_conn),
+        filename="statement-ai-rejected.csv",
+        checksum="statement-ai-rejected",
+        extension="csv",
+        raw_text="Date,Description,Amount",
+        import_status="completed",
+        uploaded_at="2026-05-11T09:59:59Z",
     )
-    core_conn.commit()
+    insert_transaction(
+        core_conn,
+        statement_id=statement_id,
+        tx_date="2026-01-02",
+        description="UNKNOWN SHOP",
+        amount=12.34,
+        category="UNKNOWN",
+        needs_review=1,
+        fingerprint="statement-ai-rejected-tx",
+    )
 
     def reject_queue(queued_statement_id):
         """Reject the statement AI queue request."""
@@ -643,27 +468,15 @@ def test_categorize_statement_unknowns_handles_queue_rejection(owner_client, cor
 
 def test_upload_route_rejects_duplicate_statement_checksum(owner_client, core_conn, monkeypatch):
     """Verify that duplicate uploads are rejected before queueing background work."""
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
-    core_conn.execute(
-        text("""
-        INSERT INTO statements (
-            statement_type_id,
-            filename,
-            checksum,
-            raw_text,
-            uploaded_at
-        )
-        VALUES (:p0, 'already.csv', :p1, 'Date,Description,Amount', '2026-05-11T12:00:00Z')
-        """),
-        {"p0": statement_type_id, "p1": "known-checksum"},
+    statement_type_id = default_statement_type_id(core_conn)
+    insert_statement(
+        core_conn,
+        statement_type_id=statement_type_id,
+        filename="already.csv",
+        checksum="known-checksum",
+        raw_text="Date,Description,Amount",
+        uploaded_at="2026-05-11T12:00:00Z",
     )
-    core_conn.commit()
     monkeypatch.setattr("finance_app.modules.upload.service.file_checksum", lambda uploaded_file: "known-checksum")
 
     response = owner_client.post(
@@ -678,21 +491,14 @@ def test_upload_route_rejects_duplicate_statement_checksum(owner_client, core_co
         follow_redirects=True,
     )
 
-    statement_count = core_conn.execute(text("SELECT COUNT(*) AS count FROM statements")).fetchone()._mapping["count"]
     assert response.status_code == 200
     assert_visible_text(response, "This statement was already uploaded as already.csv on 2026-05-11T12:00:00Z")
-    assert statement_count == 1
+    assert statement_count(core_conn) == 1
 
 
 def test_upload_route_handles_racing_duplicate_statement_checksum(owner_client, core_conn, monkeypatch):
     """Verify checksum insert conflicts return the controlled duplicate-upload outcome."""
-    statement_type_id = core_conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-    """)).fetchone()._mapping["id"]
+    statement_type_id = default_statement_type_id(core_conn)
     monkeypatch.setattr("finance_app.modules.upload.service.file_checksum", lambda uploaded_file: "race-checksum")
     lookups = {"count": 0}
     submitted_jobs = capture_background_jobs(monkeypatch, upload_service)
@@ -731,11 +537,11 @@ def test_upload_route_handles_racing_duplicate_statement_checksum(owner_client, 
         content_type="multipart/form-data",
         follow_redirects=True,
     )
-    account_count = core_conn.execute(text("""
-                SELECT COUNT(*) AS count
-                FROM accounts
-                WHERE name IN ('Race duplicate account', 'Race duplicate checking')
-                """)).fetchone()._mapping["count"]
+    account_count = core_conn.execute(
+        select(func.count())
+        .select_from(accounts_table)
+        .where(accounts_table.c.name.in_(["Race duplicate account", "Race duplicate checking"]))
+    ).scalar_one()
 
     assert response.status_code == 200
     assert lookups["count"] == 2

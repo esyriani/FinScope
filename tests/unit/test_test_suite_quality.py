@@ -9,7 +9,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TESTS_ROOT = PROJECT_ROOT / "tests"
-LAYER_DIRS = {"integration", "routes", "smoke", "unit"}
+LAYER_DIRS = {"integration", "optional", "routes", "smoke", "unit"}
 
 
 def test_test_files_live_in_documented_layer_directories():

@@ -86,3 +86,39 @@ def test_normalize_merchant_keeps_cleaned_key_without_database_alias(cleaned_key
     assert result.cleaned_key == cleaned_key
     assert result.merchant_key == cleaned_key
     assert result.normalization_source == "fallback"
+
+
+@pytest.mark.parametrize(
+    ("raw_description", "cleaned_key", "removed_tokens"),
+    [
+        ("AMZN Mktp CA*QI44D1DJ3", "AMZN MKTP", ("CA*QI44D1DJ3",)),
+        ("EBOX INC PAI", "EBOX", ("PAI", "INC")),
+        ("SQ *COSMETA", "COSMETA", ("SQ",)),
+        ("Home Depot #1234", "HOME DEPOT", ("#1234",)),
+    ],
+)
+def test_cleanup_metadata_records_removed_artifacts(raw_description, cleaned_key, removed_tokens):
+    """Verify cleanup metadata records the exact artifacts it removes."""
+    result = clean_merchant_description(raw_description)
+
+    assert result.cleaned_key == cleaned_key
+    assert result.removed_tokens == removed_tokens
+    assert result.confidence == "high"
+
+
+def test_empty_artifact_only_description_has_low_confidence():
+    """Verify descriptions that collapse to an empty key are low confidence."""
+    result = clean_merchant_description("***12345")
+
+    assert result.cleaned_key == ""
+    assert result.removed_tokens == ("***12345",)
+    assert result.confidence == "low"
+
+
+def test_normalize_merchant_marks_rule_source_when_artifacts_are_removed():
+    """Verify metadata distinguishes rule-based cleanup from fallback casing."""
+    result = normalize_merchant("HYDRO-QUEBEC FAC")
+
+    assert result.cleaned_key == "HYDRO-QUEBEC"
+    assert result.normalization_source == "rule"
+    assert result.removed_tokens == ("FAC",)
