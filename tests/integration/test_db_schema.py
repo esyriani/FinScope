@@ -205,6 +205,8 @@ def reflected_mysql_check_constraints(table):
     for constraint in table.constraints:
         if not isinstance(constraint, CheckConstraint):
             continue
+        if not connection_module.schema_item_applies_to_dialect(constraint, dialect):
+            continue
         sqltext = connection_module.compile_sql(constraint.sqltext, dialect)
         sqltext = sqltext.replace(" != ", " <> ").replace(", ", ",")
         constraints.append(
@@ -494,6 +496,25 @@ def test_schema_validation_accepts_mysql_reflected_check_sql_and_truncated_names
         dialect,
         recurring_patterns_table.name,
         recurring_patterns_table,
+    )
+
+    assert issues == {}
+
+
+def test_schema_validation_skips_dialect_scoped_check_constraints():
+    """Verify validation ignores checks intentionally not emitted for MySQL."""
+    issues = {}
+    dialect = mysql.dialect()
+    inspector = ReflectedConstraintInspector(
+        checks=reflected_mysql_check_constraints(pinned_reports_table),
+    )
+
+    connection_module.validate_check_constraints(
+        issues,
+        inspector,
+        dialect,
+        pinned_reports_table.name,
+        pinned_reports_table,
     )
 
     assert issues == {}

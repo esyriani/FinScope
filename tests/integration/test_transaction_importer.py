@@ -161,6 +161,35 @@ def test_filter_new_transactions_preserves_repeated_same_value_rows(core_conn):
     assert len({tx["fingerprint"] for tx in new_transactions}) == len(batch)
 
 
+def test_filter_new_transactions_skips_duplicate_source_identity_without_stopping_batch(core_conn):
+    """Verify source-identified duplicate rows are skipped while later rows still import."""
+    batch = [
+        {
+            "tx_date": "2026-03-01",
+            "description": "Provider duplicate",
+            "amount": 10.00,
+            "source_row_number": 4,
+        },
+        {
+            "tx_date": "2026-03-01",
+            "description": "Provider duplicate",
+            "amount": 10.00,
+            "source_row_number": 4,
+        },
+        {
+            "tx_date": "2026-03-02",
+            "description": "Provider fresh",
+            "amount": 20.00,
+            "source_row_number": 5,
+        },
+    ]
+
+    new_transactions, skipped_count = filter_new_transactions(core_conn, batch, account_id=7, statement_id=77)
+
+    assert skipped_count == 1
+    assert [tx["description"] for tx in new_transactions] == ["Provider duplicate", "Provider fresh"]
+
+
 def test_get_existing_transaction_fingerprints_checks_all_chunks(core_conn):
     """Verify existing-fingerprint lookup spans batches larger than one SQL chunk."""
     fingerprints = [f"chunked-fingerprint-{index:04d}" for index in range(1805)]

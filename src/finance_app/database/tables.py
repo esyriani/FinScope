@@ -210,7 +210,8 @@ pinned_reports = Table(
     CheckConstraint(
         "short_title IS NULL OR length(trim(short_title)) <= 30",
         name="pinned_reports_short_title_length",
-    ),
+        info={"schema_validation_dialects": ("sqlite",)},
+    ).ddl_if(dialect="sqlite"),
     **AUTOINCREMENT_TABLE_OPTIONS,
 )
 

@@ -231,12 +231,22 @@ def validate_check_constraints(
     for constraint in table.constraints:
         if not isinstance(constraint, CheckConstraint):
             continue
+        if not schema_item_applies_to_dialect(constraint, dialect):
+            continue
         actual_sql = reflected_name_lookup(actual_constraints, reflection_names(constraint, dialect, "constraint"))
         if actual_sql is None:
             add_schema_issue(issues, "missing check constraints", f"{table_name}.{constraint.name}")
             continue
         if not sql_fragments_match(compile_sql(constraint.sqltext, dialect), actual_sql):
             add_schema_issue(issues, "check constraint mismatches", f"{table_name}.{constraint.name}")
+
+
+def schema_item_applies_to_dialect(schema_item: Any, dialect: Any) -> bool:
+    """Return whether a metadata item is expected to exist for this dialect."""
+    expected_dialects = schema_item.info.get("schema_validation_dialects")
+    if not expected_dialects:
+        return True
+    return dialect.name in expected_dialects
 
 
 def validate_foreign_keys(

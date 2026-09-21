@@ -16,9 +16,18 @@ from pathlib import Path
 
 PROFILES = {
     "categorization-orchestration": ("tests/integration/test_categorization_workflow.py",),
+    "import-transaction-kinds": (
+        "tests/unit/test_upload_transaction_kinds.py",
+        "tests/integration/test_account_payment_import.py",
+        "tests/integration/test_interac_import.py",
+    ),
+    "import-transaction-kinds-unit": ("tests/unit/test_upload_transaction_kinds.py",),
     "llm-results": ("tests/integration/test_llm_categorization.py",),
     "merchant-normalization": ("tests/unit/test_merchant_normalization.py",),
+    "reimbursements": ("tests/integration/test_reimbursements_service.py",),
     "rule-scoring": ("tests/unit/test_category_rules_matching.py",),
+    "statement-parser": ("tests/unit/test_statement_importer.py",),
+    "transaction-importer": ("tests/integration/test_transaction_importer.py",),
 }
 
 
@@ -36,6 +45,7 @@ def main() -> int:
         "pytest",
         "-n",
         "0",
+        "-x",
         *PROFILES[args.profile],
     ]
     env = dict(os.environ)

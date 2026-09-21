@@ -397,3 +397,401 @@ All passed. The full Python suite result was:
 ```text
 1233 passed in 176.89s (0:02:56)
 ```
+
+## Continuation: reimbursement mutation target
+
+This continuation applies the same survivor-driven methodology to the
+reimbursement allocation service:
+
+- Mutation target:
+  `src/finance_app/modules/reimbursements/service.py`
+- Cosmic Ray profile: `cosmic-ray-reimbursements.toml`
+- Focused profile runner:
+  `tools/cosmic_ray_profile_tests.py reimbursements`
+- Focused tests:
+  `tests/integration/test_reimbursements_service.py`
+
+The scope intentionally targets the service layer instead of the whole
+reimbursements package. The service owns write-time reimbursement invariants:
+transaction role validation, allocation limits, insert/update/delete
+orchestration, completion/resume state changes, and the result totals returned
+after allocation writes. Route and presenter tests remain useful confidence
+layers, but mutating them in this first reimbursement campaign would add UI and
+template noise rather than focusing on the financial rules.
+
+The shared mutation profile runner now passes `-x` to pytest so killed mutants
+stop at the first failing focused test. This does not change killed versus
+survived semantics; it only keeps on-demand integration-level mutation runs
+practical.
+
+### Initial reimbursement result
+
+Commands:
+
+```powershell
+.\.venv\Scripts\cosmic-ray.exe baseline cosmic-ray-reimbursements.toml
+.\.venv\Scripts\cosmic-ray.exe init --force cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\reimbursements-initial.sqlite > runtime\mutation\reimbursements-initial.jsonl
+.\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\reimbursements-initial.jsonl
+```
+
+| Metric | Count |
+| --- | ---: |
+| Total mutants | 257 |
+| Killed | 223 |
+| Survived | 34 |
+| Timeout | 0 |
+| Incompetent | 0 |
+| Error or abnormal worker result | 0 |
+| Pending | 0 |
+| Mutation score | 86.77% |
+
+### Meaningful reimbursement survivor analysis
+
+Actionable survivors were concentrated in a few high-value reimbursement
+boundaries:
+
+- Additive allocation checks survived when `allocated_before + amount` was
+  replaced with multiplicative operators. Existing tests used large values
+  where both the original and mutant still rejected the allocation. This was a
+  missing test for small fractional over-allocation.
+- Exact sign and zero boundaries survived for reimbursement credits, expense
+  rows, match amounts, and parsed ids. Existing tests covered ordinary positive
+  and negative examples but not the exact boundary values.
+- Self-match protection survived an equality-to-identity mutation. Existing
+  tests did not assert that equal ids are rejected before any database lookup.
+- Empty multiple-match helper guards survived because the service-level tests
+  did not call the batch helpers directly.
+- Legacy category-label fallback survived around `category_id is None` because
+  factory-created rows normally resolve category ids.
+
+Non-actionable survivors in the initial run included:
+
+- The private `_save_reimbursement_allocation()` keyword-only separator mutated
+  into a positional-only separator. Current internal callers still behave the
+  same, and this is not a product contract.
+- The `ReimbursementAllocationResult` dataclass `frozen=True` toggle. Result
+  immutability is nice, but not part of the reimbursement financial invariant
+  under test.
+- A transaction-kind comparison changed from `!=` to `>`. All valid
+  non-expense transaction-kind enum values currently sort after `"expense"`,
+  and the database constraint prevents arbitrary lower-sorting values.
+- The `ensure_reimbursable_tag()` missing-built-in fallback. Built-in taxonomy
+  metadata is deterministic in normal runtime; this branch is defensive for a
+  broken taxonomy registry rather than ordinary reimbursement behavior.
+
+No production defect was confirmed by the initial survivors.
+
+### Survivor-driven reimbursement tests added
+
+Tests added in `tests/integration/test_reimbursements_service.py` protect:
+
+- Exact one-dollar reimbursement, expense, and match amount boundaries.
+- Empty, zero, and negative match amounts being rejected as domain errors before
+  persistence constraints.
+- Invalid reimbursement and expense ids: zero, negative, and non-numeric input.
+- Same transaction id rejection before missing-row lookup.
+- Fractional over-allocation from one reimbursement to multiple expenses.
+- Fractional over-allocation from multiple reimbursements to one expense.
+- Zero and positive reimbursement credits being rejected.
+- Zero and negative reimbursable expense amounts being rejected.
+- Legacy category labels with `category_id` cleared still classifying a
+  reimbursement credit while keeping a non-reimbursement expense valid.
+- Empty batch submissions for both reimbursement-to-expenses and
+  expense-to-reimbursements helpers.
+
+### Final reimbursement result
+
+Commands:
+
+```powershell
+.\.venv\Scripts\cosmic-ray.exe baseline cosmic-ray-reimbursements.toml
+.\.venv\Scripts\cosmic-ray.exe init --force cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-final.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-final.sqlite
+.\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\reimbursements-final.sqlite > runtime\mutation\reimbursements-final.jsonl
+.\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\reimbursements-final.jsonl
+```
+
+| Metric | Count |
+| --- | ---: |
+| Total mutants | 257 |
+| Killed | 252 |
+| Survived | 5 |
+| Timeout | 0 |
+| Incompetent | 0 |
+| Error or abnormal worker result | 0 |
+| Pending | 0 |
+| Mutation score | 98.05% |
+
+### Reimbursement survivors remaining
+
+The five remaining survivors are non-actionable for this campaign:
+
+- `ReimbursementAllocationResult` dataclass `frozen=True` changed to `False`:
+  low-value mutation outside the financial behavior contract.
+- `_save_reimbursement_allocation()` keyword-only separator changed to a
+  positional-only separator: private call-shape mutation with no observable
+  reimbursement behavior difference for current callers.
+- `validate_expense_transaction()` transaction-kind `!=` changed to `>`:
+  equivalent for the valid transaction-kind vocabulary because all non-expense
+  enum values sort after `"expense"`.
+- `ensure_reimbursable_tag()` `tag is None` branch inverted or negated:
+  defensive fallback for missing built-in taxonomy metadata, not ordinary
+  reimbursement allocation behavior.
+
+No meaningful reimbursement survivor remains. No production defect or
+specification ambiguity was confirmed.
+
+### Reimbursement verification
+
+Focused reimbursement tests after the survivor-driven additions:
+
+```text
+33 passed in 24.52s
+```
+
+Full local quality gate after the reimbursement mutation work:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m black --check .
+.\.venv\Scripts\python.exe -B -m djlint src\finance_app\templates --profile=jinja --lint
+.\.venv\Scripts\python.exe -B -m ruff check .
+.\.venv\Scripts\python.exe -B -m mypy
+npm run lint:frontend
+.\.venv\Scripts\python.exe -B -m pytest
+```
+
+All passed. The full Python suite result was:
+
+```text
+1253 passed in 176.52s (0:02:56)
+```
+
+## Continuation: transaction import/parsing mutation target
+
+This continuation applies the same survivor-driven methodology to transaction
+import and parsing. Mutation testing remains on demand only; no CI/CD or GitHub
+Actions integration was added.
+
+The selected targets were split by responsibility so survivor analysis stayed
+readable:
+
+- Statement parser:
+  `src/finance_app/modules/statements/importer.py`
+- Transaction deduplication importer:
+  `src/finance_app/modules/transactions/importer.py`
+- Import transaction-kind and linked-payment helpers:
+  `src/finance_app/modules/upload/transaction_kinds.py`
+
+`src/finance_app/modules/statements/types.py` was inspected but not mutated in
+this campaign. Its tests primarily cover statement-type settings persistence
+and synchronization, not imported row parsing semantics.
+
+### Transaction import/parsing profiles
+
+Profiles added for this campaign:
+
+- `cosmic-ray-statement-parser.toml`, running
+  `tools/cosmic_ray_profile_tests.py statement-parser`
+- `cosmic-ray-transaction-importer.toml`, running
+  `tools/cosmic_ray_profile_tests.py transaction-importer`
+- `cosmic-ray-import-transaction-kinds.toml`, running
+  `tools/cosmic_ray_profile_tests.py import-transaction-kinds`
+- `cosmic-ray-import-transaction-kinds-unit.toml`, running
+  `tools/cosmic_ray_profile_tests.py import-transaction-kinds-unit`
+
+The broader `import-transaction-kinds` focused test command remains useful for
+normal verification because it includes account-payment and Interac integration
+flows. The final mutation rerun used the unit-only profile because the broader
+profile became noisy and stalled with an active date-window mutant after 395 of
+414 mutants. The interrupted broad diagnostic run had 302 killed, 93 survived,
+and 19 pending mutants; it was not counted as a final result.
+
+### Initial transaction import/parsing results
+
+Commands followed the same pattern for each profile:
+
+```powershell
+.\.venv\Scripts\cosmic-ray.exe baseline <profile>.toml
+.\.venv\Scripts\cosmic-ray.exe init --force <profile>.toml runtime\mutation\<name>-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec <profile>.toml runtime\mutation\<name>-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\<name>-initial.sqlite > runtime\mutation\<name>-initial.jsonl
+.\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\<name>-initial.jsonl
+```
+
+| Target | Total mutants | Killed | Survived | Incompetent/error | Raw mutation score |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Statement parser | 819 | 632 | 187 | 0 | 77.17% |
+| Transaction importer | 45 | 39 | 6 | 0 | 86.67% |
+| Import transaction kinds, broad initial profile | 414 | 255 | 159 | 0 | 61.59% |
+
+### Meaningful transaction import/parsing survivor analysis
+
+Actionable survivors were concentrated in these areas:
+
+- Duplicate source-identity filtering: a `continue` to `break` mutation allowed
+  one duplicate parsed row to stop later fresh rows from importing.
+- Statement parser date and amount boundaries: explicit date-order priority,
+  zero values, signed debit/credit handling, bank-account sign normalization,
+  Interac required fields, and ignored-row counts were underasserted.
+- Import-kind inference: default Interac enrichment mode, credit-card payment
+  text, linked-account source filtering, four-character account tokens, negative
+  linked-transfer descriptions, and exact zero/positive/negative boundaries
+  needed direct coverage.
+- Linked-payment matching: existing tests did not assert enough of the amount,
+  date, ignored-row, already-payment, account-id, and update-only-the-matched-row
+  invariants.
+- Undo-state capture: duplicate update snapshots needed a direct test to ensure
+  each transaction id is recorded once.
+- Transaction source identity: provider transaction ids needed direct coverage
+  as stable fingerprint inputs without falling back to parsed row indexes.
+
+Non-actionable or low-value survivor groups included:
+
+- SQLAlchemy comparison variants that compile to equivalent behavior for the
+  current constrained enum/string values or for SQLite's query result in these
+  narrowly scoped helper tests.
+- Identity-comparison mutations for small integer ids, where behavior is an
+  implementation artifact of Python object identity rather than a product
+  contract.
+- Two-decimal money tolerance variants where the database stores amounts at
+  cents precision and sub-cent distinctions are not observable through normal
+  persisted rows.
+- Parser bookkeeping count mutations for malformed/padded rows after the
+  transaction list and source-row semantics are already covered.
+- File checksum, extension, and allowed-file helper mutations, which are
+  low-value for this parsing/import semantics campaign.
+- Delimiter/header heuristic variants that did not change the parsed
+  transactions for representative inputs and would be better handled by a
+  dedicated parser fixture set if those heuristics become product-critical.
+
+No production defect was confirmed. One specification note remains: linked
+credit-account matching is intentionally token-based and therefore matches broad
+tokens such as `"Mastercard"`; tests were written to preserve the current fuzzy
+rule rather than tightening it accidentally.
+
+### Survivor-driven transaction import/parsing tests added
+
+Tests added in `tests/unit/test_statement_importer.py` protect:
+
+- Date-format priority for explicit month-first/day-first choices.
+- Auto date-order analysis for inputs with no slash-style numeric dates.
+- Zero, positive, negative, debit, credit, and bank-account sign boundaries.
+- CSV source-row offsets after a one-line preamble.
+- Interac required date/name/amount fields and one-cent boundary.
+- Interac ignored-row counts for unusable exports.
+- Provider transaction ids as stable fingerprint source identities.
+
+Tests added in `tests/integration/test_transaction_importer.py` protect:
+
+- Duplicate source identities being skipped without stopping later fresh rows in
+  the same import batch.
+
+Tests added in `tests/unit/test_upload_transaction_kinds.py` protect:
+
+- Interac-only default enrichment mode, including dynamic string equality.
+- Payment/transfer category metadata and review state.
+- Account-role, amount-sign, linked-description, and payment-text
+  classification boundaries.
+- Linked credit-account matching by paid-from account, account type, normalized
+  description, and four-character account tokens.
+- Nearest-payment matching and ambiguity handling.
+- Inclusive date windows and invalid date rejection.
+- Linked-account payment matching filters for amount, date, ignored rows,
+  existing payment rows, source account, and description.
+- Updating only the matched funding row, not neighboring transaction ids.
+- Missing account handling.
+- Undo snapshot deduplication by transaction id.
+
+### Final transaction import/parsing results
+
+Final commands used the same baseline/init/exec/dump/summary pattern as the
+initial campaign. The final transaction-kind score below is from the unit-only
+mutation profile; the broader integration profile is retained for normal
+focused verification.
+
+| Target | Total mutants | Killed | Survived | Incompetent/error | Raw mutation score | Meaningful survivors remaining |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Statement parser | 819 | 667 | 152 | 0 | 81.44% | 0 |
+| Transaction importer | 45 | 42 | 3 | 0 | 93.33% | 0 |
+| Import transaction kinds, unit profile | 414 | 363 | 51 | 0 | 87.68% | 0 |
+
+The completed statement-parser final run above predates the last
+provider-source-identity assertion. A rerun was attempted, but Cosmic Ray stalled
+after 3 mutants on a non-behavioral annotation mutation
+(`object | None` changed to `object % None`). The source file was restored and
+the completed final campaign is kept as the official statement-parser mutation
+result.
+
+Narrow manual fault-injection confirmation was performed for the added
+provider-source-identity behavior. The focused test
+`tests/unit/test_statement_importer.py::test_transaction_fingerprint_prefers_provider_source_identity`
+passed against unmodified production code. Temporarily removing
+`provider_transaction_id` from the `transaction_source_identity()` precedence
+tuple made the test fail because two rows with the same provider id but
+different fallback source fields produced different fingerprints. Restoring the
+tuple made the test pass again. This confirms the intended mutant would be
+killed without rerunning the full statement-parser campaign.
+
+### Transaction import/parsing survivors remaining
+
+The remaining transaction-importer survivors are non-actionable:
+
+- The empty-chunk `continue` in `get_existing_transaction_fingerprints()` is
+  unreachable for `range(0, len(values), positive_chunk_size)`.
+- The two `chunk_size = 900` number replacements preserve observable behavior;
+  chunk size affects batching performance, not deduplication correctness.
+
+The remaining statement-parser survivors are non-actionable for this campaign:
+
+- Row-count arithmetic mutants in malformed Interac/CSV bookkeeping do not
+  change imported transaction values for the covered parsing cases.
+- Date-order heuristic threshold mutations are low value after explicit tests
+  for detected month-first/day-first, ambiguous, and no-choice paths.
+- File checksum, file-extension, and allowed-file mutations are outside the
+  transaction-value parsing risk area.
+- Header/delimiter helper mutations that preserve parsed transactions are
+  equivalent for the representative fixtures used here.
+
+The remaining import transaction-kind survivors are non-actionable:
+
+- SQLAlchemy comparison and boolean-expression mutations that preserve the
+  result under the constrained account/type/kind vocabulary used by these
+  helpers.
+- Identity-comparison mutants for small integer ids and enum-like strings.
+- Number replacements around default `0`, confidence `1.0`, and token-length
+  thresholds where added tests cover the meaningful boundary and remaining
+  variants do not change product behavior.
+- Sub-cent amount-tolerance variants that are not observable with persisted
+  two-decimal transaction amounts.
+
+No production defect was confirmed. No import-rule ambiguity required a
+production change.
+
+### Transaction import/parsing verification
+
+Focused import/parsing tests after survivor-driven additions:
+
+```text
+statement-parser: 53 passed in 0.47s
+transaction-importer: 11 passed in 7.86s
+import-transaction-kinds: 26 passed in 14.38s
+```
+
+Full local quality gate after the transaction import/parsing mutation work:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m black --check .
+.\.venv\Scripts\python.exe -B -m djlint src\finance_app\templates --profile=jinja --lint
+.\.venv\Scripts\python.exe -B -m ruff check .
+.\.venv\Scripts\python.exe -B -m mypy
+npm run lint:frontend
+.\.venv\Scripts\python.exe -B -m pytest
+```
+
+All passed. The full Python suite result was:
+
+```text
+1289 passed in 186.52s (0:03:06)
+```

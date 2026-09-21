@@ -12,6 +12,7 @@ from finance_app.core.constants import (
 )
 from finance_app.modules.statements.importer import (
     analyze_slash_date_order,
+    build_interac_transfer,
     build_transaction,
     date_formats_for_order,
     parse_csv_transactions,
@@ -165,6 +166,47 @@ def test_parse_date_respects_selected_slash_date_order(raw_value, date_order, ex
     assert parse_date(raw_value, date_formats=date_formats_for_order(date_order)) == expected
 
 
+def test_date_formats_for_order_prioritizes_selected_numeric_formats():
+    """Verify explicit date-order choices change the parser format priority."""
+    assert date_formats_for_order(DATE_ORDER_MONTH_FIRST)[0] == "%m/%d/%Y"
+    assert date_formats_for_order(DATE_ORDER_DAY_FIRST)[0] == "%d/%m/%Y"
+    assert date_formats_for_order("unknown")[0] == "%Y-%m-%d"
+
+
+def test_analyze_slash_date_order_reports_no_choice_when_no_numeric_dates():
+    """Verify non-numeric dates do not trigger ambiguous date-order warnings."""
+    analysis = analyze_slash_date_order(["2026-05-12", "May 13, 2026"])
+
+    assert analysis["effective_order"] == DATE_ORDER_AUTO
+    assert analysis["requires_choice"] is False
+    assert analysis["has_date_order_dates"] is False
+    assert analysis["slash_date_count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"raw_debit": "0.00"}, None),
+        ({"raw_credit": "0.00"}, None),
+        ({"raw_amount": "0.00"}, None),
+        ({"raw_debit": "-12.34"}, Decimal("12.34")),
+        ({"raw_credit": "-12.34"}, Decimal("-12.34")),
+        ({"raw_amount": "12.34", "statement_type": "bank_account"}, Decimal("-12.34")),
+        ({"raw_amount": "-12.34", "statement_type": "bank_account"}, Decimal("12.34")),
+    ],
+)
+def test_build_transaction_amount_boundary_and_sign_rules(kwargs, expected):
+    """Verify direct transaction building protects zero and sign semantics."""
+    statement_type = kwargs.pop("statement_type", "credit_card")
+
+    tx = build_transaction("2026-01-02", "Boundary Shop", statement_type, **kwargs)
+
+    if expected is None:
+        assert tx is None
+    else:
+        assert tx["amount"] == expected
+
+
 def test_build_transaction_prefers_debit_credit_columns():
     """Verify that debit and credit columns map to app spending conventions."""
     debit_tx = build_transaction("2026-01-02", "GROCERY", "credit_card", raw_debit="$12.34")
@@ -201,6 +243,23 @@ def test_parse_csv_transactions_detects_header_after_intro_rows():
         ("2026-01-03", "PAYMENT", Decimal("-100.00")),
     ]
     assert [tx["source_row_number"] for tx in result["transactions"]] == [4, 5]
+
+
+def test_parse_csv_transactions_tracks_source_rows_after_single_intro_row():
+    """Verify header offsets are not accidentally tied to one specific preamble length."""
+    raw_text = "\n".join(
+        [
+            "Generated,2026-05-09",
+            "Transaction Date,Description,Debit,Credit",
+            "2026-01-02,GROCERY,$12.34,",
+            "2026-01-03,PAYMENT,,$100.00",
+        ]
+    )
+
+    result = parse_csv_transactions(raw_text, statement_type="credit_card")
+
+    assert result["ignored_rows"] == 0
+    assert [tx["source_row_number"] for tx in result["transactions"]] == [3, 4]
 
 
 def test_parse_csv_transactions_uses_compact_fallback_without_header():
@@ -304,6 +363,40 @@ def test_parse_csv_transactions_parses_td_checking_two_digit_hyphen_dates():
         ("2024-01-01", "Recept - VFC ***F3I REN", Decimal("-1440.80")),
         ("2024-01-13", "HYPOTHEQUE MAISON DESJARDINS", Decimal("1760.38")),
     ]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected_none"),
+    [
+        ({"raw_date": "", "merchant_name": "Alex", "raw_amount": "$1.00"}, True),
+        ({"raw_date": "2026-05-08", "merchant_name": "  ", "raw_amount": "$1.00"}, True),
+        ({"raw_date": "2026-05-08", "merchant_name": "Alex", "raw_amount": "$0.00"}, True),
+        ({"raw_date": "2026-05-08", "merchant_name": "Alex", "raw_amount": "$0.01"}, False),
+    ],
+)
+def test_build_interac_transfer_rejects_missing_or_zero_required_values(kwargs, expected_none):
+    """Verify Interac row construction keeps required field and amount boundaries strict."""
+    tx = build_interac_transfer(direction="sent", status="Deposited", **kwargs)
+
+    if expected_none:
+        assert tx is None
+    else:
+        assert tx["amount"] == Decimal("0.01")
+
+
+def test_parse_csv_transactions_counts_invalid_interac_header_rows():
+    """Verify unusable Interac exports report all data rows as ignored."""
+    raw_text = "\n".join(
+        [
+            "Date,Amount,Status",
+            "2026-05-08,$10.00,Deposited",
+            "2026-05-09,$11.00,Deposited",
+        ]
+    )
+
+    result = parse_csv_transactions(raw_text, statement_type="interac_etransfer")
+
+    assert result == {"transactions": [], "ignored_rows": 2}
 
 
 def test_parse_csv_transactions_counts_malformed_rows_without_losing_valid_rows():
@@ -433,6 +526,31 @@ def test_transaction_fingerprint_uses_statement_scoped_source_identity():
         account_id=1,
         statement_id=11,
         import_index=1,
+    )
+
+
+def test_transaction_fingerprint_prefers_provider_source_identity():
+    """Verify provider ids are stable source identities without parsed row fallback."""
+    tx = {
+        "tx_date": "2026-01-02",
+        "description": "GROCERY",
+        "amount": Decimal("12.34"),
+        "provider_transaction_id": "provider-123",
+        "source_transaction_id": "source-456",
+        "source_row_number": 99,
+    }
+    same_provider = {**tx, "source_transaction_id": "source-789", "source_row_number": 100}
+    different_provider = {**tx, "provider_transaction_id": "provider-999"}
+
+    assert transaction_fingerprint(tx, account_id=1, statement_id=10) == transaction_fingerprint(
+        same_provider,
+        account_id=1,
+        statement_id=10,
+    )
+    assert transaction_fingerprint(tx, account_id=1, statement_id=10) != transaction_fingerprint(
+        different_provider,
+        account_id=1,
+        statement_id=10,
     )
 
 
