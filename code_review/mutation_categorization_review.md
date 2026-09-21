@@ -795,3 +795,190 @@ All passed. The full Python suite result was:
 ```text
 1289 passed in 186.52s (0:03:06)
 ```
+
+## Continuation: financial/report calculations mutation target
+
+This continuation applies the same survivor-driven methodology to shared
+financial calculation helpers. Mutation testing remains on demand only; no
+CI/CD or GitHub Actions integration was added.
+
+The selected targets were split by responsibility so SQL reporting predicates,
+pure dashboard/report helper calculations, and comparison statistics could be
+analyzed separately:
+
+- Financial reporting predicates and expressions:
+  `src/finance_app/core/reporting.py`
+- Analytics summary helpers:
+  `src/finance_app/core/analytics.py`
+- Comparison statistics:
+  `src/finance_app/modules/comparison/statistics.py`
+
+Controllers, templates, URL builders, and presentation-only formatting were not
+mutated for this campaign.
+
+### Financial/report calculation profiles
+
+Profiles added for this campaign:
+
+- `cosmic-ray-financial-reporting.toml`, running
+  `tools/cosmic_ray_profile_tests.py financial-reporting`
+- `cosmic-ray-analytics-summary.toml`, running
+  `tools/cosmic_ray_profile_tests.py analytics-summary`
+- `cosmic-ray-comparison-statistics.toml`, running
+  `tools/cosmic_ray_profile_tests.py comparison-statistics`
+
+Initial reporting and analytics runs used existing focused integration checks,
+including `tests/integration/test_financial_correctness.py`, selected dashboard
+context tests, and selected reports overview tests. Final profiles use the
+survivor-driven direct tests added in this campaign so the on-demand mutation
+lanes remain compact.
+
+### Initial financial/report calculation results
+
+Commands followed the established pattern for each profile:
+
+```powershell
+.\.venv\Scripts\cosmic-ray.exe baseline <profile>.toml
+.\.venv\Scripts\cosmic-ray.exe init --force <profile>.toml runtime\mutation\<name>-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec <profile>.toml runtime\mutation\<name>-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\<name>-initial.sqlite > runtime\mutation\<name>-initial.jsonl
+.\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\<name>-initial.jsonl
+```
+
+| Target | Total mutants | Killed | Survived | Incompetent/error | Raw mutation score |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Financial reporting | 141 | 80 | 61 | 0 | 56.74% |
+| Analytics summary | 249 | 123 | 126 | 0 | 49.40% |
+| Comparison statistics | 442 | 404 | 24 | 14 | 94.39% |
+
+### Meaningful financial/report survivor analysis
+
+Actionable survivors were concentrated in these areas:
+
+- Analytics helper branches: cash-flow status/rate arithmetic, quick-view active
+  matching, quality risk thresholds, unknown-review copy, review CTA
+  pluralization, and secondary data-quality counters were only indirectly
+  asserted through integration tests.
+- Reporting predicates and expressions: transfer-credit inclusion, zero/sign
+  boundaries, reimbursement credit exclusion, income/cash-flow sign handling,
+  and reimbursement allocation subtraction needed compact expression-level
+  coverage.
+- Comparison statistics: non-unit MAD scaling, exact anomaly threshold
+  inclusivity, zero-MAD negative differences, non-divisible sample standard
+  deviation, and inclusive percentile endpoints needed direct numeric boundary
+  assertions.
+
+Non-actionable survivor groups included:
+
+- SQLAlchemy/string-enum comparison variants such as replacing equality with
+  broad ordering comparisons. Under the persisted transaction-kind vocabulary
+  and sign conventions, these do not change ordinary report behavior.
+- Number replacements around zero boundaries where the mutated branch still
+  returns an amount of `0` and the visible financial result is unchanged.
+- Analytics fallback/default-value mutations for counters that are constrained
+  to nonnegative query results or are secondary metadata rather than financial
+  arithmetic.
+- Comparison helper mutations for impossible negative history counts,
+  single-value percentile index aliases, and the keyword-only marker location.
+
+One stale fallback was discovered in `transaction_has_builtin_category_clause()`:
+the fallback branch appeared to recognize built-in categories when
+`transactions.category_id` is `NULL`, but category identity is intentionally
+canonical through `category_id`. The cached transaction category label is
+display/import metadata, not taxonomy identity. A follow-up removed that dead
+fallback and added a regression case verifying that a legacy
+`category = "Reimbursement"` row with `category_id = NULL` is not treated as a
+built-in reimbursement credit.
+
+### Survivor-driven financial/report tests added
+
+Tests added in `tests/unit/test_analytics_helpers.py` protect:
+
+- Quick-view option filtering and active matching, including dynamic request
+  strings.
+- Cash-flow surplus, balanced, deficit, zero-income, savings-rate, and
+  spending-rate calculations.
+- Data-quality empty, danger, warning, and good levels, including exact and
+  above-threshold risk boundaries.
+- Unknown-review sentence boundaries, review CTA pluralization, driver warning
+  visibility, untagged spending details, source counters, fallback count
+  fields, and percentage rounding.
+
+Tests added in `tests/integration/test_reporting_expressions.py` protect:
+
+- Reportable, income, reimbursement-credit, spending-impact, and
+  transfer-credit predicate boundaries for expense, refund, income,
+  reimbursement, and transfer rows.
+- Canonical category semantics: cached category text without `category_id` does
+  not confer built-in reimbursement behavior.
+- Zero-value boundaries for expenses, refunds, reimbursement credits, and
+  transfers.
+- Income and cash-flow sign conventions.
+- Reimbursement allocation subtraction from original expense spending and net
+  cash-flow impact.
+
+Tests added in `tests/unit/test_comparison_statistics.py` protect:
+
+- Non-divisible sample standard deviation.
+- Robust z-score scaling when MAD is not `1`.
+- Exact anomaly-threshold inclusivity.
+- Zero-MAD negative differences.
+- Inclusive percentile lower and upper endpoints.
+
+### Final financial/report calculation results
+
+Final commands used the same baseline/init/exec/dump/summary pattern. The final
+analytics and reporting profiles use the direct survivor-driven tests described
+above.
+
+| Target | Total mutants | Killed | Survived | Incompetent/error | Raw mutation score | Meaningful test-gap survivors remaining |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Financial reporting | 141 | 116 | 25 | 0 | 82.27% | 0 |
+| Analytics summary | 249 | 206 | 43 | 0 | 82.73% | 0 |
+| Comparison statistics | 442 | 415 | 11 | 16 | 97.42% | 0 |
+
+### Financial/report calculation survivors remaining
+
+The remaining financial-reporting survivors are non-actionable for this
+campaign. The legacy category-label fallback noted during analysis was resolved
+after the final campaign by removing the dead branch and pinning canonical
+category-id behavior:
+
+- Transaction-kind comparison mutations that broaden enum equality to ordering
+  comparisons are low value under the constrained persisted kind vocabulary and
+  normal sign conventions.
+- Some zero-boundary mutations in amount expressions preserve the observable
+  amount because both original and mutant produce `0`.
+
+The remaining analytics-summary survivors are non-actionable:
+
+- Nonnegative-count guards such as `transaction_count == 0` mutated to
+  `<= 0`, and `count > 0` mutated to `!= 0`, are equivalent under query
+  constraints.
+- `total_income > 0` mutated to `!= 0` would only differ for negative income
+  totals, which are outside the report summary domain.
+- Several `or 0` and numeric replacement survivors affect defensive defaults
+  for nullable counters or duplicate equivalent fallback values after direct
+  assertions cover the visible helper contract.
+
+The remaining comparison-statistics survivors are non-actionable:
+
+- Impossible negative history-count and negative-length percentile branches.
+- Single-value percentile index aliases such as `0` versus `-1`.
+- Unreachable anomaly-direction `>= 0` behavior after the explicit
+  zero-difference branch.
+- A low-value mutation reported at the keyword-only marker line.
+
+No financial arithmetic defect was fixed in this campaign. The only discovered
+specification ambiguity was the unreachable legacy category-label fallback; the
+follow-up implementation made the canonical `category_id` behavior explicit.
+
+### Financial/report calculation verification
+
+Focused financial/report tests after survivor-driven additions:
+
+```text
+analytics-summary: 21 passed in 0.14s
+financial-reporting: 14 passed in 8.25s
+comparison-statistics: 18 passed in 0.37s
+```

@@ -15,7 +15,10 @@ import sys
 from pathlib import Path
 
 PROFILES = {
+    "analytics-summary": ("tests/unit/test_analytics_helpers.py",),
     "categorization-orchestration": ("tests/integration/test_categorization_workflow.py",),
+    "comparison-statistics": ("tests/unit/test_comparison_statistics.py",),
+    "financial-reporting": ("tests/integration/test_reporting_expressions.py",),
     "import-transaction-kinds": (
         "tests/unit/test_upload_transaction_kinds.py",
         "tests/integration/test_account_payment_import.py",

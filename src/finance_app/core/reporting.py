@@ -10,7 +10,6 @@ from typing import Any
 from sqlalchemy import and_, case, or_, select
 
 from finance_app.core.builtin_taxonomy import BUILTIN_CATEGORY_REIMBURSEMENT
-from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
     NON_REPORTABLE_TRANSACTION_KINDS,
     TRANSACTION_KIND_EXPENSE,
@@ -40,18 +39,16 @@ def reimbursement_credit_clause() -> Any:
 
 
 def transaction_has_builtin_category_clause(builtin_key: str) -> Any:
-    """Return a SQL predicate for transactions assigned a built-in category."""
+    """Return a SQL predicate for transactions assigned a built-in category.
+
+    Built-in category semantics are canonical through ``transactions.category_id``.
+    The cached transaction category label is display/import metadata and must not
+    be used as taxonomy identity.
+    """
     category_ids = select(categories_table.c.id).where(categories_table.c.builtin_key == builtin_key)
-    category_names = select(categories_table.c.name).where(categories_table.c.builtin_key == builtin_key)
-    return or_(
-        and_(
-            transactions_table.c.category_id.is_not(None),
-            transactions_table.c.category_id.in_(category_ids),
-        ),
-        and_(
-            transactions_table.c.category_id.is_(None),
-            transaction_category_label_expression("").in_(category_names),
-        ),
+    return and_(
+        transactions_table.c.category_id.is_not(None),
+        transactions_table.c.category_id.in_(category_ids),
     )
 
 
