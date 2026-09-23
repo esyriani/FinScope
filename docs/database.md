@@ -322,7 +322,7 @@ When tables, columns, indexes, or relationships change:
 
 1. Apply the application schema changes in [src/finance_app/database/tables.py](../src/finance_app/database/tables.py).
 2. Rebuild or initialize a representative [finscope.db](../runtime/finscope.db).
-3. Regenerate [docs/db-schema.html](db-schema.html) and [docs/diagrams/db-schema.dbs](diagrams/db-schema.dbs) from the SQLAlchemy Core metadata.
+3. Regenerate [docs/db-schema.html](db-schema.html) from the SQLAlchemy Core metadata. If you export DBSchema `.dbs` files while reviewing the schema, keep them local; `.dbs` files are ignored by Git.
 4. Update [architecture.md](architecture.md) or this page if the conceptual data model changed.
 
 Do not hand-edit generated schema artifacts; regenerate them from the metadata so the documentation stays consistent with the runtime schema.

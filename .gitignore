@@ -15,6 +15,7 @@ htmlcov/
 *.sqlite3
 *.db
 *.log
+*.dbs
 
 config.ini
 src/finance_app/*.db

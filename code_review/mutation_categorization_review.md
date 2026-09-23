@@ -9,7 +9,7 @@ selection.
 
 Infrastructure added for the experiment:
 
-- `cosmic-ray-rules-engine.toml` configures Cosmic Ray with the local
+- `tests/mutation/cosmic-ray-rules-engine.toml` configures Cosmic Ray with the local
   distributor, a 45 second per-mutant timeout, and
   `src/finance_app/modules/rules/engine.py` as the mutation target.
 - `tools/cosmic_ray_rule_engine_tests.py` is the test command invoked by Cosmic
@@ -30,7 +30,7 @@ documented as an opt-in local lane, not a CI gate.
 Baseline command:
 
 ```powershell
-.\.venv\Scripts\cosmic-ray.exe baseline cosmic-ray-rules-engine.toml
+.\.venv\Scripts\cosmic-ray.exe baseline tests/mutation/cosmic-ray-rules-engine.toml
 ```
 
 The unmutated baseline passed.
@@ -46,8 +46,8 @@ The focused runner also passed directly:
 Fresh session:
 
 ```powershell
-.\.venv\Scripts\cosmic-ray.exe init --force cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
-.\.venv\Scripts\cosmic-ray.exe exec cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+.\.venv\Scripts\cosmic-ray.exe init --force tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
 .\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\rules-engine.sqlite > runtime\mutation\rules-engine-dump.jsonl
 .\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\rules-engine-dump.jsonl
 ```
@@ -249,10 +249,10 @@ category-focused targets:
 
 Additional Cosmic Ray configuration files were added for each target:
 
-- `cosmic-ray-categorization-orchestration.toml`
-- `cosmic-ray-llm-results.toml`
-- `cosmic-ray-merchant-normalization.toml`
-- `cosmic-ray-rule-scoring.toml`
+- `tests/mutation/cosmic-ray-categorization-orchestration.toml`
+- `tests/mutation/cosmic-ray-llm-results.toml`
+- `tests/mutation/cosmic-ray-merchant-normalization.toml`
+- `tests/mutation/cosmic-ray-rule-scoring.toml`
 
 `tools/cosmic_ray_profile_tests.py` is the shared profile runner. It maps each
 mutation target to the smallest existing pytest selection that exercises that
@@ -405,7 +405,7 @@ reimbursement allocation service:
 
 - Mutation target:
   `src/finance_app/modules/reimbursements/service.py`
-- Cosmic Ray profile: `cosmic-ray-reimbursements.toml`
+- Cosmic Ray profile: `tests/mutation/cosmic-ray-reimbursements.toml`
 - Focused profile runner:
   `tools/cosmic_ray_profile_tests.py reimbursements`
 - Focused tests:
@@ -429,9 +429,9 @@ practical.
 Commands:
 
 ```powershell
-.\.venv\Scripts\cosmic-ray.exe baseline cosmic-ray-reimbursements.toml
-.\.venv\Scripts\cosmic-ray.exe init --force cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-initial.sqlite
-.\.venv\Scripts\cosmic-ray.exe exec cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe baseline tests/mutation/cosmic-ray-reimbursements.toml
+.\.venv\Scripts\cosmic-ray.exe init --force tests/mutation/cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec tests/mutation/cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-initial.sqlite
 .\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\reimbursements-initial.sqlite > runtime\mutation\reimbursements-initial.jsonl
 .\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\reimbursements-initial.jsonl
 ```
@@ -506,9 +506,9 @@ Tests added in `tests/integration/test_reimbursements_service.py` protect:
 Commands:
 
 ```powershell
-.\.venv\Scripts\cosmic-ray.exe baseline cosmic-ray-reimbursements.toml
-.\.venv\Scripts\cosmic-ray.exe init --force cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-final.sqlite
-.\.venv\Scripts\cosmic-ray.exe exec cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-final.sqlite
+.\.venv\Scripts\cosmic-ray.exe baseline tests/mutation/cosmic-ray-reimbursements.toml
+.\.venv\Scripts\cosmic-ray.exe init --force tests/mutation/cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-final.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec tests/mutation/cosmic-ray-reimbursements.toml runtime\mutation\reimbursements-final.sqlite
 .\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\reimbursements-final.sqlite > runtime\mutation\reimbursements-final.jsonl
 .\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\reimbursements-final.jsonl
 ```
@@ -592,13 +592,13 @@ and synchronization, not imported row parsing semantics.
 
 Profiles added for this campaign:
 
-- `cosmic-ray-statement-parser.toml`, running
+- `tests/mutation/cosmic-ray-statement-parser.toml`, running
   `tools/cosmic_ray_profile_tests.py statement-parser`
-- `cosmic-ray-transaction-importer.toml`, running
+- `tests/mutation/cosmic-ray-transaction-importer.toml`, running
   `tools/cosmic_ray_profile_tests.py transaction-importer`
-- `cosmic-ray-import-transaction-kinds.toml`, running
+- `tests/mutation/cosmic-ray-import-transaction-kinds.toml`, running
   `tools/cosmic_ray_profile_tests.py import-transaction-kinds`
-- `cosmic-ray-import-transaction-kinds-unit.toml`, running
+- `tests/mutation/cosmic-ray-import-transaction-kinds-unit.toml`, running
   `tools/cosmic_ray_profile_tests.py import-transaction-kinds-unit`
 
 The broader `import-transaction-kinds` focused test command remains useful for
@@ -613,9 +613,9 @@ and 19 pending mutants; it was not counted as a final result.
 Commands followed the same pattern for each profile:
 
 ```powershell
-.\.venv\Scripts\cosmic-ray.exe baseline <profile>.toml
-.\.venv\Scripts\cosmic-ray.exe init --force <profile>.toml runtime\mutation\<name>-initial.sqlite
-.\.venv\Scripts\cosmic-ray.exe exec <profile>.toml runtime\mutation\<name>-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe baseline tests/mutation/<profile>.toml
+.\.venv\Scripts\cosmic-ray.exe init --force tests/mutation/<profile>.toml runtime\mutation\<name>-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec tests/mutation/<profile>.toml runtime\mutation\<name>-initial.sqlite
 .\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\<name>-initial.sqlite > runtime\mutation\<name>-initial.jsonl
 .\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\<name>-initial.jsonl
 ```
@@ -820,11 +820,11 @@ mutated for this campaign.
 
 Profiles added for this campaign:
 
-- `cosmic-ray-financial-reporting.toml`, running
+- `tests/mutation/cosmic-ray-financial-reporting.toml`, running
   `tools/cosmic_ray_profile_tests.py financial-reporting`
-- `cosmic-ray-analytics-summary.toml`, running
+- `tests/mutation/cosmic-ray-analytics-summary.toml`, running
   `tools/cosmic_ray_profile_tests.py analytics-summary`
-- `cosmic-ray-comparison-statistics.toml`, running
+- `tests/mutation/cosmic-ray-comparison-statistics.toml`, running
   `tools/cosmic_ray_profile_tests.py comparison-statistics`
 
 Initial reporting and analytics runs used existing focused integration checks,
@@ -838,9 +838,9 @@ lanes remain compact.
 Commands followed the established pattern for each profile:
 
 ```powershell
-.\.venv\Scripts\cosmic-ray.exe baseline <profile>.toml
-.\.venv\Scripts\cosmic-ray.exe init --force <profile>.toml runtime\mutation\<name>-initial.sqlite
-.\.venv\Scripts\cosmic-ray.exe exec <profile>.toml runtime\mutation\<name>-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe baseline tests/mutation/<profile>.toml
+.\.venv\Scripts\cosmic-ray.exe init --force tests/mutation/<profile>.toml runtime\mutation\<name>-initial.sqlite
+.\.venv\Scripts\cosmic-ray.exe exec tests/mutation/<profile>.toml runtime\mutation\<name>-initial.sqlite
 .\.venv\Scripts\cosmic-ray.exe dump runtime\mutation\<name>-initial.sqlite > runtime\mutation\<name>-initial.jsonl
 .\.venv\Scripts\python.exe tools\cosmic_ray_summary.py runtime\mutation\<name>-initial.jsonl
 ```
@@ -995,7 +995,7 @@ The focused test profile was:
 
 - `tests/integration/test_review_workflow.py`
 
-The profile was added as `cosmic-ray-review-workflow.toml` and uses the shared
+The profile was added as `tests/mutation/cosmic-ray-review-workflow.toml` and uses the shared
 `tools/cosmic_ray_profile_tests.py` runner under the `review-workflow` profile.
 No controllers, templates, presentation-only code, or background-runner
 infrastructure were mutated.
@@ -1005,9 +1005,9 @@ infrastructure were mutated.
 The initial campaign was run before modifying tests:
 
 ```text
-cosmic-ray baseline cosmic-ray-review-workflow.toml
-cosmic-ray init --force cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-initial.sqlite
-cosmic-ray exec cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-initial.sqlite
+cosmic-ray baseline tests/mutation/cosmic-ray-review-workflow.toml
+cosmic-ray init --force tests/mutation/cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-initial.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-initial.sqlite
 cosmic-ray dump runtime\mutation\review-workflow-initial.sqlite > runtime\mutation\review-workflow-initial.jsonl
 python tools\cosmic_ray_summary.py runtime\mutation\review-workflow-initial.jsonl
 ```
@@ -1074,9 +1074,9 @@ Tests added in `tests/integration/test_review_workflow.py` protect:
 The final campaign used the same baseline/init/exec/dump/summary pattern:
 
 ```text
-cosmic-ray baseline cosmic-ray-review-workflow.toml
-cosmic-ray init --force cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-final3.sqlite
-cosmic-ray exec cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-final3.sqlite
+cosmic-ray baseline tests/mutation/cosmic-ray-review-workflow.toml
+cosmic-ray init --force tests/mutation/cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-final3.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-final3.sqlite
 cosmic-ray dump runtime\mutation\review-workflow-final3.sqlite > runtime\mutation\review-workflow-final3.jsonl
 python tools\cosmic_ray_summary.py runtime\mutation\review-workflow-final3.jsonl
 ```

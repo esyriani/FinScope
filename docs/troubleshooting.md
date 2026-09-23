@@ -48,7 +48,7 @@ If `FINANCE_DATABASE_URL` or `database.url` is set, FinScope uses that SQLite or
 
 ## AI categorization does not run
 
-Verify that `OPENAI_API_KEY` or `api_keys.openai_api_key` is configured.
+Verify that `OPENAI_API_KEY` or `[api_keys] openai_api_key` is configured.
 By default, statement imports leave unknown rows ready for a manual AI run from Uploaded statements or Processing after you review the AI usage estimate.
 If Settings > Categorization > Review AI usage is off, statement imports automatically queue AI categorization for remaining unknown rows.
 

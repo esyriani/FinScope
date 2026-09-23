@@ -142,14 +142,14 @@ FinScope handles financial data. Treat runtime databases, uploaded statement tex
 - One owner manages editor and viewer users.
 - Passwords are stored with Werkzeug `scrypt` hashes.
 - CSRF protection is enabled for mutating routes.
-- Session cookies are HttpOnly and SameSite=Lax; secure cookies are enabled when debug mode is off.
+- Session cookies are HttpOnly and SameSite=Lax. HTTPS-only cookie transport is controlled by `FINANCE_SECURE_COOKIES` or `[app] secure_cookies`; when that setting is blank, non-local server binds use secure cookies and loopback local runs use plain cookies.
 - No encryption at rest is implemented by FinScope.
 - Optional OpenAI integration is inactive unless configured and explicitly run or enabled.
 
 Operational recommendations:
 
 - Keep `FINANCE_SECRET_KEY` private.
-- Keep `OPENAI_API_KEY` out of source control.
+- Keep OpenAI API keys out of source control.
 - Protect `runtime/finscope.db`, MySQL credentials, and backups.
 - Back up the active database regularly.
 - Do not run with debug mode enabled on a shared network.

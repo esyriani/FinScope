@@ -148,7 +148,7 @@ Manual edits take precedence over automatic categorization. Rule-based categoriz
 
 ## Use optional AI categorization carefully
 
-AI categorization is optional and requires `OPENAI_API_KEY` or the equivalent config setting. By default, imports keep remaining unknown rows available for manual AI runs from Uploaded statements or Processing after FinScope shows an AI usage estimate. Owners can turn that confirmation step off in Settings > Categorization; when it is off, imports automatically queue AI categorization for remaining unknown rows.
+AI categorization is optional and requires `OPENAI_API_KEY` or `[api_keys] openai_api_key`. By default, imports keep remaining unknown rows available for manual AI runs from Uploaded statements or Processing after FinScope shows an AI usage estimate. Owners can turn that confirmation step off in Settings > Categorization; when it is off, imports automatically queue AI categorization for remaining unknown rows.
 
 AI fits after deterministic categorization:
 

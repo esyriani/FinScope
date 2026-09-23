@@ -34,6 +34,7 @@ Editor:
 Viewer:
 
 - Read dashboards, charts, reports, transactions, calendar, recurring views, and personal settings.
+- Pin, reorder, rename, and remove their own report cards.
 - Can change their own display name and password.
 - Can edit only their own General settings.
 - Cannot mutate finance data or owner-only advanced settings.
@@ -46,7 +47,7 @@ Owner-created users receive a temporary password and `must_change_password=true`
 
 The owner changes their password from Account. Owner password recovery outside the UI is an administrator maintenance task for the deployment host and database backup process.
 
-Login errors are generic. Failed logins are counted, and accounts are temporarily locked after repeated failures. Session cookies are HttpOnly and SameSite=Lax. Secure cookies are enabled when debug mode is off.
+Login errors are generic. Failed logins are counted, and accounts are temporarily locked after repeated failures. Session cookies are HttpOnly and SameSite=Lax. HTTPS-only cookie transport is controlled by `FINANCE_SECURE_COOKIES` or `[app] secure_cookies`. When that setting is left blank, FinScope uses secure cookies for non-local server binds and plain cookies on loopback for local development.
 
 ## Settings permissions
 
@@ -78,4 +79,4 @@ The `password_hash` column uses `TEXT` on SQLite. MySQL uses `VARCHAR(255) CHARA
 
 ## Deployment notes
 
-Set a strong `FINANCE_SECRET_KEY` before using FinScope beyond local development. Keep debug mode off on shared networks so secure cookie settings are active. Protect the runtime database file and backups because authentication does not encrypt the database at rest.
+Set a strong `FINANCE_SECRET_KEY` before using FinScope beyond local development. Keep debug mode off on shared networks. Leave `[app] secure_cookies` blank or set it to `true` for HTTPS deployments; set it to `false` only for local plain-HTTP development. Protect the runtime database file and backups because authentication does not encrypt the database at rest.

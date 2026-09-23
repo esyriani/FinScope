@@ -251,7 +251,7 @@ High-confidence matches require strong agreement across similar transactions bef
 
 Automatic and manual category writes persist compact JSON evidence in `transactions.category_metadata`. The metadata uses a controlled technical `decision_source`: `rule`, `similar_transactions`, `llm`, `llm_with_similar_transactions`, `combined`, `manual`, or `unknown`.
 
-AI categorization is optional and requires `OPENAI_API_KEY`.
+AI categorization is optional and requires `OPENAI_API_KEY` or `[api_keys] openai_api_key`.
 External prompts are privacy-minimized. The AI receives normalized merchant text, coarse amount direction and magnitude, transaction kind, compact category evidence summaries, the full category/tag list, and transaction-local candidate category/tag hints. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. Candidate categories and tags are hints, not a gate: the model may choose any active category or tag ID from the full category/tag list when the supplied evidence supports it.
 
 The static system-prompt policy is stored in [src/finance_app/modules/categories/llm_system_prompt.json](../src/finance_app/modules/categories/llm_system_prompt.json). Runtime code renders that structured resource with the current confidence thresholds, while transaction, category/tag, and rule payloads are still built by the Python prompt builders.

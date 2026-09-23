@@ -155,7 +155,7 @@ Warnings are always test failures. Run coverage deliberately when needed:
 <summary>Windows PowerShell</summary>
 
 ```powershell
-.\.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
+.\.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=93
 ```
 
 </details>
@@ -164,7 +164,7 @@ Warnings are always test failures. Run coverage deliberately when needed:
 <summary>Windows cmd</summary>
 
 ```bat
-.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
+.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=93
 ```
 
 </details>
@@ -173,7 +173,7 @@ Warnings are always test failures. Run coverage deliberately when needed:
 <summary>macOS</summary>
 
 ```bash
-.venv/bin/python -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
+.venv/bin/python -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=93
 ```
 
 </details>
@@ -182,7 +182,7 @@ Warnings are always test failures. Run coverage deliberately when needed:
 <summary>Linux</summary>
 
 ```bash
-.venv/bin/python -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
+.venv/bin/python -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=93
 ```
 
 </details>
@@ -302,7 +302,7 @@ FinScope includes a first on-demand Cosmic Ray mutation-testing experiment for
 the deterministic rule-based categorization engine. It mutates only
 [src/finance_app/modules/rules/engine.py](../src/finance_app/modules/rules/engine.py)
 and runs the existing rule-engine focused tests from
-[cosmic-ray-rules-engine.toml](../cosmic-ray-rules-engine.toml). This campaign
+[tests/mutation/cosmic-ray-rules-engine.toml](../tests/mutation/cosmic-ray-rules-engine.toml). This campaign
 is a diagnostic tool for test-suite analysis, not a CI gate.
 
 Activate the development virtual environment before running Cosmic Ray so the
@@ -317,10 +317,10 @@ committed.
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-cosmic-ray baseline cosmic-ray-rules-engine.toml
+cosmic-ray baseline tests/mutation/cosmic-ray-rules-engine.toml
 New-Item -ItemType Directory -Force -Path runtime\mutation | Out-Null
-cosmic-ray init --force cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
-cosmic-ray exec cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+cosmic-ray init --force tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
 cosmic-ray dump runtime\mutation\rules-engine.sqlite > runtime\mutation\rules-engine-dump.jsonl
 python tools\cosmic_ray_summary.py runtime\mutation\rules-engine-dump.jsonl
 ```
@@ -332,10 +332,10 @@ python tools\cosmic_ray_summary.py runtime\mutation\rules-engine-dump.jsonl
 
 ```bat
 .venv\Scripts\activate.bat
-cosmic-ray baseline cosmic-ray-rules-engine.toml
+cosmic-ray baseline tests/mutation/cosmic-ray-rules-engine.toml
 if not exist runtime\mutation mkdir runtime\mutation
-cosmic-ray init --force cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
-cosmic-ray exec cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+cosmic-ray init --force tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
 cosmic-ray dump runtime\mutation\rules-engine.sqlite > runtime\mutation\rules-engine-dump.jsonl
 python tools\cosmic_ray_summary.py runtime\mutation\rules-engine-dump.jsonl
 ```
@@ -347,10 +347,10 @@ python tools\cosmic_ray_summary.py runtime\mutation\rules-engine-dump.jsonl
 
 ```bash
 source .venv/bin/activate
-cosmic-ray baseline cosmic-ray-rules-engine.toml
+cosmic-ray baseline tests/mutation/cosmic-ray-rules-engine.toml
 mkdir -p runtime/mutation
-cosmic-ray init --force cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
-cosmic-ray exec cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
+cosmic-ray init --force tests/mutation/cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
 cosmic-ray dump runtime/mutation/rules-engine.sqlite > runtime/mutation/rules-engine-dump.jsonl
 python tools/cosmic_ray_summary.py runtime/mutation/rules-engine-dump.jsonl
 ```
@@ -362,10 +362,10 @@ python tools/cosmic_ray_summary.py runtime/mutation/rules-engine-dump.jsonl
 
 ```bash
 source .venv/bin/activate
-cosmic-ray baseline cosmic-ray-rules-engine.toml
+cosmic-ray baseline tests/mutation/cosmic-ray-rules-engine.toml
 mkdir -p runtime/mutation
-cosmic-ray init --force cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
-cosmic-ray exec cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
+cosmic-ray init --force tests/mutation/cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
 cosmic-ray dump runtime/mutation/rules-engine.sqlite > runtime/mutation/rules-engine-dump.jsonl
 python tools/cosmic_ray_summary.py runtime/mutation/rules-engine-dump.jsonl
 ```
@@ -382,7 +382,7 @@ commands. Frontend checks require Node.js 20+ with npm:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -392,7 +392,7 @@ npm install
 
 ```bat
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -402,7 +402,7 @@ npm install
 
 ```bash
 .venv/bin/python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -412,7 +412,7 @@ npm install
 
 ```bash
 .venv/bin/python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
