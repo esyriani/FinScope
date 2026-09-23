@@ -28,6 +28,7 @@ PROFILES = {
     "llm-results": ("tests/integration/test_llm_categorization.py",),
     "merchant-normalization": ("tests/unit/test_merchant_normalization.py",),
     "reimbursements": ("tests/integration/test_reimbursements_service.py",),
+    "review-workflow": ("tests/integration/test_review_workflow.py",),
     "rule-scoring": ("tests/unit/test_category_rules_matching.py",),
     "statement-parser": ("tests/unit/test_statement_importer.py",),
     "transaction-importer": ("tests/integration/test_transaction_importer.py",),

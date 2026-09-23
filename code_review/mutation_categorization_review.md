@@ -982,3 +982,136 @@ analytics-summary: 21 passed in 0.14s
 financial-reporting: 14 passed in 8.25s
 comparison-statistics: 18 passed in 0.37s
 ```
+
+## Review/manual recategorization
+
+### Mutation target and focused tests
+
+The review/manual recategorization campaign targeted:
+
+- `src/finance_app/modules/review/workflow.py`
+
+The focused test profile was:
+
+- `tests/integration/test_review_workflow.py`
+
+The profile was added as `cosmic-ray-review-workflow.toml` and uses the shared
+`tools/cosmic_ray_profile_tests.py` runner under the `review-workflow` profile.
+No controllers, templates, presentation-only code, or background-runner
+infrastructure were mutated.
+
+### Initial review/manual recategorization result
+
+The initial campaign was run before modifying tests:
+
+```text
+cosmic-ray baseline cosmic-ray-review-workflow.toml
+cosmic-ray init --force cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-initial.sqlite
+cosmic-ray exec cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-initial.sqlite
+cosmic-ray dump runtime\mutation\review-workflow-initial.sqlite > runtime\mutation\review-workflow-initial.jsonl
+python tools\cosmic_ray_summary.py runtime\mutation\review-workflow-initial.jsonl
+```
+
+Initial result:
+
+| Total mutants | Killed | Survived | Incompetent/error | Raw mutation score |
+| ---: | ---: | ---: | ---: | ---: |
+| 386 | 291 | 95 | 0 | 75.39% |
+
+### Meaningful review/manual recategorization survivor analysis
+
+Meaningful initial survivor groups included:
+
+- Selected transaction ID parsing skipped `None`, malformed, nonpositive, and
+  duplicate values without proving later valid IDs were preserved.
+- Transaction-kind inference lacked compact direct boundaries for transfer
+  categories, refund preservation, negative income, zero/positive expense, and
+  `None` amounts.
+- Review undo guard predicates needed stronger assertions that changed
+  category, source, metadata, reviewed timestamp, and matching transaction ID
+  prevent unsafe restoration.
+- Legacy undo snapshots without old category IDs needed a direct assertion that
+  undo resolves the canonical category foreign key.
+- Rule undo needed protection for rules already removed or changed after
+  processing, legacy previous-rule snapshots without `category_id` or
+  `ai_approved`, and neighboring rules that must not be deleted or updated.
+- Rule snapshot comparison needed value-based equality and changed-field
+  assertions across every persisted decision field, including tags.
+- Review job summaries had weak pluralization coverage for one transaction.
+
+The large survivor cluster around the no-op skip inside
+`apply_review_group_transactions()` is non-actionable for the current workflow:
+`review_group_rows()` is fed by `review_candidate_rows()`, which only returns
+rows that need review or resolve to the configured unknown category through
+`category_id`. A row that already has the target category, `needs_review = 0`,
+and identical tags is excluded before the in-loop no-op check is reached. This
+was later confirmed as stale defensive code and removed in the follow-up review.
+
+### Survivor-driven review/manual recategorization tests added
+
+Tests added in `tests/integration/test_review_workflow.py` protect:
+
+- Completed review rows being excluded while pending candidates in the same
+  group are still updated.
+- Selected review transaction ID filtering across malformed values, duplicates,
+  nonpositive IDs, and later valid IDs.
+- Reviewed transaction kind inference for transfers, refunds, negative income,
+  zero, positive, and missing amounts.
+- Singular review job messaging for one updated transaction.
+- Undo of legacy transaction snapshots where the old `category_id` is missing.
+- Undo guard exactness for changed category, review state, category source,
+  category metadata, reviewed timestamp, and transaction ID.
+- Created-rule undo deleting only the created rule while preserving neighboring
+  rules.
+- Rule undo behavior when the rule was removed or changed after processing.
+- Previous-rule restoration from legacy snapshots missing `category_id` and
+  `ai_approved`.
+- Rule snapshot equality by value rather than identity, and mismatch detection
+  for all persisted rule decision fields and tags.
+
+### Final review/manual recategorization result
+
+The final campaign used the same baseline/init/exec/dump/summary pattern:
+
+```text
+cosmic-ray baseline cosmic-ray-review-workflow.toml
+cosmic-ray init --force cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-final3.sqlite
+cosmic-ray exec cosmic-ray-review-workflow.toml runtime\mutation\review-workflow-final3.sqlite
+cosmic-ray dump runtime\mutation\review-workflow-final3.sqlite > runtime\mutation\review-workflow-final3.jsonl
+python tools\cosmic_ray_summary.py runtime\mutation\review-workflow-final3.jsonl
+```
+
+Final result:
+
+| Total mutants | Killed | Survived | Incompetent/error | Raw mutation score | Meaningful test-gap survivors remaining |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 386 | 358 | 28 | 0 | 92.75% | 0 |
+
+### Review/manual recategorization survivors remaining
+
+The final campaign was run before the stale no-op branch follow-up. At that
+point, the remaining 28 survivors were non-actionable for this campaign:
+
+- Twenty-four survivors are the stale in-loop no-op skip branch in
+  `apply_review_group_transactions()`. A follow-up inspection confirmed the
+  review candidate query excludes the fully reviewed target-category row shape
+  needed to reach that branch, and the branch was removed.
+- Two survivors are low-value pluralization variants in background-job summary
+  strings and do not affect durable review, rule, tag, category, or undo state.
+- One survivor changes `needs_review == 0` to `needs_review <= 0` in an undo
+  guard. The database constrains `needs_review` to `0` or `1`, making the mutant
+  equivalent for persisted rows.
+- One survivor is the related zero/one message-count comparison and is also
+  presentation-only.
+
+No production defect was fixed in this campaign. The only stale-code finding was
+the unreachable in-loop no-op skip described above; it was removed in a
+follow-up focused cleanup after the mutation campaign.
+
+### Review/manual recategorization verification
+
+Focused review workflow tests after survivor-driven additions:
+
+```text
+45 passed in 12.96s
+```

@@ -134,9 +134,6 @@ def apply_review_group_transactions(
 
     for row in rows:
         old_tags = get_transaction_tag_names(conn, row["id"])
-        if row["category"] == category and row["needs_review"] == 0 and old_tags == tags:
-            continue
-
         metadata = manual_category_assignment()
         transaction_kind = reviewed_transaction_kind(category, row["amount"], row["transaction_kind"])
         old_state = TransactionCategorySnapshot.from_row(row, old_tags)
