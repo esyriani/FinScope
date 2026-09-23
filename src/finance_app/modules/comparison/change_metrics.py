@@ -16,14 +16,12 @@ def direction_tone(direction: str, positive_tone: str = "danger") -> str:
 
 
 def percentage_change(current: Any, previous: Any) -> Any:
-    """Handle percentage change."""
     if previous == 0:
         return None
     return round(((current - previous) / previous) * 100, 1)
 
 
 def change_state(current: Any, previous: Any) -> Any:
-    """Build state."""
     if current == 0 and previous == 0:
         return "no_activity"
     if current > 0 and previous == 0:
@@ -36,7 +34,6 @@ def change_state(current: Any, previous: Any) -> Any:
 
 
 def format_change_label(current: Any, previous: Any, percent: Any) -> Any:
-    """Format change label."""
     state = change_state(current, previous)
     labels = {
         "no_activity": "No activity",
@@ -52,7 +49,6 @@ def format_change_label(current: Any, previous: Any, percent: Any) -> Any:
 def period_change_sentence(
     label: Any, noun: Any, change: Any, percent: Any, previous: Any, current: Any, previous_label: Any
 ) -> Any:
-    """Build change sentence."""
     if previous == 0 and current == 0:
         return gettext(
             "{label} {noun} is unchanged versus {period}.",

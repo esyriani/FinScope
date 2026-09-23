@@ -101,9 +101,6 @@ full-suite command enforces strict markers, warnings as errors, parallel
 execution, collection from [tests/](./), and no coverage run.
 The suite also blocks socket connections globally; LLM and other external
 integration tests should inject fake clients or request functions.
-Prompt-quality checks that intentionally call a provider live outside pytest in
-[../evals/llm_categorization](../evals/llm_categorization); use dry-run mode for
-local harness validation and opt in to real provider runs explicitly.
 Live MySQL checks live in [optional/mysql](optional/mysql/) and require
 `FINSCOPE_TEST_MYSQL_URL`; run them with `pytest -n 0 -m "optional and mysql"`.
 Future expensive pytest-backed lanes, such as mutation-testing checks, should

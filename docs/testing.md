@@ -187,58 +187,6 @@ Warnings are always test failures. Run coverage deliberately when needed:
 
 </details>
 
-## LLM prompt evals
-
-The ordinary pytest suite remains network-free. Sanitized categorization prompt
-examples live in
-[evals/llm_categorization/datasets/validation.jsonl](../evals/llm_categorization/datasets/validation.jsonl),
-and the opt-in harness reuses the production prompt builder with an injected
-provider.
-
-Use dry-run mode to validate the dataset, scoring, and report generation without
-calling a model:
-
-<details open>
-<summary>Windows PowerShell</summary>
-
-```powershell
-.\.venv\Scripts\python.exe -B evals\llm_categorization\run_prompt_eval.py --dry-run
-```
-
-</details>
-
-<details>
-<summary>Windows cmd</summary>
-
-```bat
-.venv\Scripts\python.exe -B evals\llm_categorization\run_prompt_eval.py --dry-run
-```
-
-</details>
-
-<details>
-<summary>macOS</summary>
-
-```bash
-.venv/bin/python -B evals/llm_categorization/run_prompt_eval.py --dry-run
-```
-
-</details>
-
-<details>
-<summary>Linux</summary>
-
-```bash
-.venv/bin/python -B evals/llm_categorization/run_prompt_eval.py --dry-run
-```
-
-</details>
-
-To run against OpenAI, set `OPENAI_API_KEY` or the app setting, pass the model
-with `--model`, and review the generated `report.md` and `raw_outputs.jsonl`
-under `evals/llm_categorization/runs/`. Do not add real financial examples or
-private model outputs to the repository.
-
 ## Optional test lanes
 
 The default suite stays fast and SQLite-backed. Slower or environment-specific

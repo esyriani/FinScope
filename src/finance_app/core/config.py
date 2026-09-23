@@ -381,7 +381,7 @@ def parse_port(value: object, fallback: int = 5000) -> int:
 
 
 def parse_positive_int(value: object, fallback: int) -> int:
-    """Parse positive int."""
+    """Return a positive config integer, or fallback when parsing fails."""
     try:
         parsed = int(str(value).strip())
     except (TypeError, ValueError):
@@ -391,7 +391,7 @@ def parse_positive_int(value: object, fallback: int) -> int:
 
 
 def parse_probability(value: object, fallback: float) -> float:
-    """Parse probability."""
+    """Return a config probability in [0, 1], or fallback when invalid."""
     try:
         parsed = float(str(value).strip())
     except (TypeError, ValueError):

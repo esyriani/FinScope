@@ -125,7 +125,7 @@ def parse_global_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, 
 
 
 def parse_positive_int(value: object, fallback: int, minimum: int = 1, label: str = "Numeric settings") -> int:
-    """Parse positive int."""
+    """Parse an integer setting and reject values below the configured minimum."""
     try:
         parsed = int(str(value).strip())
     except (TypeError, ValueError):
@@ -146,7 +146,6 @@ def parse_bounded_int(value: object, fallback: int, minimum: int, maximum: int, 
 
 
 def normalize_minimum_int(value: object, minimum: int, fallback: int) -> str:
-    """Normalize minimum int."""
     try:
         parsed = int(str(value).strip())
     except (TypeError, ValueError):
@@ -155,7 +154,7 @@ def normalize_minimum_int(value: object, minimum: int, fallback: int) -> str:
 
 
 def parse_probability(value: object, label: str) -> float:
-    """Parse probability."""
+    """Return a submitted probability, rejecting values outside [0, 1]."""
     try:
         parsed = float(str(value).strip())
     except (TypeError, ValueError):
@@ -168,7 +167,7 @@ def parse_probability(value: object, label: str) -> float:
 
 
 def parse_non_negative_float(value: object, label: str) -> float:
-    """Parse non negative float."""
+    """Return a submitted float that can be zero but not negative."""
     try:
         parsed = float(str(value).strip())
     except (TypeError, ValueError):
@@ -186,17 +185,15 @@ def parse_checkbox(value: object) -> bool:
 
 
 def format_probability(value: object) -> str:
-    """Format probability."""
     return f"{float(str(value)):.2f}"
 
 
 def format_decimal(value: object) -> str:
-    """Format decimal."""
     return f"{float(str(value)):g}"
 
 
 def clean_openai_model(value: object) -> str:
-    """Clean openai model."""
+    """Return a provider model name only when it uses allowed identifier characters."""
     text = str(value or "").strip()
     if not text:
         return ""
@@ -204,12 +201,11 @@ def clean_openai_model(value: object) -> str:
 
 
 def normalize_theme_mode(value: object) -> str:
-    """Normalize theme mode."""
     return THEME_MODE_DARK if str(value or "").strip().lower() == THEME_MODE_DARK else THEME_MODE_LIGHT
 
 
 def parse_statement_types_form(form: QueryArgs) -> list[dict[str, str]]:
-    """Parse statement types form."""
+    """Return configured statement-type rows, ignoring blanks and requiring one row."""
     ids = form.getlist("statement_type_ids")
     names = form.getlist("statement_type_names")
     parser_types = form.getlist("statement_type_parser_types")
