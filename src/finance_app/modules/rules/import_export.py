@@ -36,6 +36,7 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.categories.service import clean_category_name, normalize_merchant_description
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, normalize_tag_names
+from finance_app.modules.rules.forms import validate_rule_tags_for_direction
 
 from .repository import (
     category_rule_exists,
@@ -587,6 +588,10 @@ def parse_rules_csv_row(row: Mapping[str, Any], line_number: int) -> dict[str, A
     if direction not in CATEGORY_RULE_DIRECTIONS:
         allowed_directions = ", ".join(sorted(CATEGORY_RULE_DIRECTIONS))
         raise ValueError(f"Row {line_number}: direction must be one of {allowed_directions}.")
+    try:
+        validate_rule_tags_for_direction(tag_names, direction)
+    except ValueError as exc:
+        raise ValueError(f"Row {line_number}: {exc}") from None
 
     created_at = str(rule_import_value(normalized_row, "created_at", "created") or "").strip() or None
 

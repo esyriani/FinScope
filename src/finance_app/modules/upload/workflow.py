@@ -1,7 +1,7 @@
 """Background workflow helpers for the upload feature."""
 
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
 from decimal import Decimal
 from typing import Any
 
@@ -14,6 +14,9 @@ from finance_app.core.constants import (
     ACCOUNT_TYPE_SAVINGS,
     DATE_ORDER_AUTO,
     INTERAC_DIRECTION_AUTO,
+    INTERAC_IGNORED_REASON_INVALID,
+    INTERAC_IGNORED_REASON_NO_MATCH,
+    INTERAC_IGNORED_REASONS,
     STATEMENT_IMPORT_MODE_ENRICHMENT,
     STATEMENT_IMPORT_STATUS_COMPLETED,
     STATEMENT_IMPORT_STATUS_FAILED,
@@ -106,6 +109,7 @@ def import_transactions(
     date_order: str = DATE_ORDER_AUTO,
     categorizer: Any = None,
     tag_setter: Any = None,
+    interac_ignored_reasons: MutableMapping[str, int] | None = None,
 ) -> tuple[int, int, int]:
     """Import parsed statement transactions.
 
@@ -122,6 +126,7 @@ def import_transactions(
         date_order: Date parsing override for ambiguous statement dates.
         categorizer: Optional transaction categorization function.
         tag_setter: Optional transaction tag persistence function.
+        interac_ignored_reasons: Optional mutable Interac ignored-row reason counts.
 
     Returns:
         A tuple of inserted, skipped, and ignored row counts.
@@ -152,6 +157,7 @@ def import_transactions(
             date_order=date_order,
         )
     ignored_count = parse_result["ignored_rows"]
+    merge_interac_ignored_reasons(interac_ignored_reasons, parse_result.get("interac_ignored_reasons"))
     if import_mode == STATEMENT_IMPORT_MODE_ENRICHMENT:
         if statement_type != STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
             return inserted_count, skipped_count, ignored_count + len(parse_result["transactions"])
@@ -163,6 +169,7 @@ def import_transactions(
             ignored_count=ignored_count,
             categorizer=categorizer,
             tag_setter=tag_setter,
+            interac_ignored_reasons=interac_ignored_reasons,
         )
 
     transactions, duplicate_count = filter_new_transactions(
@@ -204,6 +211,27 @@ def import_transactions(
 
     mark_linked_account_payments(conn, account_id, transactions, undo_state)
     return inserted_count, skipped_count, ignored_count
+
+
+def merge_interac_ignored_reasons(
+    target: MutableMapping[str, int] | None,
+    source: Mapping[str, Any] | None,
+) -> None:
+    """Add Interac parser ignored-row reason counts into the import details."""
+    if target is None:
+        return
+
+    for reason in INTERAC_IGNORED_REASONS:
+        target.setdefault(reason, 0)
+    for reason, count in (source or {}).items():
+        target[str(reason)] = target.get(str(reason), 0) + int(count or 0)
+
+
+def increment_interac_ignored_reason(target: MutableMapping[str, int] | None, reason: str) -> None:
+    """Increment one Interac ignored-row reason count when details are tracked."""
+    if target is None:
+        return
+    target[reason] = target.get(reason, 0) + 1
 
 
 def insert_imported_transaction_if_new(
@@ -260,6 +288,7 @@ def enrich_interac_transactions(
     ignored_count: int = 0,
     categorizer: Any = None,
     tag_setter: Any = None,
+    interac_ignored_reasons: MutableMapping[str, int] | None = None,
 ) -> tuple[int, int, int]:
     """Enrich matching checking-account transactions from Interac history rows.
 
@@ -277,11 +306,13 @@ def enrich_interac_transactions(
         merchant = get_or_create_merchant_for_name(conn, transfer["interac_merchant"])
         if merchant is None:
             ignored_count += 1
+            increment_interac_ignored_reason(interac_ignored_reasons, INTERAC_IGNORED_REASON_INVALID)
             continue
 
         match = find_interac_match(conn, account_id, transfer, merchant["id"])
         if match is None:
             ignored_count += 1
+            increment_interac_ignored_reason(interac_ignored_reasons, INTERAC_IGNORED_REASON_NO_MATCH)
             continue
         if match == "ambiguous":
             skipped_count += 1
@@ -525,6 +556,7 @@ def import_statement_transactions_job(
             if not claimed:
                 return "Statement import was already claimed by another attempt."
 
+        interac_ignored_reasons: dict[str, int] = {}
         with db_core_transaction() as conn:
             if replace_existing_transactions:
                 delete_statement_transactions(conn, statement_id)
@@ -539,6 +571,7 @@ def import_statement_transactions_job(
                 import_mode=import_mode,
                 interac_direction=interac_direction,
                 date_order=date_order,
+                interac_ignored_reasons=interac_ignored_reasons,
             )
             if extension == "csv" and inserted_count and statement_type != STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER:
                 llm_candidate_count = count_statement_unknown_transactions(conn, statement_id)
@@ -593,6 +626,7 @@ def import_statement_transactions_job(
         ignored_count,
         llm_candidate_count=llm_candidate_count,
         auto_llm_job_id=auto_llm_job_id,
+        interac_ignored_reasons=interac_ignored_reasons,
     )
 
 

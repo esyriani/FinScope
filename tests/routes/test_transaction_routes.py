@@ -215,7 +215,7 @@ def test_update_transaction_category_route_saves_manual_category_rule_and_tags(o
 
     tx = transaction_state(core_conn, tx_id)
     rule = core_conn.execute(text("""
-        SELECT id, merchant_id, keyword, category, amount_min, amount_max, source
+        SELECT id, merchant_id, keyword, category, amount_min, amount_max, direction, source
         FROM category_rules
         WHERE keyword = 'METRO GROCERY'
         """)).fetchone()
@@ -230,7 +230,7 @@ def test_update_transaction_category_route_saves_manual_category_rule_and_tags(o
     assert tx["reviewed_at"] is not None
     assert get_transaction_tag_names(core_conn, tx_id) == ["Tax"]
     assert rule._mapping["merchant_id"] is not None
-    assert tuple(rule[2:]) == ("METRO GROCERY", "Food", 10.0, 20.0, "manual")
+    assert tuple(rule[2:]) == ("METRO GROCERY", "Food", 10.0, 20.0, "debit", "manual")
     assert get_rule_tags_by_rule_id(core_conn, [rule._mapping["id"]])[rule._mapping["id"]] == ["Tax"]
 
 

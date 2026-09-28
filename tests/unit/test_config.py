@@ -129,6 +129,7 @@ def test_setting_defaults_include_runtime_settings_seed_values(monkeypatch, tmp_
     assert settings.default_dashboard_top_driver_limit == 8
     assert settings.default_pinned_report_limit == 6
     assert settings.default_merchant_suggestion_limit == 6
+    assert settings.default_categorization_model == "gpt-6-luna"
     assert settings.default_llm_review_threshold == 0.62
     assert settings.default_transaction_ai_rerun_enabled is False
     assert settings.default_confirm_ai_token_usage_enabled is False

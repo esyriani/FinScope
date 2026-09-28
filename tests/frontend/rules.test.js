@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createDom, flushAsync, loadScript } from "./support/dom.js";
+import { createDom, dispatch, flushAsync, loadScript } from "./support/dom.js";
 
 describe("rule preview runtime behavior", () => {
     afterEach(() => {
@@ -65,6 +65,50 @@ describe("rule preview runtime behavior", () => {
             "Enter a keyword to preview matches."
         );
         expect(document.querySelector("[data-rule-preview-list]").children).toHaveLength(0);
+
+        dom.window.close();
+    });
+
+    it("shows an inline modal error instead of submitting reimbursable non-debit rules", () => {
+        const dom = createDom(`
+            <form
+                data-rule-editor
+                data-reimbursable-tag-name="Reimbursable"
+                data-reimbursable-direction-error="Use debit for reimbursable rules."
+            >
+                <div class="alert d-none" data-rule-editor-error></div>
+                <select name="direction">
+                    <option value="any" selected>Any</option>
+                    <option value="debit">Debit</option>
+                </select>
+                <input type="checkbox" name="tags" value="Reimbursable" checked>
+            </form>
+        `);
+        const { document } = dom.window;
+
+        loadScript(dom, "core.js");
+        loadScript(dom, "rules.js");
+
+        const form = document.querySelector("form");
+        const invalidSubmit = new dom.window.Event("submit", { bubbles: true, cancelable: true });
+
+        expect(form.dispatchEvent(invalidSubmit)).toBe(false);
+        expect(invalidSubmit.defaultPrevented).toBe(true);
+        expect(document.querySelector("[data-rule-editor-error]").textContent).toBe(
+            "Use debit for reimbursable rules."
+        );
+        expect(document.querySelector("[data-rule-editor-error]").classList.contains("d-none")).toBe(false);
+        expect(document.activeElement).toBe(document.querySelector("[name='direction']"));
+
+        document.querySelector("[name='direction']").value = "debit";
+        dispatch(dom.window, document.querySelector("[name='direction']"), "change");
+
+        expect(document.querySelector("[data-rule-editor-error]").textContent).toBe("");
+        expect(document.querySelector("[data-rule-editor-error]").classList.contains("d-none")).toBe(true);
+
+        const validSubmit = new dom.window.Event("submit", { bubbles: true, cancelable: true });
+        expect(form.dispatchEvent(validSubmit)).toBe(true);
+        expect(validSubmit.defaultPrevented).toBe(false);
 
         dom.window.close();
     });

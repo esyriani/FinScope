@@ -543,6 +543,14 @@ def test_schema_validation_normalizes_mysql_generated_columns_and_defaults():
     """Verify generated SQL and timestamp defaults compare across MySQL reflection."""
     assert connection_module.sql_fragments_match("lower(trim(name))", "(lcase(trim(`name`)))")
     assert connection_module.sql_fragments_match(
+        "CASE WHEN role = 'owner' THEN 1 ELSE NULL END",
+        "((case when (`role` = _utf8mb4'owner') then 1 else NULL end))",
+    )
+    assert connection_module.sql_fragments_match(
+        "trim(name) != ''",
+        "(trim(`name`) <> _utf8mb4'')",
+    )
+    assert connection_module.sql_fragments_match(
         "short_title IS NULL OR length(trim(short_title)) <= 30",
         "`short_title` is null or octet_length(trim(`short_title`)) <= 30",
     )
@@ -1250,5 +1258,7 @@ def test_builtin_tags_are_seeded_with_stable_keys(schema_conn):
         ).mappings()
     }
 
-    assert rows["Reimbursable"] == "reimbursable"
-    assert rows["Tax"] == "tax"
+    assert rows == {
+        "Reimbursable": "reimbursable",
+        "Tax": "tax",
+    }

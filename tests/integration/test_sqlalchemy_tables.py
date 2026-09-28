@@ -424,6 +424,8 @@ def test_core_metadata_compiles_portable_uniqueness_for_mysql_and_postgresql():
         assert "NUMERIC(14, 2)" in normalized
         if database_url.startswith("mysql"):
             assert "password_hash VARCHAR(255)" in normalized
+            assert "category_filters VARCHAR(4096) NOT NULL DEFAULT '[]'" in normalized
+            assert "tag_filters VARCHAR(4096) NOT NULL DEFAULT '[]'" in normalized
             assert "ENGINE=InnoDB" in normalized
             assert "CHARSET=utf8mb4" in normalized
             assert "COLLATE utf8mb4_unicode_ci" in normalized

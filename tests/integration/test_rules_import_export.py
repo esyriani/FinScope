@@ -81,6 +81,17 @@ def test_parse_rules_csv_accepts_automatic_source():
     assert rules[0]["source"] == "automatic"
 
 
+def test_parse_rules_csv_requires_debit_direction_for_reimbursable_tag():
+    """Verify imported Reimbursable rules must be debit-scoped."""
+    with pytest.raises(ValueError, match="Row 2: Rules with the Reimbursable tag must use Debit direction."):
+        parse_rules_csv("keyword,category,tags,direction\nConference Hotel,Travel,Reimbursable,credit\n")
+
+    rules = parse_rules_csv("keyword,category,tags,direction\nConference Hotel,Travel,Reimbursable,debit\n")
+
+    assert rules[0]["tags"] == ["Reimbursable"]
+    assert rules[0]["direction"] == "debit"
+
+
 def test_import_rules_add_skips_duplicates_and_persists_tags(core_conn):
     """Verify that add-mode imports skip duplicate rows and attach rule tags."""
     imported_rules = parse_rules_csv(

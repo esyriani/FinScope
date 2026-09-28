@@ -8,6 +8,10 @@ from finance_app.core.constants import (
     DATE_ORDER_AUTO,
     DATE_ORDER_DAY_FIRST,
     DATE_ORDER_MONTH_FIRST,
+    INTERAC_IGNORED_REASON_CANCELLED,
+    INTERAC_IGNORED_REASON_INVALID,
+    INTERAC_IGNORED_REASON_NO_MATCH,
+    INTERAC_IGNORED_REASON_NON_DEPOSITED,
     UNKNOWN_CATEGORY,
 )
 from finance_app.modules.statements.importer import (
@@ -396,7 +400,16 @@ def test_parse_csv_transactions_counts_invalid_interac_header_rows():
 
     result = parse_csv_transactions(raw_text, statement_type="interac_etransfer")
 
-    assert result == {"transactions": [], "ignored_rows": 2}
+    assert result == {
+        "transactions": [],
+        "ignored_rows": 2,
+        "interac_ignored_reasons": {
+            INTERAC_IGNORED_REASON_CANCELLED: 0,
+            INTERAC_IGNORED_REASON_NON_DEPOSITED: 0,
+            INTERAC_IGNORED_REASON_NO_MATCH: 0,
+            INTERAC_IGNORED_REASON_INVALID: 2,
+        },
+    }
 
 
 def test_parse_csv_transactions_counts_malformed_rows_without_losing_valid_rows():
@@ -435,6 +448,8 @@ def test_parse_csv_transactions_parses_interac_sent_history():
     result = parse_csv_transactions(raw_text, statement_type="interac_etransfer")
 
     assert result["ignored_rows"] == 1
+    assert result["interac_ignored_reasons"][INTERAC_IGNORED_REASON_CANCELLED] == 1
+    assert result["interac_ignored_reasons"][INTERAC_IGNORED_REASON_NON_DEPOSITED] == 0
     assert result["transactions"] == [
         {
             "tx_date": "2026-05-08",
@@ -467,6 +482,23 @@ def test_parse_csv_transactions_parses_interac_received_history():
     assert result["transactions"][0]["description"] == "CHARLES-ANTOINE DEMERS"
     assert result["transactions"][0]["amount"] == Decimal("-1250.00")
     assert result["transactions"][0]["interac_direction"] == "received"
+
+
+def test_parse_csv_transactions_counts_interac_non_deposited_rows():
+    """Verify incomplete Interac statuses are reported separately from cancellations."""
+    raw_text = "\n".join(
+        [
+            "Date Sent,Recipient,Amount,Method,Status",
+            "08-May-26,Kiet Menage,$350.00,Mobile,Pending",
+            "09-May-26,Cancelled Person,$25.00,Email,CanceledGo to Details",
+        ]
+    )
+
+    result = parse_csv_transactions(raw_text, statement_type="interac_etransfer")
+
+    assert result["ignored_rows"] == 2
+    assert result["interac_ignored_reasons"][INTERAC_IGNORED_REASON_CANCELLED] == 1
+    assert result["interac_ignored_reasons"][INTERAC_IGNORED_REASON_NON_DEPOSITED] == 1
 
 
 def test_parse_csv_transactions_applies_interac_direction_override():

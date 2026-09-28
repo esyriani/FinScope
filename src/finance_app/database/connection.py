@@ -414,6 +414,7 @@ def _normalize_sql(value: object, *, loose: bool) -> str:
     if value in (None, ""):
         return ""
     normalized = strip_identifier_quotes(value).replace('"', "'")
+    normalized = re.sub(r"\b_utf8(?:mb3|mb4)?(?=')", "", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"\bcurrent_timestamp\s*\(\s*\)", "current_timestamp", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"\blcase\s*\(", "lower(", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"\boctet_length\s*\(", "length(", normalized, flags=re.IGNORECASE)

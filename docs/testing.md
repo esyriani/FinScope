@@ -244,6 +244,40 @@ GitHub Actions keeps the normal quality and test jobs on every push and pull
 request. The optional MySQL job runs only from manual workflow dispatches and
 the scheduled weekly workflow.
 
+### AI categorization oracle
+
+FinScope includes an on-demand AI categorization oracle for locally labeled
+transaction samples under `runtime/llm_eval/`. It is a diagnostic quality gate,
+not part of pytest or CI, because live mode can call the configured AI provider
+and uses local private finance data.
+
+Validation is offline and safe to run at any time:
+
+<details open>
+<summary>Windows PowerShell</summary>
+
+```powershell
+.\.venv\Scripts\python.exe -B tools\llm_categorization_eval.py --input runtime\llm_eval\llm_categorization_oracle.xlsx
+```
+
+</details>
+
+Live provider scoring requires the explicit `--live` flag. Use `--mode cold`
+for taxonomy-only new-account behavior, `--mode rules` for rule evidence,
+`--mode full` for the realistic prompt context with rule and historical
+evidence, or `--mode all` for the ablation suite. Live runs write JSON and
+Markdown reports beside the oracle workbook unless output paths are provided.
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+.\.venv\Scripts\python.exe -B tools\llm_categorization_eval.py --input runtime\llm_eval\llm_categorization_oracle.xlsx --live --mode full
+.\.venv\Scripts\python.exe -B tools\llm_categorization_eval.py --input runtime\llm_eval\llm_categorization_oracle.xlsx --live --mode all
+```
+
+</details>
+
 ### Rule-engine mutation experiment
 
 FinScope includes a first on-demand Cosmic Ray mutation-testing experiment for

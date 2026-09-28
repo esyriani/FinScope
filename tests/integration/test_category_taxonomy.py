@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, insert, select, text
 
 from finance_app.core import constants
 from finance_app.database.tables import (
@@ -11,6 +11,8 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     tags as tags_table,
 )
+from finance_app.database.tables import transaction_tags as transaction_tags_table
+from finance_app.database.tables import transactions as transactions_table
 from finance_app.database.taxonomy import seed_category_taxonomy
 from finance_app.modules.categories import llm as llm_module
 from finance_app.modules.categories.llm_workflow import (
@@ -62,12 +64,58 @@ def test_taxonomy_categories_tags_and_builtins_are_persisted(core_conn):
     assert categories["Transfers"]["builtin_key"] == "transfers"
     assert "salary" in categories["Income"]["instruction"].casefold()
     assert "Reimbursable" in tags
+    assert "Reimbursement" not in tags
     assert "Tax" in tags
     assert "Government" in tags
     assert persisted_tag_rows["Reimbursable"]["builtin_key"] == "reimbursable"
     assert persisted_tag_rows["Tax"]["builtin_key"] == "tax"
     assert tag_rows["Reimbursable"]["color"].startswith("#")
     assert tag_rows["Government"]["color"].startswith("#")
+
+
+def test_taxonomy_seed_removes_retired_builtin_reimbursement_tag(core_conn):
+    """Verify a previously seeded Reimbursement tag is removed during startup seeding."""
+    tag_id = core_conn.execute(
+        insert(tags_table).values(
+            name="Reimbursement",
+            builtin_key="reimbursement",
+            description="Retired built-in tag.",
+            instruction="Retired.",
+            color="#0f766e",
+        )
+    ).inserted_primary_key[0]
+    transaction_id = core_conn.execute(
+        insert(transactions_table).values(
+            tx_date="2026-01-02",
+            description="Retired reimbursement tag row",
+            amount=-42.00,
+            category="Reimbursement",
+            transaction_kind="income",
+            fingerprint="retired-reimbursement-tag-row",
+        )
+    ).inserted_primary_key[0]
+    core_conn.execute(
+        insert(transaction_tags_table).values(
+            transaction_id=transaction_id,
+            tag_id=tag_id,
+            source="manual",
+        )
+    )
+
+    seed_category_taxonomy(core_conn)
+
+    assert (
+        core_conn.execute(
+            select(func.count()).select_from(tags_table).where(tags_table.c.builtin_key == "reimbursement")
+        ).scalar_one()
+        == 0
+    )
+    assert (
+        core_conn.execute(
+            select(func.count()).select_from(transaction_tags_table).where(transaction_tags_table.c.tag_id == tag_id)
+        ).scalar_one()
+        == 0
+    )
 
 
 def test_core_constants_do_not_define_taxonomy():
@@ -167,6 +215,7 @@ def test_llm_fallback_path_uses_seeded_taxonomy_options(core_conn):
     assert request_llm.called
     _, _, category_options, tag_options, *_ = request_llm.call_args.args
     assert "Income" in category_options
+    assert "Reimbursement" not in tag_options
     assert "Tax" in tag_options
 
 

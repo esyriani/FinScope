@@ -118,6 +118,68 @@ function setupRuleAmountControls(root = document) {
 
 setupRuleAmountControls();
 
+function setupRuleEditorValidation(root = document) {
+    const forms = Array.from(root.querySelectorAll("[data-rule-editor]"));
+
+    forms.forEach((form) => {
+        if (form.dataset.ruleEditorValidationReady === "true") {
+            return;
+        }
+
+        form.dataset.ruleEditorValidationReady = "true";
+        const error = form.querySelector("[data-rule-editor-error]");
+        const reimbursableTag = form.dataset.reimbursableTagName || "Reimbursable";
+        const message =
+            form.dataset.reimbursableDirectionError ||
+            financeTranslate("Rules with the Reimbursable tag must use Debit direction.");
+
+        function hasReimbursableDirectionConflict() {
+            const direction = form.querySelector("[name='direction']")?.value || "";
+            if (direction === "debit") {
+                return false;
+            }
+
+            return Array.from(form.querySelectorAll("input[name='tags']:checked")).some(
+                (input) => input.value.toLowerCase() === reimbursableTag.toLowerCase()
+            );
+        }
+
+        function hideErrorIfResolved() {
+            if (!error || hasReimbursableDirectionConflict()) {
+                return;
+            }
+
+            error.textContent = "";
+            error.classList.add("d-none");
+        }
+
+        function showError() {
+            if (error) {
+                error.textContent = message;
+                error.classList.remove("d-none");
+            }
+            form.querySelector("[name='direction']")?.focus();
+        }
+
+        form.addEventListener("submit", (event) => {
+            if (!hasReimbursableDirectionConflict()) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            showError();
+        });
+        form.addEventListener("change", (event) => {
+            if (event.target.matches("[name='direction'], input[name='tags']")) {
+                hideErrorIfResolved();
+            }
+        });
+    });
+}
+
+setupRuleEditorValidation();
+
 function setupRulePreviewForms(root = document) {
     const forms = Array.from(root.querySelectorAll("[data-rule-editor]"));
 
@@ -369,5 +431,6 @@ setupRuleTableActions();
 
 window.financeApp?.registerInitializer("rules.save-mode-controls", setupRuleSaveModeControls);
 window.financeApp?.registerInitializer("rules.amount-controls", setupRuleAmountControls);
+window.financeApp?.registerInitializer("rules.editor-validation", setupRuleEditorValidation);
 window.financeApp?.registerInitializer("rules.preview-forms", setupRulePreviewForms);
 window.financeApp?.registerInitializer("rules.table-actions", setupRuleTableActions);

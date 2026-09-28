@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from flask import url_for
 from sqlalchemy import String, and_, case, cast, func, literal, or_, select
 
+from finance_app.core.builtin_taxonomy import BUILTIN_TAG_REIMBURSABLE, builtin_tag_name_for_key
 from finance_app.core.category_sql import category_label_expression
 from finance_app.core.config import settings
 from finance_app.core.constants import (
@@ -39,6 +40,7 @@ from finance_app.modules.categories.taxonomy import (
     get_tag_option_rows,
 )
 from finance_app.modules.merchants.sql_filters import escape_like_token
+from finance_app.modules.rules.forms import REIMBURSABLE_RULE_DIRECTION_ERROR
 from finance_app.modules.rules.service import count_rule_transaction_references_by_rule_id
 from finance_app.modules.settings.runtime import get_int_setting
 
@@ -163,6 +165,8 @@ def build_rules_context(args: Any) -> dict[str, Any]:
         "page_end": min(offset + page_size, total_count),
         "current_rules_url": current_rules_url,
         "post_save_rule": post_save_rule,
+        "reimbursable_rule_direction_error": REIMBURSABLE_RULE_DIRECTION_ERROR,
+        "reimbursable_tag_name": builtin_tag_name_for_key(BUILTIN_TAG_REIMBURSABLE),
     }
 
 

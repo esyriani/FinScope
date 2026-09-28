@@ -2158,6 +2158,7 @@
   "Ownership can only be handed off to an active user.": "La propri\u00e9t\u00e9 ne peut \u00eatre transf\u00e9r\u00e9e qu'\u00e0 un utilisateur actif.",
   "Amount bounds must be valid numbers.": "Les limites de montant doivent \u00eatre des nombres valides.",
   "Keyword and category are required.": "Le mot-cl\u00e9 et la cat\u00e9gorie sont obligatoires.",
+  "Rules with the Reimbursable tag must use Debit direction.": "Les r\u00e8gles avec l'\u00e9tiquette Reimbursable doivent utiliser la direction D\u00e9bit.",
   "Enter a keyword and category to preview matching transactions.": "Entrez un mot-cl\u00e9 et une cat\u00e9gorie pour afficher un aper\u00e7u des transactions correspondantes.",
   "No importable rules were found.": "Aucune r\u00e8gle importable n'a \u00e9t\u00e9 trouv\u00e9e.",
   "No imported rules were recorded for undo.": "Aucune r\u00e8gle import\u00e9e n'a \u00e9t\u00e9 enregistr\u00e9e pour l'annulation.",

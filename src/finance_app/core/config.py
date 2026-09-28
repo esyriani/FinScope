@@ -251,9 +251,9 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
         ),
         default_categorization_model=env(
             "FINANCE_DEFAULT_CATEGORIZATION_MODEL",
-            parser.get("setting_defaults", "categorization_model", fallback="gpt-4o-mini"),
+            parser.get("setting_defaults", "categorization_model", fallback="gpt-6-luna"),
         ).strip()
-        or "gpt-4o-mini",
+        or "gpt-6-luna",
         default_recurrence_minimum_occurrences=parse_positive_int(
             env(
                 "FINANCE_DEFAULT_RECURRENCE_MINIMUM_OCCURRENCES",

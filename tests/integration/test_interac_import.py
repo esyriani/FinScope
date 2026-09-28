@@ -2,6 +2,12 @@
 
 from sqlalchemy import insert, select
 
+from finance_app.core.constants import (
+    INTERAC_IGNORED_REASON_CANCELLED,
+    INTERAC_IGNORED_REASON_INVALID,
+    INTERAC_IGNORED_REASON_NO_MATCH,
+    INTERAC_IGNORED_REASON_NON_DEPOSITED,
+)
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import (
     accounts as accounts_table,
@@ -104,6 +110,7 @@ def test_interac_history_ignores_unmatched_rows(app):
     del app
     with db_core_transaction() as conn:
         account_id = create_account(conn)
+        ignored_reasons = {}
 
         inserted, skipped, ignored = import_transactions(
             conn,
@@ -112,10 +119,12 @@ def test_interac_history_ignores_unmatched_rows(app):
             statement_type="interac_etransfer",
             extension="csv",
             raw_text="Date Deposited,Received From,Amount,Method,Status\n02-Jan-23,CHARLES DEMERS,$1250.00,Email,Autodeposited\n",
+            interac_ignored_reasons=ignored_reasons,
         )
 
         count = conn.execute(select(transactions_table.c.id)).fetchall()
         assert (inserted, skipped, ignored) == (0, 0, 1)
+        assert ignored_reasons[INTERAC_IGNORED_REASON_NO_MATCH] == 1
         assert count == []
 
 
@@ -127,11 +136,16 @@ def test_interac_result_message_explains_skipped_and_ignored_rows():
         inserted_count=29,
         skipped_count=1,
         ignored_count=76,
+        interac_ignored_reasons={
+            INTERAC_IGNORED_REASON_CANCELLED: 2,
+            INTERAC_IGNORED_REASON_NON_DEPOSITED: 3,
+            INTERAC_IGNORED_REASON_NO_MATCH: 71,
+            INTERAC_IGNORED_REASON_INVALID: 0,
+        },
     )
 
     assert "Skipped 1 ambiguous match because each matched more than one possible checking transaction." in message
-    assert "Ignored 76 rows that were cancelled, non-deposited" in message
-    assert "no matching checking ledger transaction yet" in message
+    assert "Ignored 76 rows: 2 cancelled, 3 non-deposited, 71 with no matching checking transaction yet." in message
     assert "Import matching checking statements first" in message
 
 

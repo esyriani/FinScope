@@ -28,7 +28,8 @@
         "Manual rules match by normalized keyword containment and optional direction. Negative amounts are credits/income/refunds.",
         "Normalize merchant names by removing transaction IDs, terminal IDs, dates, authorization codes, city names, card numbers, prefixes such as \"POS PURCHASE\", and repeated punctuation.",
         "Prefer the most specific supported category.",
-        "Choose the best supported category when the merchant identity or transaction purpose points to one taxonomy category, even when confidence is not high enough for automatic approval. Use \"needs_review\": true for those lower-confidence best-fit suggestions.",
+        "Choose the best supported category when the merchant identity, supplied evidence, or transaction purpose clearly points to one taxonomy category. Use \"needs_review\": true for supported suggestions that are plausible but not confident enough for automatic approval.",
+        "Use \"UNKNOWN\" when the transaction is ambiguous, evidence is weak or conflicting, confidence is low, or you simply do not know the correct category. Do not force a category just to avoid \"UNKNOWN\".",
         "Do not create new categories or category IDs.",
         "Do not create new tags or tag IDs.",
         "Do not infer private personal context unless it is directly supported by the supplied normalized merchant or evidence summary.",
@@ -39,8 +40,8 @@
         "Choose any ID from the full taxonomy when it best fits the merchant or transaction purpose, even when it is outside candidate_taxonomy.",
         "When choosing a category or tag outside candidate_taxonomy, set \"needs_review\" to true unless the merchant/category is obvious and confidence is at least ${verify_threshold}. Do not choose \"UNKNOWN\" merely because the best taxonomy ID is outside candidate_taxonomy.",
         "Use evidence_summary as supporting evidence, but do not copy it blindly when it conflicts or is weak.",
-        "Use \"UNKNOWN\" only when the normalized merchant is generic, unreadable, mainly a payment processor without a clear merchant, or cannot be reasonably mapped to any taxonomy category.",
-        "Before returning \"UNKNOWN\", check candidate_taxonomy and the full taxonomy for a review-worthy best fit. Prefer a supported best-fit category with \"needs_review\": true over \"UNKNOWN\" when the merchant or service identity provides a plausible match."
+        "Use \"UNKNOWN\" when the normalized merchant is generic, unreadable, mainly a payment processor without a clear merchant, or cannot be reasonably mapped to any taxonomy category.",
+        "Before returning \"UNKNOWN\", check candidate_taxonomy and the full taxonomy for a clearly supported best fit. Return \"UNKNOWN\" instead of a weak guess when no category is sufficiently supported."
       ]
     },
     {

@@ -153,9 +153,10 @@ BUILTIN_TAG_TAXA = (
         description="Marks expenses expected to be repaid by work, insurance, a tenant, another person, or another organization.",
         instruction=(
             "Use only when the transaction description, user rule, or context clearly "
-            "indicates that the expense is expected to be repaid. This tag can apply "
+            "indicates that the debit expense is expected to be repaid. This tag can apply "
             "across categories, such as Food, Travel, Work, Health, Education, "
-            "Transportation, Housing, or Rental."
+            "Transportation, Housing, or Rental. Do not use for incoming credits; "
+            "use the Reimbursement category for repayments."
         ),
         color="#2563eb",
         behavior=ReimbursableTagBehavior(),

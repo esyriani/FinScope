@@ -39,7 +39,7 @@ def settings_form_data(conn, **overrides):
         "verify_threshold": "0.90",
         "transaction_ai_rerun_enabled": "1",
         "confirm_ai_token_usage_enabled": "1",
-        "openai_model": "gpt-4o-mini",
+        "openai_model": "gpt-6-luna",
         "recurrence_minimum_occurrences": "4",
         "recurrence_date_tolerance_days": "6",
         "recurrence_amount_tolerance_absolute": "12.5",
@@ -143,7 +143,7 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert settings["verify_threshold"] == "0.90"
     assert settings["transaction_ai_rerun_enabled"] == "1"
     assert settings["confirm_ai_token_usage_enabled"] == "1"
-    assert settings["openai_model"] == "gpt-4o-mini"
+    assert settings["openai_model"] == "gpt-6-luna"
     assert settings["recurrence_minimum_occurrences"] == "4"
     assert settings["recurrence_date_tolerance_days"] == "6"
     assert settings["recurrence_amount_tolerance_absolute"] == "12.5"

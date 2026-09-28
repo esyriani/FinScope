@@ -83,6 +83,48 @@ def test_rules_create_route_allows_direct_save_without_preview_confirmation(owne
     assert rule is not None
 
 
+def test_rules_create_route_requires_debit_direction_for_reimbursable_tag(owner_client, core_conn):
+    """Verify Reimbursable rule tags require a debit-scoped rule."""
+    blocked = owner_client.post(
+        "/rules/create",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "keyword": "Conference Hotel",
+            "category": "Travel",
+            "tags": ["Reimbursable"],
+            "direction": "any",
+        },
+        follow_redirects=True,
+    )
+    blocked_count = core_conn.execute(select(func.count()).select_from(category_rules_table)).scalar_one()
+
+    allowed = owner_client.post(
+        "/rules/create",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "keyword": "Conference Hotel",
+            "category": "Travel",
+            "tags": ["Reimbursable"],
+            "direction": "debit",
+        },
+        follow_redirects=True,
+    )
+    rule = core_conn.execute(
+        select(
+            category_rules_table.c.id,
+            category_rules_table.c.direction,
+        ).where(category_rules_table.c.keyword == "CONFERENCE HOTEL")
+    ).fetchone()
+
+    assert blocked.status_code == 200
+    assert_visible_text(blocked, "Rules with the Reimbursable tag must use Debit direction.")
+    assert blocked_count == 0
+    assert allowed.status_code == 200
+    assert_visible_text(allowed, "Rule saved for: CONFERENCE HOTEL")
+    assert rule._mapping["direction"] == "debit"
+    assert get_rule_tags_by_rule_id(core_conn, [rule._mapping["id"]])[rule._mapping["id"]] == ["Reimbursable"]
+
+
 def test_rules_route_renders_automatic_source_badge(owner_client, core_conn):
     """Verify that automatic rules show the automatic source badge."""
     rule_id = insert_rule(core_conn, keyword="METRO GROCERY", category="Food", source="automatic")
@@ -349,6 +391,35 @@ def test_rules_update_route_replaces_rule_values_and_tags(owner_client, core_con
     assert get_rule_tags_by_rule_id(core_conn, [rule_id])[rule_id] == ["Government", "Tax"]
 
 
+def test_rules_update_route_requires_debit_direction_for_reimbursable_tag(owner_client, core_conn):
+    """Verify editing cannot save Reimbursable on non-debit rules."""
+    rule_id = insert_rule(core_conn, keyword="EXISTING STORE", category="Food", tags=["Tax"])
+
+    response = owner_client.post(
+        f"/rules/{rule_id}/update",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "keyword": "Existing Store",
+            "category": "Travel",
+            "tags": ["Reimbursable"],
+            "direction": "credit",
+        },
+        follow_redirects=True,
+    )
+
+    rule = core_conn.execute(
+        select(
+            category_rules_table.c.keyword,
+            category_rules_table.c.category,
+            category_rules_table.c.direction,
+        ).where(category_rules_table.c.id == rule_id)
+    ).fetchone()
+    assert response.status_code == 200
+    assert_visible_text(response, "Rules with the Reimbursable tag must use Debit direction.")
+    assert tuple(rule) == ("EXISTING STORE", "Food", "any")
+    assert get_rule_tags_by_rule_id(core_conn, [rule_id])[rule_id] == ["Tax"]
+
+
 def test_rules_update_route_allows_direct_save_without_preview_confirmation(owner_client, core_conn):
     """Verify direct rule updates save without audit preview."""
     rule_id = insert_rule(core_conn, keyword="EXISTING STORE", category="Food")
@@ -578,6 +649,28 @@ def test_rules_preview_route_returns_validation_error_json(owner_client):
     assert response.get_json() == {
         "ok": False,
         "message": "Enter a keyword and category to preview matching transactions.",
+        "match_count": 0,
+        "transactions": [],
+    }
+
+
+def test_rules_preview_route_rejects_reimbursable_without_debit_direction(owner_client):
+    """Verify preview validation mirrors rule save validation."""
+    response = owner_client.post(
+        "/rules/preview",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "keyword": "Conference Hotel",
+            "category": "Travel",
+            "tags": ["Reimbursable"],
+            "direction": "credit",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "ok": False,
+        "message": "Rules with the Reimbursable tag must use Debit direction.",
         "match_count": 0,
         "transactions": [],
     }
