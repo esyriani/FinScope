@@ -1,0 +1,8 @@
+[cosmic-ray]
+module-path = "src/finance_app/modules/merchants/normalization.py"
+timeout = 20.0
+excluded-modules = []
+test-command = "python -B tools/cosmic_ray_profile_tests.py merchant-normalization"
+
+[cosmic-ray.distributor]
+name = "local"
