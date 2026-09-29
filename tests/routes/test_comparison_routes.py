@@ -142,13 +142,13 @@ def test_comparison_route_renders_monthly_spending_table_option(owner_client, co
             "id": "comparisonMonthlyByYearTable",
             "data-export-title": "Monthly spending by year",
         },
-        text="Jan 50.00 $ baseline 120.00 $ +70.00 $ | +140.0% 170.00 $",
+        text="Jan $50.00 baseline $120.00 +$70.00 | +140.0% $170.00",
     )
     assert_has_element(
         response,
         "span",
         attrs={"data-export-part": True, "data-export-type": "money", "data-export-value": "120.0"},
-        text="120.00 $",
+        text="$120.00",
     )
     assert_has_element(
         response,
@@ -159,7 +159,7 @@ def test_comparison_route_renders_monthly_spending_table_option(owner_client, co
             "data-export-type": "money",
             "data-export-value": "70.0",
         },
-        text="+70.00 $",
+        text="+$70.00",
     )
     assert_has_element(
         response,
@@ -176,7 +176,7 @@ def test_comparison_route_renders_monthly_spending_table_option(owner_client, co
         response,
         "span",
         attrs={"data-export-part": True, "data-export-type": "money", "data-export-value": "200.0"},
-        text="200.00 $",
+        text="$200.00",
     )
     assert_has_element(
         response,
@@ -187,7 +187,7 @@ def test_comparison_route_renders_monthly_spending_table_option(owner_client, co
             "data-export-type": "money",
             "data-export-value": "150.0",
         },
-        text="+150.00 $",
+        text="+$150.00",
     )
     assert_has_element(
         response,

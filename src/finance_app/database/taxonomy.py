@@ -7,7 +7,7 @@ seeding can call them without importing feature packages.
 
 from typing import Any
 
-from sqlalchemy import case, insert, select, update
+from sqlalchemy import case, delete, insert, select, update
 
 from finance_app.core.builtin_taxonomy import (
     BUILTIN_CATEGORIES,
@@ -17,9 +17,14 @@ from finance_app.core.builtin_taxonomy import (
 )
 from finance_app.core.taxonomy import clean_color, clean_label, load_category_seed, tag_color_for_name
 from finance_app.database.tables import categories as categories_table
+from finance_app.database.tables import category_rule_tags as category_rule_tags_table
 from finance_app.database.tables import normalize_name_key
+from finance_app.database.tables import pinned_reports as pinned_reports_table
 from finance_app.database.tables import tags as tags_table
+from finance_app.database.tables import transaction_tags as transaction_tags_table
 from finance_app.database.upsert import insert_or_select_unique_row
+
+RETIRED_BUILTIN_TAG_KEYS = ("reimbursement",)
 
 
 def seed_category_taxonomy(conn: Any) -> None:
@@ -29,6 +34,8 @@ def seed_category_taxonomy(conn: Any) -> None:
     tags = seed["tags"]
     reserved_category_names = {name.casefold() for name in builtin_category_names()}
     reserved_tag_names = {name.casefold() for name in builtin_tag_names()}
+
+    delete_retired_builtin_tags(conn)
 
     for category in BUILTIN_CATEGORIES:
         upsert_category_metadata(
@@ -69,6 +76,27 @@ def seed_category_taxonomy(conn: Any) -> None:
             tag.get("instruction"),
             tag.get("color"),
         )
+
+
+def delete_retired_builtin_tags(conn: Any) -> None:
+    """Remove tag rows that were once seeded as built-ins but are no longer reserved."""
+    retired_tag_ids = [
+        row["id"]
+        for row in conn.execute(
+            select(tags_table.c.id).where(tags_table.c.builtin_key.in_(RETIRED_BUILTIN_TAG_KEYS))
+        ).mappings()
+    ]
+    if not retired_tag_ids:
+        return
+
+    conn.execute(delete(transaction_tags_table).where(transaction_tags_table.c.tag_id.in_(retired_tag_ids)))
+    conn.execute(delete(category_rule_tags_table).where(category_rule_tags_table.c.tag_id.in_(retired_tag_ids)))
+    conn.execute(
+        update(pinned_reports_table)
+        .where(pinned_reports_table.c.target_tag_id.in_(retired_tag_ids))
+        .values(target_tag_id=None)
+    )
+    conn.execute(delete(tags_table).where(tags_table.c.id.in_(retired_tag_ids)))
 
 
 def builtin_tag_order_expression() -> Any:

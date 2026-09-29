@@ -1,2 +1,5 @@
+.gitattributes text eol=lf
 src/finance_app/static/**/*.css text eol=lf
 src/finance_app/static/**/*.js text eol=lf
+tests/frontend/*.js text eol=lf
+tests/frontend/**/*.js text eol=lf

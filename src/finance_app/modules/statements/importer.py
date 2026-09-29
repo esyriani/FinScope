@@ -25,6 +25,10 @@ from finance_app.core.constants import (
     INTERAC_DIRECTION_RECEIVED,
     INTERAC_DIRECTION_SENT,
     INTERAC_DIRECTIONS,
+    INTERAC_IGNORED_REASON_CANCELLED,
+    INTERAC_IGNORED_REASON_INVALID,
+    INTERAC_IGNORED_REASON_NON_DEPOSITED,
+    INTERAC_IGNORED_REASONS,
     STATEMENT_TYPE_PARSER_BANK_ACCOUNT,
     STATEMENT_TYPE_PARSER_CREDIT_CARD,
     STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
@@ -215,6 +219,11 @@ def parse_money(value: object) -> Decimal | None:
     return parse_money_text(value)
 
 
+def empty_interac_ignored_reasons() -> dict[str, int]:
+    """Return zeroed ignored-row reason counts for Interac history imports."""
+    return dict.fromkeys(INTERAC_IGNORED_REASONS, 0)
+
+
 def csv_rows(raw_text: str) -> list[list[str]]:
     """Parse non-empty CSV rows using a detected dialect when possible."""
     sample = raw_text[:4096]
@@ -377,6 +386,40 @@ def build_interac_transfer(
     }
 
 
+def interac_ignored_reason(
+    raw_date: object,
+    merchant_name: object,
+    raw_amount: object,
+    status: object | None = None,
+    require_deposited_status: bool = True,
+    date_formats: Iterable[str] | None = None,
+) -> str | None:
+    """Return why an Interac history row cannot become an enrichment candidate."""
+    normalized_status = str(status or "").strip().lower()
+    if require_deposited_status and not is_deposited_interac_status(normalized_status):
+        if is_cancelled_interac_status(normalized_status):
+            return INTERAC_IGNORED_REASON_CANCELLED
+        return INTERAC_IGNORED_REASON_NON_DEPOSITED
+
+    tx_date = parse_date(raw_date, date_formats=date_formats)
+    description = str(merchant_name or "").strip()
+    amount = parse_money(raw_amount)
+    if not tx_date or not description or amount is None or abs(amount) <= MONEY_PRESENT_THRESHOLD:
+        return INTERAC_IGNORED_REASON_INVALID
+
+    return None
+
+
+def is_deposited_interac_status(normalized_status: str) -> bool:
+    """Return whether an Interac status represents a completed deposit."""
+    return normalized_status.startswith("deposited") or normalized_status.startswith("autodeposited")
+
+
+def is_cancelled_interac_status(normalized_status: str) -> bool:
+    """Return whether an Interac status represents a cancelled transfer."""
+    return normalized_status.startswith(("cancelled", "canceled"))
+
+
 def normalize_interac_direction(direction: object) -> str:
     """Return a supported Interac direction override value."""
     normalized = str(direction or INTERAC_DIRECTION_AUTO).strip().lower()
@@ -397,6 +440,7 @@ def parse_interac_transactions(
         return {
             "transactions": [],
             "ignored_rows": 0,
+            "interac_ignored_reasons": empty_interac_ignored_reasons(),
         }
 
     header = rows[0]
@@ -425,14 +469,22 @@ def parse_interac_transactions(
         date_col = deposited_date_col
         merchant_col = received_from_col
     else:
+        ignored_rows = max(0, len(rows) - 1)
+        ignored_reasons = empty_interac_ignored_reasons()
+        ignored_reasons[INTERAC_IGNORED_REASON_INVALID] = ignored_rows
         return {
             "transactions": [],
-            "ignored_rows": max(0, len(rows) - 1),
+            "ignored_rows": ignored_rows,
+            "interac_ignored_reasons": ignored_reasons,
         }
     if not date_col or not merchant_col:
+        ignored_rows = max(0, len(rows) - 1)
+        ignored_reasons = empty_interac_ignored_reasons()
+        ignored_reasons[INTERAC_IGNORED_REASON_INVALID] = ignored_rows
         return {
             "transactions": [],
-            "ignored_rows": max(0, len(rows) - 1),
+            "ignored_rows": ignored_rows,
+            "interac_ignored_reasons": ignored_reasons,
         }
 
     records: list[tuple[int, dict[str, str]]] = []
@@ -446,7 +498,21 @@ def parse_interac_transactions(
     )
     transactions: list[dict[str, Any]] = []
     ignored_rows = 0
+    ignored_reasons = empty_interac_ignored_reasons()
     for source_row_number, record in records:
+        ignored_reason = interac_ignored_reason(
+            record.get(date_col),
+            record.get(merchant_col),
+            record.get(amount_col) if amount_col else None,
+            status=record.get(status_col) if status_col else None,
+            require_deposited_status=require_deposited_status,
+            date_formats=date_formats,
+        )
+        if ignored_reason:
+            ignored_rows += 1
+            ignored_reasons[ignored_reason] += 1
+            continue
+
         tx = build_interac_transfer(
             record.get(date_col),
             record.get(merchant_col),
@@ -457,15 +523,14 @@ def parse_interac_transactions(
             require_deposited_status=require_deposited_status,
             date_formats=date_formats,
         )
-        if tx:
-            tx["source_row_number"] = source_row_number
-            transactions.append(tx)
-        else:
-            ignored_rows += 1
+        assert tx is not None
+        tx["source_row_number"] = source_row_number
+        transactions.append(tx)
 
     return {
         "transactions": transactions,
         "ignored_rows": ignored_rows,
+        "interac_ignored_reasons": ignored_reasons,
     }
 
 

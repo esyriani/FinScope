@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import text
 from tests.support.database import insert_transaction as insert_test_transaction
 from tests.support.database import set_owner_setting
-from tests.support.html import assert_has_element, assert_visible_text, parse_html
+from tests.support.html import assert_asset_reference, assert_has_element, assert_visible_text, parse_html
 from tests.support.jobs import reject_background_jobs
 from tests.support.web import set_csrf_token
 
@@ -110,7 +110,6 @@ def test_transactions_table_exports_category_method_and_score_separately(owner_c
 def test_transactions_custom_range_filter_renders_date_fields(owner_client):
     """Verify custom period filtering exposes bookmarkable date fields."""
     response = owner_client.get("/transactions?period=custom&date_from=2026-01-01&date_to=2026-01-31")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert_has_element(
@@ -123,10 +122,11 @@ def test_transactions_custom_range_filter_renders_date_fields(owner_client):
         "input",
         attrs={"id": "transaction-date-to", "name": "date_to", "value": "2026-01-31"},
     )
-    assert "data-transactions-custom-range" in body
-    assert "vendor/flatpickr" in body
-    assert "js/dates.js" in body
-    assert "js/transactions.js" in body
+    assert_has_element(response, None, attrs={"data-transactions-custom-range": True})
+    assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.css\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/vendor/flatpickr/4\.6\.13/flatpickr\.min\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/dates\.js\?v=[0-9a-f]{12}")
+    assert_asset_reference(response, r"/static/js/transactions\.js\?v=[0-9a-f]{12}")
 
 
 def test_transactions_batch_selection_labels_current_page_scope(owner_client, core_conn):
@@ -215,7 +215,7 @@ def test_update_transaction_category_route_saves_manual_category_rule_and_tags(o
 
     tx = transaction_state(core_conn, tx_id)
     rule = core_conn.execute(text("""
-        SELECT id, merchant_id, keyword, category, amount_min, amount_max, source
+        SELECT id, merchant_id, keyword, category, amount_min, amount_max, direction, source
         FROM category_rules
         WHERE keyword = 'METRO GROCERY'
         """)).fetchone()
@@ -230,7 +230,7 @@ def test_update_transaction_category_route_saves_manual_category_rule_and_tags(o
     assert tx["reviewed_at"] is not None
     assert get_transaction_tag_names(core_conn, tx_id) == ["Tax"]
     assert rule._mapping["merchant_id"] is not None
-    assert tuple(rule[2:]) == ("METRO GROCERY", "Food", 10.0, 20.0, "manual")
+    assert tuple(rule[2:]) == ("METRO GROCERY", "Food", 10.0, 20.0, "debit", "manual")
     assert get_rule_tags_by_rule_id(core_conn, [rule._mapping["id"]])[rule._mapping["id"]] == ["Tax"]
 
 
@@ -497,7 +497,7 @@ def test_batch_transactions_route_queues_selected_recategorization(owner_client,
 
     assert response.status_code == 200
     assert captured["transaction_ids"] == ["11", "22"]
-    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
+    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Processing item: abcdef12")
 
 
 def test_batch_transactions_route_handles_recategorization_queue_rejection(owner_client, monkeypatch):
@@ -582,7 +582,7 @@ def test_batch_recategorization_runs_without_confirmation_when_setting_disabled(
 
     assert response.status_code == 200
     assert captured == [["11", "22"]]
-    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Job: abcdef12")
+    assert_visible_text(response, "Recategorization queued for 2 selected transactions. Processing item: abcdef12")
 
 
 def test_estimate_batch_transaction_ai_route_returns_json(owner_client, monkeypatch):

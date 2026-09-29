@@ -97,10 +97,10 @@
         <div class="card-body border-bottom">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                 <div class="text-muted">
-                    {{ _("Showing {start}-{end} of {total} jobs", start=page_start, end=page_end, total=total_count) }}
+                    {{ _("Showing {start}-{end} of {total} processing items", start=page_start, end=page_end, total=total_count) }}
                 </div>
 
-                {{ jobs_pagination(_("Job pages")) }}
+                {{ jobs_pagination(_("Processing activity pages")) }}
             </div>
         </div>
 
@@ -118,7 +118,7 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <th>{{ _("Job") }}</th>
+                            <th>{{ _("Processing item") }}</th>
                             <th>{{ _("Status") }}</th>
                             <th>{{ _("Created") }}</th>
                             <th>{{ _("Started") }}</th>
@@ -191,8 +191,8 @@
                                                 <button
                                                     class="btn btn-sm btn-outline-warning btn-icon-only"
                                                     type="submit"
-                                                    aria-label="{{ _('Cancel job {label}', label=job.label) }}"
-                                                    title="{{ _('Cancel job') }}"
+                                                    aria-label="{{ _('Cancel processing item {label}', label=job.label) }}"
+                                                    title="{{ _('Cancel processing item') }}"
                                                     data-bs-tooltip
                                                 >
                                                     <i class="bi bi-stop-circle" aria-hidden="true"></i>
@@ -200,11 +200,11 @@
                                             </form>
                                         {% endif %}
 
-                                        {% set undo_title = _("Undo job") %}
+                                        {% set undo_title = _("Undo processing item") %}
                                         {% if job.undo_status == "undone" %}
                                             {% set undo_title = _("Already undone") %}
                                         {% elif job.status in ["queued", "running"] %}
-                                            {% set undo_title = _("Available after the job finishes") %}
+                                            {% set undo_title = _("Available after processing finishes") %}
                                         {% elif job.undo_status == "unavailable" %}
                                             {% set undo_title = _("Nothing to undo") %}
                                         {% endif %}
@@ -218,7 +218,7 @@
                                             {% else %}
                                                 disabled
                                             {% endif %}
-                                            aria-label="{{ _('Undo job {label}', label=job.label) }}"
+                                            aria-label="{{ _('Undo processing item {label}', label=job.label) }}"
                                             title="{{ undo_title }}"
                                             data-bs-tooltip
                                         >
@@ -246,7 +246,7 @@
                                         <div
                                             class="progress"
                                             role="progressbar"
-                                            aria-label="{{ _('AI job progress') }}"
+                                            aria-label="{{ _('AI processing progress') }}"
                                             aria-valuemin="0"
                                             aria-valuemax="100"
                                             aria-valuenow="{{ progress_percent }}"
@@ -290,7 +290,7 @@
 
         {% if total_pages > 1 %}
         <div class="table-pagination-footer d-flex justify-content-end">
-            {{ jobs_pagination(_("Job pages bottom")) }}
+            {{ jobs_pagination(_("Processing activity pages bottom")) }}
         </div>
         {% endif %}
     {% else %}
@@ -309,19 +309,19 @@
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="next" value="{{ request.full_path }}">
                             <div class="modal-header">
-                            <h5 class="modal-title" id="undo-job-{{ job.id }}-title">{{ _("Undo job") }}</h5>
+                            <h5 class="modal-title" id="undo-job-{{ job.id }}-title">{{ _("Undo processing item") }}</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
                         </div>
                         <div class="modal-body">
                             <p>{{ _("Undo") }} <strong>{{ job.label }}</strong>?</p>
                             <p class="mb-0 text-danger">
-                                {{ _("This will remove data created by the job and restore transaction values it changed.") }}
+                                {{ _("This will remove data created by the processing item and restore transaction values it changed.") }}
                                 {{ _("This action cannot be undone.") }}
                             </p>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
-                            <button class="btn btn-outline-danger" type="submit"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Undo job") }}</button>
+                            <button class="btn btn-outline-danger" type="submit"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Undo processing item") }}</button>
                         </div>
                     </form>
                 </div>

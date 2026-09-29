@@ -510,7 +510,7 @@ def recategorize_selected_transactions_job(transaction_ids: Iterable[object] | N
     if skipped_stale_count:
         summary += (
             f" Skipped {skipped_stale_count} transaction"
-            f"{'' if skipped_stale_count == 1 else 's'} changed after the job started."
+            f"{'' if skipped_stale_count == 1 else 's'} changed after processing started."
         )
     append_selected_recategorization_log(
         "Selected transaction recategorization completed: {summary}",

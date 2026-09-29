@@ -155,7 +155,7 @@
                             <div class="form-text text-danger">{{ _("Removes all existing rules and replaces them with the imported file. The queued work can be undone from Processing.") }}</div>
                         </div>
                     </div>
-                    <p class="text-muted mb-0">{{ _("The import is previewed before a background job is queued.") }}</p>
+                    <p class="text-muted mb-0">{{ _("The import is previewed before processing starts.") }}</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}</button>
@@ -329,6 +329,8 @@
                 action="{{ url_for('rules.add_rule') }}"
                 data-rule-editor
                 data-rule-preview-url="{{ url_for('rules.preview_rule') }}"
+                data-reimbursable-tag-name="{{ reimbursable_tag_name }}"
+                data-reimbursable-direction-error="{{ _(reimbursable_rule_direction_error) }}"
                 data-busy-overlay
                 data-busy-delay-ms="0"
                 data-busy-message="{{ _('Saving rule...') }}"
@@ -341,6 +343,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="alert alert-danger d-none" role="alert" data-rule-editor-error></div>
                     {{ rule_keyword_control("new-rule", "", "Keyword") }}
                     {{ rule_category_control("new-rule", category_options, category_descriptions=category_descriptions) }}
                     {{ rule_tag_control("new-rule", tag_options) }}
@@ -527,6 +530,8 @@
                 action="{{ url_for('rules.update_rule', rule_id=rule['id']) }}"
                 data-rule-editor
                 data-rule-preview-url="{{ url_for('rules.preview_rule') }}"
+                data-reimbursable-tag-name="{{ reimbursable_tag_name }}"
+                data-reimbursable-direction-error="{{ _(reimbursable_rule_direction_error) }}"
                 data-busy-overlay
                 data-busy-delay-ms="0"
                 data-busy-message="{{ _('Saving rule...') }}"
@@ -540,6 +545,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="alert alert-danger d-none" role="alert" data-rule-editor-error></div>
                     {{ rule_keyword_control("rule-" ~ rule["id"], rule["keyword"], "Keyword") }}
                     {% if rule["merchant_id"] %}
                         {{ rule_scope_control("rule-" ~ rule["id"], rule["merchant_id"], rule["merchant_name"]) }}

@@ -36,15 +36,23 @@ function financeMoneyNumber(value) {
     return Number.isFinite(numberValue) ? numberValue : null;
 }
 
-function financeFormatNumberParts(formatter, numberValue) {
-    if (typeof formatter.formatToParts !== "function") {
-        return formatter.format(numberValue);
-    }
+function financeLanguage() {
+    return String(window.financeLocale || "en-CA")
+        .split(/[-_]/)[0]
+        .toLowerCase();
+}
 
-    return formatter
-        .formatToParts(numberValue)
-        .map((part) => (part.type === "group" ? " " : part.value))
-        .join("");
+function financeFormatCurrencyText(numberValue, formattedNumber) {
+    const symbol = window.financeCurrencySymbol || "$";
+    const sign = numberValue < 0 ? "-" : "";
+    const absoluteNumber = formattedNumber.replace(/^-/, "");
+    if (!symbol) {
+        return `${sign}${absoluteNumber}`;
+    }
+    if (financeLanguage() === "fr") {
+        return `${sign}${absoluteNumber} ${symbol}`.trim();
+    }
+    return `${sign}${symbol}${absoluteNumber}`.trim();
 }
 
 window.financeLocale = financeDocument.dataset.financeLocale || "en-CA";
@@ -57,8 +65,8 @@ window.financeTranslate = function financeTranslate(message, variables) {
         template
     );
 };
-window.financeFormatMoney = function financeFormatMoney(value, options = {}) {
-    const minimumFractionDigits = options.minimumFractionDigits ?? 2;
+window.financeFormatNumber = function financeFormatNumber(value, options = {}) {
+    const minimumFractionDigits = options.minimumFractionDigits ?? 0;
     const maximumFractionDigits = options.maximumFractionDigits ?? minimumFractionDigits;
     const formatter = new Intl.NumberFormat(window.financeLocale || "en-CA", {
         minimumFractionDigits,
@@ -69,8 +77,50 @@ window.financeFormatMoney = function financeFormatMoney(value, options = {}) {
         return "";
     }
 
-    const formatted = financeFormatNumberParts(formatter, numberValue);
-    return `${formatted} ${window.financeCurrencySymbol || "$"}`.trim();
+    const formatted = formatter.format(Math.abs(numberValue));
+    const sign = options.signDisplay === "always" && numberValue > 0 ? "+" : numberValue < 0 ? "-" : "";
+    return `${sign}${formatted}`;
+};
+window.financeFormatMoney = function financeFormatMoney(value, options = {}) {
+    const minimumFractionDigits = options.minimumFractionDigits ?? 2;
+    const maximumFractionDigits = options.maximumFractionDigits ?? minimumFractionDigits;
+    const numberValue = financeMoneyNumber(value);
+    if (numberValue === null) {
+        return "";
+    }
+
+    const formatted = window.financeFormatNumber(Math.abs(numberValue), {
+        minimumFractionDigits,
+        maximumFractionDigits,
+    });
+    return financeFormatCurrencyText(numberValue, formatted);
+};
+window.financeFormatPercent = function financeFormatPercent(value, options = {}) {
+    const minimumFractionDigits = options.minimumFractionDigits ?? 1;
+    const maximumFractionDigits = options.maximumFractionDigits ?? minimumFractionDigits;
+    const formatted = window.financeFormatNumber(value, {
+        minimumFractionDigits,
+        maximumFractionDigits,
+        signDisplay: options.signDisplay,
+    });
+    if (!formatted) {
+        return "";
+    }
+    return financeLanguage() === "fr" ? `${formatted} %` : `${formatted}%`;
+};
+window.financeFormatDate = function financeFormatDate(value) {
+    if (!value) {
+        return "";
+    }
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+    return new Intl.DateTimeFormat(window.financeLocale || "en-CA", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+    }).format(date);
 };
 window.financeFormatAxisMoney = function financeFormatAxisMoney(value) {
     return window.financeFormatMoney(value, {

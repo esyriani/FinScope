@@ -102,12 +102,18 @@ function setupRecurringActivityDetailModal() {
     }
 
     function formatDateLocal(value) {
+        if (window.financeFormatDate) {
+            return window.financeFormatDate(value);
+        }
+
         if (!value) return "";
         const date = new Date(`${value}T00:00:00`);
         if (Number.isNaN(date.getTime())) return String(value);
-        const day = String(date.getDate()).padStart(2, "0");
-        const month = date.toLocaleString(window.financeLocale || "en-CA", { month: "short" });
-        return `${day}-${month}-${date.getFullYear()}`;
+        return new Intl.DateTimeFormat(window.financeLocale || "en-CA", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+        }).format(date);
     }
 
     function statusLabel(value) {
@@ -238,11 +244,31 @@ function setupRecurringActivityDetailModal() {
         return "";
     }
 
-    function signedNumber(value, suffix) {
+    function signedNumber(value, suffix = "", fractionDigits = 0) {
+        if (window.financeFormatNumber) {
+            const formatted = window.financeFormatNumber(value, {
+                minimumFractionDigits: fractionDigits,
+                maximumFractionDigits: fractionDigits,
+                signDisplay: "always",
+            });
+            return formatted ? `${formatted}${suffix}` : "";
+        }
+
         const numberValue = Number(value);
         if (!Number.isFinite(numberValue)) return "";
         const prefix = numberValue > 0 ? "+" : "";
-        return `${prefix}${numberValue}${suffix}`;
+        return `${prefix}${numberValue.toFixed(fractionDigits)}${suffix}`;
+    }
+
+    function signedPercent(value) {
+        if (window.financeFormatPercent) {
+            return window.financeFormatPercent(value, {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+                signDisplay: "always",
+            });
+        }
+        return signedNumber(value, "%", 1);
     }
 
     function detailValue(details, snakeName, camelName) {
@@ -307,7 +333,7 @@ function setupRecurringActivityDetailModal() {
         amountChangePanel.classList.toggle("d-none", !change);
         if (!change) return;
 
-        const percentText = Number.isFinite(Number(change.percent)) ? ` (${signedNumber(change.percent, "%")})` : "";
+        const percentText = Number.isFinite(Number(change.percent)) ? ` (${signedPercent(change.percent)})` : "";
         if (amountChangeTypical) amountChangeTypical.textContent = formatMoneyLocal(change.typical_amount);
         if (amountChangeActual) amountChangeActual.textContent = formatMoneyLocal(change.actual_amount);
         if (amountChangeDifference) {

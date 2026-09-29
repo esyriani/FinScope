@@ -8,6 +8,7 @@ from finance_app.modules.comparison.statistics import (
     build_descriptive_statistics,
     build_grouped_descriptive_statistics,
     median_absolute_deviation,
+    percentile,
     robust_anomaly_score,
 )
 
@@ -67,6 +68,20 @@ def test_build_descriptive_statistics_handles_single_value():
     assert stats["iqr"] == 0.00
     assert stats["stdev"] is None
     assert stats["boxplot"] == [42.50, 42.50, 42.50, 42.50, 42.50]
+
+
+def test_build_descriptive_statistics_uses_sample_stdev_for_non_divisible_variance():
+    """Verify sample standard deviation keeps Decimal precision before rounding."""
+    stats = build_descriptive_statistics(
+        [
+            Decimal("1.00"),
+            Decimal("2.00"),
+            Decimal("4.00"),
+        ]
+    )
+
+    assert stats["mean"] == 2.33
+    assert stats["stdev"] == 1.53
 
 
 def test_build_grouped_descriptive_statistics_sorts_by_total_then_label():
@@ -158,6 +173,40 @@ def test_robust_anomaly_score_detects_low_anomaly():
     assert result["is_anomaly"] is True
 
 
+def test_robust_anomaly_score_uses_non_unit_mad_as_divisor():
+    """Verify robust z-score scales by MAD instead of multiplying by it."""
+    result = robust_anomaly_score(
+        Decimal("106.00"),
+        [
+            Decimal("96.00"),
+            Decimal("100.00"),
+            Decimal("104.00"),
+        ],
+    )
+
+    assert result["status"] == "ok"
+    assert result["mad"] == Decimal("4.00")
+    assert result["difference"] == Decimal("6.00")
+    assert result["z_score"] == pytest.approx(1.01175)
+    assert result["is_anomaly"] is False
+
+
+def test_robust_anomaly_score_treats_exact_threshold_as_anomaly():
+    """Verify the configured anomaly threshold is inclusive."""
+    result = robust_anomaly_score(
+        Decimal("103.50"),
+        [
+            Decimal("99.3255"),
+            Decimal("100.00"),
+            Decimal("100.6745"),
+        ],
+    )
+
+    assert result["score"] == pytest.approx(3.5)
+    assert result["threshold"] == 3.5
+    assert result["is_anomaly"] is True
+
+
 def test_robust_anomaly_score_handles_zero_mad_identical_current():
     """Verify identical current and history values produce a zero z-score."""
     result = robust_anomaly_score(
@@ -222,6 +271,24 @@ def test_robust_anomaly_score_avoids_huge_score_for_small_zero_mad_difference():
     assert result["is_anomaly"] is False
 
 
+def test_robust_anomaly_score_handles_zero_mad_negative_difference():
+    """Verify a below-baseline value with zero MAD is unscored, not flat."""
+    result = robust_anomaly_score(
+        Decimal("99.00"),
+        [
+            Decimal("100.00"),
+            Decimal("100.00"),
+            Decimal("100.00"),
+        ],
+    )
+
+    assert result["status"] == "zero_mad_nonzero_difference"
+    assert result["difference"] == Decimal("-1.00")
+    assert result["direction"] == "low"
+    assert result["z_score"] is None
+    assert result["is_anomaly"] is False
+
+
 def test_robust_anomaly_score_handles_insufficient_history():
     """Verify short histories return baseline metadata without a score."""
     result = robust_anomaly_score(
@@ -242,6 +309,18 @@ def test_robust_anomaly_score_handles_insufficient_history():
     assert result["z_score"] is None
     assert result["score"] == 0.0
     assert result["is_anomaly"] is False
+
+
+@pytest.mark.parametrize(
+    ("fraction", "expected"),
+    [
+        (Decimal("0"), Decimal("10.00")),
+        (Decimal("1"), Decimal("30.00")),
+    ],
+)
+def test_percentile_returns_inclusive_boundaries(fraction, expected):
+    """Verify percentile handles exact lower and upper inclusive bounds."""
+    assert percentile([Decimal("10.00"), Decimal("20.00"), Decimal("30.00")], fraction) == expected
 
 
 def test_robust_anomaly_score_handles_empty_history():

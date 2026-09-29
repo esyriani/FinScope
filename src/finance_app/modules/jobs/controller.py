@@ -33,7 +33,7 @@ def job_status(job_id: str) -> ResponseReturnValue:
     """Return the current status for a background job."""
     job = get_background_job(job_id)
     if job is None:
-        return jsonify({"error": gettext("Job not found.")}), 404
+        return jsonify({"error": gettext("Processing item not found.")}), 404
     return jsonify(jobs_service.job_status_payload(job))
 
 
@@ -51,7 +51,7 @@ def undo_job(job_id: str) -> ResponseReturnValue:
     except Exception as exc:
         flash(
             gettext(
-                "Could not undo job: {error_type}: {detail}",
+                "Could not undo processing item: {error_type}: {detail}",
                 error_type=type(exc).__name__,
                 detail=exc,
             )
@@ -59,9 +59,9 @@ def undo_job(job_id: str) -> ResponseReturnValue:
         return redirect(next_url)
 
     if job is None:
-        flash(gettext("Job not found."))
+        flash(gettext("Processing item not found."))
     else:
-        flash(gettext(job.get("undo_result") or "Job undone."))
+        flash(gettext(job.get("undo_result") or "Processing item undone."))
 
     return redirect(next_url)
 
@@ -79,11 +79,11 @@ def cancel_job(job_id: str) -> ResponseReturnValue:
         return redirect(next_url)
 
     if job is None:
-        flash(gettext("Job not found."))
+        flash(gettext("Processing item not found."))
     elif job["status"] == "cancelled":
-        flash(gettext("Job cancelled."))
+        flash(gettext("Processing item cancelled."))
     else:
-        flash(gettext("Cancellation requested. The job will stop after the current batch."))
+        flash(gettext("Cancellation requested. Processing will stop after the current batch."))
 
     return redirect(next_url)
 
@@ -96,7 +96,11 @@ def cancel_queued_ai_jobs() -> ResponseReturnValue:
     cancelled_count = cancel_queued_background_jobs(queue=AI_JOB_QUEUE)
     flash(
         gettext(
-            ("Cancelled {count} queued AI job." if cancelled_count == 1 else "Cancelled {count} queued AI jobs."),
+            (
+                "Cancelled {count} queued AI processing item."
+                if cancelled_count == 1
+                else "Cancelled {count} queued AI processing items."
+            ),
             count=cancelled_count,
         )
     )
@@ -128,9 +132,9 @@ def categorize_all_unknowns() -> ResponseReturnValue:
     flash(
         gettext(
             (
-                "AI categorization queued for {count} unknown transaction. Job: {job_id}"
+                "AI categorization queued for {count} unknown transaction. Processing item: {job_id}"
                 if unknown_count == 1
-                else "AI categorization queued for {count} unknown transactions. Job: {job_id}"
+                else "AI categorization queued for {count} unknown transactions. Processing item: {job_id}"
             ),
             count=unknown_count,
             job_id=job_id[:8],

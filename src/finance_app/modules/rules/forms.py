@@ -2,9 +2,13 @@
 
 from decimal import Decimal, InvalidOperation
 
+from finance_app.core.builtin_taxonomy import BUILTIN_TAG_REIMBURSABLE, builtin_tag_name_for_key
+from finance_app.core.constants import CATEGORY_RULE_DIRECTION_DEBIT
 from finance_app.core.money import parse_money_text
 from finance_app.modules.categories.repository import normalize_optional_account_id, normalize_rule_direction
 from finance_app.modules.categories.service import normalize_merchant_description
+
+REIMBURSABLE_RULE_DIRECTION_ERROR = "Rules with the Reimbursable tag must use Debit direction."
 
 
 def parse_amount_bounds(min_value: object, max_value: object) -> tuple[Decimal | None, Decimal | None]:
@@ -60,6 +64,19 @@ def parse_rule_account_id(value: object) -> int | None:
 def parse_rule_direction(value: object) -> str:
     """Parse a rule direction constraint from form data."""
     return normalize_rule_direction(value)
+
+
+def validate_rule_tags_for_direction(tags: list[str], direction: str) -> None:
+    """Reject rule tags whose semantics require a narrower direction."""
+    reimbursable_tag = builtin_tag_name_for_key(BUILTIN_TAG_REIMBURSABLE)
+    if not reimbursable_tag:
+        return
+
+    if (
+        any(tag.casefold() == reimbursable_tag.casefold() for tag in tags)
+        and direction != CATEGORY_RULE_DIRECTION_DEBIT
+    ):
+        raise ValueError(REIMBURSABLE_RULE_DIRECTION_ERROR)
 
 
 def amount_bounds_label(amount_min: object | None, amount_max: object | None) -> str:

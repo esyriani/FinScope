@@ -383,7 +383,7 @@ def test_undo_apply_all_rules_job_skips_transactions_changed_after_job(app, core
     message = undo_apply_all_rules_job(undo_state)
 
     assert message == (
-        "Restored previous rule categories for 0 transactions. " "Skipped 1 transaction that changed after the job."
+        "Restored previous rule categories for 0 transactions. " "Skipped 1 transaction that changed after processing."
     )
     assert transaction_state(core_conn, metro_id)["category"] == "Personal"
 

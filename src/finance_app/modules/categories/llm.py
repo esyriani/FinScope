@@ -526,10 +526,9 @@ def request_llm_categories(
 
     try:
         client = client_factory(api_key=effective_api_key, timeout=LLM_TIMEOUT_SECONDS)
-        response = client.chat.completions.create(
+        response = create_chat_completion_with_temperature_fallback(
+            client,
             model=openai_model,
-            response_format={"type": "json_object"},
-            temperature=0,
             messages=messages,
         )
         content = response.choices[0].message.content
@@ -574,3 +573,27 @@ def request_llm_categories(
         result_count=len(results),
     )
     return results if isinstance(results, list) else []
+
+
+def create_chat_completion_with_temperature_fallback(client: Any, model: str, messages: list[dict[str, str]]) -> Any:
+    """Create a chat completion, retrying once for models that require default temperature."""
+    request_kwargs: dict[str, Any] = {
+        "model": model,
+        "response_format": {"type": "json_object"},
+        "temperature": 0,
+        "messages": messages,
+    }
+    try:
+        return client.chat.completions.create(**request_kwargs)
+    except Exception as exc:
+        if not is_temperature_unsupported_error(exc):
+            raise
+        logger.info("OpenAI model %s rejected temperature=0; retrying with provider default temperature.", model)
+        request_kwargs.pop("temperature", None)
+        return client.chat.completions.create(**request_kwargs)
+
+
+def is_temperature_unsupported_error(exc: BaseException) -> bool:
+    """Return whether a provider error indicates temperature is unsupported."""
+    message = str(exc).casefold()
+    return "temperature" in message and "unsupported" in message

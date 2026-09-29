@@ -206,8 +206,8 @@ def build_attention_items(attention_counts: Any, failed_imports: Any, failed_job
         items.append(
             attention_item(
                 "failed_jobs",
-                "Failed jobs",
-                "Open the jobs page to inspect failed background work.",
+                "Failed processing",
+                "Open the Processing page to inspect failed background work.",
                 attention_counts["failed_jobs"],
                 "/jobs",
                 "bi-activity",

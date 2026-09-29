@@ -125,7 +125,7 @@
                             <td class="text-end {% if change_is_favorable %}text-success{% else %}text-danger{% endif %}" data-sort-value="{{ item.amount_change.difference }}">
                                 <div class="recurring-table-primary">{{ item.amount_change.difference | moneyfmt }}</div>
                                 {% if item.amount_change.percent is not none %}
-                                    <div class="recurring-table-detail">{{ "%+.1f"|format(item.amount_change.percent) }}%</div>
+                                    <div class="recurring-table-detail">{{ item.amount_change.percent | percentfmt(signed=true) }}</div>
                                 {% endif %}
                             </td>
                         {% else %}

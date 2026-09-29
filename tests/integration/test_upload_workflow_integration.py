@@ -131,7 +131,7 @@ def test_upload_route_marks_statement_failed_when_executor_rejects(owner_client,
     assert statement is not None
     assert tuple(statement)[:2] == (
         "failed",
-        "Background job could not be queued: RuntimeError: executor stopped",
+        "Background processing could not be queued: RuntimeError: executor stopped",
     )
     assert statement._mapping["import_finished_at"] is not None
     assert statement._mapping["imported_count"] == 0
@@ -585,7 +585,7 @@ def test_reprocess_statement_import_route_marks_failed_when_executor_rejects(own
     assert_visible_text(response, "Statement import could not be queued. Retry import from Uploaded statements.")
     assert tuple(statement)[:2] == (
         "failed",
-        "Background job could not be queued: RuntimeError: executor stopped",
+        "Background processing could not be queued: RuntimeError: executor stopped",
     )
     assert statement._mapping["import_finished_at"] is not None
     assert statement._mapping["imported_count"] == 0

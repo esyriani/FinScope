@@ -2,8 +2,8 @@
 
 The FinScope test suite is organized by layer and uses strict pytest markers.
 The default pytest configuration runs tests in parallel with pytest-xdist,
-collects tests only from [tests/](../tests/), skips coverage by default for speed, and
-treats warnings as errors.
+collects tests only from [tests/](../tests/), skips coverage by default for
+speed, excludes `optional` tests, and treats warnings as errors.
 An autouse network guard blocks socket connections in every test; external
 integrations such as LLM providers must be exercised through injected fakes.
 
@@ -155,7 +155,7 @@ Warnings are always test failures. Run coverage deliberately when needed:
 <summary>Windows PowerShell</summary>
 
 ```powershell
-.\.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
+.\.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=93
 ```
 
 </details>
@@ -164,7 +164,7 @@ Warnings are always test failures. Run coverage deliberately when needed:
 <summary>Windows cmd</summary>
 
 ```bat
-.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
+.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=93
 ```
 
 </details>
@@ -173,7 +173,7 @@ Warnings are always test failures. Run coverage deliberately when needed:
 <summary>macOS</summary>
 
 ```bash
-.venv/bin/python -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
+.venv/bin/python -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=93
 ```
 
 </details>
@@ -182,7 +182,174 @@ Warnings are always test failures. Run coverage deliberately when needed:
 <summary>Linux</summary>
 
 ```bash
-.venv/bin/python -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=91
+.venv/bin/python -B -m pytest --cov=finance_app --cov-report=term-missing --cov-fail-under=93
+```
+
+</details>
+
+## Optional test lanes
+
+The default suite stays fast and SQLite-backed. Slower or environment-specific
+checks live under [tests/optional/](../tests/optional/) and must be marked
+`optional` plus a capability marker such as `mysql` or `mutation`. Use this
+pattern for live backend checks, mutation testing, or future long-running gates
+that should be run deliberately rather than on every local edit.
+
+Live MySQL coverage requires a server URL with permission to create and drop
+temporary databases. The configured database name is used only as a safe prefix;
+each test creates a disposable database with a unique suffix and drops it during
+teardown.
+
+<details open>
+<summary>Windows PowerShell</summary>
+
+```powershell
+$env:FINSCOPE_TEST_MYSQL_URL = "mysql+pymysql://root:password@127.0.0.1:3306/finscope_test?charset=utf8mb4"
+.\.venv\Scripts\python.exe -B -m pytest -n 0 -m "optional and mysql"
+```
+
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+set "FINSCOPE_TEST_MYSQL_URL=mysql+pymysql://root:password@127.0.0.1:3306/finscope_test?charset=utf8mb4"
+.venv\Scripts\python.exe -B -m pytest -n 0 -m "optional and mysql"
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+export FINSCOPE_TEST_MYSQL_URL="mysql+pymysql://root:password@127.0.0.1:3306/finscope_test?charset=utf8mb4"
+.venv/bin/python -B -m pytest -n 0 -m "optional and mysql"
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+export FINSCOPE_TEST_MYSQL_URL="mysql+pymysql://root:password@127.0.0.1:3306/finscope_test?charset=utf8mb4"
+.venv/bin/python -B -m pytest -n 0 -m "optional and mysql"
+```
+
+</details>
+
+GitHub Actions keeps the normal quality and test jobs on every push and pull
+request. The optional MySQL job runs only from manual workflow dispatches and
+the scheduled weekly workflow.
+
+### AI categorization oracle
+
+FinScope includes an on-demand AI categorization oracle for locally labeled
+transaction samples under `runtime/llm_eval/`. It is a diagnostic quality gate,
+not part of pytest or CI, because live mode can call the configured AI provider
+and uses local private finance data.
+
+Validation is offline and safe to run at any time:
+
+<details open>
+<summary>Windows PowerShell</summary>
+
+```powershell
+.\.venv\Scripts\python.exe -B tools\llm_categorization_eval.py --input runtime\llm_eval\llm_categorization_oracle.xlsx
+```
+
+</details>
+
+Live provider scoring requires the explicit `--live` flag. Use `--mode cold`
+for taxonomy-only new-account behavior, `--mode rules` for rule evidence,
+`--mode full` for the realistic prompt context with rule and historical
+evidence, or `--mode all` for the ablation suite. Live runs write JSON and
+Markdown reports beside the oracle workbook unless output paths are provided.
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+.\.venv\Scripts\python.exe -B tools\llm_categorization_eval.py --input runtime\llm_eval\llm_categorization_oracle.xlsx --live --mode full
+.\.venv\Scripts\python.exe -B tools\llm_categorization_eval.py --input runtime\llm_eval\llm_categorization_oracle.xlsx --live --mode all
+```
+
+</details>
+
+### Rule-engine mutation experiment
+
+FinScope includes a first on-demand Cosmic Ray mutation-testing experiment for
+the deterministic rule-based categorization engine. It mutates only
+[src/finance_app/modules/rules/engine.py](../src/finance_app/modules/rules/engine.py)
+and runs the existing rule-engine focused tests from
+[tests/mutation/cosmic-ray-rules-engine.toml](../tests/mutation/cosmic-ray-rules-engine.toml). This campaign
+is a diagnostic tool for test-suite analysis, not a CI gate.
+
+Activate the development virtual environment before running Cosmic Ray so the
+`cosmic-ray` command itself resolves to the project install. The config invokes
+[tools/cosmic_ray_rule_engine_tests.py](../tools/cosmic_ray_rule_engine_tests.py),
+which locates the repo virtualenv and runs the focused pytest selection.
+Session databases and dumps should stay under `runtime/mutation/`, which is not
+committed.
+
+<details open>
+<summary>Windows PowerShell</summary>
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+cosmic-ray baseline tests/mutation/cosmic-ray-rules-engine.toml
+New-Item -ItemType Directory -Force -Path runtime\mutation | Out-Null
+cosmic-ray init --force tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+cosmic-ray dump runtime\mutation\rules-engine.sqlite > runtime\mutation\rules-engine-dump.jsonl
+python tools\cosmic_ray_summary.py runtime\mutation\rules-engine-dump.jsonl
+```
+
+</details>
+
+<details>
+<summary>Windows cmd</summary>
+
+```bat
+.venv\Scripts\activate.bat
+cosmic-ray baseline tests/mutation/cosmic-ray-rules-engine.toml
+if not exist runtime\mutation mkdir runtime\mutation
+cosmic-ray init --force tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-rules-engine.toml runtime\mutation\rules-engine.sqlite
+cosmic-ray dump runtime\mutation\rules-engine.sqlite > runtime\mutation\rules-engine-dump.jsonl
+python tools\cosmic_ray_summary.py runtime\mutation\rules-engine-dump.jsonl
+```
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+source .venv/bin/activate
+cosmic-ray baseline tests/mutation/cosmic-ray-rules-engine.toml
+mkdir -p runtime/mutation
+cosmic-ray init --force tests/mutation/cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
+cosmic-ray dump runtime/mutation/rules-engine.sqlite > runtime/mutation/rules-engine-dump.jsonl
+python tools/cosmic_ray_summary.py runtime/mutation/rules-engine-dump.jsonl
+```
+
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+source .venv/bin/activate
+cosmic-ray baseline tests/mutation/cosmic-ray-rules-engine.toml
+mkdir -p runtime/mutation
+cosmic-ray init --force tests/mutation/cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
+cosmic-ray exec tests/mutation/cosmic-ray-rules-engine.toml runtime/mutation/rules-engine.sqlite
+cosmic-ray dump runtime/mutation/rules-engine.sqlite > runtime/mutation/rules-engine-dump.jsonl
+python tools/cosmic_ray_summary.py runtime/mutation/rules-engine-dump.jsonl
 ```
 
 </details>
@@ -197,7 +364,7 @@ commands. Frontend checks require Node.js 20+ with npm:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -207,7 +374,7 @@ npm install
 
 ```bat
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -217,7 +384,7 @@ npm install
 
 ```bash
 .venv/bin/python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -227,7 +394,7 @@ npm install
 
 ```bash
 .venv/bin/python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
 
 </details>
@@ -291,8 +458,10 @@ The same quality gates run in GitHub Actions for every push and pull request.
 Mypy is configured in [pyproject.toml](../pyproject.toml) for [sitecustomize.py](../sitecustomize.py) and the production
 application package. Djlint checks Jinja templates in lint-only mode. Frontend
 checks are configured through npm scripts: Prettier checks formatting for
-first-party static JavaScript and CSS, ESLint checks browser JavaScript, and
-Stylelint checks first-party CSS. Vendored browser libraries are excluded.
+first-party static JavaScript, CSS, and frontend runtime tests; ESLint checks
+browser JavaScript and the frontend tests; Stylelint checks first-party CSS; and
+Vitest runs jsdom browser-behavior tests for selected static assets. Vendored
+browser libraries are excluded.
 
 ## Markers
 
@@ -303,6 +472,9 @@ Stylelint checks first-party CSS. Vendored browser libraries are excluded.
   put detailed route copy, exact HTML, pagination, sorting, and cleanup
   assertions in route or integration tests.
 - `slow`: currently applied to smoke tests.
+- `optional`: opt-in tests excluded from default local and pull request runs.
+- `mysql`: live MySQL runtime tests requiring `FINSCOPE_TEST_MYSQL_URL`.
+- `mutation`: reserved for optional future mutation-testing checks.
 - `db`: tests using the database fixture.
 - `flask`: tests using Flask app, request context, or test client.
 
@@ -312,6 +484,8 @@ Stylelint checks first-party CSS. Vendored browser libraries are excluded.
 - [tests/integration/](../tests/integration/)
 - [tests/routes/](../tests/routes/)
 - [tests/smoke/](../tests/smoke/)
+- [tests/optional/](../tests/optional/)
+- [tests/frontend/](../tests/frontend/)
 - [tests/support/](../tests/support/)
 
 Prefer the smallest useful test layer. Use smoke tests for critical cross-layer workflows, not for behavior already covered cleanly by unit, integration, or route tests.

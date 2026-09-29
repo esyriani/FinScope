@@ -5,6 +5,7 @@ from contextlib import contextmanager
 
 from sqlalchemy import text
 from tests.support.database import set_owner_setting
+from tests.support.html import assert_visible_text
 from tests.support.llm import result_payload
 from tests.support.upload import (
     assert_llm_progress_log_entries,
@@ -467,7 +468,7 @@ def test_categorize_statement_unknown_transactions_job_persists_unknown_llm_meta
         {"p0": unknown_id},
     ).fetchone()
     metadata = json.loads(row._mapping["category_metadata"])
-    assert message == "0 automatically categorized."
+    assert message == "0 automatically categorized. 1 transaction kept unknown for review."
     assert row._mapping["category"] == "UNKNOWN"
     assert row._mapping["needs_review"] == 1
     assert row._mapping["category_source"] == "unknown"
@@ -503,7 +504,7 @@ def test_categorize_unknown_transactions_job_logs_real_batch_progress(app, core_
         ["UNKNOWN GOOD", "UNKNOWN UNRESOLVED"],
         ["UNKNOWN TIMEOUT"],
     ]
-    assert message == "1 automatically categorized: 1 AI."
+    assert message == "1 automatically categorized: 1 AI. 2 transactions kept unknown for review."
     assert_llm_progress_log_entries(log_entries)
     assert_llm_progress_updates(progress_updates)
 
@@ -562,7 +563,7 @@ def test_categorize_statement_unknowns_route_queues_statement_ai(owner_client, c
 
     assert response.status_code == 200
     assert submitted == [statement_id]
-    assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
+    assert_visible_text(response, "AI categorization queued for 1 unknown transaction.")
 
 
 def test_automatic_categorization_message_reports_source_breakdown():
@@ -576,3 +577,15 @@ def test_automatic_categorization_message_reports_source_breakdown():
     )
 
     assert message == "76 automatically categorized: 50 similarity, 26 AI."
+
+
+def test_automatic_categorization_message_reports_unresolved_unknowns():
+    """Verify AI summaries report rows the model kept unknown."""
+    assert (
+        upload_messages.automatic_categorization_message(0, unresolved_count=1)
+        == "0 automatically categorized. 1 transaction kept unknown for review."
+    )
+    assert (
+        upload_messages.automatic_categorization_message(3, {"ai": 3}, unresolved_count=12)
+        == "3 automatically categorized: 3 AI. 12 transactions kept unknown for review."
+    )

@@ -5,6 +5,7 @@ import json
 import pytest
 from sqlalchemy import insert, select, update
 
+from finance_app.core.constants import REIMBURSEMENT_CATEGORY, TRANSACTION_KIND_INCOME
 from finance_app.database.tables import transactions as transactions_table
 from finance_app.modules.categories.repository import resolve_category_id
 from finance_app.modules.categories.taxonomy import (
@@ -104,6 +105,7 @@ def test_assign_manual_category_updates_transaction_tags_and_optional_rule(core_
         "category": "Food",
         "amount_min": 10.0,
         "amount_max": 20.0,
+        "direction": "debit",
         "source": "manual",
     }
     assert get_rule_tags_by_rule_id(core_conn, [result.saved_rule_id])[result.saved_rule_id] == ["Tax"]
@@ -157,6 +159,49 @@ def test_assign_manual_category_saves_rule_and_approves_unchanged_transaction(co
     assert tx["needs_review"] == 0
     assert tx["reviewed_at"] is not None
     assert get_transaction_tag_names(core_conn, transaction_id) == ["Tax"]
+
+
+def test_assign_manual_category_saves_credit_reimbursement_rule_without_reimbursable_tag(core_conn):
+    """Verify credit reimbursement rules are credit-scoped and keep only persisted tags."""
+    merchant_id = get_or_create_merchant_for_description(core_conn, "JUDO QUEBEC")["id"]
+    transaction_id = core_conn.execute(
+        insert(transactions_table).values(
+            merchant_id=merchant_id,
+            tx_date="2026-01-20",
+            description="JUDO QUEBEC",
+            amount=-95.00,
+            category="UNKNOWN",
+            category_id=resolve_category_id(core_conn, "UNKNOWN"),
+            transaction_kind=TRANSACTION_KIND_INCOME,
+            needs_review=1,
+            fingerprint="tx-judo-reimbursement",
+        )
+    ).inserted_primary_key[0]
+
+    result = assign_manual_category(
+        core_conn,
+        transaction_id,
+        REIMBURSEMENT_CATEGORY,
+        tag_names=["Judo", "Reimbursable"],
+        rule_keyword="JUDO QUEBEC",
+        rule_merchant_id=merchant_id,
+    )
+
+    assert result.updated is True
+    assert result.saved_rule_id is not None
+    assert get_transaction_tag_names(core_conn, transaction_id) == ["Judo"]
+
+    rule = get_transaction_rule(core_conn, result.saved_rule_id)
+    assert rule == {
+        "merchant_id": merchant_id,
+        "keyword": "JUDO QUEBEC",
+        "category": REIMBURSEMENT_CATEGORY,
+        "amount_min": None,
+        "amount_max": None,
+        "direction": "credit",
+        "source": "manual",
+    }
+    assert get_rule_tags_by_rule_id(core_conn, [result.saved_rule_id])[result.saved_rule_id] == ["Judo"]
 
 
 def test_mark_transaction_verified_updates_review_status(core_conn, repository_transaction):
@@ -224,6 +269,7 @@ def get_transaction_rule(conn, rule_id):
                 category_rules_table.c.category,
                 category_rules_table.c.amount_min,
                 category_rules_table.c.amount_max,
+                category_rules_table.c.direction,
                 category_rules_table.c.source,
             ).where(category_rules_table.c.id == rule_id)
         )

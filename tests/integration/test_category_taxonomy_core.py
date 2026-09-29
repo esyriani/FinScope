@@ -70,6 +70,31 @@ def test_taxonomy_helpers_support_core_connections(app, core_conn):
     assert tuple(transaction_tag) == ("manual", rule_id)
 
 
+def test_transaction_tags_allow_reimbursable_only_on_expenses(app, core_conn):
+    """Verify the Reimbursable tag is only persisted on debit expense rows."""
+    del app
+    expense_id = core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, transaction_kind, fingerprint)
+        VALUES ('2026-01-02', 'EXPENSE', 42.00, 'UNKNOWN', 'expense', 'core-taxonomy-expense')
+        """)).lastrowid
+    credit_id = core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, transaction_kind, fingerprint)
+        VALUES ('2026-01-03', 'CREDIT', -42.00, 'UNKNOWN', 'income', 'core-taxonomy-credit')
+        """)).lastrowid
+    transfer_id = core_conn.execute(text("""
+        INSERT INTO transactions (tx_date, description, amount, category, transaction_kind, fingerprint)
+        VALUES ('2026-01-04', 'TRANSFER', 42.00, 'Transfers', 'transfer', 'core-taxonomy-transfer')
+        """)).lastrowid
+
+    set_transaction_tags(core_conn, expense_id, ["Reimbursable", "Tax"], source="manual")
+    set_transaction_tags(core_conn, credit_id, ["Reimbursable", "Tax"], source="manual")
+    set_transaction_tags(core_conn, transfer_id, ["Reimbursable", "Tax"], source="manual")
+
+    assert get_transaction_tag_names(core_conn, expense_id) == ["Reimbursable", "Tax"]
+    assert get_transaction_tag_names(core_conn, credit_id) == ["Tax"]
+    assert get_transaction_tag_names(core_conn, transfer_id) == ["Tax"]
+
+
 def test_taxonomy_upserts_use_database_name_keys(app, core_conn):
     """Match category and tag metadata by generated normalized name keys."""
     del app

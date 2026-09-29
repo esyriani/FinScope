@@ -616,7 +616,7 @@ def test_comparison_route_renders_visual_key_insights(owner_client, core_conn, m
         "insight-current-value text-danger",
         "insight-bar-fill",
     )
-    assert_visible_text(response, "Key insights", "Largest category increase", "Food", "+140.00 $")
+    assert_visible_text(response, "Key insights", "Largest category increase", "Food", "+$140.00")
     assert_not_markup(
         response,
         "insight_type",
@@ -662,7 +662,7 @@ def test_comparison_route_renders_ranked_anomaly_insights(owner_client, core_con
         "Key insights",
         "Unusually high category spending",
         "Food: higher than usual",
-        "+170.00 $",
+        "+$170.00",
     )
     assert_not_markup(response, "robust_anomaly", "merchant_behavior", "rank_reason")
 

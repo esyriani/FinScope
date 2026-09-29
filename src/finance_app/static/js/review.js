@@ -75,7 +75,7 @@ async function fetchReviewJobStatus(statusUrl) {
     });
 
     if (!response.ok) {
-        throw new Error(reviewTranslate("Review job status could not be loaded."));
+        throw new Error(reviewTranslate("Review processing status could not be loaded."));
     }
 
     return response.json();

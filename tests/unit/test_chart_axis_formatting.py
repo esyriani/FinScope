@@ -45,17 +45,20 @@ def test_browser_money_formatting_is_centralized():
         assert "window.financeFormatMoney" in script or ".formatMoney" in script
 
 
-def test_browser_money_formatter_preserves_locale_decimal_separators():
-    """Verify browser money display only normalizes grouping separators."""
+def test_browser_money_formatter_preserves_locale_number_parts():
+    """Verify browser money display keeps locale separators and centralizes placement."""
     app_boot_js = (ROOT / "src" / "finance_app" / "static" / "js" / "app-boot.js").read_text(encoding="utf-8")
 
     assert "function financeMoneyNumber(value)" in app_boot_js
     assert 'typeof value !== "number" && typeof value !== "string"' in app_boot_js
     assert 'typeof value === "string" && value.trim() === ""' in app_boot_js
     assert "Number.isFinite(numberValue) ? numberValue : null" in app_boot_js
-    assert "function financeFormatNumberParts(formatter, numberValue)" in app_boot_js
-    assert ".formatToParts(numberValue)" in app_boot_js
-    assert 'part.type === "group" ? " " : part.value' in app_boot_js
+    assert "window.financeFormatNumber" in app_boot_js
+    assert "window.financeFormatPercent" in app_boot_js
+    assert "function financeFormatCurrencyText" in app_boot_js
+    assert ".format(Math.abs(numberValue))" in app_boot_js
+    assert ".formatToParts(numberValue)" not in app_boot_js
+    assert 'part.type === "group" ? " " : part.value' not in app_boot_js
     assert 'replace(/,/g, " ")' not in app_boot_js
     assert "Number(value) || 0" not in app_boot_js
 

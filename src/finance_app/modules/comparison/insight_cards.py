@@ -8,7 +8,7 @@ from finance_app.modules.comparison.constants import UNKNOWN_WARNING_THRESHOLD
 
 
 def largest_change(rows: Any, direction: Any) -> Any:
-    """Handle largest change."""
+    """Return the largest absolute-change row for one movement direction."""
     candidates = [row for row in rows if row["direction"] == direction]
     return max(candidates, key=lambda row: row["abs_change"], default=None)
 
@@ -101,7 +101,7 @@ def change_insight(
     rank_reason: Any = "",
     **extra_fields: Any,
 ) -> Any:
-    """Build insight."""
+    """Return a comparison card for one category or merchant row."""
     name = row[label_key]
     noun = gettext(row.get("noun") or "spending")
     if row["state"] == "new":
@@ -181,7 +181,7 @@ def build_period_insight_groups(insights: Any) -> Any:
 def build_period_unknown_warning(
     category_rows: Any, current_spending: Any, previous_spending: Any, unknown_category: Any
 ) -> Any:
-    """Build period unknown warning."""
+    """Warn when Unknown spending can distort period category insights."""
     unknown = next((row for row in category_rows if row["category"] == unknown_category), None)
     if not unknown:
         return None
@@ -200,7 +200,7 @@ def build_period_unknown_warning(
 
 
 def build_year_unknown_warning(category_comparison: Any, unknown_category: Any) -> Any:
-    """Build year unknown warning."""
+    """Warn when Unknown spending can distort year-over-year category totals."""
     total = sum(row["total"] for row in category_comparison)
     unknown = next((row for row in category_comparison if row["category"] == unknown_category), None)
     if not unknown or not total:
@@ -232,14 +232,12 @@ def build_unknown_warning_message(source: Any, category: Any, share: Any) -> Any
 
 
 def percentage_share(value: Any, total: Any) -> Any:
-    """Handle percentage share."""
     value = money_to_float(value)
     total = money_to_float(total)
     return round((value / total) * 100, 1) if total else 0
 
 
 def format_signed_count(value: Any) -> Any:
-    """Format signed count."""
     value = int(round(value or 0))
     return f"{value:+d}" if value else "0"
 
@@ -268,12 +266,10 @@ def positive_money_float(value: Any) -> Any:
 
 
 def format_money_text(value: Any) -> Any:
-    """Format money text."""
     return format_money_display(value)
 
 
 def format_signed_money_text(value: Any) -> Any:
-    """Format signed money text."""
     value = rounded_money_float(value)
     prefix = "+" if value > 0 else "-" if value < 0 else ""
     return f"{prefix}{format_money_text(abs(value))}"

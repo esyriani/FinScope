@@ -172,7 +172,7 @@ def import_rules() -> ResponseReturnValue:
 
     flash(
         gettext(
-            "Rules import queued in the background. Track progress on the Processing page. Job: {job_id}",
+            "Rules import queued in the background. Track progress on the Processing page. Processing item: {job_id}",
             job_id=result["job_id"][:8],
         )
     )
@@ -289,7 +289,7 @@ def apply_all_rules() -> ResponseReturnValue:
 
     flash(
         gettext(
-            "Applying all rules in the background. Track progress on the Processing page. Job: {job_id}",
+            "Applying all rules in the background. Track progress on the Processing page. Processing item: {job_id}",
             job_id=result["job_id"][:8],
         )
     )

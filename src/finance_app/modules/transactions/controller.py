@@ -113,9 +113,9 @@ def batch_transactions() -> ResponseReturnValue:
             flash(
                 gettext(
                     (
-                        "Recategorization queued for {count} selected transaction. Job: {job_id}"
+                        "Recategorization queued for {count} selected transaction. Processing item: {job_id}"
                         if selected_count == 1
-                        else "Recategorization queued for {count} selected transactions. Job: {job_id}"
+                        else "Recategorization queued for {count} selected transactions. Processing item: {job_id}"
                     ),
                     count=selected_count,
                     job_id=job_id[:8],

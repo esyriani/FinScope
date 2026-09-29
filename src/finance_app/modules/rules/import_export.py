@@ -36,6 +36,7 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.categories.service import clean_category_name, normalize_merchant_description
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, normalize_tag_names
+from finance_app.modules.rules.forms import validate_rule_tags_for_direction
 
 from .repository import (
     category_rule_exists,
@@ -470,7 +471,7 @@ def undo_rules_override_import(undo_state: Mapping[str, Any]) -> str:
         # Override undo is intentionally strict: if rule state changed after
         # import, restoring the prior snapshot would discard later user edits.
         if not rule_snapshots_equal(current_rules, after_rules):
-            raise ValueError("Cannot undo this rules import because rules changed after the import job.")
+            raise ValueError("Cannot undo this rules import because rules changed after import processing.")
 
         imported_rule_ids = [rule["id"] for rule in after_rules]
         if imported_rule_ids and rule_reference_count(conn, imported_rule_ids):
@@ -587,6 +588,10 @@ def parse_rules_csv_row(row: Mapping[str, Any], line_number: int) -> dict[str, A
     if direction not in CATEGORY_RULE_DIRECTIONS:
         allowed_directions = ", ".join(sorted(CATEGORY_RULE_DIRECTIONS))
         raise ValueError(f"Row {line_number}: direction must be one of {allowed_directions}.")
+    try:
+        validate_rule_tags_for_direction(tag_names, direction)
+    except ValueError as exc:
+        raise ValueError(f"Row {line_number}: {exc}") from None
 
     created_at = str(rule_import_value(normalized_row, "created_at", "created") or "").strip() or None
 

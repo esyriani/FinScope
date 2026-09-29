@@ -67,7 +67,7 @@ def test_build_period_insights_preserves_card_order_and_public_fields():
         "change": 140.0,
         "abs_change": 140.0,
         "percent": 233.3,
-        "amount_label": "+140.00 $",
+        "amount_label": "+$140.00",
         "percent_label": "+233.3%",
         "direction": "up",
         "state": "changed",
@@ -89,18 +89,18 @@ def test_build_period_insights_preserves_card_order_and_public_fields():
     ]
     assert public_fields(insights[0]) == {
         "label": "Largest category increase",
-        "value": "Food +140.00 $ (+233.3%)",
-        "detail": "Prior: 60.00 $. Current: 200.00 $",
+        "value": "Food +$140.00 (+233.3%)",
+        "detail": "Prior: $60.00. Current: $200.00",
         "visual": "comparison",
         "group": "categories",
         "tone": "danger",
         "icon": "bi-graph-up-arrow",
         "title": "Food",
-        "summary": "+140.00 $",
+        "summary": "+$140.00",
         "badge": "+233.3%",
     }
-    assert insights[0]["previous_label"] == "60.00 $"
-    assert insights[0]["current_label"] == "200.00 $"
+    assert insights[0]["previous_label"] == "$60.00"
+    assert insights[0]["current_label"] == "$200.00"
     assert insights[0]["previous_width"] == 30.0
     assert insights[0]["current_width"] == 100.0
     assert insights[0]["insight_type"] == "category_increase"
@@ -112,7 +112,7 @@ def test_build_period_insights_preserves_card_order_and_public_fields():
     assert public_fields(insights[2]) == {
         "label": "Transaction activity",
         "value": "1 transaction",
-        "detail": "0 versus prior period. Average spending: 200.00 $",
+        "detail": "0 versus prior period. Average spending: $200.00",
         "visual": "activity",
         "group": "spending",
         "tone": "accent",
@@ -124,7 +124,7 @@ def test_build_period_insights_preserves_card_order_and_public_fields():
     assert insights[2]["stat_items"] == [
         {"label": "Current", "value": "1"},
         {"label": "Prior", "value": "1"},
-        {"label": "Average", "value": "200.00 $"},
+        {"label": "Average", "value": "$200.00"},
     ]
     assert insights[2]["insight_type"] == "transaction_activity"
     assert insights[2]["score"] == 0.0
@@ -143,7 +143,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
             "change": 140.0,
             "abs_change": 140.0,
             "percent": 233.3,
-            "amount_label": "+140.00 $",
+            "amount_label": "+$140.00",
             "percent_label": "+233.3%",
             "direction": "up",
             "state": "changed",
@@ -155,7 +155,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
             "change": -80.0,
             "abs_change": 80.0,
             "percent": -80.0,
-            "amount_label": "-80.00 $",
+            "amount_label": "-$80.00",
             "percent_label": "-80.0%",
             "direction": "down",
             "state": "changed",
@@ -167,7 +167,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
             "change": 40.0,
             "abs_change": 40.0,
             "percent": None,
-            "amount_label": "+40.00 $",
+            "amount_label": "+$40.00",
             "percent_label": "New",
             "direction": "up",
             "state": "new",
@@ -179,7 +179,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
             "change": -80.0,
             "abs_change": 80.0,
             "percent": -100.0,
-            "amount_label": "-80.00 $",
+            "amount_label": "-$80.00",
             "percent_label": "Dropped",
             "direction": "down",
             "state": "dropped",
@@ -194,7 +194,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
             "change": 140.0,
             "abs_change": 140.0,
             "percent": 233.3,
-            "amount_label": "+140.00 $",
+            "amount_label": "+$140.00",
             "percent_label": "+233.3%",
             "direction": "up",
             "state": "changed",
@@ -207,7 +207,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
             "change": -90.0,
             "abs_change": 90.0,
             "percent": -90.0,
-            "amount_label": "-90.00 $",
+            "amount_label": "-$90.00",
             "percent_label": "-90.0%",
             "direction": "down",
             "state": "changed",
@@ -220,7 +220,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
             "change": 40.0,
             "abs_change": 40.0,
             "percent": None,
-            "amount_label": "+40.00 $",
+            "amount_label": "+$40.00",
             "percent_label": "New",
             "direction": "up",
             "state": "new",
@@ -233,7 +233,7 @@ def test_build_period_insights_scores_all_existing_candidate_types():
             "change": -80.0,
             "abs_change": 80.0,
             "percent": -100.0,
-            "amount_label": "-80.00 $",
+            "amount_label": "-$80.00",
             "percent_label": "Dropped",
             "direction": "down",
             "state": "dropped",
@@ -307,25 +307,25 @@ def test_robust_anomaly_insight_candidates_build_plain_language_cards():
     assert public_fields(insights[0]) == {
         "label": "Unusually high category spending",
         "value": "Food: higher than usual",
-        "detail": "Food is 220.00 $ this period; typical recent spending is 50.00 $.",
+        "detail": "Food is $220.00 this period; typical recent spending is $50.00.",
         "visual": "comparison",
         "group": "categories",
         "tone": "danger",
         "icon": "bi-graph-up-arrow",
         "title": "Food: higher than usual",
-        "summary": "+170.00 $",
+        "summary": "+$170.00",
         "badge": "Higher than usual",
     }
     assert public_fields(insights[1]) == {
         "label": "Unusually low category spending",
         "value": "Travel: lower than usual",
-        "detail": "Travel is 20.00 $ this period; typical recent spending is 200.00 $.",
+        "detail": "Travel is $20.00 this period; typical recent spending is $200.00.",
         "visual": "comparison",
         "group": "categories",
         "tone": "success",
         "icon": "bi-graph-down-arrow",
         "title": "Travel: lower than usual",
-        "summary": "-180.00 $",
+        "summary": "-$180.00",
         "badge": "Lower than usual",
     }
     assert "median" not in insights[0]["detail"].casefold()
@@ -336,8 +336,8 @@ def test_robust_anomaly_insight_candidates_build_plain_language_cards():
     assert insights[0]["robust_anomaly"]["is_anomaly"] is True
     assert insights[0]["selection_metrics"]["metric"] == "money"
     assert insights[0]["selection_metrics"]["entity_key"] == "Food"
-    assert insights[0]["previous_label"] == "50.00 $"
-    assert insights[0]["current_label"] == "220.00 $"
+    assert insights[0]["previous_label"] == "$50.00"
+    assert insights[0]["current_label"] == "$220.00"
 
 
 def test_robust_anomaly_insight_candidates_require_five_history_periods():
@@ -468,19 +468,19 @@ def test_merchant_behavior_candidates_detect_new_merchant():
     assert public_fields(insights[0]) == {
         "label": "New merchant activity",
         "value": "NEW BAKERY: new this period",
-        "detail": "NEW BAKERY has 75.00 $ in current-period spending and did not appear in the prior period.",
+        "detail": "NEW BAKERY has $75.00 in current-period spending and did not appear in the prior period.",
         "visual": "aggregate",
         "group": "merchants",
         "tone": "danger",
         "icon": "bi-plus-circle",
         "title": "New merchant",
-        "summary": "75.00 $",
+        "summary": "$75.00",
         "badge": "New",
     }
     assert insights[0]["stat_items"] == [
         {"label": "Merchant", "value": "NEW BAKERY"},
-        {"label": "Current", "value": "75.00 $"},
-        {"label": "Prior", "value": "0.00 $"},
+        {"label": "Current", "value": "$75.00"},
+        {"label": "Prior", "value": "$0.00"},
     ]
     assert insights[0]["merchant_behavior"] == {
         "behavior": "new",
@@ -502,19 +502,19 @@ def test_merchant_behavior_candidates_detect_dropped_merchant():
     assert public_fields(insights[0]) == {
         "label": "Missing merchant activity",
         "value": "PAUSED SUBSCRIPTION: missing this period",
-        "detail": "PAUSED SUBSCRIPTION had 120.00 $ in prior-period spending and is missing from the current period.",
+        "detail": "PAUSED SUBSCRIPTION had $120.00 in prior-period spending and is missing from the current period.",
         "visual": "aggregate",
         "group": "merchants",
         "tone": "success",
         "icon": "bi-dash-circle",
         "title": "Missing merchant",
-        "summary": "120.00 $",
+        "summary": "$120.00",
         "badge": "Missing",
     }
     assert insights[0]["stat_items"] == [
         {"label": "Merchant", "value": "PAUSED SUBSCRIPTION"},
-        {"label": "Current", "value": "0.00 $"},
-        {"label": "Prior", "value": "120.00 $"},
+        {"label": "Current", "value": "$0.00"},
+        {"label": "Prior", "value": "$120.00"},
     ]
     assert insights[0]["merchant_behavior"]["behavior"] == "dropped"
 
@@ -539,18 +539,18 @@ def test_merchant_behavior_candidates_detect_resurrected_merchant():
     assert public_fields(insights[0]) == {
         "label": "Merchant returned",
         "value": "SEASONAL SHOP: returned after a gap",
-        "detail": "SEASONAL SHOP returned with 90.00 $ after 6 months without spending.",
+        "detail": "SEASONAL SHOP returned with $90.00 after 6 months without spending.",
         "visual": "aggregate",
         "group": "merchants",
         "tone": "accent",
         "icon": "bi-arrow-clockwise",
         "title": "Merchant returned",
-        "summary": "90.00 $",
+        "summary": "$90.00",
         "badge": "Returned",
     }
     assert insights[0]["stat_items"] == [
         {"label": "Merchant", "value": "SEASONAL SHOP"},
-        {"label": "Current", "value": "90.00 $"},
+        {"label": "Current", "value": "$90.00"},
         {"label": "Last seen", "value": "6 months ago"},
     ]
     assert insights[0]["merchant_behavior"]["behavior"] == "resurrected"
@@ -586,7 +586,7 @@ def test_merchant_behavior_candidates_detect_major_rank_increase():
         {"label": "Merchant", "value": "METRO GROCERY"},
         {"label": "Current rank", "value": "#1"},
         {"label": "Prior rank", "value": "#5"},
-        {"label": "Current", "value": "200.00 $"},
+        {"label": "Current", "value": "$200.00"},
     ]
     assert insights[0]["merchant_behavior"]["behavior"] == "rank_increase"
     assert insights[0]["merchant_behavior"]["rank_change"] == 4

@@ -11,7 +11,7 @@ This guide covers repository onboarding and development workflow. Detailed archi
 - Bootstrap 5.3.3 and ECharts 5.6.0.
 - pytest 9.0.3 with pytest-xdist.
 - OpenAI SDK 2.33.0 for optional AI categorization.
-- Node.js 20+ with npm for frontend formatting and linting.
+- Node.js 20+ with npm for frontend formatting, linting, and jsdom runtime tests.
 
 ## Repository layout
 
@@ -76,8 +76,9 @@ npm ci
 `requirements-dev.txt` installs the editable package with the Python development
 extra, including pytest, Black, djlint, mypy, and Ruff. Python requirements
 files use [constraints.txt](../constraints.txt) to install the tested dependency
-resolution. `package-lock.json` pins the npm formatter and linting dependencies:
-Prettier, ESLint, Stylelint, and their shared configs.
+resolution. `package-lock.json` pins the npm formatter, linting, and frontend
+runtime-test dependencies: Prettier, ESLint, Stylelint, Vitest, jsdom, and their
+shared configs.
 
 Python packaging and declared dependencies are configured in [pyproject.toml](../pyproject.toml). Runtime dependencies live in `[project].dependencies`; development tools live in the `dev` optional dependency extra. [requirements.txt](../requirements.txt) is a non-editable pip install wrapper for normal installs, and [requirements-dev.txt](../requirements-dev.txt) is an editable wrapper for contributor installs. Do not duplicate Python dependency names in requirements files.
 

@@ -492,7 +492,7 @@ def build_rule_assessment(
             "badge_class": "text-bg-warning",
             "paragraphs": [
                 "Category conflict. This rule overlaps with another rule that assigns a different category.",
-                "FineScope currently applies the highest-scoring rule.",
+                "FinScope currently applies the highest-scoring rule.",
             ],
             "recommended_action_label": "Review category conflict",
             "recommended_action_detail": "Inspect the shared transactions and consider narrowing one rule.",

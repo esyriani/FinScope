@@ -7,6 +7,7 @@ CLIENT_TRANSLATION_MESSAGES = (
     "No active transactions match this rule.",
     "Preview unavailable.",
     "Rule updated.",
+    "Rules with the Reimbursable tag must use Debit direction.",
     "The rule action could not be completed.",
     "{count} active matching transaction.",
     "{count} active matching transactions.",

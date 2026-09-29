@@ -320,9 +320,9 @@ def test_review_page_localizes_group_summary_fragments(owner_client, core_conn):
 
     assert response.status_code == 200
     assert "2 transactions" in review_summary
-    assert "02-janv.-2026 \u00e0 05-janv.-2026" in review_summary
-    assert "Impact de 24.68 $" in review_summary
-    assert_visible_text(response, "02-janv.-2026 / Personnel")
+    assert "2 janv. 2026 \u00e0 5 janv. 2026" in review_summary
+    assert "Impact de 24,68 $" in review_summary
+    assert_visible_text(response, "2 janv. 2026 / Personnel")
     assert all("Personal" not in detail for detail in example_details)
 
 

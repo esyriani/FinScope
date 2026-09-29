@@ -432,7 +432,11 @@ def seed_reimbursable_dashboard_data(conn):
             ("tx_date", "description", "amount", "category", "transaction_kind", "fingerprint"),
         ),
     )
-    for fingerprint in ("dashboard-reimbursable-expense", "dashboard-reimbursable-credit"):
+    tag_assignments = {
+        "dashboard-reimbursable-expense": ["Judo", "Reimbursable"],
+        "dashboard-reimbursable-credit": ["Judo"],
+    }
+    for fingerprint, tags in tag_assignments.items():
         transaction_id = (
             conn.execute(
                 text("""
@@ -445,7 +449,7 @@ def seed_reimbursable_dashboard_data(conn):
             .fetchone()
             ._mapping["id"]
         )
-        set_transaction_tags(conn, transaction_id, ["Reimbursable"], source="manual")
+        set_transaction_tags(conn, transaction_id, tags, source="manual")
     conn.commit()
 
 
@@ -504,12 +508,13 @@ def seed_reimbursable_comparison_data(conn):
             ("tx_date", "description", "amount", "category", "transaction_kind", "fingerprint"),
         ),
     )
-    for fingerprint in (
-        "comparison-reimbursable-prior-expense",
-        "comparison-reimbursable-prior-credit",
-        "comparison-reimbursable-current-expense",
-        "comparison-reimbursable-current-credit",
-    ):
+    tag_assignments = {
+        "comparison-reimbursable-prior-expense": ["Judo", "Reimbursable"],
+        "comparison-reimbursable-prior-credit": ["Judo"],
+        "comparison-reimbursable-current-expense": ["Judo", "Reimbursable"],
+        "comparison-reimbursable-current-credit": ["Judo"],
+    }
+    for fingerprint, tags in tag_assignments.items():
         transaction_id = (
             conn.execute(
                 text("""
@@ -522,7 +527,7 @@ def seed_reimbursable_comparison_data(conn):
             .fetchone()
             ._mapping["id"]
         )
-        set_transaction_tags(conn, transaction_id, ["Reimbursable"], source="manual")
+        set_transaction_tags(conn, transaction_id, tags, source="manual")
     conn.commit()
 
 

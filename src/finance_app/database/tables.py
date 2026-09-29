@@ -190,8 +190,8 @@ pinned_reports = Table(
     Column("merchant_filter_id", Integer, ForeignKey("merchants.id", ondelete="SET NULL")),
     Column("merchant_query", String(255), nullable=False, server_default=""),
     Column("classification_scope", String(32), nullable=False),
-    Column("category_filters", Text, nullable=False, server_default="[]"),
-    Column("tag_filters", Text, nullable=False, server_default="[]"),
+    Column("category_filters", String(4096), nullable=False, server_default="[]"),
+    Column("tag_filters", String(4096), nullable=False, server_default="[]"),
     Column("fingerprint", String(512), nullable=False),
     Column("sort_order", Integer, nullable=False, server_default=text("0")),
     Column("short_title", String(30)),
@@ -210,7 +210,8 @@ pinned_reports = Table(
     CheckConstraint(
         "short_title IS NULL OR length(trim(short_title)) <= 30",
         name="pinned_reports_short_title_length",
-    ),
+        info={"schema_validation_dialects": ("sqlite",)},
+    ).ddl_if(dialect="sqlite"),
     **AUTOINCREMENT_TABLE_OPTIONS,
 )
 
@@ -361,22 +362,22 @@ category_rules = Table(
     Column(
         "keyword_scope_key",
         String(255),
-        Computed("CASE WHEN merchant_id IS NULL THEN keyword ELSE NULL END", persisted=True),
+        Computed("CASE WHEN merchant_id IS NULL THEN keyword ELSE NULL END"),
     ),
     Column(
         "account_id_key",
         Integer,
-        Computed("COALESCE(account_id, -1)", persisted=True),
+        Computed("COALESCE(account_id, -1)"),
     ),
     Column(
         "amount_min_key",
         MONEY_AMOUNT_TYPE,
-        Computed(f"COALESCE(amount_min, {MONEY_NULL_SENTINEL_SQL})", persisted=True),
+        Computed(f"COALESCE(amount_min, {MONEY_NULL_SENTINEL_SQL})"),
     ),
     Column(
         "amount_max_key",
         MONEY_AMOUNT_TYPE,
-        Computed(f"COALESCE(amount_max, {MONEY_NULL_SENTINEL_SQL})", persisted=True),
+        Computed(f"COALESCE(amount_max, {MONEY_NULL_SENTINEL_SQL})"),
     ),
     Column("source", String(32), nullable=False, server_default=CATEGORY_RULE_SOURCE_MANUAL),
     Column("ai_approved", Integer, nullable=False, server_default=text("0")),

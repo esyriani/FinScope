@@ -97,7 +97,8 @@ def undo_apply_all_rules_job(undo_state: Mapping[str, Any]) -> str:
 
     if skipped_count:
         message += (
-            f" Skipped {skipped_count} transaction" f"{'' if skipped_count == 1 else 's'} that changed after the job."
+            f" Skipped {skipped_count} transaction"
+            f"{'' if skipped_count == 1 else 's'} that changed after processing."
         )
 
     return message
