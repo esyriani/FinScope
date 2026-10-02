@@ -126,7 +126,7 @@ Creating or editing a rule saves the future matching behavior first and leaves h
 
 ### Importing and applying rules
 
-Rules can be exported and imported as CSV. Imported rows use the export format shown in the import modal, including keyword, account name, merchant name, category, tags, amount bounds, direction, source, and created timestamp.
+Rules can be exported and imported as CSV. Imported rows use the export format shown in the import modal, including keyword, account name, merchant name, category, tags, amount bounds, direction, source, and created timestamp. If some rows have errors, FinScope skips and reports those rows while allowing the valid rows to be imported.
 
 Use Add new rules only when merging rules from another database or backup. Use Override all rules only when you intentionally want to replace the current rule set; the resulting processing item can be undone from Processing when undo metadata is still available.
 

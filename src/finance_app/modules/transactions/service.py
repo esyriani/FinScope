@@ -149,7 +149,7 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         )
         all_transaction_ids = [row["id"] for row in fetched_rows]
         tag_map = get_transaction_tags_by_id(conn, [row["id"] for row in fetched_rows])
-        rows = build_transaction_rows(fetched_rows, tag_map, get_tag_color_map(conn), conn)
+        rows = build_transaction_rows(fetched_rows, tag_map, get_tag_color_map(conn), conn, unknown_category)
         account_options = list_account_options(conn)
         categories = fetch_distinct_categories(conn)
         category_options = get_category_options(conn)

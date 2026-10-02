@@ -218,7 +218,7 @@ FinScope supports two rule scopes: merchant-bound and approximate-keyword rules.
 **Approximate-keyword rules** use normalized substring matching against simplified transaction descriptions and main merchant names.
 For example, `VIREMENT` matches: `VIREMENT INTERAC 2`.
 
-Rules may also be constrained by account, signed direction (`any`, `debit`, or `credit`), and optional amount bounds. Account and direction constraints make rules more specific and increase rule confidence when they match. Rules that assign the built-in `Reimbursable` tag must use the `debit` direction because that tag can only apply to positive expense rows. Imported rule CSV files can include `account_name` and `direction`; an explicit account name must match an existing account so a misspelled scoped import does not become a broad rule.
+Rules may also be constrained by account, signed direction (`any`, `debit`, or `credit`), and optional amount bounds. Account and direction constraints make rules more specific and increase rule confidence when they match. Rules that assign the built-in `Reimbursable` tag must use the `debit` direction because that tag can only apply to positive expense rows. Imported rule CSV files can include `account_name` and `direction`; an explicit account name must match an existing account so a misspelled scoped import does not become a broad rule. During rule import preview and processing, row-level errors are reported separately while valid rows remain importable.
 
 Rule priority is deterministic. Higher-priority rules are evaluated first based on:
 

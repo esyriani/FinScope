@@ -23,7 +23,7 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
             ("category_source", "ai"),
             ("amount_type", "income"),
             ("ignored", "ignored"),
-            ("review", "pending_approval"),
+            ("review", "pre_approved"),
             ("period", "all"),
             ("sort", "amount"),
             ("direction", "asc"),
@@ -45,7 +45,7 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
     assert filters["category_source"] == "ai"
     assert filters["amount_type"] == "income"
     assert filters["ignored"] == "ignored"
-    assert filters["review"] == "pending_approval"
+    assert filters["review"] == "pre_approved"
     assert filters["period"] == "all"
     assert filters["sort"] == "amount"
     assert filters["direction"] == "asc"
@@ -170,7 +170,7 @@ def test_build_transaction_core_filters_supports_credit_filter(core_conn):
 
 
 def test_build_transaction_core_filters_supports_pending_approval_review_filter(core_conn):
-    """Verify pending approval means categorized but not manually approved."""
+    """Verify pending approval is derived from category confidence."""
     filters = parse_transaction_filters(
         MultiDict([("review", "pending_approval")]),
         core_conn,
@@ -180,8 +180,23 @@ def test_build_transaction_core_filters_supports_pending_approval_review_filter(
     sql = "\n".join(str(condition) for condition in core_filters.criteria())
 
     assert filters["review"] == "pending_approval"
-    assert "transactions.needs_review" in sql
-    assert "transactions.reviewed_at IS NULL" in sql
+    assert "transactions.category_confidence" in sql
+    assert "transactions.needs_review" not in sql
+
+
+def test_build_transaction_core_filters_supports_pre_approved_review_filter(core_conn):
+    """Verify pre-approved filtering uses the shared status expression."""
+    filters = parse_transaction_filters(
+        MultiDict([("review", "pre_approved")]),
+        core_conn,
+    )
+
+    core_filters = build_transaction_core_filters(filters, "UNKNOWN")
+    sql = "\n".join(str(condition) for condition in core_filters.criteria())
+
+    assert filters["review"] == "pre_approved"
+    assert "transactions.category_confidence" in sql
+    assert "transactions.needs_review" not in sql
 
 
 def test_transaction_sort_restricts_sort_expression():

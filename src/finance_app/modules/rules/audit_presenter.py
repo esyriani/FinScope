@@ -445,6 +445,8 @@ def build_rule_import_preview_context(
             "rules_to_import": len(import_plan.proposed_rules),
             "skipped_existing": import_plan.skipped_existing,
             "skipped_duplicate": import_plan.skipped_duplicate,
+            "invalid_rows": len(import_plan.row_errors),
+            "row_errors": list(import_plan.row_errors),
             "replaced_rules": import_plan.replaced_rules,
             "cleared_transaction_rule_refs": import_plan.cleared_transaction_rule_refs,
             "rules": [present_rule(rule) for rule in import_plan.proposed_rules],

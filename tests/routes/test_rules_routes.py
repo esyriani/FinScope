@@ -900,6 +900,33 @@ def test_rules_import_route_previews_then_queues_background_job(owner_client, mo
     assert submitted.undo_args == (submitted.args[2],)
 
 
+def test_rules_import_route_previews_valid_rows_with_row_errors(owner_client, monkeypatch):
+    """Verify import preview reports skipped row errors without blocking valid rows."""
+    submitted_jobs = capture_background_jobs(monkeypatch, rules_workflow, job_id="rulesrowerrors")
+
+    preview = owner_client.post(
+        "/rules/import",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "mode": "add",
+            "rules_file": (io.BytesIO(b"keyword,category\nMetro,Food\n,Utilities\n"), "rules.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert preview.status_code == 200
+    assert_visible_text(
+        preview,
+        "Rule import preview",
+        "METRO",
+        "Rows with errors",
+        "Invalid rows skipped",
+        "Row 3: keyword or merchant_name is required.",
+    )
+    assert len(submitted_jobs) == 0
+
+
 def test_rules_import_route_handles_queue_rejection(owner_client, monkeypatch):
     """Verify rules import queue rejection flashes a retryable message."""
     rejected_jobs = reject_background_jobs(monkeypatch, rules_workflow)

@@ -2,6 +2,8 @@
 
 from sqlalchemy import text
 from tests.support.html import (
+    assert_asset_reference,
+    assert_has_element,
     assert_input,
     assert_no_element,
     assert_not_visible_text,
@@ -86,6 +88,36 @@ def test_first_run_bootstrap_creates_owner(anonymous_client, core_conn):
     assert owner["is_active"] == 1
     assert owner["must_change_password"] == 0
     assert owner["password_hash"] != "OwnerPass123!"
+
+
+def test_first_run_bootstrap_password_mismatch_keeps_entered_values(anonymous_client, core_conn):
+    """Verify password mismatch re-renders first-run bootstrap without losing form input."""
+    core_conn.execute(text("DELETE FROM audit_log"))
+    core_conn.execute(text("DELETE FROM users"))
+    core_conn.commit()
+
+    response = anonymous_client.post(
+        "/auth/bootstrap",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(anonymous_client),
+            "username": "firstowner",
+            "display_name": "First Owner",
+            "password": "OwnerPass123!",
+            "confirm_password": "Mismatch123!",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert_visible_text(response, "Passwords do not match.")
+    assert_asset_reference(response, r"/static/js/auth-bootstrap\.js\?v=[0-9a-f]{12}")
+    assert_has_element(response, "section", attrs={"data-auth-bootstrap-panel": True, "class": "auth-panel-shake"})
+    assert_has_element(response, "form", attrs={"data-auth-bootstrap-form": True})
+    assert_input(response, name="username", value="firstowner")
+    assert_input(response, name="display_name", value="First Owner")
+    assert_input(response, name="password", value="OwnerPass123!")
+    assert_input(response, name="confirm_password", value="Mismatch123!")
+    assert user_by_username(core_conn, "firstowner") is None
 
 
 def test_login_success_failure_logout_and_lockout(owner_client, anonymous_client, core_conn):
