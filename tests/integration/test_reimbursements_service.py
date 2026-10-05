@@ -19,7 +19,9 @@ from finance_app.modules.reimbursements import presenter, queries
 from finance_app.modules.reimbursements.service import (
     ReimbursementAllocationError,
     complete_reimbursable_expense,
+    create_expense_reimbursement_matches,
     create_reimbursement_allocation,
+    create_reimbursement_matches,
     delete_reimbursement_allocation,
     resume_reimbursable_expense,
     update_reimbursement_allocation_amount,
@@ -87,6 +89,12 @@ def set_category(conn, transaction_id: int, category: str) -> None:
     conn.commit()
 
 
+def clear_category_id(conn, transaction_id: int) -> None:
+    """Preserve a legacy category label while clearing the taxonomy foreign key."""
+    conn.execute(update(transactions_table).where(transactions_table.c.id == transaction_id).values(category_id=None))
+    conn.commit()
+
+
 def test_reimbursement_allocation_tracks_partial_balances(core_conn, data_factory):
     """Verify a reimbursement can partially offset a larger expense."""
     expense_id = expense_transaction(data_factory, amount="1000.00")
@@ -104,6 +112,18 @@ def test_reimbursement_allocation_tracks_partial_balances(core_conn, data_factor
     assert allocation_count(core_conn) == 1
 
 
+def test_reimbursement_allocation_allows_exact_one_dollar_boundaries(core_conn, data_factory):
+    """Verify one-dollar limits are valid for both transaction roles and match amount."""
+    expense_id = expense_transaction(data_factory, amount="1.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-1.00")
+
+    result = create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("1.00"), conn=core_conn)
+
+    assert result.reimbursement_remaining == Decimal("0.00")
+    assert result.expense_remaining == Decimal("0.00")
+    assert allocation_count(core_conn) == 1
+
+
 def test_reimbursement_allocation_updates_and_deletes(core_conn, data_factory):
     """Verify allocation amounts can be adjusted and removed."""
     expense_id = expense_transaction(data_factory, amount="1000.00")
@@ -118,6 +138,58 @@ def test_reimbursement_allocation_updates_and_deletes(core_conn, data_factory):
     assert updated.expense_remaining == Decimal("600.00")
     assert deleted is True
     assert allocation_count(core_conn) == 0
+
+
+@pytest.mark.parametrize(
+    ("amount", "message"),
+    (
+        ("", "greater than zero"),
+        ("0.00", "greater than zero"),
+        ("-0.01", "greater than zero"),
+    ),
+)
+def test_reimbursement_allocation_rejects_non_positive_match_amount(
+    core_conn,
+    data_factory,
+    amount,
+    message,
+):
+    """Verify invalid allocation amounts fail before persistence constraints."""
+    expense_id = expense_transaction(data_factory, amount="1000.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
+
+    with pytest.raises(ReimbursementAllocationError, match=message):
+        create_reimbursement_allocation(reimbursement_id, expense_id, amount, conn=core_conn)
+
+    assert allocation_count(core_conn) == 0
+
+
+@pytest.mark.parametrize(
+    ("reimbursement_id", "expense_id", "message"),
+    (
+        ("0", "1", "Invalid reimbursement transaction id"),
+        ("-1", "1", "Invalid reimbursement transaction id"),
+        ("not-an-id", "1", "Invalid reimbursement transaction id"),
+        ("1", "0", "Invalid expense transaction id"),
+        ("1", "-1", "Invalid expense transaction id"),
+        ("1", "not-an-id", "Invalid expense transaction id"),
+    ),
+)
+def test_reimbursement_allocation_rejects_invalid_transaction_ids(
+    core_conn,
+    reimbursement_id,
+    expense_id,
+    message,
+):
+    """Verify transaction ids are normalized before database lookups."""
+    with pytest.raises(ReimbursementAllocationError, match=message):
+        create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("1.00"), conn=core_conn)
+
+
+def test_reimbursement_allocation_rejects_same_transaction_id_before_lookup(core_conn):
+    """Verify a self-match fails as a domain error before querying missing rows."""
+    with pytest.raises(ReimbursementAllocationError, match="cannot be matched to itself"):
+        create_reimbursement_allocation("1000", "1000", Decimal("1.00"), conn=core_conn)
 
 
 def test_reimbursable_expense_completion_completes_and_resumes_pending_balance(core_conn, data_factory):
@@ -222,6 +294,17 @@ def test_reimbursement_allocation_rejects_over_allocated_reimbursement(core_conn
         create_reimbursement_allocation(reimbursement_id, second_expense_id, Decimal("150.00"), conn=core_conn)
 
 
+def test_reimbursement_allocation_rejects_fractional_over_allocated_reimbursement(core_conn, data_factory):
+    """Verify over-allocation uses addition rather than any multiplicative shortcut."""
+    first_expense_id = expense_transaction(data_factory, amount="0.50")
+    second_expense_id = expense_transaction(data_factory, amount="0.60")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-1.00")
+    create_reimbursement_allocation(reimbursement_id, first_expense_id, Decimal("0.50"), conn=core_conn)
+
+    with pytest.raises(ReimbursementAllocationError, match="still unmatched"):
+        create_reimbursement_allocation(reimbursement_id, second_expense_id, Decimal("0.60"), conn=core_conn)
+
+
 def test_reimbursement_allocation_rejects_over_allocated_expense(core_conn, data_factory):
     """Verify allocation totals cannot exceed the covered expense amount."""
     expense_id = expense_transaction(data_factory, amount="500.00")
@@ -233,6 +316,17 @@ def test_reimbursement_allocation_rejects_over_allocated_expense(core_conn, data
         create_reimbursement_allocation(second_reimbursement_id, expense_id, Decimal("250.00"), conn=core_conn)
 
 
+def test_reimbursement_allocation_rejects_fractional_over_allocated_expense(core_conn, data_factory):
+    """Verify expense over-allocation uses additive totals for sub-dollar amounts."""
+    expense_id = expense_transaction(data_factory, amount="1.00")
+    first_reimbursement_id = reimbursement_transaction(data_factory, amount="-0.50")
+    second_reimbursement_id = reimbursement_transaction(data_factory, amount="-0.60")
+    create_reimbursement_allocation(first_reimbursement_id, expense_id, Decimal("0.50"), conn=core_conn)
+
+    with pytest.raises(ReimbursementAllocationError, match="still to reimburse"):
+        create_reimbursement_allocation(second_reimbursement_id, expense_id, Decimal("0.60"), conn=core_conn)
+
+
 def test_reimbursement_allocation_requires_reimbursement_category(core_conn, data_factory):
     """Verify credits must use the dedicated Reimbursement category."""
     expense_id = expense_transaction(data_factory, amount="1000.00")
@@ -240,6 +334,40 @@ def test_reimbursement_allocation_requires_reimbursement_category(core_conn, dat
 
     with pytest.raises(ReimbursementAllocationError, match="Reimbursement category"):
         create_reimbursement_allocation(income_id, expense_id, Decimal("100.00"), conn=core_conn)
+
+
+@pytest.mark.parametrize("amount", ("0.00", "25.00"))
+def test_reimbursement_allocation_requires_incoming_reimbursement_credit(core_conn, data_factory, amount):
+    """Verify reimbursement transactions must be negative incoming credits."""
+    expense_id = expense_transaction(data_factory, amount="1000.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount=amount)
+
+    with pytest.raises(ReimbursementAllocationError, match="incoming credit"):
+        create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("100.00"), conn=core_conn)
+
+
+@pytest.mark.parametrize("amount", ("0.00", "-25.00"))
+def test_reimbursement_allocation_requires_positive_expense_amount(core_conn, data_factory, amount):
+    """Verify covered expenses must have positive spending amounts."""
+    expense_id = expense_transaction(data_factory, amount=amount)
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
+
+    with pytest.raises(ReimbursementAllocationError, match="positive spending row"):
+        create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("100.00"), conn=core_conn)
+
+
+def test_reimbursement_allocation_accepts_legacy_category_labels_without_ids(core_conn, data_factory):
+    """Verify legacy category text still classifies reimbursements without category ids."""
+    expense_id = expense_transaction(data_factory, amount="1.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-1.00")
+    clear_category_id(core_conn, expense_id)
+    clear_category_id(core_conn, reimbursement_id)
+
+    result = create_reimbursement_allocation(reimbursement_id, expense_id, Decimal("1.00"), conn=core_conn)
+
+    assert result.reimbursement_transaction_id == reimbursement_id
+    assert result.expense_transaction_id == expense_id
+    assert allocation_count(core_conn) == 1
 
 
 def test_reimbursement_allocation_rejects_ignored_transactions(core_conn, data_factory):
@@ -272,3 +400,29 @@ def test_reimbursement_allocation_requires_expense_role(core_conn, data_factory)
 
     with pytest.raises(ReimbursementAllocationError, match="expense cash-flow role"):
         create_reimbursement_allocation(reimbursement_id, income_like_expense_id, Decimal("100.00"), conn=core_conn)
+
+
+@pytest.mark.parametrize(
+    ("matcher", "transaction_id", "matches", "message"),
+    (
+        (create_reimbursement_matches, "reimbursement", [], "Select at least one expense"),
+        (create_expense_reimbursement_matches, "expense", [], "Select at least one reimbursement"),
+    ),
+)
+def test_reimbursement_multiple_match_helpers_require_selected_matches(
+    core_conn,
+    data_factory,
+    matcher,
+    transaction_id,
+    matches,
+    message,
+):
+    """Verify batch match helpers reject empty submissions before opening allocations."""
+    expense_id = expense_transaction(data_factory, amount="1000.00")
+    reimbursement_id = reimbursement_transaction(data_factory, amount="-900.00")
+    subject_id = reimbursement_id if transaction_id == "reimbursement" else expense_id
+
+    with pytest.raises(ReimbursementAllocationError, match=message):
+        matcher(subject_id, matches, conn=core_conn)
+
+    assert allocation_count(core_conn) == 0

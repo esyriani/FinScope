@@ -8,7 +8,13 @@ import json
 from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
 
-from finance_app.core.constants import STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER
+from finance_app.core.constants import (
+    INTERAC_IGNORED_REASON_CANCELLED,
+    INTERAC_IGNORED_REASON_INVALID,
+    INTERAC_IGNORED_REASON_NO_MATCH,
+    INTERAC_IGNORED_REASON_NON_DEPOSITED,
+    STATEMENT_TYPE_PARSER_INTERAC_ETRANSFER,
+)
 from finance_app.modules.categories.sources import (
     CATEGORY_SOURCE_AI,
     CATEGORY_SOURCE_HISTORY,
@@ -82,14 +88,27 @@ def merge_source_counts(target: MutableMapping[str, int], source: Mapping[str, i
         target[key] = target.get(key, 0) + value
 
 
-def automatic_categorization_message(updated_count: int, source_counts: Mapping[str, int] | None = None) -> str:
+def automatic_categorization_message(
+    updated_count: int,
+    source_counts: Mapping[str, int] | None = None,
+    unresolved_count: int | None = None,
+) -> str:
     """Return a concise background-job summary for automatic categorization."""
+    unresolved_suffix = unresolved_categorization_message(unresolved_count)
     if not updated_count:
-        return "0 automatically categorized."
+        return f"0 automatically categorized.{unresolved_suffix}"
 
     breakdown = automatic_categorization_breakdown(source_counts or {})
     suffix = f": {breakdown}" if breakdown else ""
-    return f"{updated_count} automatically categorized{suffix}."
+    return f"{updated_count} automatically categorized{suffix}.{unresolved_suffix}"
+
+
+def unresolved_categorization_message(unresolved_count: int | None) -> str:
+    """Return the optional unresolved-count suffix for AI categorization summaries."""
+    if unresolved_count is None or unresolved_count <= 0:
+        return ""
+    unknown_label = "transaction" if unresolved_count == 1 else "transactions"
+    return f" {unresolved_count} {unknown_label} kept unknown for review."
 
 
 def automatic_categorization_breakdown(source_counts: Mapping[str, int]) -> str:
@@ -119,6 +138,7 @@ def upload_result_message(
     ignored_count: int,
     llm_candidate_count: int = 0,
     auto_llm_job_id: str | None = None,
+    interac_ignored_reasons: Mapping[str, int] | None = None,
 ) -> str:
     """Render the background upload result message."""
     del extension
@@ -130,13 +150,7 @@ def upload_result_message(
                 f"{'' if skipped_count == 1 else 'es'} because each matched more than one possible checking transaction. "
             )
         if ignored_count:
-            ignored_label = "row" if ignored_count == 1 else "rows"
-            ignored_verb = "was" if ignored_count == 1 else "were"
-            message += (
-                f"Ignored {ignored_count} {ignored_label} that {ignored_verb} cancelled, "
-                "non-deposited, or had no matching checking ledger transaction yet. "
-                "Import matching checking statements first, then reprocess this Interac history. "
-            )
+            message += interac_ignored_message(ignored_count, interac_ignored_reasons)
         message += "No duplicate Interac ledger rows were added."
         return message
 
@@ -160,4 +174,31 @@ def upload_result_message(
             )
 
     message += "The original file was not stored."
+    return message
+
+
+def interac_ignored_message(ignored_count: int, reasons: Mapping[str, int] | None = None) -> str:
+    """Return an Interac ignored-row message with specific reason counts."""
+    counts = reasons or {}
+    cancelled_count = int(counts.get(INTERAC_IGNORED_REASON_CANCELLED, 0) or 0)
+    non_deposited_count = int(counts.get(INTERAC_IGNORED_REASON_NON_DEPOSITED, 0) or 0)
+    no_match_count = int(counts.get(INTERAC_IGNORED_REASON_NO_MATCH, 0) or 0)
+    invalid_count = int(counts.get(INTERAC_IGNORED_REASON_INVALID, 0) or 0)
+    known_count = cancelled_count + non_deposited_count + no_match_count + invalid_count
+    unclassified_count = max(0, ignored_count - known_count)
+
+    ignored_label = "row" if ignored_count == 1 else "rows"
+    parts = [
+        f"{cancelled_count} cancelled",
+        f"{non_deposited_count} non-deposited",
+        f"{no_match_count} with no matching checking transaction yet",
+    ]
+    if invalid_count:
+        parts.append(f"{invalid_count} invalid")
+    if unclassified_count:
+        parts.append(f"{unclassified_count} unclassified")
+
+    message = f"Ignored {ignored_count} {ignored_label}: {', '.join(parts)}. "
+    if no_match_count or unclassified_count:
+        message += "Import matching checking statements first, then reprocess this Interac history. "
     return message

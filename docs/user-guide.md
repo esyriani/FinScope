@@ -24,7 +24,7 @@ Ignored rows stay in the database but are excluded from normal active-transactio
 
 Reimbursements tracks incoming credits that repay expenses paid upfront.
 
-Keep reimbursable expenses in their natural category and tag them `Reimbursable` plus any context tags. Categorize the incoming credit as `Reimbursement`, then create allocations that link the credit to the covered expenses. Allocated amounts reduce the original expense category in Dashboard and Comparison, while the reimbursement credit itself is not counted as ordinary income.
+Keep reimbursable expenses in their natural category and tag them `Reimbursable` plus any context tags. Categorize the incoming credit as `Reimbursement` and keep any useful context tags such as `Judo`. Then create allocations that link the credit to the covered expenses. Allocated amounts reduce the original expense category in Dashboard and Comparison, while the reimbursement credit itself is not counted as ordinary income.
 
 When an expense is only partially eligible for reimbursement, match the amount actually paid back, then mark the expense complete. This removes the remaining balance from reimbursement follow-up without inventing a credit or changing the original expense category. Use Resume tracking if more money later needs to be matched.
 
@@ -122,7 +122,7 @@ Admin > Categories and tags manages categories and tags in the active database.
 
 Categories are exclusive primary classifications. Tags are optional secondary labels that can overlap. The page supports creating, editing, deleting unused user-managed values, and importing or exporting categories and tags YAML.
 
-Some categories and tags are system-managed because they affect workflows or reports. `Income`, `Rental`, `UNKNOWN`, `Transfers`, `Reimbursement`, `Reimbursable`, and `Tax` are visible in the taxonomy page with built-in badges and cannot be renamed or deleted.
+Some categories and tags are system-managed because they affect workflows or reports. Built-in categories include `Income`, `Rental`, `UNKNOWN`, `Transfers`, and `Reimbursement`; built-in tags include `Reimbursable` and `Tax`. They are visible in the taxonomy page with built-in badges and cannot be renamed or deleted.
 
 The seed file [src/finance_app/taxonomy.yml](../src/finance_app/taxonomy.yml) is used only when initializing ordinary user-managed taxonomy rows in a new database. After initialization, use the Categories and tags page for runtime changes. See [Categories, tags, and categorization](taxonomy.md) for the full model.
 
@@ -142,14 +142,14 @@ FinScope handles financial data. Treat runtime databases, uploaded statement tex
 - One owner manages editor and viewer users.
 - Passwords are stored with Werkzeug `scrypt` hashes.
 - CSRF protection is enabled for mutating routes.
-- Session cookies are HttpOnly and SameSite=Lax; secure cookies are enabled when debug mode is off.
+- Session cookies are HttpOnly and SameSite=Lax. HTTPS-only cookie transport is controlled by `FINANCE_SECURE_COOKIES` or `[app] secure_cookies`; when that setting is blank, non-local server binds use secure cookies and loopback local runs use plain cookies.
 - No encryption at rest is implemented by FinScope.
 - Optional OpenAI integration is inactive unless configured and explicitly run or enabled.
 
 Operational recommendations:
 
 - Keep `FINANCE_SECRET_KEY` private.
-- Keep `OPENAI_API_KEY` out of source control.
+- Keep OpenAI API keys out of source control.
 - Protect `runtime/finscope.db`, MySQL credentials, and backups.
 - Back up the active database regularly.
 - Do not run with debug mode enabled on a shared network.

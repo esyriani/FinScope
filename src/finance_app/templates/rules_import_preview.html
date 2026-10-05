@@ -37,6 +37,18 @@
 </div>
 {% endif %}
 
+{% if import_preview.row_errors %}
+<div class="alert alert-warning" role="status">
+    <div class="fw-semibold">{{ _("Rows with errors") }}</div>
+    <p class="mb-2">{{ _("These rows were skipped. The valid rules can still be imported.") }}</p>
+    <ul class="mb-0">
+        {% for row_error in import_preview.row_errors %}
+            <li>{{ row_error }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
 {% if not preview.has_transaction_impacts %}
 <div class="alert alert-warning" role="status">
     {{ _("No historical transactions would change. This action may still affect future matches.") }}
@@ -83,6 +95,10 @@
     <div class="metric-card">
         <div class="metric-label">{{ _("Duplicate rows skipped") }}</div>
         <div class="metric-value">{{ import_preview.skipped_duplicate }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">{{ _("Invalid rows skipped") }}</div>
+        <div class="metric-value">{{ import_preview.invalid_rows }}</div>
     </div>
     <div class="metric-card">
         <div class="metric-label">{{ _("Rules replaced") }}</div>

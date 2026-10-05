@@ -366,6 +366,34 @@ def default_statement_type_id(conn):
     return insert_statement_type(conn)
 
 
+def statement_type_id_for_parser(conn, parser_type):
+    """Return an active statement type id for a parser type.
+
+    Args:
+        conn: Active SQLAlchemy Core connection or compatible test connection.
+        parser_type: Statement parser key to locate.
+
+    Returns:
+        The first active statement type id for the parser type.
+    """
+    row = (
+        conn.execute(
+            select(statement_types_table.c.id)
+            .where(
+                statement_types_table.c.active == 1,
+                statement_types_table.c.parser_type == parser_type,
+            )
+            .order_by(statement_types_table.c.id)
+            .limit(1)
+        )
+        .mappings()
+        .fetchone()
+    )
+    if row is not None:
+        return row["id"]
+    return insert_statement_type(conn, parser_type=parser_type)
+
+
 def insert_statement(
     conn,
     *,

@@ -30,7 +30,12 @@ from finance_app.modules.categories.taxonomy import (
     normalize_tag_names,
     set_rule_tags,
 )
-from finance_app.modules.rules.forms import parse_amount_bounds, parse_rule_account_id, parse_rule_direction
+from finance_app.modules.rules.forms import (
+    parse_amount_bounds,
+    parse_rule_account_id,
+    parse_rule_direction,
+    validate_rule_tags_for_direction,
+)
 
 
 def create_rule_from_form(conn: Any, form: Any) -> tuple[int, str]:
@@ -42,6 +47,7 @@ def create_rule_from_form(conn: Any, form: Any) -> tuple[int, str]:
     merchant_id = normalize_optional_merchant_id(form.get("merchant_id"))
     account_id = parse_rule_account_id(form.get("account_id"))
     direction = parse_rule_direction(form.get("direction"))
+    validate_rule_tags_for_direction(tags, direction)
     amount_min, amount_max = parse_amount_bounds(
         form.get("amount_min", ""),
         form.get("amount_max", ""),
@@ -75,6 +81,7 @@ def preview_rule_from_form(conn: Any, form: Any) -> dict[str, Any]:
     merchant_id = normalize_optional_merchant_id(form.get("merchant_id"))
     account_id = parse_rule_account_id(form.get("account_id"))
     direction = parse_rule_direction(form.get("direction"))
+    validate_rule_tags_for_direction(tags, direction)
     amount_min, amount_max = parse_amount_bounds(
         form.get("amount_min", ""),
         form.get("amount_max", ""),
@@ -110,6 +117,7 @@ def update_rule_from_form(conn: Any, rule_id: int, form: Any) -> None:
     direction = parse_rule_direction(
         form.get("direction") if "direction" in form else current["direction"] if current else None
     )
+    validate_rule_tags_for_direction(tags, direction)
     amount_min, amount_max = parse_amount_bounds(
         form.get("amount_min", ""),
         form.get("amount_max", ""),

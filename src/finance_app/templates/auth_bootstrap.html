@@ -1,7 +1,9 @@
+{% set page_scripts = ["js/auth-bootstrap.js"] %}
 {% extends "base.html" %}
 
 {% block content %}
-<section class="auth-panel card">
+{% set bootstrap_form = bootstrap_form | default({}) %}
+<section class="auth-panel card {% if bootstrap_error %}auth-panel-shake{% endif %}" data-auth-bootstrap-panel>
     <div class="card-body">
         <div class="auth-heading">
             <div class="brand-mark auth-brand-mark" aria-hidden="true">
@@ -21,27 +23,35 @@
             {% endif %}
         {% endwith %}
 
-        <form method="post" class="auth-form">
+        <form
+            method="post"
+            class="auth-form"
+            data-auth-bootstrap-form
+            data-password-mismatch-message="{{ _('Passwords do not match.') }}"
+        >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div>
                 <label for="username" class="form-label">{{ _("Username") }}</label>
-                <input id="username" class="form-control" type="text" name="username" autocomplete="username" required autofocus>
+                <input id="username" class="form-control" type="text" name="username" autocomplete="username" value="{{ bootstrap_form.username | default('') }}" required autofocus>
             </div>
 
             <div>
                 <label for="display_name" class="form-label">{{ _("Display name") }}</label>
-                <input id="display_name" class="form-control" type="text" name="display_name" autocomplete="name" required>
+                <input id="display_name" class="form-control" type="text" name="display_name" autocomplete="name" value="{{ bootstrap_form.display_name | default('') }}" required>
             </div>
 
             <div>
                 <label for="password" class="form-label">{{ _("Password") }}</label>
-                <input id="password" class="form-control" type="password" name="password" autocomplete="new-password" required>
+                <input id="password" class="form-control" type="password" name="password" autocomplete="new-password" value="{{ bootstrap_form.password | default('') }}" required>
             </div>
 
             <div>
                 <label for="confirm_password" class="form-label">{{ _("Confirm password") }}</label>
-                <input id="confirm_password" class="form-control" type="password" name="confirm_password" autocomplete="new-password" required>
+                <input id="confirm_password" class="form-control" type="password" name="confirm_password" autocomplete="new-password" value="{{ bootstrap_form.confirm_password | default('') }}" aria-describedby="confirm-password-feedback" required>
+                <div id="confirm-password-feedback" class="invalid-feedback" data-password-match-feedback>
+                    {{ _("Passwords do not match.") }}
+                </div>
             </div>
 
             <button class="btn btn-primary w-100" type="submit">

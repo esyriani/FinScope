@@ -4,7 +4,9 @@ Verifies the OpenAI adapter behavior with deterministic fake clients. The tests
 avoid network calls and focus on parsing, error handling, and log sanitization.
 """
 
+import json
 import logging
+from types import SimpleNamespace
 
 from tests.support.llm import (
     openai_error_response,
@@ -85,6 +87,53 @@ def test_request_llm_categories_handles_invalid_json():
     )
 
 
+def test_request_llm_categories_retries_when_model_rejects_temperature():
+    """Verify models that require default temperature can still be requested."""
+    fake_client = TemperatureRetryClientFactory(
+        {
+            "results": [
+                {
+                    "request_id": "0",
+                    "category_id": 2,
+                    "confidence": 0.95,
+                    "needs_review": False,
+                    "tag_ids": [],
+                }
+            ]
+        }
+    )
+
+    results = llm.request_llm_categories(
+        [{"llm_request_id": "0", "merchant_key": "METRO", "description": "Metro", "amount": 12.34}],
+        [],
+        ["UNKNOWN", "Food"],
+        [],
+        [
+            {"id": 1, "name": "UNKNOWN", "description": "", "instruction": ""},
+            {"id": 2, "name": "Food", "description": "food", "instruction": "food"},
+        ],
+        [],
+        "gpt-temperature-default",
+        0.9,
+        0.6,
+        client_factory=fake_client,
+        api_key="sk-test",
+    )
+
+    assert results == [
+        {
+            "request_id": "0",
+            "category_id": 2,
+            "confidence": 0.95,
+            "needs_review": False,
+            "tag_ids": [],
+        }
+    ]
+    assert len(fake_client.created_calls) == 2
+    assert fake_client.created_calls[0]["temperature"] == 0
+    assert "temperature" not in fake_client.created_calls[1]
+
+
 def test_request_llm_categories_handles_api_exceptions_and_sanitizes_logs(caplog):
     """Verify OpenAI timeouts or rate-limit errors keep transactions unchanged."""
     fake_client = openai_error_response(TimeoutError("request timed out for sk-testsecret123"))
@@ -115,3 +164,35 @@ def test_request_llm_categories_handles_api_exceptions_and_sanitizes_logs(caplog
     assert "OpenAI categorization request failed: TimeoutError" in caplog.text
     assert "sk-testsecret123" not in caplog.text
     assert "sk-***" in caplog.text
+
+
+class TemperatureRetryClientFactory:
+    """Fake client that rejects temperature once before returning JSON."""
+
+    def __init__(self, payload):
+        """Store payload and initialize call logs."""
+        self.payload = payload
+        self.constructor_calls = []
+        self.created_calls = []
+
+    def __call__(self, api_key, timeout):
+        """Return an OpenAI-shaped fake client and capture construction args."""
+        self.constructor_calls.append({"api_key": api_key, "timeout": timeout})
+        return SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=self.create),
+            )
+        )
+
+    def create(self, **kwargs):
+        """Reject the first call with temperature, then return configured JSON."""
+        self.created_calls.append(dict(kwargs))
+        if len(self.created_calls) == 1:
+            raise RuntimeError("Unsupported value: 'temperature' does not support 0 with this model.")
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content=json.dumps(self.payload)),
+                )
+            ]
+        )

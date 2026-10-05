@@ -304,7 +304,7 @@ Rows with `merchant_id` and `type` are unique through a portable nullable unique
 
 - Merchant identity is modeled separately from imported transaction descriptions. `transactions.description` stores display text, while `transactions.merchant_id` links rows to `merchants` when a durable merchant is known. Rows without a merchant ID use deterministic description normalization as a fallback grouping and filtering key.
 - Category names are still cached in `transactions.category` and `category_rules.category` for display and import snapshots, while `category_id` is the stable query identity. Application write paths keep the text cache and foreign key synchronized.
-- Built-in category and tag behavior is keyed by `builtin_key`. Reporting and workflow predicates should resolve built-in semantics through those keys, not through editable cached names.
+- Built-in category and tag behavior is keyed by `builtin_key`. Reporting and workflow predicates should resolve transaction category semantics through `transactions.category_id` and `categories.builtin_key`, not through editable cached names.
 - Tags use many-to-many join tables so both transactions and category rules can share the same tag definitions. Built-in tags use stable keys so workflows such as reimbursements and future tax review can depend on semantics rather than editable display labels.
 - Saved report pins are normalized in `pinned_reports` rather than embedded in `user_settings` so duplicate prevention, ownership, ordering, and target cleanup can be enforced through database constraints.
 - Reimbursement allocations are explicit links rather than category rewrites. This keeps reimbursable spending visible in its natural category while allowing reports and monitoring pages to compute reimbursed and pending amounts from the allocation table. Reimbursement expense completions close policy-limited or otherwise settled expenses for monitoring only; they do not add reimbursement money or alter analytics offsets.
@@ -322,7 +322,7 @@ When tables, columns, indexes, or relationships change:
 
 1. Apply the application schema changes in [src/finance_app/database/tables.py](../src/finance_app/database/tables.py).
 2. Rebuild or initialize a representative [finscope.db](../runtime/finscope.db).
-3. Regenerate [docs/db-schema.html](db-schema.html) and [docs/diagrams/db-schema.dbs](diagrams/db-schema.dbs) from the SQLAlchemy Core metadata.
+3. Regenerate [docs/db-schema.html](db-schema.html) from the SQLAlchemy Core metadata. If you export DBSchema `.dbs` files while reviewing the schema, keep them local; `.dbs` files are ignored by Git.
 4. Update [architecture.md](architecture.md) or this page if the conceptual data model changed.
 
 Do not hand-edit generated schema artifacts; regenerate them from the metadata so the documentation stays consistent with the runtime schema.

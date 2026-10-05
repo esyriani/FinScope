@@ -205,6 +205,8 @@ def reflected_mysql_check_constraints(table):
     for constraint in table.constraints:
         if not isinstance(constraint, CheckConstraint):
             continue
+        if not connection_module.schema_item_applies_to_dialect(constraint, dialect):
+            continue
         sqltext = connection_module.compile_sql(constraint.sqltext, dialect)
         sqltext = sqltext.replace(" != ", " <> ").replace(", ", ",")
         constraints.append(
@@ -499,6 +501,25 @@ def test_schema_validation_accepts_mysql_reflected_check_sql_and_truncated_names
     assert issues == {}
 
 
+def test_schema_validation_skips_dialect_scoped_check_constraints():
+    """Verify validation ignores checks intentionally not emitted for MySQL."""
+    issues = {}
+    dialect = mysql.dialect()
+    inspector = ReflectedConstraintInspector(
+        checks=reflected_mysql_check_constraints(pinned_reports_table),
+    )
+
+    connection_module.validate_check_constraints(
+        issues,
+        inspector,
+        dialect,
+        pinned_reports_table.name,
+        pinned_reports_table,
+    )
+
+    assert issues == {}
+
+
 def test_schema_validation_accepts_mysql_reflected_foreign_key_truncation():
     """Verify MySQL-reflected truncated foreign-key names match Core metadata."""
     issues = {}
@@ -521,6 +542,14 @@ def test_schema_validation_accepts_mysql_reflected_foreign_key_truncation():
 def test_schema_validation_normalizes_mysql_generated_columns_and_defaults():
     """Verify generated SQL and timestamp defaults compare across MySQL reflection."""
     assert connection_module.sql_fragments_match("lower(trim(name))", "(lcase(trim(`name`)))")
+    assert connection_module.sql_fragments_match(
+        "CASE WHEN role = 'owner' THEN 1 ELSE NULL END",
+        "((case when (`role` = _utf8mb4'owner') then 1 else NULL end))",
+    )
+    assert connection_module.sql_fragments_match(
+        "trim(name) != ''",
+        "(trim(`name`) <> _utf8mb4'')",
+    )
     assert connection_module.sql_fragments_match(
         "short_title IS NULL OR length(trim(short_title)) <= 30",
         "`short_title` is null or octet_length(trim(`short_title`)) <= 30",
@@ -1229,5 +1258,7 @@ def test_builtin_tags_are_seeded_with_stable_keys(schema_conn):
         ).mappings()
     }
 
-    assert rows["Reimbursable"] == "reimbursable"
-    assert rows["Tax"] == "tax"
+    assert rows == {
+        "Reimbursable": "reimbursable",
+        "Tax": "tax",
+    }

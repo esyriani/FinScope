@@ -29,6 +29,10 @@ LAYER_MARKERS = {
     "routes": "route",
     "smoke": "smoke",
 }
+OPTIONAL_CAPABILITY_MARKERS = {
+    "mysql": "mysql",
+    "mutation": "mutation",
+}
 DB_FIXTURES = {"core_conn", "data_factory"}
 FLASK_FIXTURES = {
     "app",
@@ -88,6 +92,13 @@ def pytest_collection_modifyitems(config, items):
         marker_name = LAYER_MARKERS.get(layer)
         if marker_name:
             item.add_marker(getattr(pytest.mark, marker_name))
+
+        if layer == "optional":
+            item.add_marker(pytest.mark.optional)
+            for path_part in relative_parts[1:]:
+                marker_name = OPTIONAL_CAPABILITY_MARKERS.get(path_part)
+                if marker_name:
+                    item.add_marker(getattr(pytest.mark, marker_name))
 
         if layer == "smoke":
             item.add_marker(pytest.mark.slow)
@@ -170,8 +181,11 @@ def authenticated_test_client(app, user, *, fresh=True):
 
 
 @pytest.fixture(autouse=True)
-def block_network_calls(monkeypatch):
+def block_network_calls(monkeypatch, request):
     """Prevent tests from opening real network connections."""
+    if request.node.get_closest_marker("mysql"):
+        return
+
     install_network_guard(monkeypatch)
 
 

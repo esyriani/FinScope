@@ -8,6 +8,8 @@ from sqlalchemy import and_, case, exists, func, select, update
 
 from finance_app.core.category_sql import transaction_category_label_expression
 from finance_app.core.constants import (
+    CATEGORY_RULE_DIRECTION_CREDIT,
+    CATEGORY_RULE_DIRECTION_DEBIT,
     CATEGORY_RULE_SOURCE_MANUAL,
     CATEGORY_SOURCE_UNKNOWN,
     TRANSACTION_KIND_EXPENSE,
@@ -125,6 +127,7 @@ def assign_manual_category(
             select(
                 transactions_table.c.id,
                 transactions_table.c.category,
+                transactions_table.c.amount,
             ).where(transactions_table.c.id == transaction_id)
         )
         .mappings()
@@ -180,6 +183,7 @@ def assign_manual_category(
 
     saved_rule_id = None
     if rule_keyword:
+        persisted_tags = get_transaction_tag_names(conn, transaction_id)
         saved_rule_id = save_category_rule(
             conn,
             rule_keyword,
@@ -187,14 +191,23 @@ def assign_manual_category(
             source=CATEGORY_RULE_SOURCE_MANUAL,
             amount_min=amount_min,
             amount_max=amount_max,
-            tags=submitted_tags,
+            tags=persisted_tags,
             merchant_id=rule_merchant_id,
+            direction=manual_rule_direction(current["amount"]),
         )
     return ManualCategoryAssignment(
         updated=True,
         saved_rule_id=saved_rule_id,
         transaction_changed=transaction_changed,
     )
+
+
+def manual_rule_direction(amount: MoneyValue | None) -> str:
+    """Return the signed direction for a rule saved from a transaction edit."""
+    amount_value = optional_money_to_decimal(amount)
+    if amount_value is not None and amount_value < 0:
+        return CATEGORY_RULE_DIRECTION_CREDIT
+    return CATEGORY_RULE_DIRECTION_DEBIT
 
 
 def mark_transaction_verified(conn: Any, transaction_id: int, reviewed_at: str | None = None) -> bool:

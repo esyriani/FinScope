@@ -126,7 +126,7 @@ Creating or editing a rule saves the future matching behavior first and leaves h
 
 ### Importing and applying rules
 
-Rules can be exported and imported as CSV. Imported rows use the export format shown in the import modal, including keyword, account name, merchant name, category, tags, amount bounds, direction, source, and created timestamp.
+Rules can be exported and imported as CSV. Imported rows use the export format shown in the import modal, including keyword, account name, merchant name, category, tags, amount bounds, direction, source, and created timestamp. If some rows have errors, FinScope skips and reports those rows while allowing the valid rows to be imported.
 
 Use Add new rules only when merging rules from another database or backup. Use Override all rules only when you intentionally want to replace the current rule set; the resulting processing item can be undone from Processing when undo metadata is still available.
 
@@ -148,7 +148,7 @@ Manual edits take precedence over automatic categorization. Rule-based categoriz
 
 ## Use optional AI categorization carefully
 
-AI categorization is optional and requires `OPENAI_API_KEY` or the equivalent config setting. By default, imports keep remaining unknown rows available for manual AI runs from Uploaded statements or Processing after FinScope shows an AI usage estimate. Owners can turn that confirmation step off in Settings > Categorization; when it is off, imports automatically queue AI categorization for remaining unknown rows.
+AI categorization is optional and requires `OPENAI_API_KEY` or `[api_keys] openai_api_key`. By default, imports keep remaining unknown rows available for manual AI runs from Uploaded statements or Processing after FinScope shows an AI usage estimate. Owners can turn that confirmation step off in Settings > Categorization; when it is off, imports automatically queue AI categorization for remaining unknown rows.
 
 AI fits after deterministic categorization:
 

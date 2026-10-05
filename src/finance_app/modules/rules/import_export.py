@@ -36,6 +36,7 @@ from finance_app.database.tables import (
 )
 from finance_app.modules.categories.service import clean_category_name, normalize_merchant_description
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, normalize_tag_names
+from finance_app.modules.rules.forms import validate_rule_tags_for_direction
 
 from .repository import (
     category_rule_exists,
@@ -69,6 +70,16 @@ RULE_EXPORT_COLUMNS = (
     "created_at",
 )
 RULE_SOURCE_VALUES = set(IMPORTABLE_CATEGORY_RULE_SOURCES)
+IMPORT_RULE_LINE_NUMBER = "_line_number"
+
+
+@dataclass(frozen=True)
+class RuleCsvParseResult:
+    """Represent CSV parsing output with recoverable row errors."""
+
+    total_rows: int
+    rules: tuple[dict[str, Any], ...]
+    row_errors: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -83,6 +94,7 @@ class RuleImportPreview:
             already exists.
         skipped_duplicate: Rows skipped because the same import key appears
             earlier in the file.
+        row_errors: Row-level errors skipped during parsing, preview, or import.
         replaced_rules: Override-mode count of current rules that would be
             removed before import.
         cleared_transaction_rule_refs: Override-mode transaction rule
@@ -94,6 +106,7 @@ class RuleImportPreview:
     proposed_rules: tuple[dict[str, Any], ...]
     skipped_existing: int = 0
     skipped_duplicate: int = 0
+    row_errors: tuple[str, ...] = ()
     replaced_rules: int = 0
     cleared_transaction_rule_refs: int = 0
 
@@ -181,15 +194,27 @@ def export_rule_rows(conn: Any) -> list[dict[str, Any]]:
 
 def import_rules_job(raw_text: str, mode: str, undo_state: MutableMapping[str, Any]) -> str:
     """Import rules job."""
-    imported_rules = parse_rules_csv(raw_text)
-    if not imported_rules:
-        raise ValueError("No importable rules were found.")
+    parsed = parse_rules_csv_with_errors(raw_text)
+    if not parsed.rules:
+        raise_no_importable_rules(parsed.row_errors)
 
     with db_core_transaction() as conn:
         if mode == RULE_IMPORT_MODE_OVERRIDE:
-            return import_rules_override(conn, imported_rules, undo_state)
+            return import_rules_override(
+                conn,
+                parsed.rules,
+                undo_state,
+                row_errors=parsed.row_errors,
+                skip_invalid_rows=True,
+            )
 
-        return import_rules_add(conn, imported_rules, undo_state)
+        return import_rules_add(
+            conn,
+            parsed.rules,
+            undo_state,
+            row_errors=parsed.row_errors,
+            skip_invalid_rows=True,
+        )
 
 
 def preview_rules_import(conn: Any, raw_text: str, mode: str) -> RuleImportPreview:
@@ -211,58 +236,95 @@ def preview_rules_import(conn: Any, raw_text: str, mode: str) -> RuleImportPrevi
     if mode not in RULE_IMPORT_MODES:
         raise ValueError("Choose whether to add new rules or override existing rules.")
 
-    imported_rules = parse_rules_csv(raw_text)
-    if not imported_rules:
-        raise ValueError("No importable rules were found.")
+    parsed = parse_rules_csv_with_errors(raw_text)
+    if not parsed.rules:
+        raise_no_importable_rules(parsed.row_errors)
 
     if mode == RULE_IMPORT_MODE_OVERRIDE:
-        return preview_rules_import_override(conn, imported_rules)
+        return preview_rules_import_override(
+            conn,
+            parsed.rules,
+            total_rows=parsed.total_rows,
+            row_errors=parsed.row_errors,
+        )
 
-    return preview_rules_import_add(conn, imported_rules)
+    return preview_rules_import_add(
+        conn,
+        parsed.rules,
+        total_rows=parsed.total_rows,
+        row_errors=parsed.row_errors,
+    )
 
 
-def preview_rules_import_add(conn: Any, imported_rules: Sequence[Mapping[str, Any]]) -> RuleImportPreview:
+def preview_rules_import_add(
+    conn: Any,
+    imported_rules: Sequence[Mapping[str, Any]],
+    total_rows: int | None = None,
+    row_errors: Sequence[str] = (),
+) -> RuleImportPreview:
     """Return a read-only add-mode import plan."""
     proposed_rules: list[dict[str, Any]] = []
     skipped_existing = 0
     skipped_duplicate = 0
+    skipped_errors = list(row_errors)
     seen_keys: set[tuple[Any, ...]] = set()
 
     for index, rule in enumerate(imported_rules, start=1):
-        key = rule_import_key(rule)
-        if key in seen_keys:
-            skipped_duplicate += 1
-            continue
-        seen_keys.add(key)
+        try:
+            key = rule_import_key(rule)
+            if key in seen_keys:
+                skipped_duplicate += 1
+                continue
+            seen_keys.add(key)
 
-        if category_rule_exists(conn, rule):
-            skipped_existing += 1
-            continue
+            validate_import_rule_for_write(conn, rule)
+            if category_rule_exists(conn, rule):
+                skipped_existing += 1
+                continue
 
-        proposed_rules.append(preview_imported_rule(conn, rule, -index))
+            proposed_rules.append(preview_imported_rule(conn, rule, -index))
+        except ValueError as exc:
+            skipped_errors.append(import_rule_error_message(rule, exc))
+
+    if not proposed_rules and skipped_errors and not skipped_existing and not skipped_duplicate:
+        raise_no_importable_rules(skipped_errors)
 
     return RuleImportPreview(
         mode=RULE_IMPORT_MODE_ADD,
-        total_rows=len(imported_rules),
+        total_rows=total_rows if total_rows is not None else len(imported_rules),
         proposed_rules=tuple(proposed_rules),
         skipped_existing=skipped_existing,
         skipped_duplicate=skipped_duplicate,
+        row_errors=tuple(skipped_errors),
     )
 
 
-def preview_rules_import_override(conn: Any, imported_rules: Sequence[Mapping[str, Any]]) -> RuleImportPreview:
+def preview_rules_import_override(
+    conn: Any,
+    imported_rules: Sequence[Mapping[str, Any]],
+    total_rows: int | None = None,
+    row_errors: Sequence[str] = (),
+) -> RuleImportPreview:
     """Return a read-only override-mode import plan."""
     proposed_rules: list[dict[str, Any]] = []
     skipped_duplicate = 0
+    skipped_errors = list(row_errors)
     seen_keys: set[tuple[Any, ...]] = set()
 
     for index, rule in enumerate(imported_rules, start=1):
-        key = rule_import_key(rule)
-        if key in seen_keys:
-            skipped_duplicate += 1
-            continue
-        seen_keys.add(key)
-        proposed_rules.append(preview_imported_rule(conn, rule, -index))
+        try:
+            key = rule_import_key(rule)
+            if key in seen_keys:
+                skipped_duplicate += 1
+                continue
+            seen_keys.add(key)
+            validate_import_rule_for_write(conn, rule)
+            proposed_rules.append(preview_imported_rule(conn, rule, -index))
+        except ValueError as exc:
+            skipped_errors.append(import_rule_error_message(rule, exc))
+
+    if not proposed_rules and skipped_errors and not skipped_duplicate:
+        raise_no_importable_rules(skipped_errors)
 
     replaced_rules = conn.execute(select(func.count()).select_from(category_rules_table)).scalar_one()
     cleared_refs = conn.execute(
@@ -270,9 +332,10 @@ def preview_rules_import_override(conn: Any, imported_rules: Sequence[Mapping[st
     ).scalar_one()
     return RuleImportPreview(
         mode=RULE_IMPORT_MODE_OVERRIDE,
-        total_rows=len(imported_rules),
+        total_rows=total_rows if total_rows is not None else len(imported_rules),
         proposed_rules=tuple(proposed_rules),
         skipped_duplicate=skipped_duplicate,
+        row_errors=tuple(skipped_errors),
         replaced_rules=replaced_rules,
         cleared_transaction_rule_refs=cleared_refs,
     )
@@ -307,12 +370,17 @@ def preview_imported_rule(conn: Any, rule: Mapping[str, Any], synthetic_id: int)
 
 
 def import_rules_add(
-    conn: Any, imported_rules: Sequence[Mapping[str, Any]], undo_state: MutableMapping[str, Any]
+    conn: Any,
+    imported_rules: Sequence[Mapping[str, Any]],
+    undo_state: MutableMapping[str, Any],
+    row_errors: Sequence[str] = (),
+    skip_invalid_rows: bool = False,
 ) -> str:
     """Import rules add."""
     inserted_rules: list[dict[str, Any] | None] = []
     skipped_existing = 0
     skipped_duplicate = 0
+    skipped_errors = list(row_errors)
     seen_keys: set[tuple[Any, ...]] = set()
     existing_categories = existing_category_names(conn)
     created_categories: list[str] = []
@@ -320,23 +388,33 @@ def import_rules_add(
     # Track duplicate import keys inside this file separately from rules that
     # already exist in the database so the final job message is actionable.
     for rule in imported_rules:
-        key = rule_import_key(rule)
-        if key in seen_keys:
-            skipped_duplicate += 1
-            continue
-        seen_keys.add(key)
+        try:
+            key = rule_import_key(rule)
+            if key in seen_keys:
+                skipped_duplicate += 1
+                continue
+            seen_keys.add(key)
 
-        if category_rule_exists(conn, rule):
-            skipped_existing += 1
-            continue
+            validate_import_rule_for_write(conn, rule)
+            if category_rule_exists(conn, rule):
+                skipped_existing += 1
+                continue
 
-        ensure_import_category(conn, rule["category"], existing_categories, created_categories)
-        rule_id = insert_imported_rule(conn, rule)
-        inserted_rules.append(snapshot_rule_by_id(conn, rule_id))
+            ensure_import_category(conn, rule["category"], existing_categories, created_categories)
+            rule_id = insert_imported_rule(conn, rule)
+            inserted_rules.append(snapshot_rule_by_id(conn, rule_id))
+        except ValueError as exc:
+            if not skip_invalid_rows:
+                raise
+            skipped_errors.append(import_rule_error_message(rule, exc))
+
+    if not inserted_rules and skipped_errors and not skipped_existing and not skipped_duplicate:
+        raise_no_importable_rules(skipped_errors)
 
     undo_state["mode"] = RULE_IMPORT_MODE_ADD
     undo_state["inserted_rules"] = inserted_rules
     undo_state["created_categories"] = created_categories
+    undo_state["row_errors"] = skipped_errors
 
     message = f"Imported {len(inserted_rules)} new rule"
     message += "" if len(inserted_rules) == 1 else "s"
@@ -345,14 +423,28 @@ def import_rules_add(
         message += f" Skipped {skipped_existing} existing rule{'' if skipped_existing == 1 else 's'}."
     if skipped_duplicate:
         message += f" Skipped {skipped_duplicate} duplicate row{'' if skipped_duplicate == 1 else 's'} in the file."
+    message += invalid_row_summary(skipped_errors)
 
     return message
 
 
 def import_rules_override(
-    conn: Any, imported_rules: Sequence[Mapping[str, Any]], undo_state: MutableMapping[str, Any]
+    conn: Any,
+    imported_rules: Sequence[Mapping[str, Any]],
+    undo_state: MutableMapping[str, Any],
+    row_errors: Sequence[str] = (),
+    skip_invalid_rows: bool = False,
 ) -> str:
     """Import rules override."""
+    valid_rules, skipped_errors = import_rules_valid_for_write(
+        conn,
+        imported_rules,
+        row_errors=row_errors,
+        skip_invalid_rows=skip_invalid_rows,
+    )
+    if not valid_rules:
+        raise_no_importable_rules(skipped_errors)
+
     before_rules = snapshot_category_rules(conn)
     before_transaction_refs = snapshot_transaction_rule_refs(conn)
     inserted_count = 0
@@ -370,7 +462,7 @@ def import_rules_override(
     )
     conn.execute(delete(category_rules_table))
 
-    for rule in imported_rules:
+    for rule in valid_rules:
         key = rule_import_key(rule)
         if key in seen_keys:
             skipped_duplicate += 1
@@ -386,6 +478,7 @@ def import_rules_override(
     undo_state["after_rules"] = after_rules
     undo_state["transaction_rule_refs"] = before_transaction_refs
     undo_state["created_categories"] = created_categories
+    undo_state["row_errors"] = skipped_errors
 
     message = f"Replaced rules with {inserted_count} imported rule"
     message += "" if inserted_count == 1 else "s"
@@ -397,6 +490,7 @@ def import_rules_override(
         )
     if skipped_duplicate:
         message += f" Skipped {skipped_duplicate} duplicate row{'' if skipped_duplicate == 1 else 's'} in the file."
+    message += invalid_row_summary(skipped_errors)
 
     return message
 
@@ -514,17 +608,103 @@ def undo_rules_override_import(undo_state: Mapping[str, Any]) -> str:
 
 def parse_rules_csv(raw_text: str) -> list[dict[str, Any]]:
     """Parse rules CSV."""
+    parsed = parse_rules_csv_with_errors(raw_text)
+    if parsed.row_errors:
+        raise ValueError(parsed.row_errors[0])
+    return [public_import_rule(rule) for rule in parsed.rules]
+
+
+def parse_rules_csv_with_errors(raw_text: str) -> RuleCsvParseResult:
+    """Parse importable CSV rows while collecting row-level errors."""
     reader = csv.DictReader(io.StringIO(raw_text))
     if not reader.fieldnames:
         raise ValueError("The rules CSV needs a header row.")
 
     rules: list[dict[str, Any]] = []
+    row_errors: list[str] = []
+    total_rows = 0
     for line_number, row in enumerate(reader, start=2):
         if not any(str(value or "").strip() for value in row.values()):
             continue
-        rules.append(parse_rules_csv_row(row, line_number))
+        total_rows += 1
+        try:
+            rule = parse_rules_csv_row(row, line_number)
+        except ValueError as exc:
+            row_errors.append(csv_row_error_message(line_number, exc))
+            continue
+        rule[IMPORT_RULE_LINE_NUMBER] = line_number
+        rules.append(rule)
 
-    return rules
+    return RuleCsvParseResult(
+        total_rows=total_rows,
+        rules=tuple(rules),
+        row_errors=tuple(row_errors),
+    )
+
+
+def public_import_rule(rule: Mapping[str, Any]) -> dict[str, Any]:
+    """Return an import rule without parser-only metadata."""
+    return {key: value for key, value in rule.items() if key != IMPORT_RULE_LINE_NUMBER}
+
+
+def csv_row_error_message(line_number: int, exc: ValueError) -> str:
+    """Return a row-numbered CSV error message."""
+    message = str(exc)
+    prefix = f"Row {line_number}: "
+    return message if message.startswith(prefix) else f"{prefix}{message}"
+
+
+def import_rule_error_message(rule: Mapping[str, Any], exc: ValueError) -> str:
+    """Return a row-numbered import validation error message."""
+    line_number = rule.get(IMPORT_RULE_LINE_NUMBER)
+    if line_number is None:
+        return str(exc)
+    try:
+        parsed_line_number = int(str(line_number))
+    except (TypeError, ValueError):
+        return str(exc)
+    return csv_row_error_message(parsed_line_number, exc)
+
+
+def invalid_row_summary(row_errors: Sequence[str]) -> str:
+    """Return a short processing summary for skipped invalid rows."""
+    if not row_errors:
+        return ""
+    message = f" Skipped {len(row_errors)} invalid row{'' if len(row_errors) == 1 else 's'}."
+    return f"{message} {'; '.join(row_errors)}"
+
+
+def raise_no_importable_rules(row_errors: Sequence[str] = ()) -> None:
+    """Raise a useful error when an import has no valid rows."""
+    if row_errors:
+        raise ValueError(row_errors[0])
+    raise ValueError("No importable rules were found.")
+
+
+def validate_import_rule_for_write(conn: Any, rule: Mapping[str, Any]) -> None:
+    """Validate database-backed rule references before preview or import."""
+    resolve_rule_account_id(conn, rule, require_existing=True)
+
+
+def import_rules_valid_for_write(
+    conn: Any,
+    imported_rules: Sequence[Mapping[str, Any]],
+    row_errors: Sequence[str] = (),
+    skip_invalid_rows: bool = False,
+) -> tuple[list[Mapping[str, Any]], list[str]]:
+    """Return rules that can be safely written plus skipped row errors."""
+    valid_rules: list[Mapping[str, Any]] = []
+    skipped_errors = list(row_errors)
+    for rule in imported_rules:
+        try:
+            validate_import_rule_for_write(conn, rule)
+        except ValueError as exc:
+            if not skip_invalid_rows:
+                raise
+            skipped_errors.append(import_rule_error_message(rule, exc))
+            continue
+        valid_rules.append(rule)
+    return valid_rules, skipped_errors
 
 
 def parse_rules_csv_row(row: Mapping[str, Any], line_number: int) -> dict[str, Any]:
@@ -587,6 +767,10 @@ def parse_rules_csv_row(row: Mapping[str, Any], line_number: int) -> dict[str, A
     if direction not in CATEGORY_RULE_DIRECTIONS:
         allowed_directions = ", ".join(sorted(CATEGORY_RULE_DIRECTIONS))
         raise ValueError(f"Row {line_number}: direction must be one of {allowed_directions}.")
+    try:
+        validate_rule_tags_for_direction(tag_names, direction)
+    except ValueError as exc:
+        raise ValueError(f"Row {line_number}: {exc}") from None
 
     created_at = str(rule_import_value(normalized_row, "created_at", "created") or "").strip() or None
 

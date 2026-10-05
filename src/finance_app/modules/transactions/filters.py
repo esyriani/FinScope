@@ -64,6 +64,7 @@ from finance_app.modules.transactions.constants import (
     IGNORED_FILTERS,
     REVIEW_FILTER_NEEDS_REVIEW,
     REVIEW_FILTER_PENDING_APPROVAL,
+    REVIEW_FILTER_PRE_APPROVED,
     REVIEW_FILTER_VERIFIED,
     REVIEW_FILTERS,
     TRANSACTION_SORT_ACCOUNT,
@@ -73,6 +74,14 @@ from finance_app.modules.transactions.constants import (
     TRANSACTION_SORT_DESCRIPTION,
     TRANSACTION_SORT_IGNORED,
     TRANSACTION_SORT_REVIEW,
+)
+from finance_app.modules.transactions.status import (
+    TRANSACTION_STATUS_APPROVED,
+    TRANSACTION_STATUS_NEEDS_REVIEW,
+    TRANSACTION_STATUS_PENDING_APPROVAL,
+    TRANSACTION_STATUS_PRE_APPROVED,
+    transaction_status_expression,
+    transaction_status_rank_expression,
 )
 
 
@@ -171,11 +180,7 @@ def transaction_sort(filters: TransactionFilters | Mapping[str, Any], unknown_ca
         TRANSACTION_SORT_DESCRIPTION: transactions_table.c.description,
         TRANSACTION_SORT_AMOUNT: transactions_table.c.amount,
         TRANSACTION_SORT_CATEGORY: transaction_category_label_expression(unknown_category),
-        TRANSACTION_SORT_REVIEW: case(
-            (transactions_table.c.needs_review == 1, 2),
-            (transactions_table.c.reviewed_at.is_(None), 1),
-            else_=0,
-        ),
+        TRANSACTION_SORT_REVIEW: transaction_status_rank_expression(unknown_category),
         TRANSACTION_SORT_IGNORED: transactions_table.c.ignored,
     }
     return resolve_sort(filters["sort"], sort_columns, TRANSACTION_SORT_DATE)
@@ -215,12 +220,13 @@ def build_transaction_core_filters(
         core_filters.add(transactions_table.c.needs_review == 0)
 
     if filters["review"] == REVIEW_FILTER_NEEDS_REVIEW:
-        core_filters.add(transactions_table.c.needs_review == 1)
+        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_NEEDS_REVIEW)
     elif filters["review"] == REVIEW_FILTER_PENDING_APPROVAL:
-        core_filters.add(transactions_table.c.needs_review == 0)
-        core_filters.add(transactions_table.c.reviewed_at.is_(None))
+        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_PENDING_APPROVAL)
+    elif filters["review"] == REVIEW_FILTER_PRE_APPROVED:
+        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_PRE_APPROVED)
     elif filters["review"] == REVIEW_FILTER_VERIFIED:
-        core_filters.add(transactions_table.c.reviewed_at.is_not(None))
+        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_APPROVED)
 
     if filters["category_source"] == CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED:
         core_filters.add(transactions_table.c.reviewed_at.is_not(None))
@@ -270,10 +276,13 @@ def search_condition(search: object, unknown_category: str) -> Any | None:
     terms = [term for term in text.split() if term]
     account_name = func.coalesce(accounts_table.c.name, "Personal")
     category_value = transaction_category_label_expression(unknown_category)
+    review_status = transaction_status_expression(unknown_category)
     review_state = case(
-        (transactions_table.c.needs_review == 1, "needs review"),
-        (transactions_table.c.reviewed_at.is_not(None), "verified"),
-        else_="ready to approve",
+        (review_status == TRANSACTION_STATUS_NEEDS_REVIEW, "needs review"),
+        (review_status == TRANSACTION_STATUS_PENDING_APPROVAL, "pending approval"),
+        (review_status == TRANSACTION_STATUS_PRE_APPROVED, "pre-approved"),
+        (review_status == TRANSACTION_STATUS_APPROVED, "approved"),
+        else_="ignored",
     )
     ignored_state = case(
         (transactions_table.c.ignored == 1, "ignored"),

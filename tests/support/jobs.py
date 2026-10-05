@@ -1,10 +1,12 @@
-"""Background job capture helpers for tests.
+"""Background job helpers for tests.
 
 Provides reusable recorders for route and workflow tests that patch
 ``submit_background_job``. The helpers capture submitted job metadata without
-starting asynchronous work.
+starting asynchronous work, and provide deterministic waits for smoke tests
+that run the real process-local background runner.
 """
 
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
 
 from finance_app.background import runner
@@ -163,3 +165,64 @@ def reject_background_jobs(
         A ``RejectingBackgroundJobRecorder`` containing attempted submissions.
     """
     return RejectingBackgroundJobRecorder(job_id, queue=queue, detail=detail).install(monkeypatch, target)
+
+
+def clear_background_jobs():
+    """Clear process-local background job state for isolated runner tests."""
+    with runner._lock:
+        runner._jobs.clear()
+        runner._job_sequence = 0
+        runner._job_history_degraded = False
+        runner._job_history_degraded_detail = ""
+
+
+def wait_for_background_job(job_id, *, timeout=5, require_completed=True):
+    """Wait for one real background runner job by joining its future."""
+    record = background_job_record(job_id)
+    if record is None:
+        job = runner.get_background_job(job_id)
+        if job is None:
+            raise AssertionError(f"Background job did not start: {job_id}")
+        if job["status"] not in runner.FINISHED_STATUSES:
+            raise AssertionError(f"Background job did not finish: {job_id}")
+        if require_completed:
+            assert job["status"] == "completed", job
+        return job
+
+    future = record.get("_future")
+    if future is not None:
+        try:
+            future.result(timeout=timeout)
+        except FutureTimeoutError as exc:
+            raise AssertionError(f"Background job did not finish: {job_id}") from exc
+
+    job = runner.get_background_job(job_id)
+    if job is None or job["status"] not in runner.FINISHED_STATUSES:
+        raise AssertionError(f"Background job did not finish: {job_id}")
+    if require_completed:
+        assert job["status"] == "completed", job
+    return job
+
+
+def wait_for_background_job_label(label, *, timeout=5, require_completed=True):
+    """Wait for a real background runner job identified by its display label."""
+    record = next((job for job in runner.active_job_records() if job["label"] == label), None)
+    if record is None:
+        job = next((item for item in runner.list_background_jobs(limit=None) if item["label"] == label), None)
+        if job is None:
+            raise AssertionError(f"Background job did not start: {label}")
+        return wait_for_background_job(job["id"], timeout=timeout, require_completed=require_completed)
+    return wait_for_background_job(record["id"], timeout=timeout, require_completed=require_completed)
+
+
+def wait_for_all_background_jobs(*, timeout=5):
+    """Wait for all process-local background runner jobs to reach terminal states."""
+    job_ids = [job["id"] for job in runner.active_job_records()]
+    for job_id in job_ids:
+        wait_for_background_job(job_id, timeout=timeout, require_completed=False)
+    return runner.list_background_jobs(limit=None)
+
+
+def background_job_record(job_id):
+    """Return the process-local runner record for a job, including private test state."""
+    return next((job for job in runner.active_job_records() if job["id"] == job_id), None)

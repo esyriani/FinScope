@@ -58,7 +58,7 @@ finscope
 
 </details>
 
-Modify `src/finance_app/config.ini` according to your settings, including `database`, `server`, `categorization_model`, and `openai_api_key`.
+Modify `src/finance_app/config.ini` according to your settings. Common values are `[database] url` or `path`, `[server] host` or `port`, `[setting_defaults] categorization_model`, and `[api_keys] openai_api_key`.
 
 If `src/finance_app/config.ini` is left as default, open `http://127.0.0.1:5000` in a browser. FinScope uses the repository-level `runtime/finscope.db` SQLite database by default unless `FINANCE_DATABASE_URL`, `FINANCE_DB_PATH`, or app `config.ini` selects another database.
 

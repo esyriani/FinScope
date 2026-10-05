@@ -3,7 +3,14 @@
 import pytest
 from sqlalchemy import text
 from tests.support.database import set_owner_setting
-from tests.support.html import assert_has_element, assert_no_element
+from tests.support.html import (
+    assert_has_element,
+    assert_markup,
+    assert_no_element,
+    assert_not_markup,
+    assert_not_visible_text,
+    assert_visible_text,
+)
 from tests.support.web import set_csrf_token
 
 from finance_app.background import runner
@@ -128,17 +135,13 @@ def test_jobs_page_paginates_and_renders_public_job_data(owner_client, core_conn
     complete_job("Newest job", result="new")
 
     response = owner_client.get("/jobs?page=2")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Showing 3-3 of 3 processing items" in body
-    assert "Earliest job" in body
-    assert "previous" in body
+    assert_visible_text(response, "Showing 3-3 of 3 processing items", "Earliest job", "previous")
     earliest_created_at = runner.get_background_job(earliest_job_id)["created_at"]
-    assert format_datetime(earliest_created_at) in body
-    assert earliest_created_at not in body
-    assert "Newest job" not in body
-    assert "Middle job" not in body
+    assert_visible_text(response, format_datetime(earliest_created_at))
+    assert_not_markup(response, earliest_created_at)
+    assert_not_visible_text(response, "Newest job", "Middle job")
 
 
 def test_jobs_page_renders_ai_estimate_hook_by_default(owner_client):
@@ -188,19 +191,20 @@ def test_jobs_page_renders_expandable_progress_for_running_ai_job(owner_client):
     )
 
     response = owner_client.get("/jobs")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert f'id="job-progress-{job_id}"' in body
-    assert "data-ai-job-progress" in body
-    assert f'data-job-status-url="/jobs/{job_id}.json"' in body
-    assert 'role="progressbar"' in body
-    assert 'aria-valuenow="30"' in body
-    assert "width: 30%" in body
-    assert "30% complete" in body
-    assert "Processed 3 of 10; 2 categorized." in body
-    assert "Log" in body
-    assert "Starting batch 1-10 of 10." in body
+    assert_has_element(response, None, attrs={"id": f"job-progress-{job_id}"})
+    assert_has_element(response, None, attrs={"data-ai-job-progress": True})
+    assert_has_element(response, None, attrs={"data-job-status-url": f"/jobs/{job_id}.json"})
+    assert_has_element(response, None, attrs={"role": "progressbar", "aria-valuenow": "30"})
+    assert_markup(response, "width: 30%")
+    assert_visible_text(
+        response,
+        "30% complete",
+        "Processed 3 of 10; 2 categorized.",
+        "Log",
+        "Starting batch 1-10 of 10.",
+    )
 
 
 def test_jobs_page_keeps_ai_progress_log_available_after_completion(owner_client):
@@ -224,12 +228,11 @@ def test_jobs_page_keeps_ai_progress_log_available_after_completion(owner_client
     )
 
     response = owner_client.get("/jobs")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert f'id="job-progress-{job_id}"' in body
-    assert '<tr class="collapse " id=' in body
-    assert "AI categorization completed: 1 automatically categorized." in body
+    assert_has_element(response, None, attrs={"id": f"job-progress-{job_id}"})
+    assert_markup(response, '<tr class="collapse " id=')
+    assert_visible_text(response, "AI categorization completed: 1 automatically categorized.")
 
 
 def test_jobs_page_renders_ajax_auto_refresh_controls(owner_client):
@@ -237,15 +240,18 @@ def test_jobs_page_renders_ajax_auto_refresh_controls(owner_client):
     complete_job("Auto refresh job", result="done")
 
     response = owner_client.get("/jobs?page=1")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "data-jobs-auto-refresh" in body
-    assert 'data-jobs-auto-refresh-interval="10"' in body
-    assert "data-jobs-refresh-button" in body
-    assert 'data-jobs-refresh-interval="10"' in body
-    assert "data-jobs-refresh-target='[data-ajax-refresh-target=\"jobs-actions\"]'" in body
-    assert "Refresh (10)" in body
+    assert_has_element(response, None, attrs={"data-jobs-auto-refresh": True})
+    assert_has_element(response, None, attrs={"data-jobs-auto-refresh-interval": "10"})
+    assert_has_element(response, None, attrs={"data-jobs-refresh-button": True})
+    assert_has_element(response, None, attrs={"data-jobs-refresh-interval": "10"})
+    assert_has_element(
+        response,
+        None,
+        attrs={"data-jobs-refresh-target": '[data-ajax-refresh-target="jobs-actions"]'},
+    )
+    assert_visible_text(response, "Refresh (10)")
 
 
 def test_undo_job_post_runs_undo_and_flashes_result(owner_client):
@@ -265,11 +271,10 @@ def test_undo_job_post_runs_undo_and_flashes_result(owner_client):
         },
         follow_redirects=True,
     )
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert undo_calls == ["called"]
-    assert "Undo route complete." in body
+    assert_visible_text(response, "Undo route complete.")
     assert runner.get_background_job(job_id)["undo_status"] == "undone"
 
 
@@ -299,9 +304,9 @@ def test_undo_job_post_handles_runner_error_cases(owner_client):
         follow_redirects=True,
     )
 
-    assert "Processing item not found." in missing_response.get_data(as_text=True)
-    assert "This processing item does not have anything to undo." in unavailable_response.get_data(as_text=True)
-    assert "Could not undo processing item: RuntimeError: cannot undo" in failing_response.get_data(as_text=True)
+    assert_visible_text(missing_response, "Processing item not found.")
+    assert_visible_text(unavailable_response, "This processing item does not have anything to undo.")
+    assert_visible_text(failing_response, "Could not undo processing item: RuntimeError: cannot undo")
 
 
 def test_cancel_job_post_marks_queued_job_cancelled(owner_client):
@@ -318,7 +323,7 @@ def test_cancel_job_post_marks_queued_job_cancelled(owner_client):
     )
 
     assert response.status_code == 200
-    assert "Processing item cancelled." in response.get_data(as_text=True)
+    assert_visible_text(response, "Processing item cancelled.")
     assert runner.get_background_job(job_id)["status"] == "cancelled"
 
 
@@ -350,7 +355,7 @@ def test_categorize_all_unknowns_queues_ai_job(owner_client, core_conn, monkeypa
 
     assert response.status_code == 200
     assert submitted == ["queued"]
-    assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
+    assert_visible_text(response, "AI categorization queued for 1 unknown transaction.")
 
 
 def test_categorize_all_unknowns_handles_queue_rejection(owner_client, core_conn, monkeypatch):
@@ -383,7 +388,7 @@ def test_categorize_all_unknowns_handles_queue_rejection(owner_client, core_conn
     )
 
     assert response.status_code == 200
-    assert "AI categorization could not be queued. Try again." in response.get_data(as_text=True)
+    assert_visible_text(response, "AI categorization could not be queued. Try again.")
 
 
 def test_categorize_all_unknowns_requires_token_estimate_confirmation(owner_client, core_conn, monkeypatch):
@@ -410,7 +415,7 @@ def test_categorize_all_unknowns_requires_token_estimate_confirmation(owner_clie
 
     assert response.status_code == 200
     assert submitted == []
-    assert "Review the estimated AI usage before continuing." in response.get_data(as_text=True)
+    assert_visible_text(response, "Review the estimated AI usage before continuing.")
 
 
 def test_categorize_all_unknowns_runs_without_confirmation_when_setting_disabled(owner_client, core_conn, monkeypatch):
@@ -438,7 +443,7 @@ def test_categorize_all_unknowns_runs_without_confirmation_when_setting_disabled
 
     assert response.status_code == 200
     assert submitted == ["queued"]
-    assert "AI categorization queued for 1 unknown transaction." in response.get_data(as_text=True)
+    assert_visible_text(response, "AI categorization queued for 1 unknown transaction.")
 
 
 def test_estimate_categorize_all_unknowns_returns_json(owner_client, monkeypatch):
@@ -476,6 +481,6 @@ def test_cancel_queued_ai_jobs_route_clears_only_ai_queue(owner_client):
     )
 
     assert response.status_code == 200
-    assert "Cancelled 1 queued AI processing item." in response.get_data(as_text=True)
+    assert_visible_text(response, "Cancelled 1 queued AI processing item.")
     assert runner.get_background_job(main_job)["status"] == "queued"
     assert runner.get_background_job(ai_job)["status"] == "cancelled"

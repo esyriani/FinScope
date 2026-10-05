@@ -19,10 +19,13 @@ def test_pytest_defaults_parallel_no_coverage_test_collection_only():
     """Verify default pytest runs are parallel, coverage-free, and tests-scoped."""
     config = load_pytest_config()
     addopts = config["addopts"].split()
+    addopts_text = " ".join(addopts)
     norecursedirs = set(config["norecursedirs"].split())
 
     assert config["testpaths"].split() == ["tests"]
     assert "-n" in addopts
     assert "auto" in addopts
+    assert "-m" in addopts
+    assert "not optional" in addopts_text
     assert not any(option == "--no-cov" or option.startswith("--cov") for option in addopts)
     assert {"src", "docs", "runtime", ".venv", "vibecoding"} <= norecursedirs

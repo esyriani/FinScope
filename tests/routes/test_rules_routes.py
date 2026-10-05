@@ -3,8 +3,8 @@
 import csv
 import io
 
-from sqlalchemy import text
-from tests.support.database import insert_merchant, insert_rule
+from sqlalchemy import func, select, update
+from tests.support.database import insert_merchant, insert_rule, insert_transaction
 from tests.support.html import (
     assert_form,
     assert_has_element,
@@ -23,6 +23,7 @@ from tests.support.web import set_csrf_token
 
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.core.filters import format_datetime
+from finance_app.database.tables import category_rules as category_rules_table
 from finance_app.modules.categories.tag_filters import UNTAGGED_TAG_FILTER
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, set_rule_tags
 from finance_app.modules.rules import workflow as rules_workflow
@@ -45,11 +46,16 @@ def test_rules_create_route_persists_rule_and_tags(owner_client, core_conn):
         follow_redirects=True,
     )
 
-    rule = core_conn.execute(text("""
-        SELECT id, keyword, category, amount_min, amount_max, source
-        FROM category_rules
-        WHERE keyword = 'METRO GROCERY'
-        """)).fetchone()
+    rule = core_conn.execute(
+        select(
+            category_rules_table.c.id,
+            category_rules_table.c.keyword,
+            category_rules_table.c.category,
+            category_rules_table.c.amount_min,
+            category_rules_table.c.amount_max,
+            category_rules_table.c.source,
+        ).where(category_rules_table.c.keyword == "METRO GROCERY")
+    ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Rule saved for: METRO GROCERY")
     assert_visible_text(response, "Historical transactions were not changed.", "Review apply", "Rule detail")
@@ -68,11 +74,55 @@ def test_rules_create_route_allows_direct_save_without_preview_confirmation(owne
         },
         follow_redirects=True,
     )
-    rule = core_conn.execute(text("SELECT id FROM category_rules WHERE keyword = 'METRO GROCERY'")).fetchone()
+    rule = core_conn.execute(
+        select(category_rules_table.c.id).where(category_rules_table.c.keyword == "METRO GROCERY")
+    ).fetchone()
 
     assert response.status_code == 200
     assert_visible_text(response, "Rule saved for: METRO GROCERY", "Historical transactions were not changed.")
     assert rule is not None
+
+
+def test_rules_create_route_requires_debit_direction_for_reimbursable_tag(owner_client, core_conn):
+    """Verify Reimbursable rule tags require a debit-scoped rule."""
+    blocked = owner_client.post(
+        "/rules/create",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "keyword": "Conference Hotel",
+            "category": "Travel",
+            "tags": ["Reimbursable"],
+            "direction": "any",
+        },
+        follow_redirects=True,
+    )
+    blocked_count = core_conn.execute(select(func.count()).select_from(category_rules_table)).scalar_one()
+
+    allowed = owner_client.post(
+        "/rules/create",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "keyword": "Conference Hotel",
+            "category": "Travel",
+            "tags": ["Reimbursable"],
+            "direction": "debit",
+        },
+        follow_redirects=True,
+    )
+    rule = core_conn.execute(
+        select(
+            category_rules_table.c.id,
+            category_rules_table.c.direction,
+        ).where(category_rules_table.c.keyword == "CONFERENCE HOTEL")
+    ).fetchone()
+
+    assert blocked.status_code == 200
+    assert_visible_text(blocked, "Rules with the Reimbursable tag must use Debit direction.")
+    assert blocked_count == 0
+    assert allowed.status_code == 200
+    assert_visible_text(allowed, "Rule saved for: CONFERENCE HOTEL")
+    assert rule._mapping["direction"] == "debit"
+    assert get_rule_tags_by_rule_id(core_conn, [rule._mapping["id"]])[rule._mapping["id"]] == ["Reimbursable"]
 
 
 def test_rules_route_renders_automatic_source_badge(owner_client, core_conn):
@@ -93,16 +143,15 @@ def test_rules_route_formats_created_timestamp(owner_client, core_conn):
     created_at = "2026-05-13T03:38:00Z"
     rule_id = insert_rule(core_conn, keyword="TIMESTAMP RULE", category="Food")
     core_conn.execute(
-        text("UPDATE category_rules SET created_at = :p0 WHERE id = :p1"), {"p0": created_at, "p1": rule_id}
+        update(category_rules_table).where(category_rules_table.c.id == rule_id).values(created_at=created_at)
     )
     core_conn.commit()
 
     response = owner_client.get("/rules")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert format_datetime(created_at) in body
-    assert created_at not in body
+    assert_visible_text(response, format_datetime(created_at))
+    assert_not_visible_text(response, created_at)
 
 
 def test_rules_route_exposes_active_sort_direction(owner_client, core_conn):
@@ -146,39 +195,34 @@ def test_rules_route_uses_direct_delete_for_unapplied_rules(owner_client, core_c
     rule_id = insert_rule(core_conn, keyword="UNUSED STORE", category="Food")
 
     response = owner_client.get("/rules")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert f'action="/rules/{rule_id}/delete"' in body
-    assert "This rule is not applied to any transactions." in body
+    assert_form(response, f"/rules/{rule_id}/delete")
+    assert_visible_text(response, "This rule is not applied to any transactions.")
 
 
 def test_rules_route_keeps_delete_preview_for_applied_rules(owner_client, core_conn):
     """Verify applied rules keep the delete preview action."""
     rule_id = insert_rule(core_conn, keyword="APPLIED STORE", category="Food")
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Applied Store', 12.34, 'Food', 'rule',
-            :p0, 0, 'rules-page-applied-delete'
-        )
-        """),
-        {"p0": rule_id},
+    insert_transaction(
+        core_conn,
+        tx_date="2026-01-02",
+        description="Applied Store",
+        amount=12.34,
+        category="Food",
+        category_source="rule",
+        category_rule_id=rule_id,
+        needs_review=0,
+        fingerprint="rules-page-applied-delete",
     )
-    core_conn.commit()
 
     response = owner_client.get("/rules")
-    body = response.get_data(as_text=True)
-    delete_modal = body.split(f'id="delete-rule-{rule_id}"', 1)[1]
 
     assert response.status_code == 200
-    assert 'action="/rules/audit/preview"' in delete_modal
-    assert 'name="action" value="delete_rule"' in delete_modal
-    assert "Preview delete" in delete_modal
+    assert_no_element(response, "form", attrs={"action": f"/rules/{rule_id}/delete"})
+    assert_form(response, "/rules/audit/preview")
+    assert_input(response, name="action", value="delete_rule")
+    assert_visible_text(response, "Preview delete")
 
 
 def test_rules_route_renders_scope_selector_for_merchant_bound_rule(owner_client, core_conn):
@@ -315,7 +359,7 @@ def test_rules_create_route_rejects_invalid_form(owner_client, core_conn):
         follow_redirects=True,
     )
 
-    count = core_conn.execute(text("SELECT COUNT(*) AS count FROM category_rules")).fetchone()._mapping["count"]
+    count = core_conn.execute(select(func.count()).select_from(category_rules_table)).scalar_one()
     assert response.status_code == 200
     assert_visible_text(response, "Keyword and category are required.")
     assert count == 0
@@ -345,6 +389,35 @@ def test_rules_update_route_replaces_rule_values_and_tags(owner_client, core_con
     assert_visible_text(response, "Historical transactions were not changed.", "Review apply", "Rule detail")
     assert tuple(rule[1:]) == ("HYDRO QUEBEC", "Utilities", 25.0, 50.0, "manual", 0)
     assert get_rule_tags_by_rule_id(core_conn, [rule_id])[rule_id] == ["Government", "Tax"]
+
+
+def test_rules_update_route_requires_debit_direction_for_reimbursable_tag(owner_client, core_conn):
+    """Verify editing cannot save Reimbursable on non-debit rules."""
+    rule_id = insert_rule(core_conn, keyword="EXISTING STORE", category="Food", tags=["Tax"])
+
+    response = owner_client.post(
+        f"/rules/{rule_id}/update",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "keyword": "Existing Store",
+            "category": "Travel",
+            "tags": ["Reimbursable"],
+            "direction": "credit",
+        },
+        follow_redirects=True,
+    )
+
+    rule = core_conn.execute(
+        select(
+            category_rules_table.c.keyword,
+            category_rules_table.c.category,
+            category_rules_table.c.direction,
+        ).where(category_rules_table.c.id == rule_id)
+    ).fetchone()
+    assert response.status_code == 200
+    assert_visible_text(response, "Rules with the Reimbursable tag must use Debit direction.")
+    assert tuple(rule) == ("EXISTING STORE", "Food", "any")
+    assert get_rule_tags_by_rule_id(core_conn, [rule_id])[rule_id] == ["Tax"]
 
 
 def test_rules_update_route_allows_direct_save_without_preview_confirmation(owner_client, core_conn):
@@ -385,12 +458,11 @@ def test_rules_update_route_can_change_merchant_bound_rule_to_fuzzy(owner_client
     )
 
     rule = core_conn.execute(
-        text("""
-        SELECT merchant_id, keyword, category
-        FROM category_rules
-        WHERE id = :p0
-        """),
-        {"p0": rule_id},
+        select(
+            category_rules_table.c.merchant_id,
+            category_rules_table.c.keyword,
+            category_rules_table.c.category,
+        ).where(category_rules_table.c.id == rule_id)
     ).fetchone()
     assert response.status_code == 200
     assert_visible_text(response, "Rule updated.")
@@ -478,11 +550,15 @@ def test_rules_approve_route_rejects_manual_rule(owner_client, core_conn):
 def test_rules_apply_route_returns_json_for_table_action(owner_client, core_conn):
     """Verify confirmed AJAX apply returns updated counts without refreshing the page."""
     rule_id = insert_rule(core_conn, keyword="METRO", category="Food")
-    core_conn.execute(text("""
-        INSERT INTO transactions (tx_date, description, amount, category, needs_review, fingerprint)
-        VALUES ('2026-01-02', 'Metro Grocery #123', 14.25, 'UNKNOWN', 1, 'ajax-apply-match')
-        """))
-    core_conn.commit()
+    insert_transaction(
+        core_conn,
+        tx_date="2026-01-02",
+        description="Metro Grocery #123",
+        amount=14.25,
+        category="UNKNOWN",
+        needs_review=1,
+        fingerprint="ajax-apply-match",
+    )
 
     response = owner_client.post(
         f"/rules/{rule_id}/apply",
@@ -519,15 +595,24 @@ def test_rules_apply_route_rejects_unconfirmed_json_apply(owner_client, core_con
 
 def test_rules_preview_route_returns_match_count_and_sample(owner_client, core_conn):
     """Verify that preview returns matching transactions without mutating data."""
-    core_conn.execute(text("""
-        INSERT INTO transactions (tx_date, description, amount, category, needs_review, fingerprint)
-        VALUES ('2026-01-02', 'Metro Grocery #123', 14.25, 'UNKNOWN', 1, 'preview-match')
-        """))
-    core_conn.execute(text("""
-        INSERT INTO transactions (tx_date, description, amount, category, needs_review, fingerprint)
-        VALUES ('2026-01-03', 'Other Store', 14.25, 'UNKNOWN', 1, 'preview-miss')
-        """))
-    core_conn.commit()
+    insert_transaction(
+        core_conn,
+        tx_date="2026-01-02",
+        description="Metro Grocery #123",
+        amount=14.25,
+        category="UNKNOWN",
+        needs_review=1,
+        fingerprint="preview-match",
+    )
+    insert_transaction(
+        core_conn,
+        tx_date="2026-01-03",
+        description="Other Store",
+        amount=14.25,
+        category="UNKNOWN",
+        needs_review=1,
+        fingerprint="preview-miss",
+    )
 
     response = owner_client.post(
         "/rules/preview",
@@ -569,6 +654,28 @@ def test_rules_preview_route_returns_validation_error_json(owner_client):
     }
 
 
+def test_rules_preview_route_rejects_reimbursable_without_debit_direction(owner_client):
+    """Verify preview validation mirrors rule save validation."""
+    response = owner_client.post(
+        "/rules/preview",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "keyword": "Conference Hotel",
+            "category": "Travel",
+            "tags": ["Reimbursable"],
+            "direction": "credit",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "ok": False,
+        "message": "Rules with the Reimbursable tag must use Debit direction.",
+        "match_count": 0,
+        "transactions": [],
+    }
+
+
 def test_rules_delete_route_removes_unapplied_rule_without_preview(owner_client, core_conn):
     """Verify direct rule deletion is allowed when no transaction references it."""
     rule_id = insert_rule(core_conn)
@@ -587,20 +694,17 @@ def test_rules_delete_route_removes_unapplied_rule_without_preview(owner_client,
 def test_rules_delete_route_requires_preview_when_rule_is_applied(owner_client, core_conn):
     """Verify direct deletion is blocked when a transaction references the rule."""
     rule_id = insert_rule(core_conn)
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Grocery', 12.34, 'Food', 'rule',
-            :p0, 0, 'delete-route-applied'
-        )
-        """),
-        {"p0": rule_id},
+    insert_transaction(
+        core_conn,
+        tx_date="2026-01-02",
+        description="Metro Grocery",
+        amount=12.34,
+        category="Food",
+        category_source="rule",
+        category_rule_id=rule_id,
+        needs_review=0,
+        fingerprint="delete-route-applied",
     )
-    core_conn.commit()
 
     response = owner_client.post(
         f"/rules/{rule_id}/delete",
@@ -655,20 +759,17 @@ def test_rules_delete_route_returns_json_for_unapplied_delete(owner_client, core
 def test_rules_delete_route_rejects_unconfirmed_json_delete_when_applied(owner_client, core_conn):
     """Verify AJAX deletion still requires preview for applied rules."""
     rule_id = insert_rule(core_conn)
-    core_conn.execute(
-        text("""
-        INSERT INTO transactions (
-            tx_date, description, amount, category, category_source,
-            category_rule_id, needs_review, fingerprint
-        )
-        VALUES (
-            '2026-01-02', 'Metro Grocery', 12.34, 'Food', 'rule',
-            :p0, 0, 'delete-route-ajax-applied'
-        )
-        """),
-        {"p0": rule_id},
+    insert_transaction(
+        core_conn,
+        tx_date="2026-01-02",
+        description="Metro Grocery",
+        amount=12.34,
+        category="Food",
+        category_source="rule",
+        category_rule_id=rule_id,
+        needs_review=0,
+        fingerprint="delete-route-ajax-applied",
     )
-    core_conn.commit()
 
     response = owner_client.post(
         f"/rules/{rule_id}/delete",
@@ -797,6 +898,33 @@ def test_rules_import_route_previews_then_queues_background_job(owner_client, mo
     assert isinstance(submitted.args[2], dict)
     assert submitted.undo_handler is undo_import_rules_job
     assert submitted.undo_args == (submitted.args[2],)
+
+
+def test_rules_import_route_previews_valid_rows_with_row_errors(owner_client, monkeypatch):
+    """Verify import preview reports skipped row errors without blocking valid rows."""
+    submitted_jobs = capture_background_jobs(monkeypatch, rules_workflow, job_id="rulesrowerrors")
+
+    preview = owner_client.post(
+        "/rules/import",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "mode": "add",
+            "rules_file": (io.BytesIO(b"keyword,category\nMetro,Food\n,Utilities\n"), "rules.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert preview.status_code == 200
+    assert_visible_text(
+        preview,
+        "Rule import preview",
+        "METRO",
+        "Rows with errors",
+        "Invalid rows skipped",
+        "Row 3: keyword or merchant_name is required.",
+    )
+    assert len(submitted_jobs) == 0
 
 
 def test_rules_import_route_handles_queue_rejection(owner_client, monkeypatch):

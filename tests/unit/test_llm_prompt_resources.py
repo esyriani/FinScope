@@ -31,4 +31,6 @@ def test_llm_system_prompt_resource_is_structured_and_rendered():
     assert "0.62 up to below 0.91" in prompt
     assert "${verify_threshold}" not in prompt
     assert "Bank statement context" in prompt
+    assert 'Do not force a category just to avoid "UNKNOWN".' in prompt
+    assert 'Return "UNKNOWN" instead of a weak guess' in prompt
     assert '"category_id": "one ID from taxonomy.categories"' in prompt

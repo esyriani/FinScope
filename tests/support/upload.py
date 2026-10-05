@@ -5,21 +5,20 @@ workflow tests. The helpers assume the standard seeded statement type and owner
 settings fixtures are present.
 """
 
-from sqlalchemy import text
-
 from finance_app.modules.upload import ai_workflow as upload_ai_workflow
 from finance_app.modules.upload.repository import new_statement_import_token, reset_statement_import_state
+from tests.support.database import (
+    default_statement_type_id,
+    insert_account,
+    insert_statement,
+    insert_transaction,
+    statement_type_id_for_parser,
+)
 
 
 def first_statement_type_id(conn):
     """Return a valid active statement type id from the test database."""
-    return conn.execute(text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        ORDER BY id
-        LIMIT 1
-        """)).fetchone()._mapping["id"]
+    return default_statement_type_id(conn)
 
 
 def statement_type_id(conn, parser_type):
@@ -32,21 +31,7 @@ def statement_type_id(conn, parser_type):
     Returns:
         Matching statement type id.
     """
-    return (
-        conn.execute(
-            text("""
-        SELECT id
-        FROM statement_types
-        WHERE active = 1
-        AND parser_type = :p0
-        ORDER BY id
-        LIMIT 1
-        """),
-            {"p0": parser_type},
-        )
-        .fetchone()
-        ._mapping["id"]
-    )
+    return statement_type_id_for_parser(conn, parser_type)
 
 
 def create_account_statement(conn, filename="statement.csv"):
@@ -59,18 +44,14 @@ def create_account_statement(conn, filename="statement.csv"):
     Returns:
         A tuple of ``(account_id, statement_id)``.
     """
-    account_id = conn.execute(text("""
-        INSERT INTO accounts (name)
-        VALUES ('Personal')
-        """)).lastrowid
-    statement_id = conn.execute(
-        text("""
-        INSERT INTO statements (account_id, statement_type_id, filename, checksum, raw_text)
-        VALUES (:p0, :p1, :p2, :p3, '')
-        """),
-        {"p0": account_id, "p1": first_statement_type_id(conn), "p2": filename, "p3": f"checksum-{filename}"},
-    ).lastrowid
-    conn.commit()
+    account_id = insert_account(conn, "Personal")
+    statement_id = insert_statement(
+        conn,
+        account_id=account_id,
+        statement_type_id=first_statement_type_id(conn),
+        filename=filename,
+        checksum=f"checksum-{filename}",
+    )
     return account_id, statement_id
 
 
@@ -84,48 +65,22 @@ def queue_statement_import_attempt(conn, statement_id):
 
 def insert_llm_progress_transactions(conn, statement_id, account_id):
     """Insert unknown transactions that exercise success, unresolved, and request-error batches."""
-    conn.execute(
-        text("""
-        INSERT INTO transactions (
-            statement_id,
-            account_id,
-            tx_date,
-            description,
-            amount,
-            category,
-            needs_review,
-            fingerprint
+    for description, tx_date, amount, fingerprint in (
+        ("UNKNOWN GOOD", "2026-01-02", 12.34, "llm-progress-good"),
+        ("UNKNOWN UNRESOLVED", "2026-01-03", 23.45, "llm-progress-unresolved"),
+        ("UNKNOWN TIMEOUT", "2026-01-04", 34.56, "llm-progress-timeout"),
+    ):
+        insert_transaction(
+            conn,
+            statement_id=statement_id,
+            account_id=account_id,
+            tx_date=tx_date,
+            description=description,
+            amount=amount,
+            category="UNKNOWN",
+            needs_review=1,
+            fingerprint=fingerprint,
         )
-        VALUES (:p0, :p1, :p2, :p3, :p4, 'UNKNOWN', 1, :p5)
-        """),
-        [
-            {
-                "p0": statement_id,
-                "p1": account_id,
-                "p2": "2026-01-02",
-                "p3": "UNKNOWN GOOD",
-                "p4": 12.34,
-                "p5": "llm-progress-good",
-            },
-            {
-                "p0": statement_id,
-                "p1": account_id,
-                "p2": "2026-01-03",
-                "p3": "UNKNOWN UNRESOLVED",
-                "p4": 23.45,
-                "p5": "llm-progress-unresolved",
-            },
-            {
-                "p0": statement_id,
-                "p1": account_id,
-                "p2": "2026-01-04",
-                "p3": "UNKNOWN TIMEOUT",
-                "p4": 34.56,
-                "p5": "llm-progress-timeout",
-            },
-        ],
-    )
-    conn.commit()
 
 
 def build_llm_progress_categorizer(batches):

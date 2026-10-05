@@ -62,15 +62,7 @@
 {% endmacro %}
 
 {% macro transaction_status_badge(tx) %}
-{% if tx["ignored"] %}
-    <span class="badge text-bg-secondary transaction-status-badge">{{ _("Ignored") }}</span>
-{% elif tx["needs_review"] %}
-    <span class="badge text-bg-warning transaction-status-badge">{{ _("Needs review") }}</span>
-{% elif tx["reviewed_at"] %}
-    <span class="badge text-bg-success transaction-status-badge">{{ _("Approved") }}</span>
-{% else %}
-    <span class="badge text-bg-secondary transaction-status-badge">{{ _("Pending approval") }}</span>
-{% endif %}
+<span class="badge {{ tx['review_status_badge_class'] }} transaction-status-badge">{{ _(tx["review_status_label"]) }}</span>
 {% endmacro %}
 
 <div class="page-header">
@@ -190,7 +182,7 @@
             <div class="col-md-3">
                 <div class="form-label-with-help">
                     <label class="form-label" for="review">{{ _("Status") }}</label>
-                    {{ help_tip("Shows whether a transaction is ready, needs review, or is waiting for approval.", "Explain transaction status") }}
+                    {{ help_tip("Shows whether a transaction needs review, is pending approval, was pre-approved, or was approved by you.", "Explain transaction status") }}
                 </div>
                 <select id="review" class="form-select" name="review">
                     {% for review_value, review_text in review_filter_options %}

@@ -52,6 +52,7 @@ def bootstrap() -> ResponseReturnValue:
         return redirect(url_for("auth.login"))
 
     if request.method == "POST":
+        bootstrap_form = bootstrap_form_values(request.form)
         try:
             row = bootstrap_owner(
                 request.form.get("username"),
@@ -62,6 +63,11 @@ def bootstrap() -> ResponseReturnValue:
             )
         except ValueError as exc:
             flash(gettext(str(exc)))
+            return render_template(
+                "auth_bootstrap.html",
+                bootstrap_form=bootstrap_form,
+                bootstrap_error=True,
+            )
         else:
             user = authenticate_user(row["username"], request.form.get("password"), request.remote_addr)
             if user is not None:
@@ -70,6 +76,16 @@ def bootstrap() -> ResponseReturnValue:
             return redirect(url_for("home.home"))
 
     return render_template("auth_bootstrap.html")
+
+
+def bootstrap_form_values(form: Mapping[str, Any]) -> dict[str, str]:
+    """Return submitted bootstrap form values for validation re-rendering."""
+    return {
+        "username": str(form.get("username") or ""),
+        "display_name": str(form.get("display_name") or ""),
+        "password": str(form.get("password") or ""),
+        "confirm_password": str(form.get("confirm_password") or ""),
+    }
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])

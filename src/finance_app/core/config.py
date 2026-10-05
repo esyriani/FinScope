@@ -251,9 +251,9 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
         ),
         default_categorization_model=env(
             "FINANCE_DEFAULT_CATEGORIZATION_MODEL",
-            parser.get("setting_defaults", "categorization_model", fallback="gpt-4o-mini"),
+            parser.get("setting_defaults", "categorization_model", fallback="gpt-6-luna"),
         ).strip()
-        or "gpt-4o-mini",
+        or "gpt-6-luna",
         default_recurrence_minimum_occurrences=parse_positive_int(
             env(
                 "FINANCE_DEFAULT_RECURRENCE_MINIMUM_OCCURRENCES",
@@ -381,7 +381,7 @@ def parse_port(value: object, fallback: int = 5000) -> int:
 
 
 def parse_positive_int(value: object, fallback: int) -> int:
-    """Parse positive int."""
+    """Return a positive config integer, or fallback when parsing fails."""
     try:
         parsed = int(str(value).strip())
     except (TypeError, ValueError):
@@ -391,7 +391,7 @@ def parse_positive_int(value: object, fallback: int) -> int:
 
 
 def parse_probability(value: object, fallback: float) -> float:
-    """Parse probability."""
+    """Return a config probability in [0, 1], or fallback when invalid."""
     try:
         parsed = float(str(value).strip())
     except (TypeError, ValueError):

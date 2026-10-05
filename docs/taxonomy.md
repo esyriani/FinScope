@@ -108,7 +108,7 @@ shown as short badges in the table.
 | `UNKNOWN` category | Represents unresolved classification. Imports, deterministic categorization, historical matching, and AI fallback use this value when no confident category exists. Review and AI rerun flows treat null or `UNKNOWN` categories as unresolved work. |
 | `Transfers` category | Provides the protected label used when transaction-kind detection identifies balance movement, credit card payments, cash withdrawals, deposits, or adjustments. Spending and income reports exclude transfer/payment transaction kinds; the category keeps the user-facing taxonomy aligned with that non-reportable cash-flow role. |
 | `Reimbursement` category | Identifies incoming reimbursement credits. Reporting excludes these credits from ordinary income, and allocation-aware spending calculations use reimbursement allocations to offset the covered expense rows. The Reimbursements page uses the key to find eligible credits. |
-| `Reimbursable` tag | Identifies expenses expected to be repaid. The Reimbursements page uses this key, allocation rows, and completion markers to show pending expenses and settled items. |
+| `Reimbursable` tag | Identifies positive expense rows expected to be repaid. Transaction tag writes drop this tag from credits, transfers, and other non-expense rows. The Reimbursements page uses this key, allocation rows, and completion markers to show pending expenses and settled items. |
 | `Tax` tag | Reserves a stable tag for tax preparation, accounting, and year-end review. It does not currently change totals by itself; the key is protected for future tax review and export workflows. |
 
 ## Special built-in categories
@@ -150,7 +150,7 @@ This category is managed by FinScope and cannot be renamed, edited, or deleted f
 
 ### Reimbursement
 
-The built-in `Reimbursement` category is reserved for incoming credits that repay expenses the user paid upfront. Keep the original expenses in their natural category, such as `Travel`, `Food`, or `Work`, and tag those expenses with context such as `Conference` and `Reimbursable`. Categorize the incoming credit as `Reimbursement`, then link it to the covered expense transactions so FinScope can track paid and pending amounts. The credit can keep context tags such as `Conference` or `Insurance`, but it does not need the `Reimbursable` tag because the allocation link records what was repaid.
+The built-in `Reimbursement` category is reserved for incoming credits that repay expenses the user paid upfront. Keep the original expenses in their natural category, such as `Travel`, `Food`, or `Work`, and tag those expenses with context such as `Conference` and `Reimbursable`. Categorize the incoming credit as `Reimbursement`, and keep context tags such as `Conference`, `Insurance`, or `Judo` when they help identify the repayment source. The credit does not need the `Reimbursable` tag because the allocation link records what was repaid.
 
 For example, $1,000 of conference travel expenses tagged `Conference` and `Reimbursable`, followed by a $900 reimbursement credit categorized as `Reimbursement` and allocated to those expenses, leaves $100 pending reimbursement while preserving the natural `Travel` spending category.
 
@@ -163,14 +163,15 @@ or change the underlying category treatment.
 
 ### Reimbursable
 
-The built-in `Reimbursable` tag marks expenses that are expected to be repaid
+The built-in `Reimbursable` tag marks positive expense rows that are expected to be repaid
 by work, insurance, a tenant, another person, or another organization. The
 Reimbursements page uses this tag, reimbursement allocations, and completion
 markers to track which expenses are still pending.
 
 `Reimbursable` is protected and cannot be renamed, edited, or deleted from the
-UI. Reimbursement credits themselves normally use the `Reimbursement` category
-instead of this tag; the allocation link records what was repaid.
+UI. Transaction tag writes only persist it on positive expense rows.
+Reimbursement credits themselves use the `Reimbursement` category; the
+allocation link records what was repaid.
 
 ### Tax
 
@@ -217,7 +218,7 @@ FinScope supports two rule scopes: merchant-bound and approximate-keyword rules.
 **Approximate-keyword rules** use normalized substring matching against simplified transaction descriptions and main merchant names.
 For example, `VIREMENT` matches: `VIREMENT INTERAC 2`.
 
-Rules may also be constrained by account, signed direction (`any`, `debit`, or `credit`), and optional amount bounds. Account and direction constraints make rules more specific and increase rule confidence when they match. Imported rule CSV files can include `account_name` and `direction`; an explicit account name must match an existing account so a misspelled scoped import does not become a broad rule.
+Rules may also be constrained by account, signed direction (`any`, `debit`, or `credit`), and optional amount bounds. Account and direction constraints make rules more specific and increase rule confidence when they match. Rules that assign the built-in `Reimbursable` tag must use the `debit` direction because that tag can only apply to positive expense rows. Imported rule CSV files can include `account_name` and `direction`; an explicit account name must match an existing account so a misspelled scoped import does not become a broad rule. During rule import preview and processing, row-level errors are reported separately while valid rows remain importable.
 
 Rule priority is deterministic. Higher-priority rules are evaluated first based on:
 
@@ -251,7 +252,7 @@ High-confidence matches require strong agreement across similar transactions bef
 
 Automatic and manual category writes persist compact JSON evidence in `transactions.category_metadata`. The metadata uses a controlled technical `decision_source`: `rule`, `similar_transactions`, `llm`, `llm_with_similar_transactions`, `combined`, `manual`, or `unknown`.
 
-AI categorization is optional and requires `OPENAI_API_KEY`.
+AI categorization is optional and requires `OPENAI_API_KEY` or `[api_keys] openai_api_key`.
 External prompts are privacy-minimized. The AI receives normalized merchant text, coarse amount direction and magnitude, transaction kind, compact category evidence summaries, the full category/tag list, and transaction-local candidate category/tag hints. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. Candidate categories and tags are hints, not a gate: the model may choose any active category or tag ID from the full category/tag list when the supplied evidence supports it.
 
 The static system-prompt policy is stored in [src/finance_app/modules/categories/llm_system_prompt.json](../src/finance_app/modules/categories/llm_system_prompt.json). Runtime code renders that structured resource with the current confidence thresholds, while transaction, category/tag, and rule payloads are still built by the Python prompt builders.

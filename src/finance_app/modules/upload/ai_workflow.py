@@ -266,7 +266,8 @@ def categorize_unknown_transactions_job(
             log_appender=log_appender,
         )
 
-    summary = automatic_categorization_message(updated_count, source_counts)
+    unresolved_count = max(0, processed_count - updated_count)
+    summary = automatic_categorization_message(updated_count, source_counts, unresolved_count)
     append_ai_categorization_log(
         "AI categorization completed: {summary}",
         params={"summary": summary},

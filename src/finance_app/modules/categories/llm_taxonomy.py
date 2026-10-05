@@ -5,7 +5,7 @@ rule evidence, historical evidence, merchant history, and taxonomy text.
 """
 
 import re
-from collections.abc import Mapping, MutableMapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 from sqlalchemy import func, select
@@ -63,6 +63,7 @@ def prepare_llm_candidate_taxonomies(
     unknown_category: str,
     category_rows: Sequence[Mapping[str, Any]] | None = None,
     tag_rows: Sequence[Mapping[str, Any]] | None = None,
+    exclude_transaction_ids: Iterable[object] | None = None,
 ) -> None:
     """Attach compact candidate category and tag lists to LLM transaction payloads.
 
@@ -73,12 +74,26 @@ def prepare_llm_candidate_taxonomies(
     """
     category_rows = category_rows or []
     tag_rows = tag_rows or []
-    common_categories = common_category_names(conn, category_options, unknown_category)
+    excluded_ids = normalized_excluded_transaction_ids(exclude_transaction_ids)
+    common_categories = common_category_names(
+        conn,
+        category_options,
+        unknown_category,
+        exclude_transaction_ids=excluded_ids,
+    )
     for tx in unknown_items:
         categories: list[Any] = []
         categories.extend(rule_evidence_categories(tx))
         categories.extend(historical_evidence_categories(tx))
-        categories.extend(merchant_history_category_names(conn, tx, category_options, unknown_category))
+        categories.extend(
+            merchant_history_category_names(
+                conn,
+                tx,
+                category_options,
+                unknown_category,
+                exclude_transaction_ids=excluded_ids,
+            )
+        )
         categories.extend(semantic_taxonomy_names(tx, category_rows, category_options, unknown_category))
         categories.extend(common_categories)
         categories.append(unknown_category)
@@ -95,7 +110,23 @@ def prepare_llm_candidate_taxonomies(
             candidate_categories,
             tag_options,
             tag_rows,
+            exclude_transaction_ids=excluded_ids,
         )
+
+
+def normalized_excluded_transaction_ids(values: Iterable[object] | None) -> tuple[int, ...]:
+    """Return positive transaction IDs to exclude from history-derived hints."""
+    excluded: list[int] = []
+    seen: set[int] = set()
+    for value in values or ():
+        try:
+            parsed = int(str(value))
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0 and parsed not in seen:
+            excluded.append(parsed)
+            seen.add(parsed)
+    return tuple(excluded)
 
 
 def rule_evidence_categories(transaction: Mapping[str, Any]) -> list[Any]:
@@ -166,20 +197,28 @@ def semantic_tokens(value: object) -> set[str]:
     }
 
 
-def common_category_names(conn: Any, category_options: Sequence[str], unknown_category: str) -> list[str]:
+def common_category_names(
+    conn: Any,
+    category_options: Sequence[str],
+    unknown_category: str,
+    exclude_transaction_ids: Sequence[int] = (),
+) -> list[str]:
     """Return commonly used non-unknown categories from persisted transactions."""
     category_label = transaction_category_label_expression(unknown_category)
+    conditions = [
+        transactions_table.c.ignored == 0,
+        category_label != unknown_category,
+        category_label.in_(category_options),
+    ]
+    if exclude_transaction_ids:
+        conditions.append(transactions_table.c.id.not_in(exclude_transaction_ids))
     rows = (
         conn.execute(
             select(
                 category_label.label("category"),
                 func.count().label("count"),
             )
-            .where(
-                transactions_table.c.ignored == 0,
-                category_label != unknown_category,
-                category_label.in_(category_options),
-            )
+            .where(*conditions)
             .group_by(category_label)
             .order_by(func.count().desc(), category_label)
             .limit(COMMON_CATEGORY_LIMIT)
@@ -195,6 +234,7 @@ def merchant_history_category_names(
     transaction: Mapping[str, Any],
     category_options: Sequence[str],
     unknown_category: str,
+    exclude_transaction_ids: Sequence[int] = (),
 ) -> list[str]:
     """Return categories historically used for the same durable merchant."""
     merchant_id = transaction.get("merchant_id")
@@ -202,18 +242,21 @@ def merchant_history_category_names(
         return []
 
     category_label = transaction_category_label_expression(unknown_category)
+    conditions = [
+        transactions_table.c.ignored == 0,
+        transactions_table.c.merchant_id == int(merchant_id),
+        category_label != unknown_category,
+        category_label.in_(category_options),
+    ]
+    if exclude_transaction_ids:
+        conditions.append(transactions_table.c.id.not_in(exclude_transaction_ids))
     rows = (
         conn.execute(
             select(
                 category_label.label("category"),
                 func.count().label("count"),
             )
-            .where(
-                transactions_table.c.ignored == 0,
-                transactions_table.c.merchant_id == int(merchant_id),
-                category_label != unknown_category,
-                category_label.in_(category_options),
-            )
+            .where(*conditions)
             .group_by(category_label)
             .order_by(func.count().desc(), category_label)
             .limit(COMMON_CATEGORY_LIMIT)
@@ -284,6 +327,7 @@ def compact_tag_candidates(
     candidate_categories: Sequence[str],
     tag_options: Sequence[str],
     tag_rows: Sequence[Mapping[str, Any]] | None = None,
+    exclude_transaction_ids: Sequence[int] = (),
 ) -> list[str]:
     """Return compact, valid tag candidates for one LLM transaction."""
     tags: list[Any] = []
@@ -294,19 +338,27 @@ def compact_tag_candidates(
     for example in historical.get("examples") or []:
         tags.extend(example.get("tags") or [])
     tags.extend(semantic_taxonomy_names(transaction, tag_rows or [], tag_options))
-    tags.extend(tags_for_candidate_categories(conn, candidate_categories, tag_options))
+    tags.extend(
+        tags_for_candidate_categories(
+            conn,
+            candidate_categories,
+            tag_options,
+            exclude_transaction_ids=exclude_transaction_ids,
+        )
+    )
 
     normalized = normalize_tag_names(tags, tag_options)
     if normalized:
         return normalized[:MAX_CANDIDATE_TAGS]
 
-    return common_tag_names(conn, tag_options)
+    return common_tag_names(conn, tag_options, exclude_transaction_ids=exclude_transaction_ids)
 
 
 def tags_for_candidate_categories(
     conn: Any,
     candidate_categories: Sequence[str],
     tag_options: Sequence[str],
+    exclude_transaction_ids: Sequence[int] = (),
 ) -> list[str]:
     """Return tags commonly associated with candidate categories."""
     concrete_categories = [category for category in candidate_categories if category != UNKNOWN_CATEGORY]
@@ -314,6 +366,12 @@ def tags_for_candidate_categories(
         return []
 
     category_label = transaction_category_label_expression(UNKNOWN_CATEGORY)
+    conditions = [
+        category_label.in_(concrete_categories),
+        tags_table.c.name.in_(tag_options),
+    ]
+    if exclude_transaction_ids:
+        conditions.append(transactions_table.c.id.not_in(exclude_transaction_ids))
     rows = (
         conn.execute(
             select(
@@ -325,10 +383,7 @@ def tags_for_candidate_categories(
                     transactions_table, transactions_table.c.id == transaction_tags_table.c.transaction_id
                 )
             )
-            .where(
-                category_label.in_(concrete_categories),
-                tags_table.c.name.in_(tag_options),
-            )
+            .where(*conditions)
             .group_by(tags_table.c.name)
             .order_by(func.count().desc(), tags_table.c.name)
             .limit(MAX_CANDIDATE_TAGS)
@@ -339,11 +394,18 @@ def tags_for_candidate_categories(
     return [row["name"] for row in rows]
 
 
-def common_tag_names(conn: Any, tag_options: Sequence[str]) -> list[str]:
+def common_tag_names(
+    conn: Any,
+    tag_options: Sequence[str],
+    exclude_transaction_ids: Sequence[int] = (),
+) -> list[str]:
     """Return commonly used tags as a compact fallback."""
     if not tag_options:
         return []
 
+    conditions = [tags_table.c.name.in_(tag_options)]
+    if exclude_transaction_ids:
+        conditions.append(transaction_tags_table.c.transaction_id.not_in(exclude_transaction_ids))
     rows = (
         conn.execute(
             select(
@@ -351,7 +413,7 @@ def common_tag_names(conn: Any, tag_options: Sequence[str]) -> list[str]:
                 func.count().label("count"),
             )
             .select_from(transaction_tags_table.join(tags_table, tags_table.c.id == transaction_tags_table.c.tag_id))
-            .where(tags_table.c.name.in_(tag_options))
+            .where(*conditions)
             .group_by(tags_table.c.name)
             .order_by(func.count().desc(), tags_table.c.name)
             .limit(MAX_CANDIDATE_TAGS)

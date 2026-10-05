@@ -5,7 +5,9 @@ from typing import Any
 
 from sqlalchemy import case, delete, func, insert, select
 
-from finance_app.core.constants import CATEGORY_SOURCE_UNKNOWN, TRANSACTION_TAG_SOURCES
+from finance_app.core.builtin_taxonomy import BUILTIN_TAG_REIMBURSABLE, builtin_tag_name_for_key
+from finance_app.core.constants import CATEGORY_SOURCE_UNKNOWN, TRANSACTION_KIND_EXPENSE, TRANSACTION_TAG_SOURCES
+from finance_app.core.money import optional_money_to_decimal
 from finance_app.core.taxonomy import clean_color, clean_label, tag_color_for_name
 from finance_app.database.tables import (
     categories as categories_table,
@@ -20,6 +22,7 @@ from finance_app.database.tables import (
 from finance_app.database.tables import (
     transaction_tags as transaction_tags_table,
 )
+from finance_app.database.tables import transactions as transactions_table
 from finance_app.database.taxonomy import builtin_tag_order_expression
 
 
@@ -181,7 +184,7 @@ def set_transaction_tags(
     """Set transaction tags."""
     normalized_source = normalize_transaction_tag_source(source)
     conn.execute(delete(transaction_tags_table).where(transaction_tags_table.c.transaction_id == transaction_id))
-    tag_ids = tag_ids_by_name(conn, tag_names)
+    tag_ids = tag_ids_by_name(conn, transaction_tag_names_for_persistence(conn, transaction_id, tag_names))
     for tag_id in tag_ids.values():
         conn.execute(
             insert(transaction_tags_table).values(
@@ -192,6 +195,43 @@ def set_transaction_tags(
                 assigned_at=func.current_timestamp(),
             )
         )
+
+
+def transaction_tag_names_for_persistence(
+    conn: Any,
+    transaction_id: object,
+    tag_names: Iterable[object] | str | None,
+) -> list[str]:
+    """Return transaction tag names after enforcing built-in tag eligibility."""
+    normalized = normalize_tag_names(tag_names, get_tag_options(conn))
+    if not normalized:
+        return []
+
+    reimbursable_tag = builtin_tag_name_for_key(BUILTIN_TAG_REIMBURSABLE)
+    if reimbursable_tag and not transaction_allows_reimbursable_tag(conn, transaction_id):
+        blocked = reimbursable_tag.casefold()
+        return [tag_name for tag_name in normalized if tag_name.casefold() != blocked]
+
+    return normalized
+
+
+def transaction_allows_reimbursable_tag(conn: Any, transaction_id: object) -> bool:
+    """Return whether a transaction may carry the Reimbursable tag."""
+    row = (
+        conn.execute(
+            select(
+                transactions_table.c.amount,
+                transactions_table.c.transaction_kind,
+            ).where(transactions_table.c.id == transaction_id)
+        )
+        .mappings()
+        .fetchone()
+    )
+    if row is None or row["transaction_kind"] != TRANSACTION_KIND_EXPENSE:
+        return False
+
+    amount = optional_money_to_decimal(row["amount"])
+    return bool(amount is not None and amount > 0)
 
 
 def normalize_transaction_tag_source(source: object) -> str:

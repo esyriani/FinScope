@@ -17,6 +17,7 @@ from finance_app.modules.rules.import_export import (
     import_rules_job,
     import_rules_override,
     parse_rules_csv,
+    parse_rules_csv_with_errors,
     preview_rules_import,
     undo_import_rules_job,
     undo_rules_override_import,
@@ -74,11 +75,31 @@ def test_parse_rules_csv_rejects_missing_required_fields():
         parse_rules_csv("keyword,category,source\nStore,Groceries,system\n")
 
 
+def test_parse_rules_csv_with_errors_keeps_valid_rows():
+    """Verify lenient rule CSV parsing preserves valid rows and reports row errors."""
+    parsed = parse_rules_csv_with_errors("keyword,category\nMetro,Food\n,Utilities\n")
+
+    assert parsed.total_rows == 2
+    assert [rule["keyword"] for rule in parsed.rules] == ["METRO"]
+    assert parsed.row_errors == ("Row 3: keyword or merchant_name is required.",)
+
+
 def test_parse_rules_csv_accepts_automatic_source():
     """Verify automatic rule sources can round-trip through rule CSV imports."""
     rules = parse_rules_csv("keyword,category,source\nMetro Grocery,Food,automatic\n")
 
     assert rules[0]["source"] == "automatic"
+
+
+def test_parse_rules_csv_requires_debit_direction_for_reimbursable_tag():
+    """Verify imported Reimbursable rules must be debit-scoped."""
+    with pytest.raises(ValueError, match="Row 2: Rules with the Reimbursable tag must use Debit direction."):
+        parse_rules_csv("keyword,category,tags,direction\nConference Hotel,Travel,Reimbursable,credit\n")
+
+    rules = parse_rules_csv("keyword,category,tags,direction\nConference Hotel,Travel,Reimbursable,debit\n")
+
+    assert rules[0]["tags"] == ["Reimbursable"]
+    assert rules[0]["direction"] == "debit"
 
 
 def test_import_rules_add_skips_duplicates_and_persists_tags(core_conn):
@@ -149,6 +170,30 @@ def test_preview_rules_import_add_skips_without_writing(core_conn):
     assert preview.proposed_rules[0]["keyword"] == "METRO GROCERY"
     assert preview.proposed_rules[0]["tags"] == ["Grocery"]
     assert stored_metro is None
+
+
+def test_preview_rules_import_add_reports_invalid_rows_without_writing(core_conn):
+    """Verify import preview skips invalid rows while retaining valid proposed rules."""
+    preview = preview_rules_import(
+        core_conn,
+        "keyword,category\nMetro Grocery,Food\n,Utilities\n",
+        "add",
+    )
+    stored_metro = core_conn.execute(text("SELECT id FROM category_rules WHERE keyword = 'METRO GROCERY'")).fetchone()
+
+    assert preview.total_rows == 2
+    assert len(preview.proposed_rules) == 1
+    assert preview.proposed_rules[0]["keyword"] == "METRO GROCERY"
+    assert preview.row_errors == ("Row 3: keyword or merchant_name is required.",)
+    assert stored_metro is None
+
+
+def test_preview_rules_import_rejects_when_all_rows_are_invalid(core_conn):
+    """Verify import preview blocks files with no importable rules."""
+    raw_text = "keyword,account_name,category\nMetro Grocery,Missing Account,Food\n"
+
+    with pytest.raises(ValueError, match="Row 2: Account 'Missing Account' was not found"):
+        preview_rules_import(core_conn, raw_text, "add")
 
 
 def test_import_rules_add_persists_account_and_direction_scope(core_conn):
@@ -359,6 +404,41 @@ def test_import_rules_job_export_and_undo_use_core_transactions(app, core_conn):
     assert "Removed 1 imported category." in undo_message
     assert rule_count == 0
     assert category_count == 0
+
+
+def test_import_rules_job_imports_valid_rows_and_reports_row_errors(app, core_conn):
+    """Verify rules import jobs persist valid rows and report skipped row errors."""
+    del app
+    undo_state = {}
+
+    message = import_rules_job(
+        "keyword,category\nMetro,Food\n,Utilities\n",
+        "add",
+        undo_state,
+    )
+    rule_count = core_conn.execute(text("""
+        SELECT COUNT(*) AS count
+        FROM category_rules
+        WHERE keyword = 'METRO'
+        """)).fetchone()._mapping["count"]
+
+    assert "Imported 1 new rule." in message
+    assert "Skipped 1 invalid row." in message
+    assert "Row 3: keyword or merchant_name is required." in message
+    assert undo_state["row_errors"] == ["Row 3: keyword or merchant_name is required."]
+    assert rule_count == 1
+
+
+def test_import_rules_job_rejects_when_all_rows_are_invalid(app):
+    """Verify background import jobs fail before writing when no rows are importable."""
+    del app
+
+    with pytest.raises(ValueError, match="Row 2: Account 'Missing Account' was not found"):
+        import_rules_job(
+            "keyword,account_name,category\nMetro,Missing Account,Food\n",
+            "add",
+            {},
+        )
 
 
 def test_import_rules_override_replaces_rules_and_undo_restores_previous_state(core_conn):

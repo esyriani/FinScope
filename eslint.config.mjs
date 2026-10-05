@@ -28,6 +28,21 @@ export default [
         ],
     },
     {
+        files: ["tests/frontend/**/*.js"],
+        languageOptions: {
+            ecmaVersion: "latest",
+            sourceType: "module",
+            globals: {
+                ...globals.node,
+            },
+        },
+        rules: {
+            ...js.configs.recommended.rules,
+            eqeqeq: ["error", "smart"],
+            "no-var": "error",
+        },
+    },
+    {
         files: ["src/finance_app/static/js/**/*.js"],
         languageOptions: {
             ecmaVersion: "latest",

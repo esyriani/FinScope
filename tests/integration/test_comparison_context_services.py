@@ -500,14 +500,14 @@ def test_comparison_context_income_mode_supports_income_only_merchant(app, core_
     assert "analysis_mode=income" in context["period_clear_url"]
 
 
-def test_comparison_tag_cashflow_includes_tagged_transfer_credits(app, core_conn, monkeypatch):
-    """Verify tagged comparison cash flow nets reimbursed transfer credits."""
+def test_comparison_tag_cashflow_includes_shared_context_transfer_credits(app, core_conn, monkeypatch):
+    """Verify context-tagged comparison cash flow nets reimbursed transfer credits."""
     seed_reimbursable_comparison_data(core_conn)
     monkeypatch.setattr(comparison_service, "date", FixedDate)
     args = MultiDict(
         [
             ("period_comparison", "month_last_year"),
-            ("period_tags", "Reimbursable"),
+            ("period_tags", "Judo"),
         ]
     )
 
@@ -516,7 +516,7 @@ def test_comparison_tag_cashflow_includes_tagged_transfer_credits(app, core_conn
 
     period_totals = {metric["label"]: metric for metric in context["period_comparison"]["totals"]}
 
-    assert context["selected_period_tags"] == ["Reimbursable"]
+    assert context["selected_period_tags"] == ["Judo"]
     assert period_totals["Spending"]["current"] == 200.00
     assert period_totals["Spending"]["previous"] == 100.00
     assert period_totals["Income and Credits"]["current"] == 150.00

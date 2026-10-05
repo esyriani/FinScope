@@ -1,11 +1,12 @@
 """Smoke tests for high-value application workflows."""
 
 import io
-import time
 
 import pytest
 from sqlalchemy import select, text
 from tests.support.database import insert_rule, insert_transaction
+from tests.support.html import assert_has_element, assert_visible_text
+from tests.support.jobs import clear_background_jobs, wait_for_all_background_jobs, wait_for_background_job_label
 from tests.support.web import set_csrf_token
 
 from finance_app.background import runner
@@ -18,18 +19,10 @@ from finance_app.database.tables import (
 @pytest.fixture(autouse=True)
 def isolated_background_jobs():
     """Clear in-memory background jobs around smoke tests."""
-    with runner._lock:
-        runner._jobs.clear()
-        runner._job_sequence = 0
-        runner._job_history_degraded = False
-        runner._job_history_degraded_detail = ""
+    clear_background_jobs()
     yield
-    wait_for_all_jobs()
-    with runner._lock:
-        runner._jobs.clear()
-        runner._job_sequence = 0
-        runner._job_history_degraded = False
-        runner._job_history_degraded_detail = ""
+    wait_for_all_background_jobs()
+    clear_background_jobs()
 
 
 def statement_type_id(conn, parser_type="credit_card"):
@@ -58,45 +51,8 @@ def post_csv_upload(client, core_conn, filename, raw_csv, account_name="Personal
         content_type="multipart/form-data",
         follow_redirects=True,
     )
-    job = wait_for_job_label(f"Import {filename}")
+    job = wait_for_background_job_label(f"Import {filename}")
     return response, job
-
-
-def wait_for_job_label(label, timeout=5):
-    """Wait until a job with a label exists and finishes."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        job = next(
-            (item for item in runner.list_background_jobs(limit=None) if item["label"] == label),
-            None,
-        )
-        if job is not None:
-            return wait_for_job(job["id"], timeout=max(0.1, deadline - time.monotonic()))
-        time.sleep(0.01)
-    raise AssertionError(f"Background job did not start: {label}")
-
-
-def wait_for_job(job_id, timeout=5):
-    """Wait until one background job reaches a terminal state."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        job = runner.get_background_job(job_id)
-        if job and job["status"] in runner.FINISHED_STATUSES:
-            assert job["status"] == "completed", job
-            return job
-        time.sleep(0.01)
-    raise AssertionError(f"Background job did not finish: {job_id}")
-
-
-def wait_for_all_jobs(timeout=5):
-    """Wait for currently tracked jobs to finish."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        jobs = runner.list_background_jobs(limit=None)
-        if all(job["status"] in runner.FINISHED_STATUSES for job in jobs):
-            return jobs
-        time.sleep(0.01)
-    return runner.list_background_jobs(limit=None)
 
 
 def insert_smoke_transaction(conn, description, amount, category, needs_review, fingerprint, tx_date="2026-01-02"):
@@ -146,13 +102,12 @@ def test_smoke_csv_upload_creates_transaction_visible_in_list(owner_client, core
     )
 
     transactions_page = owner_client.get("/transactions?period=all")
-    body = transactions_page.get_data(as_text=True)
 
     assert response.status_code == 200
     assert "Added 1 transactions" in job["result"]
     assert transaction_count(core_conn, "Smoke End To End Market") == 1
     assert transactions_page.status_code == 200
-    assert "Smoke End To End Market" in body
+    assert_visible_text(transactions_page, "Smoke End To End Market")
 
 
 def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(owner_client, core_conn):
@@ -177,13 +132,12 @@ def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(owne
     )
 
     transactions_page = owner_client.get("/transactions?period=all&categories=Food")
-    body = transactions_page.get_data(as_text=True)
 
     assert rule_response.status_code == 200
     assert "Added 1 transactions" in job["result"]
     assert transaction_category(core_conn, "Smoke Grocery #777") == "Food"
     assert transactions_page.status_code == 200
-    assert "Smoke Grocery #777" in body
+    assert_visible_text(transactions_page, "Smoke Grocery #777")
 
 
 def test_smoke_upload_job_can_be_undone(owner_client, core_conn):
@@ -238,15 +192,17 @@ def test_smoke_dashboard_loads_with_seeded_data(owner_client, core_conn):
     )
 
     response = owner_client.get("/dashboard?period=all")
-    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'id="dashboard-chart-data"' in body
-    assert "Analysis readiness" in body
-    assert "Trend preview" in body
-    assert "Top drivers" in body
-    assert "Explore reports" in body
-    assert "Income and credits" in body
+    assert_has_element(response, "script", attrs={"id": "dashboard-chart-data"})
+    assert_visible_text(
+        response,
+        "Analysis readiness",
+        "Trend preview",
+        "Top drivers",
+        "Explore reports",
+        "Income and credits",
+    )
 
 
 def test_smoke_same_transaction_can_import_for_different_accounts(owner_client, core_conn):
@@ -266,11 +222,10 @@ def test_smoke_same_transaction_can_import_for_different_accounts(owner_client, 
         ORDER BY accounts.name
         """)).mappings().fetchall()
     transactions_page = owner_client.get("/transactions?period=all&search=Shared+Account+Merchant")
-    body = transactions_page.get_data(as_text=True)
 
     assert [(row["account_name"], row["category"]) for row in rows] == [
         ("Account A", "Food"),
         ("Account B", "Food"),
     ]
     assert transactions_page.status_code == 200
-    assert "Shared Account Merchant" in body
+    assert_visible_text(transactions_page, "Shared Account Merchant")

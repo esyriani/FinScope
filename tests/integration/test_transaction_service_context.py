@@ -40,15 +40,15 @@ def seed_transactions(conn):
     """Seed transactions with categories, sources, tags, and ignored state."""
     account_id = conn.execute(insert(accounts_table).values(name="Checking")).inserted_primary_key[0]
     rows = [
-        ("2026-01-01", "Metro Grocery", 20.00, "Food", "rule", 0, None, 0, "tx-list-metro"),
-        ("2026-01-02", "Cafe Bistro", 12.50, "Food", "manual", 0, "2026-01-05T00:00:00Z", 0, "tx-list-cafe"),
-        ("2026-01-03", "Hydro Quebec", 120.00, "Utilities", "ai", 0, None, 0, "tx-list-hydro"),
-        ("2026-01-04", "Unknown Shop", 30.00, "UNKNOWN", "unknown", 1, None, 0, "tx-list-unknown"),
-        ("2026-01-05", "Payroll", -1000.00, "Income", "rule", 0, None, 0, "tx-list-payroll"),
-        ("2026-01-06", "Ignored Store", 999.00, "Food", "rule", 0, None, 1, "tx-list-ignored"),
+        ("2026-01-01", "Metro Grocery", 20.00, "Food", "rule", 1.0, 0, None, 0, "tx-list-metro"),
+        ("2026-01-02", "Cafe Bistro", 12.50, "Food", "manual", 1.0, 0, "2026-01-05T00:00:00Z", 0, "tx-list-cafe"),
+        ("2026-01-03", "Hydro Quebec", 120.00, "Utilities", "ai", 0.91, 0, None, 0, "tx-list-hydro"),
+        ("2026-01-04", "Unknown Shop", 30.00, "UNKNOWN", "unknown", None, 1, None, 0, "tx-list-unknown"),
+        ("2026-01-05", "Payroll", -1000.00, "Income", "rule", 1.0, 0, None, 0, "tx-list-payroll"),
+        ("2026-01-06", "Ignored Store", 999.00, "Food", "rule", 1.0, 0, None, 1, "tx-list-ignored"),
     ]
     ids = {}
-    for tx_date, description, amount, category, source, review, reviewed_at, ignored, fingerprint in rows:
+    for tx_date, description, amount, category, source, confidence, review, reviewed_at, ignored, fingerprint in rows:
         tx_id = conn.execute(
             insert(transactions_table).values(
                 account_id=account_id,
@@ -58,6 +58,7 @@ def seed_transactions(conn):
                 category=category,
                 category_id=resolve_category_id(conn, category),
                 category_source=source,
+                category_confidence=confidence,
                 needs_review=review,
                 reviewed_at=reviewed_at,
                 ignored=ignored,
@@ -177,6 +178,7 @@ def test_transactions_context_category_source_and_review_filters(core_conn):
     pending_approval_context = build_transactions_context(
         MultiDict([("period", "all"), ("review", "pending_approval")])
     )
+    pre_approved_context = build_transactions_context(MultiDict([("period", "all"), ("review", "pre_approved")]))
     verified_context = build_transactions_context(MultiDict([("period", "all"), ("review", "verified")]))
 
     assert descriptions(ai_context) == ["Hydro Quebec"]
@@ -185,6 +187,7 @@ def test_transactions_context_category_source_and_review_filters(core_conn):
         ("", "All"),
         ("needs_review", "Needs review"),
         ("pending_approval", "Pending approval"),
+        ("pre_approved", "Pre-approved"),
         ("verified", "Approved"),
     )
     assert ai_context["category_source_filter_options"] == (
@@ -196,11 +199,16 @@ def test_transactions_context_category_source_and_review_filters(core_conn):
     )
     assert ai_context["transactions"][0]["category_source_label"] == "AI"
     assert ai_context["transactions"][0]["category_source_badge_class"] == "text-bg-info"
+    assert ai_context["transactions"][0]["review_status"] == "pending_approval"
+    assert ai_context["transactions"][0]["review_status_label"] == "Pending approval"
     assert descriptions(manual_context) == ["Cafe Bistro"]
     assert descriptions(unknown_context) == ["Unknown Shop"]
     assert descriptions(needs_review_context) == ["Unknown Shop"]
     assert pending_approval_context["selected_review"] == "pending_approval"
-    assert pending_approval_context["total_count"] == 3
+    assert descriptions(pending_approval_context) == ["Hydro Quebec"]
+    assert pre_approved_context["selected_review"] == "pre_approved"
+    assert pre_approved_context["total_count"] == 2
+    assert descriptions(pre_approved_context) == ["Payroll", "Metro Grocery"]
     assert verified_context["selected_review"] == "verified"
     assert descriptions(verified_context) == ["Cafe Bistro"]
 
