@@ -166,6 +166,51 @@ def test_request_llm_categories_handles_api_exceptions_and_sanitizes_logs(caplog
     assert "sk-***" in caplog.text
 
 
+def test_request_llm_categories_blocks_invalid_final_prompt(monkeypatch, caplog):
+    """Verify final prompt validation runs before constructing a provider client."""
+    fake_client = openai_json_response({"results": []})
+    monkeypatch.setattr(
+        llm,
+        "build_llm_messages",
+        lambda *args: [
+            {"role": "system", "content": "No security boundary."},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "taxonomy": {},
+                        "transactions": [{"request_id": "0", "account_name": "TD Visa"}],
+                    }
+                ),
+            },
+        ],
+    )
+
+    with caplog.at_level(logging.WARNING, logger=llm.logger.name):
+        results = llm.request_llm_categories(
+            [{"llm_request_id": "0", "merchant_key": "METRO", "description": "Metro", "amount": 12.34}],
+            [],
+            ["UNKNOWN", "Food"],
+            [],
+            [{"id": 1, "name": "UNKNOWN", "description": "", "instruction": ""}],
+            [],
+            "gpt-test",
+            0.9,
+            0.6,
+            client_factory=fake_client,
+            api_key="sk-test",
+        )
+
+    assert results == []
+    assert fake_client.constructor_calls == []
+    status = llm.last_llm_request_status()
+    assert status["status"] == "blocked_prompt"
+    assert status["error_type"] == "PromptSecurity"
+    assert "missing_security_prompt_version" in status["detail"]
+    assert "disallowed_prompt_key:account_name" in status["detail"]
+    assert "Blocked LLM categorization request" in caplog.text
+
+
 class TemperatureRetryClientFactory:
     """Fake client that rejects temperature once before returning JSON."""
 

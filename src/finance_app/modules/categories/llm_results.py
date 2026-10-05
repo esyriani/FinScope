@@ -17,6 +17,13 @@ from finance_app.modules.categories.decision import (
     combine_confidence,
     evidence_decision_source,
 )
+from finance_app.modules.categories.llm_security import (
+    LLM_PROMPT_SECURITY_VERSION,
+    cleanup_llm_security_fields,
+    llm_transaction_sanitized_fields,
+    llm_transaction_security_flags,
+    unique_flags,
+)
 from finance_app.modules.categories.repository import normalize_category
 
 
@@ -25,6 +32,7 @@ def cleanup_llm_candidate_taxonomies(unknown_items: Sequence[MutableMapping[str,
     for tx in unknown_items:
         tx.pop("llm_candidate_categories", None)
         tx.pop("llm_candidate_tags", None)
+    cleanup_llm_security_fields(unknown_items)
 
 
 def filtered_llm_tags_for_validity(tags: Sequence[str], tag_ids: Sequence[int]) -> dict[str, Any]:
@@ -273,6 +281,11 @@ def llm_category_metadata(
     dropped_tag_ids_outside_candidate_taxonomy: Sequence[int] | None = None,
     tag_ids_payload_is_valid: bool = True,
     failure_reason: str | None = None,
+    prompt_security_flags: Sequence[str] | None = None,
+    input_security_flags: Sequence[str] | None = None,
+    output_security_flags: Sequence[str] | None = None,
+    sanitized_prompt_fields: Sequence[str] | None = None,
+    llm_reason_filtered: bool = False,
 ) -> dict[str, Any]:
     """Return persisted audit metadata for an accepted LLM categorization."""
     rule_evidence = transaction.get("rule_evidence")
@@ -280,6 +293,10 @@ def llm_category_metadata(
     tag_ids_outside_candidate_taxonomy = list(tag_ids_outside_candidate_taxonomy or [])
     dropped_invalid_tag_ids = list(dropped_invalid_tag_ids or [])
     dropped_tag_ids_outside_candidate_taxonomy = list(dropped_tag_ids_outside_candidate_taxonomy or [])
+    input_security_flags = list(input_security_flags or llm_transaction_security_flags(transaction))
+    output_security_flags = list(output_security_flags or [])
+    prompt_security_flags = list(prompt_security_flags or unique_flags((*input_security_flags, *output_security_flags)))
+    sanitized_prompt_fields = list(sanitized_prompt_fields or llm_transaction_sanitized_fields(transaction))
     metadata = {
         "decision_source": evidence_decision_source(
             rule=bool(rule_evidence),
@@ -302,8 +319,19 @@ def llm_category_metadata(
         "full_taxonomy_fallback_rejected": False,
         "llm_confidence": llm_confidence,
         "llm_reason": str(result.get("reason") or "").strip(),
+        "llm_prompt_security_version": LLM_PROMPT_SECURITY_VERSION,
         "supported_by_similar_transactions": parse_bool(result.get("supported_by_similar_transactions")),
     }
+    if prompt_security_flags:
+        metadata["prompt_security_flags"] = prompt_security_flags
+    if input_security_flags:
+        metadata["input_security_flags"] = input_security_flags
+    if output_security_flags:
+        metadata["output_security_flags"] = output_security_flags
+    if sanitized_prompt_fields:
+        metadata["sanitized_prompt_fields"] = sanitized_prompt_fields
+    if llm_reason_filtered:
+        metadata["llm_reason_filtered"] = True
     if tag_ids_outside_candidate_taxonomy:
         metadata["tag_ids_outside_candidate_taxonomy"] = tag_ids_outside_candidate_taxonomy
     if dropped_invalid_tag_ids:

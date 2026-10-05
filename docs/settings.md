@@ -33,7 +33,7 @@ Owners can edit Categorization settings. Optional AI behavior still requires an 
 | --- | --- | --- |
 | Single-transaction AI | On or off | Shows or hides the Suggest category action on transaction rows. The action previews one AI category suggestion and lets the user decide whether to apply it or save a rule. |
 | Review AI usage | On or off | When on, AI actions show an estimated AI usage summary and ask before sending a request. When off, statement imports can automatically queue AI categorization for remaining unknown rows. |
-| AI acceptance threshold | Number from `0` to `1` | Minimum confidence required before AI can create an automatic rule for a no-review result. |
+| AI acceptance threshold | Number from `0` to `1` | Minimum confidence required before AI can create an automatic rule for a no-review result. Security-flagged AI results stay review-only and never create automatic rules. |
 | AI review threshold | Number from `0` to `1` | Minimum confidence required to keep the best-fit AI category as a review item instead of leaving the transaction as `UNKNOWN`. |
 | Verify threshold | Number from `0` to `1` | Accepted AI categories below this confidence stay marked for review. |
 | OpenAI model | Model name containing letters, numbers, `.`, `_`, `:`, `/`, `+`, or `-` | Sets the categorization model. The Validate button checks whether the configured API key can see the model through the OpenAI models API. |

@@ -255,15 +255,17 @@ Automatic and manual category writes persist compact JSON evidence in `transacti
 AI categorization is optional and requires `OPENAI_API_KEY` or `[api_keys] openai_api_key`.
 External prompts are privacy-minimized. The AI receives normalized merchant text, coarse amount direction and magnitude, transaction kind, compact category evidence summaries, the full category/tag list, and transaction-local candidate category/tag hints. FinScope does not send raw transaction descriptions, exact dates, exact amounts, account names, account types, account IDs, or similar-transaction examples. Candidate categories and tags are hints, not a gate: the model may choose any active category or tag ID from the full category/tag list when the supplied evidence supports it.
 
+Prompt-bound merchant, rule, category, and tag text is treated as untrusted data. FinScope removes instruction-like text before sending the prompt, validates the final chat messages against the expected privacy and security boundary, and records prompt-security flags in `transactions.category_metadata` when suspicious input or output is detected.
+
 The static system-prompt policy is stored in [src/finance_app/modules/categories/llm_system_prompt.json](../src/finance_app/modules/categories/llm_system_prompt.json). Runtime code renders that structured resource with the current confidence thresholds, while transaction, category/tag, and rule payloads are still built by the Python prompt builders.
 
-Returned results are validated conservatively. Invalid JSON, invalid category IDs, invalid tag IDs, invalid confidence values, or inconsistent evidence remain categorized as `Unknown` or are marked for review according to the shared confidence policy.
+Returned results are validated conservatively. Invalid JSON, invalid category IDs, invalid tag IDs, invalid confidence values, inconsistent evidence, prompt-injection indicators, or prompt-leak indicators remain categorized as `UNKNOWN` or are marked for review according to the shared confidence policy.
 
 AI uses three configurable thresholds with separate responsibilities:
 
 1. `llm_review_threshold` keeps a best-fit AI category as a review-required suggestion instead of falling back to `UNKNOWN`.
 2. `verify_threshold` controls when an AI category can clear review automatically.
-3. `llm_confidence_threshold` controls when a no-review AI result can create a reusable automatic rule.
+3. `llm_confidence_threshold` controls when a no-review AI result can create a reusable automatic rule. Security-flagged AI results never create automatic rules, even when confidence is high.
 
 AI categorization is operationally separate from statement import. Imports apply
 rules and historical evidence first, then report remaining unknown rows that can

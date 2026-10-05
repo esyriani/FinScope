@@ -35,6 +35,14 @@ from finance_app.modules.categories.llm_results import (
     unknown_llm_result,
 )
 from finance_app.modules.categories.llm_rules import save_automatic_category_rule
+from finance_app.modules.categories.llm_security import (
+    llm_security_flags_require_review,
+    llm_transaction_sanitized_fields,
+    llm_transaction_security_flags,
+    sanitize_llm_reason,
+    unique_flags,
+    validate_llm_messages_security,
+)
 from finance_app.modules.categories.llm_taxonomy import (
     prepare_llm_candidate_taxonomies,
     taxonomy_ids_for_names,
@@ -289,6 +297,13 @@ def validated_llm_result(
     unknown_category: str,
 ) -> dict[str, Any]:
     """Return a validated, database-write-free LLM result for one transaction."""
+    reason_review = sanitize_llm_reason(result.get("reason"))
+    result_for_metadata = dict(result)
+    result_for_metadata["reason"] = reason_review.text
+    input_security_flags = llm_transaction_security_flags(tx)
+    output_security_flags = reason_review.flags
+    prompt_security_flags = unique_flags((*input_security_flags, *output_security_flags))
+    security_forces_review = llm_security_flags_require_review(prompt_security_flags)
     candidate_categories = tx.get("llm_candidate_categories") or context.category_options
     candidate_tags = tx.get("llm_candidate_tags") or context.tag_options
     candidate_category_ids = taxonomy_ids_for_names(context.category_rows, candidate_categories)
@@ -325,13 +340,16 @@ def validated_llm_result(
         context.review_threshold,
         context.verify_threshold,
     )
-    if llm_result_needs_forced_review(
-        decision,
-        category_outside_candidate_taxonomy,
-        tag_ids_outside_candidate_taxonomy,
-        invalid_tag_ids,
-        tag_ids_payload_is_valid,
-        tag_drop["dropped_outside_candidate_tag_ids"],
+    if (
+        llm_result_needs_forced_review(
+            decision,
+            category_outside_candidate_taxonomy,
+            tag_ids_outside_candidate_taxonomy,
+            invalid_tag_ids,
+            tag_ids_payload_is_valid,
+            tag_drop["dropped_outside_candidate_tag_ids"],
+        )
+        or security_forces_review
     ):
         decision = FinalCategoryDecision(
             category=decision.category,
@@ -348,6 +366,7 @@ def validated_llm_result(
         and decision.confidence is not None
         and decision.confidence >= context.confidence_threshold
         and not decision.needs_review
+        and not security_forces_review
     )
     return {
         "category": decision.category,
@@ -359,7 +378,7 @@ def validated_llm_result(
         "automatic_rule_checked": False,
         "metadata": llm_category_metadata(
             tx,
-            result,
+            result_for_metadata,
             decision,
             confidence,
             final_confidence,
@@ -380,6 +399,11 @@ def validated_llm_result(
                 confidence_is_valid,
                 decision,
             ),
+            prompt_security_flags=prompt_security_flags,
+            input_security_flags=input_security_flags,
+            output_security_flags=output_security_flags,
+            sanitized_prompt_fields=llm_transaction_sanitized_fields(tx),
+            llm_reason_filtered=reason_review.sanitized,
         ),
     }
 
@@ -523,6 +547,20 @@ def request_llm_categories(
         verify_threshold,
         review_threshold,
     )
+    prompt_security_issues = validate_llm_messages_security(messages)
+    if prompt_security_issues:
+        detail = ", ".join(prompt_security_issues)
+        logger.warning(
+            "Blocked LLM categorization request because prompt security validation failed: %s",
+            detail,
+        )
+        record_llm_request_status(
+            "blocked_prompt",
+            requested_count=requested_count,
+            error_type="PromptSecurity",
+            detail=detail,
+        )
+        return []
 
     try:
         client = client_factory(api_key=effective_api_key, timeout=LLM_TIMEOUT_SECONDS)

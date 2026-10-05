@@ -190,11 +190,9 @@ def detect_system_prompt_leakage(value: object) -> tuple[str, ...]:
     text, _ = normalize_llm_text(value)
     if not text:
         return ()
-    return (
-        (SECURITY_FLAG_SYSTEM_PROMPT_LEAK,)
-        if any(pattern.search(text) for pattern in SYSTEM_LEAK_PATTERNS)
-        else ()
-    )
+    if any(pattern.search(text) for pattern in SYSTEM_LEAK_PATTERNS):
+        return (SECURITY_FLAG_SYSTEM_PROMPT_LEAK,)
+    return ()
 
 
 def has_obfuscated_prompt_injection(text: str) -> bool:
@@ -203,11 +201,11 @@ def has_obfuscated_prompt_injection(text: str) -> bool:
     word_set = set(words)
     if not word_set & TYPOGLYCEMIA_CONTEXT_WORDS:
         return False
-    return any(
-        token != target and typoglycemia_match(token, target)
-        for token in words
-        for target in TYPOGLYCEMIA_WORDS
-    )
+    for token in words:
+        for target in TYPOGLYCEMIA_WORDS:
+            if token != target and typoglycemia_match(token, target):
+                return True
+    return False
 
 
 def typoglycemia_match(token: str, target: str) -> bool:
