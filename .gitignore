@@ -28,5 +28,4 @@ code review.txt
 *.docx
 codereview.md
 vibecoding/
-code_review/*
-!code_review/mutation_categorization_review.md
+code_review/
