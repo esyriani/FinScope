@@ -4,32 +4,11 @@ import re
 import warnings
 
 import pytest
+from tests.support.jobs import CapturingExecutor, RejectingExecutor
 
 from finance_app.background import runner
 
 UTC_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-
-
-class CapturingExecutor:
-    """Capture submitted jobs without executing them on another thread."""
-
-    def __init__(self):
-        """Prepare an empty submission log."""
-        self.submissions = []
-
-    def submit(self, func, *args, **kwargs):
-        """Record a submitted callable and its payload."""
-        self.submissions.append((func, args, kwargs))
-        return None
-
-
-class RejectingExecutor:
-    """Reject submitted jobs like a shut down executor would."""
-
-    def submit(self, func, *args, **kwargs):
-        """Raise instead of accepting work."""
-        del func, args, kwargs
-        raise RuntimeError("executor stopped")
 
 
 @pytest.fixture(autouse=True)
@@ -137,6 +116,17 @@ def test_cancel_background_job_marks_queued_job_cancelled():
     assert job["cancel_requested"] is True
     assert job["can_cancel"] is False
     assert job["can_undo"] is False
+
+    def work():
+        """Fail if a previously queued worker starts after cancellation."""
+        pytest.fail("Cancelled work must not execute")
+
+    runner.run_job(job_id, work, (), {})
+    job = runner.get_background_job(job_id)
+    assert job["status"] == "cancelled"
+    assert job["started_at"] is None
+    assert job["finished_at"] is not None
+    assert job["error"] is None
 
 
 def test_raise_if_cancel_requested_uses_current_running_job_context():
@@ -265,10 +255,19 @@ def test_get_list_and_count_background_jobs_use_public_newest_first_order():
 def test_undo_background_job_updates_state_and_blocks_second_undo():
     """Verify that completed jobs with undo handlers can be undone once."""
     undo_calls = []
+
+    def undo(value):
+        """Reject another undo while the first handler is still executing."""
+        assert runner.get_background_job(job_id)["undo_status"] == "undoing"
+        with pytest.raises(ValueError, match="already being undone"):
+            runner.undo_background_job(job_id)
+        undo_calls.append(value)
+        return "undo complete"
+
     job_id = runner.submit_background_job(
         "Undoable job",
         lambda: "placeholder",
-        undo_handler=lambda value: undo_calls.append(value) or "undo complete",
+        undo_handler=undo,
         undo_args=("payload",),
     )
     runner.run_job(job_id, lambda: "job complete", (), {})

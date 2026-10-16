@@ -21,6 +21,9 @@ SERVICE_MESSAGE_SOURCE_FILES = (
     ROOT / "src" / "finance_app" / "modules" / "taxonomy_admin" / "service.py",
     ROOT / "src" / "finance_app" / "modules" / "upload" / "workflow.py",
     ROOT / "src" / "finance_app" / "modules" / "review" / "workflow.py",
+    ROOT / "src" / "finance_app" / "modules" / "transactions" / "backup_workflow.py",
+    ROOT / "src" / "finance_app" / "modules" / "transactions" / "backup_repository.py",
+    ROOT / "src" / "finance_app" / "modules" / "transactions" / "backup_import.py",
 )
 
 TRANSLATED_DICT_KEYS = {"message", "error", "summary"}
@@ -53,7 +56,11 @@ class ServiceMessageVisitor(ast.NodeVisitor):
     def visit_Raise(self, node):
         """Collect literal exception messages translated by controllers."""
         exc = node.exc
-        if isinstance(exc, ast.Call) and exc.args:
+        if (
+            isinstance(exc, ast.Call)
+            and exc.args
+            and not (isinstance(exc.func, ast.Name) and exc.func.id == "TypeError")
+        ):
             self._add_constant_string(exc.args[0])
         self.generic_visit(node)
 
@@ -73,6 +80,8 @@ class ServiceMessageVisitor(ast.NodeVisitor):
         """Collect literal gettext calls in non-controller boundary helpers."""
         if isinstance(node.func, ast.Name) and node.func.id == "gettext" and node.args:
             self._add_constant_string(node.args[0])
+        if isinstance(node.func, ast.Name) and node.func.id == "row_error" and len(node.args) > 1:
+            self._add_constant_string(node.args[1])
         self.generic_visit(node)
 
     def _add_constant_string(self, node):

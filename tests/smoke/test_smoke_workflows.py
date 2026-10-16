@@ -3,14 +3,19 @@
 import io
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import delete, func, select, text
 from tests.support.database import insert_rule, insert_transaction
-from tests.support.html import assert_has_element, assert_visible_text
-from tests.support.jobs import clear_background_jobs, wait_for_all_background_jobs, wait_for_background_job_label
-from tests.support.web import set_csrf_token
+from tests.support.html import assert_has_element, assert_visible_text, parse_html
+from tests.support.jobs import (
+    clear_background_jobs,
+    wait_for_all_background_jobs,
+    wait_for_background_job_label,
+)
+from tests.support.web import csrf_enabled_client, set_csrf_token
 
 from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
+from finance_app.database.tables import accounts, background_job_events, background_jobs, transactions
 from finance_app.database.tables import (
     statement_types as statement_types_table,
 )
@@ -108,6 +113,88 @@ def test_smoke_csv_upload_creates_transaction_visible_in_list(owner_client, core
     assert transaction_count(core_conn, "Smoke End To End Market") == 1
     assert transactions_page.status_code == 200
     assert_visible_text(transactions_page, "Smoke End To End Market")
+
+
+def test_smoke_backup_import_restores_transaction_and_persists_processing_history(
+    owner_client, core_conn, data_factory
+):
+    """Export and restore an empty ledger, then safely re-import through a real worker."""
+    client = csrf_enabled_client(owner_client)
+    checking_id = data_factory.account(name="Smoke checking", account_type="checking")
+    card_id = data_factory.account(name="Smoke card", account_type="credit_card", paid_from_account_id=checking_id)
+    source_ids = [
+        data_factory.transaction(
+            account_id=checking_id,
+            description="Smoke checking restore",
+            category="Food",
+            fingerprint="smoke-backup-checking",
+        ),
+        data_factory.transaction(
+            account_id=card_id,
+            description="Smoke card restore",
+            category="Food",
+            tags=["Smoke tag"],
+            fingerprint="smoke-backup-card",
+        ),
+    ]
+    exported = client.get("/transactions/backup.csv?search=Smoke+card")
+    assert exported.status_code == 200
+    csv_bytes = exported.data
+    core_conn.execute(delete(transactions).where(transactions.c.id.in_(source_ids)))
+    core_conn.execute(delete(accounts).where(accounts.c.id == card_id))
+    core_conn.execute(delete(accounts).where(accounts.c.id == checking_id))
+    core_conn.commit()
+    preview = client.post(
+        "/transactions/backup/preview",
+        data={"backup_file": (io.BytesIO(csv_bytes), "backup.csv")},
+        follow_redirects=True,
+    )
+    reference = parse_html(preview).find_all("input", attrs={"name": "import_reference"})[0].attrs["value"]
+
+    response = client.post(
+        "/transactions/backup/import", data={"import_reference": reference, "duplicate_action": "skip_duplicates"}
+    )
+    job = wait_for_background_job_label("Import transaction backup")
+
+    assert response.status_code == 302
+    assert "2 imported, 0 duplicates skipped" in job["result"]
+    assert_visible_text(client.get("/transactions?period=all"), "Smoke checking restore", "Smoke card restore")
+    funding = accounts.alias("funding")
+    restored_card = core_conn.execute(
+        select(accounts.c.account_type, funding.c.name)
+        .select_from(accounts.join(funding, accounts.c.paid_from_account_id == funding.c.id))
+        .where(accounts.c.name == "Smoke card")
+    ).one()
+    assert tuple(restored_card) == ("credit_card", "Smoke checking")
+    assert (
+        core_conn.execute(select(background_jobs.c.status).where(background_jobs.c.id == job["id"])).scalar_one()
+        == "completed"
+    )
+    events = (
+        core_conn.execute(select(background_job_events.c.params).where(background_job_events.c.job_id == job["id"]))
+        .scalars()
+        .all()
+    )
+    assert events
+    assert "Smoke checking restore" not in str(events)
+    assert "Smoke card restore" not in str(events)
+    assert_visible_text(client.get("/jobs"), "Import transaction backup")
+
+    repeated_preview = client.post(
+        "/transactions/backup/preview",
+        data={"backup_file": (io.BytesIO(csv_bytes), "backup.csv")},
+        follow_redirects=True,
+    )
+    reference = parse_html(repeated_preview).find_all("input", attrs={"name": "import_reference"})[0].attrs["value"]
+    repeated = client.post(
+        "/transactions/backup/import",
+        data={"import_reference": reference, "duplicate_action": "skip_duplicates"},
+        follow_redirects=True,
+    )
+    assert_visible_text(repeated, "All transactions were skipped as duplicates. Nothing was imported.")
+    assert core_conn.execute(select(func.count()).select_from(background_jobs)).scalar_one() == 1
+    assert transaction_count(core_conn, "Smoke checking restore") == 1
+    assert transaction_count(core_conn, "Smoke card restore") == 1
 
 
 def test_smoke_rule_creation_auto_categorizes_uploaded_matching_transaction(owner_client, core_conn):

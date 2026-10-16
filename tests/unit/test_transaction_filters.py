@@ -1,5 +1,6 @@
-"""Tests for transaction query filter parsing."""
+"""Tests for transaction query filters and their shared review-status policy."""
 
+import pytest
 from werkzeug.datastructures import MultiDict
 
 from finance_app.modules.transactions.filters import (
@@ -7,9 +8,18 @@ from finance_app.modules.transactions.filters import (
     parse_transaction_filters,
     transaction_sort,
 )
+from finance_app.modules.transactions.status import transaction_review_status
 
 
-def test_parse_transaction_filters_normalizes_request_args(core_conn):
+@pytest.mark.parametrize("category", [None, "", "  ", "UNKNOWN", "Custom unknown"])
+def test_missing_or_unknown_category_requires_review_without_a_persisted_flag(category):
+    """Unresolved categories cannot become Automatic merely because the review flag is clear."""
+    row = {"category": category, "category_source": "ai", "needs_review": 0}
+
+    assert transaction_review_status(row, "Custom unknown") == "needs_review"
+
+
+def test_parse_transaction_filters_normalizes_request_args():
     """Verify that transaction filter parsing keeps only supported values."""
     args = MultiDict(
         [
@@ -23,7 +33,7 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
             ("category_source", "ai"),
             ("amount_type", "income"),
             ("ignored", "ignored"),
-            ("review", "pre_approved"),
+            ("review", "automatic"),
             ("period", "all"),
             ("sort", "amount"),
             ("direction", "asc"),
@@ -35,7 +45,7 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
         ]
     )
 
-    filters = parse_transaction_filters(args, core_conn)
+    filters = parse_transaction_filters(args, None)
 
     assert filters["selected_categories"] == ["Groceries", "Utilities"]
     assert filters["category"] == ""
@@ -45,7 +55,7 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
     assert filters["category_source"] == "ai"
     assert filters["amount_type"] == "income"
     assert filters["ignored"] == "ignored"
-    assert filters["review"] == "pre_approved"
+    assert filters["review"] == "automatic"
     assert filters["period"] == "all"
     assert filters["sort"] == "amount"
     assert filters["direction"] == "asc"
@@ -56,7 +66,7 @@ def test_parse_transaction_filters_normalizes_request_args(core_conn):
     assert filters["account_id"] == 7
 
 
-def test_parse_transaction_filters_keeps_custom_range_dates(core_conn):
+def test_parse_transaction_filters_keeps_custom_range_dates():
     """Verify custom range dates are normalized only for the custom period."""
     filters = parse_transaction_filters(
         MultiDict(
@@ -66,7 +76,7 @@ def test_parse_transaction_filters_keeps_custom_range_dates(core_conn):
                 ("date_to", "2026-01-01"),
             ]
         ),
-        core_conn,
+        None,
     )
 
     assert filters["period"] == "custom"
@@ -74,7 +84,7 @@ def test_parse_transaction_filters_keeps_custom_range_dates(core_conn):
     assert filters["date_to"] == "2026-02-28"
 
 
-def test_parse_transaction_filters_defaults_invalid_values(core_conn):
+def test_parse_transaction_filters_defaults_invalid_values():
     """Verify that unsupported filter values fall back to safe defaults."""
     filters = parse_transaction_filters(
         MultiDict(
@@ -90,7 +100,7 @@ def test_parse_transaction_filters_defaults_invalid_values(core_conn):
                 ("page", "-1"),
             ]
         ),
-        core_conn,
+        None,
     )
 
     assert filters["filter_mode"] == "include"
@@ -104,17 +114,17 @@ def test_parse_transaction_filters_defaults_invalid_values(core_conn):
     assert filters["page"] == 1
 
 
-def test_parse_transaction_filters_accepts_history_source(core_conn):
+def test_parse_transaction_filters_accepts_history_source():
     """Verify historical categorization is a supported source filter."""
     filters = parse_transaction_filters(
         MultiDict([("category_source", "history")]),
-        core_conn,
+        None,
     )
 
     assert filters["category_source"] == "history"
 
 
-def test_build_transaction_core_filters_combines_high_value_filters(core_conn):
+def test_build_transaction_core_filters_combines_high_value_filters():
     """Verify that parsed transaction filters translate into Core criteria."""
     filters = parse_transaction_filters(
         MultiDict(
@@ -133,7 +143,7 @@ def test_build_transaction_core_filters_combines_high_value_filters(core_conn):
                 ("account_id", "7"),
             ]
         ),
-        core_conn,
+        None,
     )
 
     core_filters = build_transaction_core_filters(filters, "UNKNOWN")
@@ -154,11 +164,11 @@ def test_build_transaction_core_filters_combines_high_value_filters(core_conn):
     assert "transactions.account_id" in sql
 
 
-def test_build_transaction_core_filters_supports_credit_filter(core_conn):
+def test_build_transaction_core_filters_supports_credit_filter():
     """Verify dashboard credit drill-down can include income and transfer credits."""
     filters = parse_transaction_filters(
         MultiDict([("amount_type", "credit")]),
-        core_conn,
+        None,
     )
 
     core_filters = build_transaction_core_filters(filters, "UNKNOWN")
@@ -167,36 +177,6 @@ def test_build_transaction_core_filters_supports_credit_filter(core_conn):
     assert filters["amount_type"] == "credit"
     assert "transactions.amount <" in sql
     assert "transactions.transaction_kind IN" in sql
-
-
-def test_build_transaction_core_filters_supports_pending_approval_review_filter(core_conn):
-    """Verify pending approval is derived from category confidence."""
-    filters = parse_transaction_filters(
-        MultiDict([("review", "pending_approval")]),
-        core_conn,
-    )
-
-    core_filters = build_transaction_core_filters(filters, "UNKNOWN")
-    sql = "\n".join(str(condition) for condition in core_filters.criteria())
-
-    assert filters["review"] == "pending_approval"
-    assert "transactions.category_confidence" in sql
-    assert "transactions.needs_review" not in sql
-
-
-def test_build_transaction_core_filters_supports_pre_approved_review_filter(core_conn):
-    """Verify pre-approved filtering uses the shared status expression."""
-    filters = parse_transaction_filters(
-        MultiDict([("review", "pre_approved")]),
-        core_conn,
-    )
-
-    core_filters = build_transaction_core_filters(filters, "UNKNOWN")
-    sql = "\n".join(str(condition) for condition in core_filters.criteria())
-
-    assert filters["review"] == "pre_approved"
-    assert "transactions.category_confidence" in sql
-    assert "transactions.needs_review" not in sql
 
 
 def test_transaction_sort_restricts_sort_expression():

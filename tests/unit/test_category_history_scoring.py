@@ -153,7 +153,7 @@ def test_historical_decision_from_candidates_supports_exceptional_single_match()
     assert decision.confidence >= 0.95
     assert decision.evidence_ids == (10,)
     assert decision.tags == ("Tax",)
-    assert decision.is_high_confidence is True
+    assert decision.confidence >= 0.95
 
 
 def test_historical_decision_from_candidates_distinguishes_medium_and_low_confidence():
@@ -172,8 +172,7 @@ def test_historical_decision_from_candidates_distinguishes_medium_and_low_confid
     )
 
     assert medium.category == "Food"
-    assert medium.is_medium_confidence is True
-    assert medium.is_high_confidence is False
+    assert 0.85 <= medium.confidence < 0.95
     assert low.category == "Food"
     assert low.confidence < 0.85
 

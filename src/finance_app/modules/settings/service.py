@@ -60,6 +60,7 @@ BOOLEAN_SETTING_KEYS = ("transaction_ai_rerun_enabled", CONFIRM_AI_TOKEN_USAGE_S
 PROBABILITY_SETTING_KEYS = (
     "llm_confidence_threshold",
     "llm_review_threshold",
+    "category_review_threshold",
     "verify_threshold",
     "recurrence_amount_tolerance_percent",
 )
@@ -121,6 +122,9 @@ def build_settings_context() -> dict[str, Any]:
             format_probability(app_settings.default_llm_review_threshold),
         ),
         "verify_threshold": current.get("verify_threshold", format_probability(app_settings.default_verify_threshold)),
+        "category_review_threshold": current.get(
+            "category_review_threshold", format_probability(app_settings.default_category_review_threshold)
+        ),
         "transaction_ai_rerun_enabled": str(
             current.get(
                 "transaction_ai_rerun_enabled",

@@ -4,7 +4,8 @@ import json
 from decimal import Decimal
 from types import SimpleNamespace
 
-from tests.support.database import insert_rule, insert_transaction
+import pytest
+from tests.support.database import insert_rule, insert_transaction, set_owner_setting
 from tests.support.llm import LLMRequestStub, llm_response_scenario, llm_result
 
 from finance_app.modules.categories import categorization
@@ -152,6 +153,22 @@ def test_high_confidence_rule_boundary_does_not_consult_history(core_conn, monke
     assert state.needs_review == 0
     assert state.assignment.category_source == "rule"
     assert state.assignment.category_confidence == 0.95
+
+
+@pytest.mark.parametrize(
+    ("review_threshold", "verify_threshold", "expected_category", "needs_review"),
+    [(0.80, 0.90, "Food", 0), (0.80, 0.99, "Food", 1), (0.99, 1.0, "UNKNOWN", 1)],
+)
+def test_runtime_settings_control_rule_acceptance_and_review(
+    core_conn, review_threshold, verify_threshold, expected_category, needs_review
+):
+    """The same real rule match follows owner-selected thresholds, not fixed display cutoffs."""
+    insert_rule(core_conn, "MARKET", "Food")
+    set_owner_setting(core_conn, "category_review_threshold", review_threshold)
+    set_owner_setting(core_conn, "verify_threshold", verify_threshold)
+    result = categorize_transactions([{"description": "Market Lane", "amount": 30.00}], conn=core_conn)[0]
+    assert result["category"] == expected_category
+    assert result["needs_review"] == needs_review
 
 
 def test_medium_confidence_rule_boundary_is_still_useful(core_conn, monkeypatch):

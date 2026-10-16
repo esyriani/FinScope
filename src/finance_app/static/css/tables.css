@@ -332,6 +332,10 @@
     white-space: nowrap;
 }
 
+[data-bs-theme="dark"] .transaction-status-badge.text-bg-primary {
+    --bs-primary-rgb: 128, 45, 212;
+}
+
 .transaction-row-actions {
     min-width: 8.5rem;
 }

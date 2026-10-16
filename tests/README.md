@@ -11,13 +11,13 @@ Tests are organized by the layer they primarily exercise:
 - [support/](support/): shared test helpers for CSRF setup, database row factories, background job capture, and deterministic LLM stubs.
 
 This file is intentionally scoped to test-suite structure, pytest selection,
-fixtures, and curation rules. For development dependency setup and the full
+fixtures, and testing conventions. For development dependency setup and the full
 formatter, linter, type-checker, frontend, and pytest gate, see
 [Developer guide](../docs/developer-guide.md#quality-checks).
 
-## Curation strategy
+## Test guidelines
 
-The curated suite should maximize confidence per test, not preserve a historical
+The suite should maximize confidence per test, not preserve a historical
 test count. Keep or add a test when it protects meaningful behavior, a layer
 boundary, a financial invariant, or a regression that a maintainer would expect
 to catch locally.
@@ -36,38 +36,10 @@ Use the lowest layer that can prove the behavior:
 - Smoke tests cover end-to-end happy paths only. One smoke test should usually
   replace many duplicated route-level happy-path checks.
 
-During curation, classify each file or related cluster with one of these
-outcomes:
-
-- Keep: the test protects clear behavior with stable assertions and little
-  duplication.
-- Consolidate: multiple tests protect the same behavior and can share factories,
-  fixtures, assertions, or parametrization.
-- Move: the behavior is valuable, but the test belongs in a different layer.
-- Rewrite: the behavior is valuable, but the test is brittle, reaches across
-  layers, bypasses production boundaries, or relies on low-value implementation
-  details.
-- Delete candidate: the test duplicates stronger coverage, protects obsolete
-  behavior, exists only to exercise a fixture, or asserts details with no clear
-  user or business value.
-
-Guardrails for pruning:
-
-- Do not remove coverage for financial correctness, imports, authentication and
-  authorization, CSRF, schema and migration invariants, LLM failure handling, or
-  destructive background jobs until equivalent or better coverage exists.
-- Keep presentation, logic, and data concerns separated in tests. Cross-layer
-  tests should be intentional route, integration, or smoke coverage.
-- Prefer shared helpers from [tests/support](support/) over ad hoc setup. Raw SQL belongs
-  in repository or schema tests, or inside support helpers used by higher-level
-  tests.
-- Prefer behavior-focused assertions over copy, layout, or implementation
-  snapshots. Exact HTML, JavaScript, and CSS assertions should protect escaping,
-  asset contracts, or serialization regressions.
-- Record deleted or merged coverage in the curation inventory created in the
-  next step so future maintainers understand what replaced it.
-
-When a curation inventory is maintained, link it from this section so future maintainers can see what replaced deleted or merged coverage.
+Prefer behavior-focused assertions over copy, layout, or implementation
+snapshots. Exact HTML, JavaScript, and CSS assertions should protect escaping,
+asset contracts, or serialization regressions. Keep financial, security, and
+destructive-workflow invariants covered at the lowest useful layer.
 
 Prefer helpers from [tests/support](support/) for common setup. Database helpers there use
 SQLAlchemy Core table metadata and work with the raw `core_conn` fixture. The
@@ -108,9 +80,16 @@ also live under [optional](optional/) and use `optional` plus a narrower
 capability marker.
 
 Quality gates in [tests/unit](unit/) keep the curated structure from drifting. They
-verify pytest defaults, documented layer directories, the remaining catch-all
-route file size, shared background-job recorder usage in route tests, and
-selected architecture boundaries.
+verify pytest defaults, documented layer directories, shared background-job
+recorder usage in route tests, and selected architecture boundaries. File
+lengths and historical test counts are not quality gates.
+
+`presentation_app` registers the real blueprints, Jinja filters, asset helpers,
+and translation helper, but does not initialize a database, authentication, or
+request-time runtime settings. Use the full `app` fixture when testing those
+boundaries or rendering a complete page through HTTP.
+
+## Run selections
 
 <details open>
 <summary>Windows PowerShell</summary>

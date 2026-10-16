@@ -12,6 +12,7 @@ from finance_app.modules.settings.forms import (
     normalize_theme_mode,
     parse_general_settings_form,
     parse_global_settings_form,
+    parse_probability,
     parse_statement_types_form,
 )
 
@@ -35,6 +36,32 @@ def settings_defaults():
         default_categorization_model="gpt-default",
         default_ui_language="en",
         locale="en",
+    )
+
+
+@pytest.fixture
+def global_settings_form():
+    """Return an otherwise-valid owner form so each validation case has one fault."""
+    return MultiDict(
+        {
+            "llm_confidence_threshold": "0.80",
+            "llm_review_threshold": "0.60",
+            "verify_threshold": "0.90",
+            "category_review_threshold": "0.85",
+            "transaction_ai_rerun_enabled": "",
+            "confirm_ai_token_usage_enabled": "1",
+            "openai_model": "gpt-4.1-mini",
+            "recurrence_minimum_occurrences": "3",
+            "recurrence_date_tolerance_days": "5",
+            "recurrence_amount_tolerance_absolute": "10",
+            "recurrence_amount_tolerance_percent": "0.15",
+            "recurrence_missed_cycles_before_inactive": "2",
+            "statement_type_ids": "1",
+            "statement_type_names": "Checking",
+            "statement_type_parser_types": "bank_account",
+            "statement_type_import_modes": "ledger",
+            "statement_type_default_account_types": "checking",
+        }
     )
 
 
@@ -100,32 +127,14 @@ def test_parse_general_settings_form_bounds_compact_preview_limits(field, messag
         parse_general_settings_form(form, settings_defaults())
 
 
-def test_parse_global_settings_form_normalizes_owner_settings():
+def test_parse_global_settings_form_normalizes_owner_settings(global_settings_form):
     """Verify global settings parsing handles probabilities, toggles, and statement types."""
-    form = MultiDict(
-        [
-            ("llm_confidence_threshold", "0.80"),
-            ("llm_review_threshold", "0.60"),
-            ("verify_threshold", "0.90"),
-            ("transaction_ai_rerun_enabled", ""),
-            ("confirm_ai_token_usage_enabled", "1"),
-            ("openai_model", "gpt-4.1-mini"),
-            ("recurrence_minimum_occurrences", "3"),
-            ("recurrence_date_tolerance_days", "5"),
-            ("recurrence_amount_tolerance_absolute", "10"),
-            ("recurrence_amount_tolerance_percent", "0.15"),
-            ("recurrence_missed_cycles_before_inactive", "2"),
-            ("statement_type_ids", "1"),
-            ("statement_type_names", "Checking"),
-            ("statement_type_parser_types", "bank_account"),
-            ("statement_type_import_modes", "ledger"),
-            ("statement_type_default_account_types", "checking"),
-        ]
-    )
-
-    parsed = parse_global_settings_form(form, settings_defaults())
+    parsed = parse_global_settings_form(global_settings_form, settings_defaults())
 
     assert parsed["llm_confidence_threshold"] == 0.8
+    assert parsed["llm_review_threshold"] == 0.60
+    assert parsed["verify_threshold"] == 0.90
+    assert parsed["category_review_threshold"] == 0.85
     assert parsed["transaction_ai_rerun_enabled"] is False
     assert parsed["confirm_ai_token_usage_enabled"] is True
     assert parsed["openai_model"] == "gpt-4.1-mini"
@@ -138,6 +147,46 @@ def test_parse_global_settings_form_normalizes_owner_settings():
             "default_account_type": "checking",
         }
     ]
+
+
+@pytest.mark.parametrize(
+    ("review", "ai_review", "automatic"),
+    [("0.90", "0.60", "0.90"), ("0.85", "0.90", "0.90"), ("0", "0", "0"), ("1", "1", "1")],
+)
+def test_parse_global_settings_form_accepts_inclusive_threshold_boundaries(
+    global_settings_form, review, ai_review, automatic
+):
+    """Review equality and probability endpoints remain valid owner settings."""
+    for field, value in (
+        ("category_review_threshold", review),
+        ("llm_review_threshold", ai_review),
+        ("verify_threshold", automatic),
+    ):
+        global_settings_form[field] = value
+
+    parsed = parse_global_settings_form(global_settings_form, settings_defaults())
+
+    assert (parsed["category_review_threshold"], parsed["llm_review_threshold"], parsed["verify_threshold"]) == (
+        float(review),
+        float(ai_review),
+        float(automatic),
+    )
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", "-0.001", "1.001", "bad", ""])
+def test_parse_probability_rejects_invalid_or_out_of_range_thresholds(value):
+    """Confidence settings must remain finite probabilities within inclusive bounds."""
+    with pytest.raises(ValueError, match="must be.*between 0 and 1"):
+        parse_probability(value, "Confidence threshold")
+
+
+@pytest.mark.parametrize("field", ["category_review_threshold", "llm_review_threshold"])
+def test_parse_global_settings_form_rejects_each_review_threshold_above_automatic(global_settings_form, field):
+    """Either review threshold exceeding automatic acceptance must block the settings change."""
+    global_settings_form[field] = "0.91"
+
+    with pytest.raises(ValueError, match="Review thresholds must not exceed"):
+        parse_global_settings_form(global_settings_form, settings_defaults())
 
 
 def test_parse_statement_types_form_requires_one_named_type():

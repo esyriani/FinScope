@@ -18,6 +18,12 @@ PROFILES = {
     "analytics-summary": ("tests/unit/test_analytics_helpers.py",),
     "categorization-orchestration": ("tests/integration/test_categorization_workflow.py",),
     "comparison-statistics": ("tests/unit/test_comparison_statistics.py",),
+    "dashboard-scope": (
+        "tests/unit/test_dashboard_filters.py",
+        "tests/integration/test_context_services.py",
+        "tests/integration/test_financial_correctness.py",
+        "tests/routes/test_dashboard_routes.py",
+    ),
     "financial-reporting": ("tests/integration/test_reporting_expressions.py",),
     "import-transaction-kinds": (
         "tests/unit/test_upload_transaction_kinds.py",
@@ -32,6 +38,26 @@ PROFILES = {
     "rule-scoring": ("tests/unit/test_category_rules_matching.py",),
     "statement-parser": ("tests/unit/test_statement_importer.py",),
     "transaction-importer": ("tests/integration/test_transaction_importer.py",),
+    "transaction-approval": (
+        "tests/unit/test_category_decision.py",
+        "tests/unit/test_transaction_filters.py",
+        "tests/unit/test_transaction_review_repository.py",
+        "tests/unit/test_settings_forms.py",
+        "tests/integration/test_categorization_workflow.py::test_runtime_settings_control_rule_acceptance_and_review",
+        "tests/integration/test_transaction_service_context.py::test_transactions_context_paginates_and_sorts",
+        "tests/integration/test_transaction_service_context.py::test_transactions_context_category_source_and_review_filters",
+        "tests/routes/test_transaction_review_routes.py",
+        "tests/routes/test_transaction_routes.py::test_verify_transaction_route_marks_transaction_reviewed",
+        "tests/routes/test_transaction_routes.py::test_verify_transaction_route_reports_missing_transaction",
+        "tests/routes/test_transaction_routes.py::test_batch_transactions_route_approves_only_selected_ids",
+    ),
+    "transaction-backup": (
+        "tests/unit/test_transaction_backup_csv.py",
+        "tests/routes/test_transaction_routes.py::test_transactions_backup_export_route_returns_canonical_csv",
+        "tests/routes/test_transaction_routes.py::test_transactions_backup_export_requires_edit_permission",
+        "tests/integration/test_transaction_backup_import.py",
+        "tests/routes/test_transaction_backup_routes.py",
+    ),
 }
 
 
@@ -39,6 +65,7 @@ def main() -> int:
     """Run one named Cosmic Ray pytest profile."""
     parser = argparse.ArgumentParser(description="Run a focused mutation-test pytest profile.")
     parser.add_argument("profile", choices=sorted(PROFILES))
+    parser.add_argument("--workers", type=int, choices=range(33), default=0)
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -48,7 +75,7 @@ def main() -> int:
         "-m",
         "pytest",
         "-n",
-        "0",
+        str(args.workers),
         "-x",
         *PROFILES[args.profile],
     ]

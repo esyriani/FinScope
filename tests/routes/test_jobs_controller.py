@@ -11,25 +11,13 @@ from tests.support.html import (
     assert_not_visible_text,
     assert_visible_text,
 )
+from tests.support.jobs import CapturingExecutor
 from tests.support.web import set_csrf_token
 
 from finance_app.background import runner
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.core.filters import format_datetime
 from finance_app.modules.jobs import service as jobs_service
-
-
-class CapturingExecutor:
-    """Capture submitted jobs without running them asynchronously."""
-
-    def __init__(self):
-        """Prepare an empty submission log."""
-        self.submissions = []
-
-    def submit(self, func, *args, **kwargs):
-        """Record the submitted job payload."""
-        self.submissions.append((func, args, kwargs))
-        return None
 
 
 @pytest.fixture(autouse=True)

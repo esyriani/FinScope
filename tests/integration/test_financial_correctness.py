@@ -4,8 +4,12 @@ Validates dashboard, Reports, and comparison totals for refunds, account
 payments, and date boundaries using the SQLAlchemy Core data layer.
 """
 
+from decimal import Decimal
+
 import pytest
 from sqlalchemy import text
+from tests.support.context_services import seed_reporting_data
+from tests.support.database import insert_transaction
 from werkzeug.datastructures import MultiDict
 
 from finance_app.core.constants import (
@@ -113,6 +117,64 @@ def reports_for_range(app, date_from, date_to):
 def rows_by_label(rows):
     """Return report rows keyed by their display label."""
     return {row["label"]: row for row in rows}
+
+
+@pytest.mark.parametrize(
+    ("quick_view", "expected_spending", "expected_income", "expected_net", "expected_count"),
+    [
+        ("categorized", 260.00, 1000.00, 740.00, 4),
+        ("all", 335.67, 1143.45, 807.78, 8),
+    ],
+)
+def test_dashboard_and_reports_apply_same_classification_scope(
+    app, core_conn, quick_view, expected_spending, expected_income, expected_net, expected_count
+):
+    """Keep headline and monthly cash flow aligned for identical classification scopes."""
+    seed_reporting_data(core_conn)
+    for index, (tx_date, amount, category, needs_review, transaction_kind) in enumerate(
+        [
+            ("2026-01-31", "45.67", "Food", 1, TRANSACTION_KIND_EXPENSE),
+            ("2026-02-28", "-123.45", "Income", 1, TRANSACTION_KIND_INCOME),
+            ("2026-01-01", "-20.00", "UNKNOWN", 0, TRANSACTION_KIND_INCOME),
+        ]
+    ):
+        insert_transaction(
+            core_conn,
+            amount=Decimal(amount),
+            category=category,
+            tx_date=tx_date,
+            needs_review=needs_review,
+            category_source="ai",
+            transaction_kind=transaction_kind,
+            fingerprint=f"financial-classification-scope-{index}",
+        )
+    args = MultiDict({"period": "custom", "date_from": "2026-01-01", "date_to": "2026-02-28", "quick_view": quick_view})
+
+    with app.test_request_context("/dashboard"):
+        dashboard = build_dashboard_context(args)
+    with app.test_request_context("/reports"):
+        reports = build_reports_context(REPORT_OVERVIEW, args)
+
+    for key, expected in (
+        ("total_spending", expected_spending),
+        ("total_income", expected_income),
+        ("net_cashflow", expected_net),
+        ("transaction_count", expected_count),
+    ):
+        assert dashboard[key] == reports[key] == expected
+    assert dashboard["cash_flow_summary"]["savings_rate"] == reports["cash_flow_summary"]["savings_rate"]
+    charts = dashboard["dashboard_chart_data"]
+    months = reports["monthly_rows"]
+    assert charts["netMonthLabels"] == charts["spendingIncomeMonthLabels"] == [row["label"] for row in months]
+    assert charts["netMonthTotals"] == [row["net"] for row in months]
+    assert charts["spendingIncomeSpendingTotals"] == [row["spending"] for row in months]
+    assert charts["spendingIncomeIncomeTotals"] == [row["income"] for row in months]
+    dashboard_counts = {option["value"]: option["count"] for option in dashboard["classification_scope_options"]}
+    report_counts = {option["value"]: option["count"] for option in reports["quick_view_options"]}
+    assert dashboard_counts == {key: report_counts[key] for key in dashboard_counts} == {"categorized": 4, "all": 8}
+    assert dashboard["data_quality"]["transaction_count"] == 8
+    assert dashboard["data_quality"]["needs_review_count"] == 3
+    assert dashboard["data_quality"]["unknown_count"] == 2
 
 
 @pytest.mark.parametrize(

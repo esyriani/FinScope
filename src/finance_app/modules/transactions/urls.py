@@ -56,10 +56,15 @@ def transactions_sort_url(sort_name: str, current_sort: str, current_direction: 
 def transactions_redirect_target() -> str:
     """Return the safe post-action transactions redirect target."""
     target = request.form.get("next", "").strip()
-    if target.startswith("/transactions"):
+    list_url = url_for("transactions.transactions")
+    try:
+        parts = urlsplit(target)
+    except ValueError:
+        return list_url
+    if not parts.scheme and not parts.netloc and parts.path == list_url:
         return target
 
-    return url_for("transactions.transactions")
+    return list_url
 
 
 def transactions_redirect_with_ignored(target: str | None, ignored: str) -> str:

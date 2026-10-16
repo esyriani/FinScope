@@ -8,8 +8,8 @@ provide source-specific evidence and persist the returned decision fields.
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-MEDIUM_CONFIDENCE_THRESHOLD = 0.85
-HIGH_CONFIDENCE_THRESHOLD = 0.95
+from finance_app.core.config import settings
+
 AGREEMENT_BONUS = 0.04
 SIMILAR_SUPPORT_BONUS = 0.03
 DISAGREEMENT_PENALTY = 0.05
@@ -118,6 +118,8 @@ def combine_confidence(
     agreement_confidences: Iterable[object] = (),
     disagreement_confidences: Iterable[object] = (),
     supported_by_similar: bool = False,
+    review_threshold: float = settings.default_category_review_threshold,
+    verify_threshold: float = settings.default_verify_threshold,
 ) -> float | None:
     """Return final confidence after agreement and disagreement adjustments.
 
@@ -142,9 +144,9 @@ def combine_confidence(
     if supported_by_similar:
         confidence += SIMILAR_SUPPORT_BONUS
     if disagreement_values:
-        confidence = min(confidence - DISAGREEMENT_PENALTY, HIGH_CONFIDENCE_THRESHOLD - DISAGREEMENT_PENALTY)
-        if confidence >= MEDIUM_CONFIDENCE_THRESHOLD:
-            confidence = max(MEDIUM_CONFIDENCE_THRESHOLD, confidence)
+        confidence = min(confidence - DISAGREEMENT_PENALTY, verify_threshold - DISAGREEMENT_PENALTY)
+        if confidence >= review_threshold:
+            confidence = max(review_threshold, confidence)
 
     return round(max(0.0, min(0.99, confidence)), 4)
 
@@ -154,6 +156,8 @@ def apply_review_policy(
     tags: Iterable[str] | None,
     confidence: object,
     unknown_category: str,
+    review_threshold: float = settings.default_category_review_threshold,
+    verify_threshold: float = settings.default_verify_threshold,
 ) -> FinalCategoryDecision:
     """Return the final assignment and review state for a proposed category.
 
@@ -167,7 +171,7 @@ def apply_review_policy(
         not category
         or category == unknown_category
         or proposed_confidence is None
-        or proposed_confidence < MEDIUM_CONFIDENCE_THRESHOLD
+        or proposed_confidence < review_threshold
     ):
         return FinalCategoryDecision(
             category=unknown_category,
@@ -184,7 +188,7 @@ def apply_review_policy(
         category=category,
         tags=tuple(tags or ()),
         confidence=rounded_confidence,
-        needs_review=1 if rounded_confidence < HIGH_CONFIDENCE_THRESHOLD else 0,
+        needs_review=1 if rounded_confidence < verify_threshold else 0,
         proposed_category=proposed_category,
         proposed_confidence=rounded_confidence,
         assigned_unknown=False,

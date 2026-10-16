@@ -3,6 +3,8 @@
 import base64
 import json
 
+import pytest
+
 from finance_app.modules.categories.llm_security import (
     FILTERED_LLM_OUTPUT,
     FILTERED_LLM_TEXT,
@@ -77,3 +79,15 @@ def test_validate_llm_messages_security_blocks_sensitive_prompt_keys():
     ]
 
     assert validate_llm_messages_security(messages) == ("disallowed_prompt_key:account_name",)
+
+
+@pytest.mark.parametrize(
+    ("messages", "issue"),
+    [
+        ([], "unexpected_message_count"),
+        ([{"role": "user"}, {"role": "system"}], "unexpected_message_roles"),
+    ],
+)
+def test_validate_llm_messages_security_rejects_invalid_envelopes(messages, issue):
+    """Reject malformed message envelopes independently of content sanitization."""
+    assert issue in validate_llm_messages_security(messages)

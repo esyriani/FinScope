@@ -56,11 +56,17 @@ def client_session_snapshot(client):
 
 
 def test_anonymous_routes_redirect_to_login(anonymous_client):
-    """Verify protected pages require authentication after owner bootstrap."""
+    """Protect application pages while keeping login-page browser assets public."""
     response = anonymous_client.get("/dashboard")
 
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
+    asset = anonymous_client.get("/static/js/app-boot.js")
+    try:
+        assert asset.status_code == 200
+        assert asset.mimetype == "text/javascript"
+    finally:
+        asset.close()
 
 
 def test_first_run_bootstrap_creates_owner(anonymous_client, core_conn):

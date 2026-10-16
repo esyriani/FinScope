@@ -16,7 +16,21 @@ Interac e-Transfer history is enrichment-only. Import matching checking statemen
 
 Transactions is the searchable transaction history. It supports period, category, tag, status, ignored-state, and how-categorized filters.
 
-Editors and owners can approve rows, ignore or restore rows, edit categories and tags, remember future matches from transaction edits, run the optional single-transaction AI suggestion action when enabled, and use batch actions for selected rows.
+Editors and owners can approve rows, mark them for review again, ignore or restore rows, edit categories and tags, remember future matches from transaction edits, run the optional single-transaction AI suggestion action when enabled, and use batch actions for selected rows.
+
+Transaction statuses are Needs review, Automatic, Approved, and Ignored. Automatic means categorization was accepted without human review; Approved records your explicit confirmation. Status badges, filters, and the Review queue use the stored review state rather than separate confidence cutoffs. Owners configure confidence thresholds in Settings > Categorization; changes apply during future categorization or explicit recategorization, not by silently rewriting existing rows.
+
+Approve clears a review requirement without changing the category, tags, or confidence. It is hidden for automatically accepted, exactly 100% rule-based matches, but remains available for AI results. Use More actions > Mark for review to clear human confirmation and reopen any active transaction without changing its classification. Explicitly reopened rule matches show Approve again so they can be confirmed. Both review actions also support selected rows. Transactions marked for review carry less weight as evidence for future similarity matches.
+
+Editors and owners can export and import a transaction backup CSV from Transactions. The compact, 20-column backup includes all transactions, regardless of the current filters, including ignored rows, plus account details, merchant names, one category, tag names, review and categorization status, categorization and review timestamps, reimbursement completion flags and links, and fingerprints. Categorization explanations, tag assignment history, internal category keys, redundant category values, database IDs, and creation or match audit timestamps are not included; they are not needed to rebuild the usable ledger. Tag names are stored as a list so punctuation in names survives restoration. Each reimbursement link contains only the expense fingerprint and exact allocated amount, including partial and split reimbursements. Keep the exported file private and unchanged: spreadsheet programs may alter dates, amounts, or embedded details when saving CSV files. Spreadsheet formulas are escaped on export, and FinScope reverses that escaping on import.
+
+Export a fresh backup before deleting the database. FinScope validates the expected columns and field values when importing. On a newly initialized database, create the owner account and then restore the transaction backup from Transactions.
+
+Choose Import backup, review the preview, then select Skip duplicates or Import all rows. Duplicate checks use fingerprints or matching date, account, description, and amount, include repeated rows within the file, and run again when processing starts. Import all rows adds copies of duplicates with fresh fingerprints; Skip duplicates retains the existing transaction details. Accounts are matched by name, created when missing, and updated with the backup's account type and funding account. Missing merchants, user categories, and tags are created, and reimbursement links are restored once between the corresponding transactions. Built-in categories are matched by name to the initialized categories so their special behavior is preserved; missing or incorrectly configured built-in categories block restoration. Preview and confirmation return to the same filtered Transactions list.
+
+When Skip duplicates leaves no transactions to import, FinScope reports that nothing was imported without creating a Processing item or changing accounts or other data. Otherwise the import appears on Processing with its status and imported/skipped counts; use View processing after confirmation to follow it. Restoration runs as one transaction: validation failures or cancellation roll back the changes. Fix invalid backup rows before confirming. Uploaded previews expire after 15 minutes and can only be confirmed by the user who uploaded them. Restarting FinScope also clears pending previews.
+
+A transaction backup is not a full database backup. It does not include uploaded statement files, rule definitions, users, settings, saved reports, or accounts with no transactions unless they fund a backed-up account. Restored transactions do not attach to statements or categorization rules. Transactions and reimbursement matches receive new creation or audit timestamps, and restored tag assignments receive new assignment timestamps with an unknown original source. The original categorization and review timestamps are preserved.
 
 Ignored rows stay in the database but are excluded from normal active-transaction views and rule matching unless a feature explicitly includes ignored rows.
 
@@ -60,6 +74,10 @@ It includes categorization completeness, spending, income and credits, net cash 
 
 Use the account filter to scope dashboard totals, charts, merchant rows, and transaction drill-downs to one imported account. Use the merchant filter to select a known merchant from suggestions or type partial merchant text; selected suggestions use the durable merchant identity, while typed text can match merchant names and imported descriptions.
 
+The Scope filter applies to all financial totals, trend charts, and top drivers. Categorized includes transactions with a known category that do not need review; All includes every active reportable transaction in the selected period, account, and merchant filters. These scopes match the corresponding Reports quick views. Analysis readiness always covers the full period, account, and merchant selection so transactions needing review remain visible, even when Categorized has no matching rows.
+
+Each Dashboard trend chart has PNG export and expand controls, matching the shared chart controls used elsewhere in FinScope. Expand opens a larger chart view; closing it restores the chart to its original position. The controls remain available after changing Dashboard filters.
+
 Transfers and payments are visible as transactions but excluded from spending and income totals to avoid double-counting internal money movement. Reimbursement credits are also excluded from ordinary income; their allocations reduce the covered expense categories instead.
 
 Unknown categories reduce report usefulness. Use the categorization completeness panel to find transactions that need review.
@@ -102,7 +120,7 @@ Users with recurring-edit permission can confirm a pattern, ignore a pattern, or
 
 Processing tracks longer-running workflows while the app remains usable.
 
-Common processing activity includes statement import, AI categorization, applying rules, review operations, and rule import. The page shows status, timestamps, results, errors, AI progress logs, cancellation where supported, and undo where the completed item still has undo metadata.
+Common processing activity includes statement import, transaction backup import, AI categorization, applying rules, review operations, and rule import. The page shows status, timestamps, results, errors, processing logs, cancellation where supported, and undo where the completed item still has undo metadata.
 
 AI categorization uses a separate queue from the main import/rule/review queue. Processing also provides Run AI on unknowns and Clear queued AI controls.
 

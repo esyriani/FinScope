@@ -1,5 +1,6 @@
 """Route tests for the settings feature."""
 
+import pytest
 from sqlalchemy import text
 from tests.support.html import assert_has_element, assert_no_element, assert_not_markup, assert_visible_text
 from tests.support.web import set_csrf_token
@@ -37,6 +38,7 @@ def settings_form_data(conn, **overrides):
         "llm_confidence_threshold": "0.75",
         "llm_review_threshold": "0.65",
         "verify_threshold": "0.90",
+        "category_review_threshold": "0.85",
         "transaction_ai_rerun_enabled": "1",
         "confirm_ai_token_usage_enabled": "1",
         "openai_model": "gpt-6-luna",
@@ -141,6 +143,7 @@ def test_settings_post_saves_runtime_settings_theme_recurrence_and_statement_typ
     assert settings["llm_confidence_threshold"] == "0.75"
     assert settings["llm_review_threshold"] == "0.65"
     assert settings["verify_threshold"] == "0.90"
+    assert settings["category_review_threshold"] == "0.85"
     assert settings["transaction_ai_rerun_enabled"] == "1"
     assert settings["confirm_ai_token_usage_enabled"] == "1"
     assert settings["openai_model"] == "gpt-6-luna"
@@ -181,6 +184,26 @@ def test_settings_post_rejects_invalid_numeric_values_without_partial_save(owner
     assert get_all_settings(core_conn)["theme_mode"] == original_settings["theme_mode"]
     assert get_all_settings(core_conn)["default_table_page_size"] == original_settings["default_table_page_size"]
     assert user_settings(core_conn) == original_user_settings
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("category_review_threshold", "NaN", "Rule and history review threshold must be between 0 and 1."),
+        ("llm_review_threshold", "0.95", "Review thresholds must not exceed the automatic confidence threshold."),
+    ],
+)
+def test_settings_reject_invalid_or_inverted_confidence_thresholds(csrf_client, core_conn, field, value, message):
+    """Threshold changes validate finite probabilities and ordering before any settings are saved."""
+    before_global = get_all_settings(core_conn)
+    before_personal = user_settings(core_conn)
+    response = csrf_client.post(
+        "/settings", data=settings_form_data(core_conn, **{field: value}), follow_redirects=True
+    )
+    assert response.status_code == 200
+    assert_visible_text(response, message)
+    assert get_all_settings(core_conn) == before_global
+    assert user_settings(core_conn) == before_personal
 
 
 def test_settings_post_rejects_overlarge_compact_limits(owner_client, core_conn):

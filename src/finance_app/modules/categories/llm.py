@@ -78,6 +78,7 @@ class LlmCategorizationRequestContext:
     confidence_threshold: float
     review_threshold: float
     verify_threshold: float
+    category_review_threshold: float
     openai_model: str
 
 
@@ -200,6 +201,9 @@ def prepare_llm_categorization_request_context(
         confidence_threshold=confidence_threshold,
         review_threshold=review_threshold,
         verify_threshold=verify_threshold,
+        category_review_threshold=get_float_setting(
+            conn, "category_review_threshold", settings.default_category_review_threshold, minimum=0, maximum=1
+        ),
         openai_model=openai_model,
     )
 
@@ -330,7 +334,11 @@ def validated_llm_result(
         tag_ids,
     )
     final_confidence = (
-        llm_final_confidence(tx, category, confidence, result) if category_id_is_valid and confidence_is_valid else 0.0
+        llm_final_confidence(
+            tx, category, confidence, result, context.category_review_threshold, context.verify_threshold
+        )
+        if category_id_is_valid and confidence_is_valid
+        else 0.0
     )
     decision = apply_llm_review_policy(
         category,

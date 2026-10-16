@@ -3,7 +3,7 @@
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from finance_app.core.constants import TRANSACTION_KINDS, UNKNOWN_CATEGORY
+from finance_app.core.constants import CATEGORY_SOURCE_RULE, TRANSACTION_KINDS, UNKNOWN_CATEGORY
 from finance_app.core.money import money_to_float
 from finance_app.modules.categories.sources import (
     category_confidence_label,
@@ -12,6 +12,8 @@ from finance_app.modules.categories.sources import (
 )
 from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.transactions.status import (
+    TRANSACTION_STATUS_IGNORED,
+    TRANSACTION_STATUS_REVIEWED,
     transaction_review_status,
     transaction_status_badge_class,
     transaction_status_label,
@@ -44,6 +46,14 @@ def build_transaction_rows(
                 "review_status": review_status,
                 "review_status_label": transaction_status_label(review_status),
                 "review_status_badge_class": transaction_status_badge_class(review_status),
+                "show_mark_reviewed": review_status not in (TRANSACTION_STATUS_IGNORED, TRANSACTION_STATUS_REVIEWED)
+                and not (
+                    row["category_source"] == CATEGORY_SOURCE_RULE
+                    and row["category_confidence"] == 1.0
+                    and not row["needs_review"]
+                ),
+                "show_mark_for_review": review_status != TRANSACTION_STATUS_IGNORED
+                and not (row.get("needs_review") and not row.get("reviewed_at")),
                 "tags": tags,
                 "tag_label": ", ".join(tags),
                 "tag_pills": [

@@ -16,6 +16,27 @@ DEFAULT_REJECTED_JOB_ID = "rejected-background-job"
 DEFAULT_REJECTION_DETAIL = "RuntimeError: executor stopped"
 
 
+class CapturingExecutor:
+    """Capture runner submissions without executing them on another thread."""
+
+    def __init__(self):
+        """Prepare an empty submission log."""
+        self.submissions = []
+
+    def submit(self, func, *args, **kwargs):
+        """Record a submitted callable and its payload."""
+        self.submissions.append((func, args, kwargs))
+        return None
+
+
+class RejectingExecutor:
+    """Reject submissions like an executor that has already shut down."""
+
+    def submit(self, func, *args, **kwargs):
+        """Raise instead of accepting work."""
+        raise RuntimeError("executor stopped")
+
+
 @dataclass(frozen=True)
 class CapturedBackgroundJob:
     """Immutable metadata for one captured background job submission."""

@@ -7,13 +7,15 @@
     "vendor/flatpickr/4.6.13/plugins/monthSelect/index.js",
     "vendor/echarts/5.6.0/echarts.min.js"
 ] %}
-{% set page_stylesheets = ["css/analytics-components.css", "css/dashboard.css"] %}
+{% set page_stylesheets = ["css/analytics-components.css", "css/dashboard.css", "css/exports.css"] %}
 {% set page_scripts = [
     "js/dates.js",
     "js/merchant-autocomplete.js",
     "js/dashboard.js",
     "js/chart-utils.js",
-    "js/dashboard-charts.js"
+    "js/dashboard-charts.js",
+    "js/xlsx-writer.js",
+    "js/exports.js"
 ] %}
 {% extends "base.html" %}
 {% from "_collapsible.html" import collapsible_filter_panel with context %}
@@ -143,7 +145,7 @@
     </div>
 </section>
 
-{% if transaction_count > 0 %}
+{% if data_quality.transaction_count > 0 %}
 <section class="dashboard-section mb-4">
     <div class="section-title">
         <h5 class="card-title">{{ _("Trend preview") }}</h5>
@@ -151,9 +153,11 @@
     <div class="dashboard-grid">
         <article class="card chart-card dashboard-preview-card">
             <div class="card-body">
-                <h6 class="dashboard-preview-title">{{ _("Net cash flow") }}</h6>
+                <div class="section-title">
+                    <h6 class="dashboard-preview-title mb-0">{{ _("Net cash flow") }}</h6>
+                </div>
                 {% if dashboard_chart_data.netMonthLabels %}
-                <div id="netChart" class="chart-viewport" role="img" aria-label="{{ _('Net cash flow') }}"></div>
+                <div id="netChart" class="chart-viewport" data-chart-export data-export-title="{{ _('Net cash flow') }}" role="img" aria-label="{{ _('Net cash flow') }}"></div>
                 {% else %}
                 <div class="dashboard-empty-preview">{{ _("No trend data in this view.") }}</div>
                 {% endif %}
@@ -161,9 +165,11 @@
         </article>
         <article class="card chart-card dashboard-preview-card">
             <div class="card-body">
-                <h6 class="dashboard-preview-title">{{ _("Spending vs income") }}</h6>
+                <div class="section-title">
+                    <h6 class="dashboard-preview-title mb-0">{{ _("Spending vs income") }}</h6>
+                </div>
                 {% if dashboard_chart_data.spendingIncomeMonthLabels %}
-                <div id="spendingIncomeChart" class="chart-viewport" role="img" aria-label="{{ _('Spending vs income') }}"></div>
+                <div id="spendingIncomeChart" class="chart-viewport" data-chart-export data-export-title="{{ _('Spending vs income') }}" role="img" aria-label="{{ _('Spending vs income') }}"></div>
                 {% else %}
                 <div class="dashboard-empty-preview">{{ _("No trend data in this view.") }}</div>
                 {% endif %}

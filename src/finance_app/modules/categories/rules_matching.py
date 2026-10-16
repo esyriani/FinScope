@@ -44,8 +44,6 @@ class ScoredRuleMatch:
         return rule_specificity(self.rule)
 
 
-HIGH_CONFIDENCE_THRESHOLD = 0.95
-MEDIUM_CONFIDENCE_THRESHOLD = 0.85
 FUZZY_RULE_MATCH_THRESHOLD = 0.86
 
 

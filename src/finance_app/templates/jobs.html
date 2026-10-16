@@ -18,7 +18,7 @@
 {% endmacro %}
 
 {% macro translated_job_message(message, params) %}
-{{ _(message, current=params.get("current", ""), total=params.get("total", ""), updated=params.get("updated", ""), skipped_stale=params.get("skipped_stale", ""), batch_skipped_stale=params.get("batch_skipped_stale", ""), start=params.get("start", ""), end=params.get("end", ""), processed=params.get("processed", ""), batch_updated=params.get("batch_updated", ""), unknown=params.get("unknown", ""), reasons=params.get("reasons", ""), error_type=params.get("error_type", ""), detail=params.get("detail", ""), result=params.get("result", ""), summary=params.get("summary", "")) }}
+{{ _(message, **params) }}
 {% endmacro %}
 
 {% macro progress_summary(job) %}
@@ -129,13 +129,13 @@
                     </thead>
                     <tbody>
                         {% for job in jobs %}
-                            {% set show_ai_progress = job.queue == "ai" and (job.status == "running" or job.progress_log) %}
+                            {% set show_progress = job.progress_log or (job.queue == "ai" and job.status == "running") %}
                             {% set progress_expanded = job.status == "running" %}
                             {% set progress_percent = job.progress_percent if job.progress_percent is not none else 0 %}
                             <tr>
                                 <td class="jobs-table-job-cell">
                                     <div class="d-flex align-items-center gap-2">
-                                        {% if show_ai_progress %}
+                                        {% if show_progress %}
                                             <button
                                                 class="btn btn-sm btn-outline-secondary btn-icon-only"
                                                 type="button"
@@ -227,7 +227,7 @@
                                     </div>
                                 </td>
                             </tr>
-                            {% if show_ai_progress %}
+                            {% if show_progress %}
                             <tr class="collapse {% if progress_expanded %}show{% endif %}" id="job-progress-{{ job.id }}">
                                 <td colspan="7" class="bg-body-tertiary">
                                     <div
@@ -246,7 +246,7 @@
                                         <div
                                             class="progress"
                                             role="progressbar"
-                                            aria-label="{{ _('AI processing progress') }}"
+                                            aria-label="{{ _('Processing progress') }}"
                                             aria-valuemin="0"
                                             aria-valuemax="100"
                                             aria-valuenow="{{ progress_percent }}"

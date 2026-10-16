@@ -5,7 +5,12 @@ from typing import Any
 from sqlalchemy import case, select
 
 from finance_app.core.category_sql import category_label_expression, transaction_category_label_expression
-from finance_app.core.constants import CATEGORY_RULE_DIRECTION_ANY, CATEGORY_RULE_SOURCE_MANUAL, UNKNOWN_CATEGORY
+from finance_app.core.constants import (
+    CATEGORY_RULE_DIRECTION_ANY,
+    CATEGORY_RULE_SOURCE_MANUAL,
+    CATEGORY_SOURCE_UNKNOWN,
+    UNKNOWN_CATEGORY,
+)
 from finance_app.database.tables import (
     accounts as accounts_table,
 )
@@ -27,7 +32,12 @@ def review_candidate_rows(conn: Any, unknown_category: str, merchant_candidate: 
     category_label = transaction_category_label_expression(unknown_category)
     filters: list[Any] = [
         transactions_table.c.ignored == 0,
-        ((transactions_table.c.needs_review == 1) | (category_label == unknown_category)),
+        transactions_table.c.reviewed_at.is_(None),
+        (
+            (transactions_table.c.needs_review == 1)
+            | (category_label == unknown_category)
+            | (transactions_table.c.category_source == CATEGORY_SOURCE_UNKNOWN)
+        ),
     ]
     if merchant_candidate:
         filters.append(

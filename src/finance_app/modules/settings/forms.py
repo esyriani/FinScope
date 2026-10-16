@@ -1,6 +1,7 @@
 """Form parsing and validation helpers for the settings feature."""
 
 import re
+from math import isfinite
 from typing import Any
 
 from finance_app.core.constants import THEME_MODE_DARK, THEME_MODE_LIGHT
@@ -81,19 +82,19 @@ def parse_general_settings_form(form: QueryArgs, app_settings: Any) -> dict[str,
 
 def parse_global_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, object]:
     """Parse owner-only advanced settings from a submitted form."""
-    return {
+    review_threshold = parse_probability(form.get("category_review_threshold"), "Rule and history review threshold")
+    ai_review_threshold = parse_probability(form.get("llm_review_threshold"), "AI review threshold")
+    verify_threshold = parse_probability(form.get("verify_threshold"), "Automatic confidence threshold")
+    if review_threshold > verify_threshold or ai_review_threshold > verify_threshold:
+        raise ValueError("Review thresholds must not exceed the automatic confidence threshold.")
+    parsed = {
         "llm_confidence_threshold": parse_probability(
             form.get("llm_confidence_threshold"),
             "AI acceptance threshold",
         ),
-        "llm_review_threshold": parse_probability(
-            form.get("llm_review_threshold"),
-            "AI review threshold",
-        ),
-        "verify_threshold": parse_probability(
-            form.get("verify_threshold"),
-            "Verify threshold",
-        ),
+        "llm_review_threshold": ai_review_threshold,
+        "verify_threshold": verify_threshold,
+        "category_review_threshold": review_threshold,
         "transaction_ai_rerun_enabled": parse_checkbox(form.get("transaction_ai_rerun_enabled")),
         "confirm_ai_token_usage_enabled": parse_checkbox(form.get("confirm_ai_token_usage_enabled")),
         "openai_model": clean_openai_model(form.get("openai_model")) or app_settings.default_categorization_model,
@@ -122,6 +123,7 @@ def parse_global_settings_form(form: QueryArgs, app_settings: Any) -> dict[str, 
         ),
         "statement_types": parse_statement_types_form(form),
     }
+    return parsed
 
 
 def parse_positive_int(value: object, fallback: int, minimum: int = 1, label: str = "Numeric settings") -> int:
@@ -160,7 +162,7 @@ def parse_probability(value: object, label: str) -> float:
     except (TypeError, ValueError):
         raise ValueError(f"{label} must be a number between 0 and 1.") from None
 
-    if parsed < 0 or parsed > 1:
+    if not isfinite(parsed) or parsed < 0 or parsed > 1:
         raise ValueError(f"{label} must be between 0 and 1.")
 
     return parsed

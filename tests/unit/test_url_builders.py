@@ -18,9 +18,9 @@ def parsed_query(url):
     return parse_qs(urlsplit(url).query, keep_blank_values=True)
 
 
-def test_dashboard_transactions_url_builds_drilldown_query(app):
+def test_dashboard_transactions_url_builds_drilldown_query(presentation_app):
     """Verify dashboard drill-down URLs include current dimension filters."""
-    with app.test_request_context("/dashboard"):
+    with presentation_app.test_request_context("/dashboard"):
         url = dashboard_transactions_url(
             "custom",
             "include",
@@ -48,9 +48,9 @@ def test_dashboard_transactions_url_builds_drilldown_query(app):
     }
 
 
-def test_transactions_url_preserves_query_values(app):
+def test_transactions_url_preserves_query_values(presentation_app):
     """Verify transactions URLs preserve active filters and stringify override values."""
-    with app.test_request_context("/transactions?period=all&ignored=active"):
+    with presentation_app.test_request_context("/transactions?period=all&ignored=active"):
         url = transactions_url(page=2, categories=["Food", ""], search="metro")
 
     assert urlsplit(url).path == "/transactions"
@@ -63,7 +63,7 @@ def test_transactions_url_preserves_query_values(app):
     }
 
 
-def test_transactions_redirect_with_ignored_replaces_filter(app):
+def test_transactions_redirect_with_ignored_replaces_filter():
     """Verify ignored redirect updates the filter without dropping other query parameters."""
     url = transactions_redirect_with_ignored("/transactions?period=all&ignored=active", "all")
 
@@ -74,9 +74,9 @@ def test_transactions_redirect_with_ignored_replaces_filter(app):
     }
 
 
-def test_comparison_url_removes_blank_query_values(app):
+def test_comparison_url_removes_blank_query_values(presentation_app):
     """Verify comparison URLs omit empty filters."""
-    with app.test_request_context("/comparison"):
+    with presentation_app.test_request_context("/comparison"):
         url = build_comparison_url(years=["2026", ""], categories=[], view="year", empty="")
 
     assert urlsplit(url).path == "/comparison"
@@ -86,9 +86,9 @@ def test_comparison_url_removes_blank_query_values(app):
     }
 
 
-def test_reports_url_removes_blank_query_values(app):
+def test_reports_url_removes_blank_query_values(presentation_app):
     """Verify Reports URLs omit empty filters."""
-    with app.test_request_context("/reports"):
+    with presentation_app.test_request_context("/reports"):
         url = build_reports_url("reports.income", basis="ledger_rows", account_id=None, empty="")
 
     assert urlsplit(url).path == "/reports/income"
@@ -97,9 +97,9 @@ def test_reports_url_removes_blank_query_values(app):
     }
 
 
-def test_reports_url_preserves_and_overrides_query_values(app):
+def test_reports_url_preserves_and_overrides_query_values(presentation_app):
     """Verify Reports URLs preserve current filters and stringify overrides."""
-    with app.test_request_context("/reports?period=ytd&account_id=3&empty="):
+    with presentation_app.test_request_context("/reports?period=ytd&account_id=3&empty="):
         url = reports_url(request.args, measure="spending", empty="")
 
     assert urlsplit(url).path == "/reports"
@@ -110,9 +110,9 @@ def test_reports_url_preserves_and_overrides_query_values(app):
     }
 
 
-def test_review_urls_preserve_grouping_and_toggle_sort(app):
+def test_review_urls_preserve_grouping_and_toggle_sort(presentation_app):
     """Verify review URLs include ungrouped keys and sort toggles."""
-    with app.test_request_context("/review"):
+    with presentation_app.test_request_context("/review"):
         url = build_review_url(2, ["A", "B"], "merchant", "asc", merchant_search="metro")
         sort_url = build_review_sort_url("merchant", "merchant", "asc", ["A"])
 
@@ -131,9 +131,9 @@ def test_review_urls_preserve_grouping_and_toggle_sort(app):
     }
 
 
-def test_calendar_urls_build_month_and_transaction_links(app):
+def test_calendar_urls_build_month_and_transaction_links(presentation_app):
     """Verify calendar URLs include month filters and transaction date scopes."""
-    with app.test_request_context("/calendar"):
+    with presentation_app.test_request_context("/calendar"):
         month_url = calendar_url(month_bounds_date(), {"categories": ["Food", ""], "account_id": 7, "empty": ""})
         tx_url = calendar_transactions_url("2026-05-01", "2026-05-31", account_id=7)
 

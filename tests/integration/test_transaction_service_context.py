@@ -150,6 +150,11 @@ def test_transactions_context_paginates_and_sorts(core_conn):
     assert second_page["page_end"] == 4
     assert first_page["run_transaction_ai_enabled"] is True
 
+    status_last_page = build_transactions_context(
+        MultiDict([("period", "all"), ("ignored", "all"), ("sort", "review"), ("direction", "desc"), ("page", "3")])
+    )
+    assert descriptions(status_last_page) == ["Cafe Bistro", "Ignored Store"]
+
 
 def test_transactions_context_ignored_filters(core_conn):
     """Verify active, ignored, and all ignored-state filters."""
@@ -175,20 +180,16 @@ def test_transactions_context_category_source_and_review_filters(core_conn):
     manual_context = build_transactions_context(MultiDict([("period", "all"), ("category_source", "manual_reviewed")]))
     unknown_context = build_transactions_context(MultiDict([("period", "all"), ("category_status", "unknown")]))
     needs_review_context = build_transactions_context(MultiDict([("period", "all"), ("review", "needs_review")]))
-    pending_approval_context = build_transactions_context(
-        MultiDict([("period", "all"), ("review", "pending_approval")])
-    )
-    pre_approved_context = build_transactions_context(MultiDict([("period", "all"), ("review", "pre_approved")]))
-    verified_context = build_transactions_context(MultiDict([("period", "all"), ("review", "verified")]))
+    automatic_context = build_transactions_context(MultiDict([("period", "all"), ("review", "automatic")]))
+    reviewed_context = build_transactions_context(MultiDict([("period", "all"), ("review", "reviewed")]))
 
     assert descriptions(ai_context) == ["Hydro Quebec"]
     assert ai_context["selected_category_source"] == "ai"
     assert ai_context["review_filter_options"] == (
         ("", "All"),
         ("needs_review", "Needs review"),
-        ("pending_approval", "Pending approval"),
-        ("pre_approved", "Pre-approved"),
-        ("verified", "Approved"),
+        ("automatic", "Automatic"),
+        ("reviewed", "Approved"),
     )
     assert ai_context["category_source_filter_options"] == (
         ("", "All methods"),
@@ -199,18 +200,33 @@ def test_transactions_context_category_source_and_review_filters(core_conn):
     )
     assert ai_context["transactions"][0]["category_source_label"] == "AI"
     assert ai_context["transactions"][0]["category_source_badge_class"] == "text-bg-info"
-    assert ai_context["transactions"][0]["review_status"] == "pending_approval"
-    assert ai_context["transactions"][0]["review_status_label"] == "Pending approval"
+    assert ai_context["transactions"][0]["review_status"] == "automatic"
+    assert ai_context["transactions"][0]["review_status_label"] == "Automatic"
     assert descriptions(manual_context) == ["Cafe Bistro"]
     assert descriptions(unknown_context) == ["Unknown Shop"]
     assert descriptions(needs_review_context) == ["Unknown Shop"]
-    assert pending_approval_context["selected_review"] == "pending_approval"
-    assert descriptions(pending_approval_context) == ["Hydro Quebec"]
-    assert pre_approved_context["selected_review"] == "pre_approved"
-    assert pre_approved_context["total_count"] == 2
-    assert descriptions(pre_approved_context) == ["Payroll", "Metro Grocery"]
-    assert verified_context["selected_review"] == "verified"
-    assert descriptions(verified_context) == ["Cafe Bistro"]
+    assert automatic_context["selected_review"] == "automatic"
+    assert automatic_context["total_count"] == 3
+    assert descriptions(automatic_context) == ["Payroll", "Hydro Quebec"]
+    assert reviewed_context["selected_review"] == "reviewed"
+    assert descriptions(reviewed_context) == ["Cafe Bistro"]
+
+    insert_transaction(
+        core_conn,
+        description="Known category needing review",
+        category="Food",
+        category_source="ai",
+        category_confidence=0.99,
+        needs_review=1,
+        tx_date="2026-01-07",
+        fingerprint="tx-list-known-review",
+    )
+    reopened_context = build_transactions_context(MultiDict([("period", "all"), ("review", "needs_review")]))
+    still_automatic = build_transactions_context(MultiDict([("period", "all"), ("review", "automatic")]))
+
+    assert descriptions(reopened_context) == ["Known category needing review", "Unknown Shop"]
+    assert reopened_context["transactions"][0]["review_status_label"] == "Needs review"
+    assert still_automatic["total_count"] == 3
 
 
 def test_transactions_context_merchant_filters_and_tag_rendering(core_conn):

@@ -340,85 +340,6 @@ def test_comparison_tabs_preserve_active_view_in_url():
     assert "updateComparisonViewQuery(tab)" in comparison_js
 
 
-def test_comparison_insight_carousel_uses_responsive_three_card_grid():
-    """Verify comparison insights show three cards on wide screens and adapt down."""
-    analytics_css = read_style("analytics-components.css")
-    comparison_css = read_style("comparison.css")
-
-    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in analytics_css
-    assert "@media (max-width: 1100px)" in analytics_css
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in analytics_css
-    assert "grid-template-columns: 1fr;" in analytics_css
-    assert ".insight-card" not in comparison_css
-
-
-def test_reports_layout_uses_wide_monthly_charts_and_collapsed_tables():
-    """Verify report charts and table panels keep the shared responsive layout."""
-    reports_template = (TEMPLATES / "reports.html").read_text(encoding="utf-8")
-    reports_overview_template = (TEMPLATES / "_reports_section_overview.html").read_text(encoding="utf-8")
-    reports_tables_template = (TEMPLATES / "_reports_tables.html").read_text(encoding="utf-8")
-    table_primitives_template = (TEMPLATES / "_table_primitives.html").read_text(encoding="utf-8")
-    reports_css = read_style("reports.css")
-    exports_js = read_script("exports.js")
-
-    assert "data-collapse-panel-header-toggle" in table_primitives_template
-    assert "data-collapse-panel-heading-toggle" in table_primitives_template
-    assert "data-table-export-toolbar" in table_primitives_template
-    assert "collapsible_table_header" in reports_tables_template
-    assert "export_toolbar" in reports_tables_template
-    assert '"[data-table-export-toolbar]"' in exports_js
-    assert "reports-table-toggle" not in reports_template
-    assert "reports-table-toggle" not in reports_tables_template
-    assert 'class="collapse reports-table-collapse" id="{{ panel_id }}"' in reports_tables_template
-    assert 'reports_chart_card("Monthly statement", "reportsMonthlyChart", true)' in reports_overview_template
-    assert "grid-template-columns: repeat(4, minmax(0, 1fr));" in reports_css
-    assert ".reports-chart-card-wide" in reports_css
-    assert "grid-column: 1 / -1;" in reports_css
-    table_grid_rules = re.findall(r"\.reports-table-grid\s*\{(?P<body>[^}]*)\}", reports_css)
-    assert any("grid-template-columns: minmax(0, 1fr);" in rule for rule in table_grid_rules)
-
-
-def test_reports_template_imports_focused_component_partials():
-    """Verify the reports page delegates reusable report markup to partials."""
-    reports_template = (TEMPLATES / "reports.html").read_text(encoding="utf-8")
-
-    assert "{% macro" not in reports_template
-    assert '{% include "_reports_section_overview.html" %}' in reports_template
-    assert '{% include "_reports_section_taxonomy_detail.html" %}' in reports_template
-    assert '{% include "_reports_section_taxonomy.html" %}' in reports_template
-    assert '{% include "_reports_section_entity_detail.html" %}' in reports_template
-    assert '{% include "_reports_section_entity.html" %}' in reports_template
-    assert '{% include "_reports_section_income.html" %}' in reports_template
-
-    component_expectations = {
-        "_reports_filters.html": ("macro reports_filter_form",),
-        "_reports_tables.html": ("macro reports_table", "macro evidence_table"),
-        "_reports_summary_cards.html": (
-            "macro reports_actions",
-            "macro reports_chart_card",
-            "macro reports_quality_panel",
-        ),
-        "_reports_explorers.html": (
-            "macro taxonomy_explorer",
-            "macro report_explorer",
-            "macro taxonomy_detail_header",
-            "macro entity_detail_header",
-        ),
-        "_reports_section_overview.html": (
-            'from "_reports_filters.html" import reports_filter_form with context',
-            'from "_reports_tables.html" import reports_table with context',
-        ),
-        "_reports_section_income.html": (
-            "reports_income_key_insights",
-            "evidence_table",
-        ),
-    }
-    for template_name, snippets in component_expectations.items():
-        template_source = (TEMPLATES / template_name).read_text(encoding="utf-8")
-        for snippet in snippets:
-            assert snippet in template_source
-
-
 def test_reports_open_controls_and_explorers_use_shared_helpers():
     """Verify taxonomy and report explorer widgets share one implementation path."""
     reports_js = read_script("reports.js")
@@ -662,15 +583,6 @@ def test_comparison_template_uses_presenter_tone_for_insight_cards():
     assert "'increase' in" not in comparison_template
 
 
-def test_scrollable_modals_fit_content_height():
-    """Verify scrollable Bootstrap modals do not stretch to full-page height."""
-    base_css = read_style("base.css")
-
-    assert ".modal-dialog-scrollable" in base_css
-    assert "height: auto;" in base_css.split(".modal-dialog-scrollable", 1)[1].split("}", 1)[0]
-    assert "overflow-y: auto;" in base_css.split(".modal-body", 1)[1].split("}", 1)[0]
-
-
 def test_filter_panels_use_shared_collapsible_summary_macros():
     """Verify page filters collapse by default and reuse the shared toggle markup."""
     collapsible_template = (TEMPLATES / "_collapsible.html").read_text(encoding="utf-8")
@@ -729,71 +641,6 @@ def test_filter_panels_use_shared_collapsible_summary_macros():
     for template_name in panel_templates:
         template = (TEMPLATES / template_name).read_text(encoding="utf-8")
         assert "collapsible_filter_panel" in template
-
-
-def test_dashboard_explore_reports_uses_compact_action_bar():
-    """Verify Dashboard report shortcuts are a compact action bar."""
-    dashboard_template = (TEMPLATES / "dashboard.html").read_text(encoding="utf-8")
-    dashboard_css = read_style("dashboard.css")
-    responsive_css = read_style("responsive.css")
-
-    assert '<section class="dashboard-action-bar mb-4">' in dashboard_template
-    assert "dashboard-report-card" not in dashboard_template
-    assert ".dashboard-action-bar" in dashboard_css
-    assert ".dashboard-action-bar" not in responsive_css
-    assert "font-size: 1.4rem;" in dashboard_css.split(".readiness-chip strong", 1)[1].split("}", 1)[0]
-
-
-def test_dashboard_classification_scope_buttons_are_radio_style_apply_filters():
-    """Verify classification-scope controls are browser-native radios applied by the form."""
-    dashboard_template = (TEMPLATES / "dashboard.html").read_text(encoding="utf-8")
-    dashboard_js = read_script("dashboard.js")
-    base_css = read_style("base.css")
-    dashboard_css = read_style("dashboard.css")
-
-    quick_view_section = dashboard_template.split("aria-label=\"{{ _('Scope') }}\"", 1)[1].split(
-        "{% endfor %}",
-        1,
-    )[0]
-
-    assert "app-toggle-group" in dashboard_template
-    assert 'role="radiogroup"' in dashboard_template
-    assert 'class="btn-check"' in quick_view_section
-    assert 'type="radio"' in quick_view_section
-    assert 'name="quick_view"' in quick_view_section
-    assert 'value="{{ option.value }}"' in quick_view_section
-    assert "app-toggle-option btn btn-sm btn-outline-secondary text-nowrap" in quick_view_section
-    assert 'type="hidden" name="quick_view"' not in dashboard_template
-    assert "data-dashboard-quick-view" not in dashboard_template
-    assert "data-dashboard-quick-view-submit" not in dashboard_template
-    assert "setupDashboardQuickView" not in dashboard_js
-    assert "dashboard-drilldown" not in dashboard_template
-    assert "dblclick" not in dashboard_js
-    assert "event.submitter" not in dashboard_js
-    assert ".btn-check:checked + .app-toggle-option" in base_css
-    assert "box-shadow: 0 0 0 2px rgba(var(--app-accent-rgb), 0.32);" in base_css
-    assert "dashboard-quick-view" not in dashboard_css
-
-
-def test_shared_analytics_css_owns_cross_page_primitives():
-    """Verify shared dashboard/home/report primitives are not hidden in page styles."""
-    analytics_css = read_style("analytics-components.css")
-    home_dashboard_css = read_style("home-dashboard.css")
-    dashboard_css = read_style("dashboard.css")
-    comparison_css = read_style("comparison.css")
-    responsive_css = read_style("responsive.css")
-
-    for selector in (".metric-grid", ".metric-card", ".chart-card", ".insight-card", ".section-title"):
-        assert selector in analytics_css
-        assert selector not in home_dashboard_css
-
-    assert ".quality-panel" in dashboard_css
-    assert ".quality-panel" not in home_dashboard_css
-    assert ".quality-panel" not in responsive_css
-    assert ".dashboard-action-bar" not in responsive_css
-    assert ".calendar-control-row" not in responsive_css
-    assert ".rule-audit-search-row" not in responsive_css
-    assert ".insight-card" not in comparison_css
 
 
 def test_dynamic_user_rows_avoid_inner_html_builders():

@@ -1,16 +1,19 @@
 """Route tests for transaction mutation endpoints."""
 
+import csv
+import io
 import json
 from pathlib import Path
 
 from sqlalchemy import text
+from tests.support.database import insert_account, set_owner_setting
 from tests.support.database import insert_transaction as insert_test_transaction
-from tests.support.database import set_owner_setting
-from tests.support.html import assert_asset_reference, assert_has_element, assert_visible_text, parse_html
+from tests.support.html import assert_asset_reference, assert_has_element, assert_link, assert_visible_text, parse_html
 from tests.support.jobs import reject_background_jobs
-from tests.support.web import set_csrf_token
+from tests.support.web import csrf_enabled_client, set_csrf_token
 
 from finance_app.background import runner
+from finance_app.core.constants import ACCOUNT_TYPE_CREDIT_CARD, TRANSACTION_KIND_INCOME
 from finance_app.core.csrf import CSRF_FIELD_NAME
 from finance_app.modules.categories.taxonomy import get_rule_tags_by_rule_id, get_transaction_tag_names
 from finance_app.modules.transactions import service as transactions_service
@@ -24,6 +27,7 @@ from finance_app.modules.transactions.controller import (
     TRANSACTION_AI_RESULT_REFERENCE,
     TRANSACTION_AI_SUGGESTION_REFERENCE,
 )
+from finance_app.modules.transactions.exporter import export_transactions_backup_csv
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -105,6 +109,149 @@ def test_transactions_table_exports_category_method_and_score_separately(owner_c
         },
         text="96%",
     )
+
+
+def test_transactions_backup_export_route_returns_canonical_csv(owner_client, core_conn):
+    """Verify the transaction backup export returns canonical all-transaction CSV details."""
+    paid_from_id = insert_account(core_conn, name="Main Checking")
+    account_id = insert_account(
+        core_conn,
+        name="Rewards Visa",
+        account_type=ACCOUNT_TYPE_CREDIT_CARD,
+        paid_from_account_id=paid_from_id,
+    )
+    insert_test_transaction(
+        core_conn,
+        description="=Refund credit",
+        amount=-42.50,
+        category="UNKNOWN",
+        category_source="manual",
+        category_confidence=1.0,
+        category_metadata='{"audit":"not part of a compact backup"}',
+        needs_review=0,
+        ignored=1,
+        transaction_kind=TRANSACTION_KIND_INCOME,
+        account_id=account_id,
+        tags=["Tax"],
+        tag_source="manual",
+        fingerprint="route-backup-export",
+    )
+
+    response = owner_client.get("/transactions/backup.csv")
+    rows = list(csv.DictReader(io.StringIO(response.get_data(as_text=True))))
+    tag_names = json.loads(rows[0]["tags"])
+
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    assert "finscope-transactions-backup.csv" in response.headers["Content-Disposition"]
+    assert len(rows) == 1
+    assert len(rows[0]) == 20
+    assert not {
+        "backup_schema_version",
+        "transaction_id",
+        "statement_id",
+        "account_id",
+        "merchant_id",
+        "category_id",
+        "category_rule_id",
+        "category_metadata",
+        "category_builtin_key",
+        "created_at",
+        "stored_category",
+        "tag_details",
+        "reimbursement_allocations_as_expense",
+    }.intersection(rows[0])
+    assert rows[0]["account_name"] == "Rewards Visa"
+    assert rows[0]["account_type"] == ACCOUNT_TYPE_CREDIT_CARD
+    assert rows[0]["paid_from_account_name"] == "Main Checking"
+    assert rows[0]["description"] == "'=Refund credit"
+    assert rows[0]["amount"] == "'-42.50"
+    assert rows[0]["category"] == "UNKNOWN"
+    assert rows[0]["category_source"] == "manual"
+    assert rows[0]["category_confidence"] == "1.0"
+    assert rows[0]["needs_review"] == "0"
+    assert rows[0]["ignored"] == "1"
+    assert rows[0]["transaction_kind"] == TRANSACTION_KIND_INCOME
+    assert tag_names == ["Tax"]
+    assert rows[0]["fingerprint"] == "route-backup-export"
+    assert rows[0]["reimbursement_expense_completed"] == "0"
+    assert rows[0]["reimbursement_allocations"] == ""
+
+
+def test_transactions_backup_export_requires_edit_permission(viewer_client):
+    """Verify read-only viewers cannot download the full transaction backup."""
+    response = viewer_client.get("/transactions/backup.csv")
+
+    assert response.status_code == 403
+
+
+def test_transactions_backup_preview_route_shows_duplicate_choice_modal(owner_client, core_conn):
+    """Verify backup preview alerts editors before importing potential duplicates."""
+    insert_test_transaction(
+        core_conn,
+        description="Duplicate backup transaction",
+        amount=18.75,
+        fingerprint="route-backup-preview-duplicate",
+    )
+    csv_text = export_transactions_backup_csv(core_conn)
+
+    response = owner_client.post(
+        "/transactions/backup/preview",
+        data={
+            CSRF_FIELD_NAME: set_csrf_token(owner_client),
+            "next": "/transactions?period=all",
+            "backup_file": (io.BytesIO(csv_text.encode("utf-8")), "backup.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert_link(response, "/transactions/backup.csv", text="Export backup")
+    assert_has_element(
+        response, "button", attrs={"data-bs-target": "#transaction-backup-import-upload-modal"}, text="Import backup"
+    )
+    assert_has_element(
+        response, "form", attrs={"action": "/transactions/backup/preview", "enctype": "multipart/form-data"}
+    )
+    assert_has_element(
+        response,
+        "div",
+        attrs={
+            "id": "transaction-backup-import-preview-modal",
+            "data-auto-show-modal": True,
+        },
+    )
+    assert_visible_text(
+        response,
+        "Backup import preview",
+        "1 potential duplicate transaction found.",
+        "Skip duplicates",
+        "Import all rows",
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={"name": "duplicate_action", "value": "skip_duplicates"},
+        text="Skip duplicates",
+    )
+    assert_has_element(
+        response,
+        "button",
+        attrs={"name": "duplicate_action", "value": "import_all"},
+        text="Import all rows",
+    )
+
+
+def test_transactions_backup_preview_requires_edit_permission(viewer_client):
+    """Verify read-only viewers cannot upload transaction backups for preview."""
+    response = csrf_enabled_client(viewer_client).post(
+        "/transactions/backup/preview",
+        data={"backup_file": (io.BytesIO(b""), "backup.csv")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 403
 
 
 def test_transactions_custom_range_filter_renders_date_fields(owner_client):

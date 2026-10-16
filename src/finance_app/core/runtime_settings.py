@@ -24,6 +24,7 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "ui_language": settings.default_ui_language,
     "llm_confidence_threshold": str(settings.default_llm_confidence_threshold),
     "llm_review_threshold": str(settings.default_llm_review_threshold),
+    "category_review_threshold": str(settings.default_category_review_threshold),
     "verify_threshold": str(settings.default_verify_threshold),
     "transaction_ai_rerun_enabled": "1" if settings.default_transaction_ai_rerun_enabled else "0",
     CONFIRM_AI_TOKEN_USAGE_SETTING_KEY: "1" if settings.default_confirm_ai_token_usage_enabled else "0",
@@ -52,6 +53,7 @@ GENERAL_SETTING_KEYS: tuple[str, ...] = (
 GLOBAL_SETTING_KEYS: tuple[str, ...] = (
     "llm_confidence_threshold",
     "llm_review_threshold",
+    "category_review_threshold",
     "verify_threshold",
     "transaction_ai_rerun_enabled",
     CONFIRM_AI_TOKEN_USAGE_SETTING_KEY,

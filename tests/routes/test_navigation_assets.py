@@ -16,36 +16,6 @@ from tests.support.html import (
 )
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/",
-        "/dashboard",
-        "/reports",
-        "/reports/taxonomy",
-        "/reports/accounts",
-        "/reports/merchants",
-        "/reports/income",
-        "/comparison",
-        "/calendar",
-        "/recurring",
-        "/review",
-        "/transactions",
-        "/rules",
-        "/upload",
-        "/jobs",
-        "/taxonomy",
-        "/settings",
-    ],
-)
-def test_primary_get_routes_render_successfully(owner_client, path):
-    """Verify that primary navigation routes render against an empty database."""
-    response = owner_client.get(path)
-
-    assert response.status_code == 200
-    assert "<html" in response_html(response).lower()
-
-
 def test_base_template_uses_local_hashed_assets(owner_client):
     """Verify that shared browser assets are served locally with content hashes."""
     response = owner_client.get("/")
@@ -70,9 +40,9 @@ def test_base_template_uses_local_hashed_assets(owner_client):
         "/static/js/reports-charts.js",
     ],
 )
-def test_static_javascript_assets_use_browser_valid_mimetype(owner_client, path):
+def test_static_javascript_assets_use_browser_valid_mimetype(presentation_app, path):
     """Verify local scripts are not served as plain text on Windows hosts."""
-    response = owner_client.get(path)
+    response = presentation_app.test_client().get(path)
 
     try:
         assert response.status_code == 200

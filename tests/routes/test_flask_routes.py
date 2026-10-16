@@ -50,6 +50,10 @@ def test_navigation_pages_render_distinct_browser_titles(owner_client):
         "/account": "FinScope - Account",
         "/dashboard": "FinScope - Dashboard",
         "/reports": "FinScope - Reports",
+        "/reports/taxonomy": "FinScope - Reports",
+        "/reports/accounts": "FinScope - Reports",
+        "/reports/merchants": "FinScope - Reports",
+        "/reports/income": "FinScope - Reports",
         "/comparison": "FinScope - Comparison",
         "/calendar": "FinScope - Calendar",
         "/recurring": "FinScope - Recurring",
@@ -131,7 +135,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(owner_clie
     modal_summary = body.split('id="categorize-transaction-', 1)[1].split("</dl>", 1)[0]
 
     assert response.status_code == 200
-    assert_visible_text(response, "How categorized", "All methods", "Pending approval", "Route Visa")
+    assert_visible_text(response, "How categorized", "All methods", "Needs review", "Route Visa")
     assert_has_element(response, "select", attrs={"id": "transaction-account", "name": "account_id"})
     assert_has_element(response, "option", attrs={"value": str(account_id), "selected": True}, text="Route Visa")
     assert_not_visible_text(response, "Ready to approve", "Unverified")
@@ -159,7 +163,7 @@ def test_transactions_route_renders_category_source_badges_and_filter(owner_clie
     assert modal_summary.index("<dt>Kind</dt>") < modal_summary.index("<dt>Account</dt>")
     assert modal_summary.index("<dt>Account</dt>") < modal_summary.index("<dt>Status</dt>")
     assert "Route Visa" in modal_summary
-    assert "Pending approval" in modal_summary
+    assert "Needs review" in modal_summary
     assert 'class="transaction-date text-nowrap"' in body
     assert "transaction-action-menu" in body
     assert "Edit category" in body
@@ -228,52 +232,6 @@ def test_transactions_route_escapes_imported_merchant_keys(owner_client, core_co
     assert "<IMG SRC=X ONERROR=ALERT 1>" not in body
     assert "<IMG SRC=X ONERROR=ALERT 1 >" not in body
     assert "<img src=x onerror=alert(1)>" not in body
-
-
-def test_dashboard_route_does_not_render_assignment_tooltips(owner_client, core_conn):
-    """Verify category assignment tooltips stay out of dashboard filters."""
-    core_conn.execute(text("""
-        INSERT INTO transactions (tx_date, description, amount, category, fingerprint)
-        VALUES ('2026-01-02', 'Dashboard Store', 12.34, 'Food', 'route-dashboard-tooltip')
-        """))
-    core_conn.commit()
-
-    response = owner_client.get("/dashboard?period=all")
-    tag_response = owner_client.get("/dashboard?period=all&tags=Tax")
-    untagged_response = owner_client.get("/dashboard?period=all&quick_view=all")
-
-    assert response.status_code == 200
-    assert tag_response.status_code == 200
-    assert untagged_response.status_code == 200
-    assert_not_markup(response, "data-category-description-select")
-    assert_no_element(response, None, attrs={"data-select-all-label": "Select all categories"})
-    assert_no_element(response, None, attrs={"data-select-all-label": "Select all tags"})
-    assert_visible_text(
-        response,
-        "What happened?",
-        "Analysis readiness",
-        "Trend preview",
-        "Top drivers",
-        "Explore reports",
-        "Overview",
-        "Income and credits",
-        "Categories and tags",
-        "Open report",
-    )
-    assert_not_visible_text(
-        tag_response,
-        "Spending by tag",
-        "Tag detail",
-        "Tagged spending can count the same transaction more than once.",
-        "Show untagged",
-    )
-    assert_not_visible_text(response, "Choose filters")
-    assert_markup(response, 'name="merchant_query"', 'placeholder="Search merchant"', "data-merchant-autocomplete")
-    assert_not_markup(response, "data-dashboard-custom-categories", "data-dashboard-custom-tags")
-    assert_markup(response, 'href="/reports?period=all&amp;quick_view=categorized"')
-    assert_markup(response, 'id="dashboard-chart-data"')
-    assert_not_markup(tag_response, '"categoryLabels"', "data-sortable-table", "data-table-export-scope")
-    assert_not_visible_text(untagged_response, "Hide untagged")
 
 
 def test_category_filters_offer_analysis_category_preset(owner_client, core_conn):

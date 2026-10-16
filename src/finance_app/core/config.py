@@ -53,6 +53,7 @@ class AppSettings:
     default_rule_audit_transaction_limit: int
     default_llm_confidence_threshold: float
     default_llm_review_threshold: float
+    default_category_review_threshold: float
     default_verify_threshold: float
     default_transaction_ai_rerun_enabled: bool
     default_confirm_ai_token_usage_enabled: bool
@@ -230,6 +231,13 @@ def load_settings(config_path: str | Path = CONFIG_PATH) -> AppSettings:
                 parser.get("setting_defaults", "llm_review_threshold", fallback="0.60"),
             ),
             0.60,
+        ),
+        default_category_review_threshold=parse_probability(
+            env(
+                "FINANCE_DEFAULT_CATEGORY_REVIEW_THRESHOLD",
+                parser.get("setting_defaults", "category_review_threshold", fallback="0.85"),
+            ),
+            0.85,
         ),
         default_verify_threshold=parse_probability(
             env(

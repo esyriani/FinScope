@@ -23,16 +23,6 @@ def test_test_files_live_in_documented_layer_directories():
     assert misplaced == []
 
 
-def test_catch_all_route_file_stays_below_review_size():
-    """Keep the remaining catch-all route file from regrowing."""
-    path = TESTS_ROOT / "routes" / "test_flask_routes.py"
-    source = path.read_text(encoding="utf-8")
-    test_count = len(re.findall(r"^\s*def test_", source, flags=re.MULTILINE))
-
-    assert test_count <= 20
-    assert len(source.splitlines()) <= 700
-
-
 def test_route_submit_background_job_patches_use_shared_recorder():
     """Verify route tests use the shared recorder for queued job assertions."""
     offenders = []

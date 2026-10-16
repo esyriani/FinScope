@@ -11,7 +11,6 @@ from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.runtime_settings import (
     CONFIRM_AI_TOKEN_USAGE_SETTING_KEY,
-    EDITABLE_SETTING_KEYS,
     GENERAL_SETTING_KEYS,
     GLOBAL_SETTING_KEYS,
     SETTINGS_DEFAULTS,
@@ -32,15 +31,6 @@ def get_all_settings(conn: Any, user_id: object | None = None) -> dict[str, str]
     if owner_user_id is not None:
         apply_setting_values(values, safe_user_settings(conn, owner_user_id), GLOBAL_SETTING_KEYS)
 
-    return values
-
-
-def get_global_settings(conn: Any) -> dict[str, str]:
-    """Return owner-row settings, falling back to defaults."""
-    values = dict(SETTINGS_DEFAULTS)
-    owner_user_id = resolve_owner_settings_user_id(conn)
-    if owner_user_id is not None:
-        apply_setting_values(values, safe_user_settings(conn, owner_user_id), EDITABLE_SETTING_KEYS)
     return values
 
 
@@ -200,15 +190,3 @@ def resolve_owner_settings_user_id(conn: Any) -> int | None:
     if owner is None:
         return None
     return int(owner["id"])
-
-
-def current_user_id(explicit_user_id: object | None = None) -> int | None:
-    """Return an explicit or authenticated user id without owner fallback."""
-    if explicit_user_id is not None:
-        try:
-            return int(str(explicit_user_id))
-        except (TypeError, ValueError):
-            return None
-    if not has_request_context() or not current_user.is_authenticated:
-        return None
-    return int(current_user.id)

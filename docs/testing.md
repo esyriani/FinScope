@@ -151,6 +151,21 @@ Coverage and warning gates:
 
 Warnings are always test failures. Run coverage deliberately when needed:
 
+Coverage is scoped to production Python (`finance_app`) in `pyproject.toml`;
+test files must not inflate the result. The commands below retain the existing
+93 percent **line coverage** gate. For a separate branch diagnostic, run:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest --cov=finance_app --cov-branch --cov-report=term-missing
+```
+
+With `--cov-branch`, the `Cover` column combines statements and branch exits;
+it is not directly comparable to the line-only gate. Prioritize uncovered
+financial, authorization, privacy, rollback, and job-lifecycle decisions rather
+than chasing a uniform percentage in presenters or defensive display fallbacks.
+Python coverage does not measure browser JavaScript: frontend runtime tests
+execute DOM behavior, formatting and escaping separately through Vitest.
+
 <details open>
 <summary>Windows PowerShell</summary>
 
@@ -353,6 +368,30 @@ python tools/cosmic_ray_summary.py runtime/mutation/rules-engine-dump.jsonl
 ```
 
 </details>
+
+### Session feature mutation profiles
+
+The focused profiles `transaction-backup`, `transaction-approval`, and
+`dashboard-scope` cover backup CSV restoration and duplicate handling,
+approval state and confidence thresholds, and Dashboard classification filters.
+Their configurations are under `tests/mutation/cosmic-ray-<profile>.toml` and
+use two pytest-xdist workers. Baseline tests can be run without mutation:
+
+```powershell
+.\.venv\Scripts\python.exe -B tools/cosmic_ray_profile_tests.py transaction-backup --workers 2
+.\.venv\Scripts\python.exe -B tools/cosmic_ray_profile_tests.py transaction-approval --workers 2
+.\.venv\Scripts\python.exe -B tools/cosmic_ray_profile_tests.py dashboard-scope --workers 2
+```
+
+Run Cosmic Ray only in an isolated source copy with the development virtualenv
+on `PATH`, not in the checkout serving a running FinScope instance. Include
+uncommitted source changes in that copy, but exclude runtime data, local
+configuration, secrets, and `.git`. Store session databases, selected-mutant
+manifests, diffs, and outputs under the ignored `runtime/mutation/` directory.
+For bounded diagnostic runs, report the selection method and number of mutants
+actually executed; do not present a sampled score as exhaustive feature coverage.
+Review surviving mutants for real assertion gaps, equivalent behavior, and
+out-of-scope code before interpreting the results.
 
 ## Code quality checks
 

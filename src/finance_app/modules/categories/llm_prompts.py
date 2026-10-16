@@ -19,7 +19,6 @@ from finance_app.core.constants import (
     CATEGORY_RULE_SOURCE_MANUAL,
 )
 from finance_app.core.money import MoneyValue, money_to_decimal
-from finance_app.modules.categories.decision import HIGH_CONFIDENCE_THRESHOLD
 from finance_app.modules.categories.llm_security import (
     LLM_PROMPT_SECURITY_VERSION,
     LlmTextSecurityReview,
@@ -57,7 +56,7 @@ def build_llm_system_prompt(
         resource.
     """
     if verify_threshold is None:
-        verify_threshold = HIGH_CONFIDENCE_THRESHOLD
+        verify_threshold = settings.default_verify_threshold
     if review_threshold is None:
         review_threshold = settings.default_llm_review_threshold
     del category_rows, tag_rows

@@ -24,6 +24,7 @@ It is built with Flask, SQLAlchemy Core, SQLite or MySQL, Bootstrap, ECharts, Ji
 ## Key features
 
 - Import CSV statements into SQLite or MySQL storage.
+- Export compact transaction backup CSVs and restore accounts, transaction details, and reimbursement links with duplicate review.
 - Deduplicate transactions with account-aware fingerprints.
 - Categorize transactions with rules, historical matches, manual edits, optional AI assistance, and persisted decision evidence.
 - Review grouped unknown merchants and save reusable categorization rules.

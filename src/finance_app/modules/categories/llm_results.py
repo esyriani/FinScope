@@ -9,9 +9,9 @@ import re
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
+from finance_app.core.config import settings
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.modules.categories.decision import (
-    MEDIUM_CONFIDENCE_THRESHOLD,
     FinalCategoryDecision,
     apply_review_policy,
     combine_confidence,
@@ -74,6 +74,8 @@ def llm_final_confidence(
     category: str,
     confidence: object,
     result: Mapping[str, Any],
+    review_threshold: float,
+    verify_threshold: float,
 ) -> float | None:
     """Return LLM confidence adjusted by rule and retrieval agreement."""
     agreement_confidences: list[float] = []
@@ -81,8 +83,12 @@ def llm_final_confidence(
     rule_evidence = transaction.get("rule_evidence") or {}
     historical_evidence = transaction.get("historical_evidence") or {}
 
-    collect_evidence_agreement(rule_evidence, category, agreement_confidences, disagreement_confidences)
-    collect_evidence_agreement(historical_evidence, category, agreement_confidences, disagreement_confidences)
+    collect_evidence_agreement(
+        rule_evidence, category, agreement_confidences, disagreement_confidences, review_threshold
+    )
+    collect_evidence_agreement(
+        historical_evidence, category, agreement_confidences, disagreement_confidences, review_threshold
+    )
 
     return combine_confidence(
         confidence,
@@ -92,6 +98,8 @@ def llm_final_confidence(
             parse_bool(result.get("supported_by_similar_transactions"))
             and historical_evidence.get("category") == category
         ),
+        review_threshold=review_threshold,
+        verify_threshold=verify_threshold,
     )
 
 
@@ -100,6 +108,7 @@ def collect_evidence_agreement(
     category: str,
     agreement_confidences: list[float],
     disagreement_confidences: list[float],
+    review_threshold: float = settings.default_category_review_threshold,
 ) -> None:
     """Append evidence confidence to agreement or disagreement buckets."""
     evidence_category = evidence.get("category")
@@ -108,7 +117,7 @@ def collect_evidence_agreement(
         return
     if evidence_category == category:
         agreement_confidences.append(evidence_confidence)
-    elif evidence_confidence >= MEDIUM_CONFIDENCE_THRESHOLD:
+    elif evidence_confidence >= review_threshold:
         disagreement_confidences.append(evidence_confidence)
 
 

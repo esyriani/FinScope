@@ -4,14 +4,13 @@ from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from finance_app.core.config import settings
 from finance_app.core.constants import UNKNOWN_CATEGORY
 from finance_app.core.money import optional_money_to_float, rounded_money_decimal
 from finance_app.database.engine import db_core_transaction
 from finance_app.modules.categories.decision import (
     DECISION_SOURCE_RULE,
     DECISION_SOURCE_UNKNOWN,
-    HIGH_CONFIDENCE_THRESHOLD,
-    MEDIUM_CONFIDENCE_THRESHOLD,
     apply_review_policy,
     combine_confidence,
     evidence_decision_source,
@@ -37,7 +36,7 @@ from finance_app.modules.categories.sources import (
     category_assignment,
 )
 from finance_app.modules.merchants.normalization import normalize_merchant
-from finance_app.modules.settings.runtime import get_unknown_category
+from finance_app.modules.settings.runtime import get_float_setting, get_unknown_category
 
 
 @dataclass(frozen=True)
@@ -90,6 +89,12 @@ def categorize_transactions_from_evidence(
     category_options = get_category_options(conn)
     rules = get_category_rules(conn)
     merchant_categorizations: dict[object, TransactionCategoryState] = {}
+    review_threshold = get_float_setting(
+        conn, "category_review_threshold", settings.default_category_review_threshold, minimum=0, maximum=1
+    )
+    verify_threshold = get_float_setting(
+        conn, "verify_threshold", settings.default_verify_threshold, minimum=0, maximum=1
+    )
 
     for tx in transactions:
         if tx.get("amount") is not None:
@@ -116,6 +121,8 @@ def categorize_transactions_from_evidence(
             category_options,
             unknown_category,
             prefer_llm_fallback=prefer_llm_fallback,
+            review_threshold=review_threshold,
+            verify_threshold=verify_threshold,
         )
         state.apply_to(tx)
 
@@ -149,6 +156,8 @@ def category_state_from_evidence(
     category_options: Iterable[str],
     unknown_category: str,
     prefer_llm_fallback: bool = True,
+    review_threshold: float = settings.default_category_review_threshold,
+    verify_threshold: float = settings.default_verify_threshold,
 ) -> TransactionCategoryState:
     """Return the category state for one transaction from rule/history evidence."""
     rule_category = (
@@ -158,12 +167,10 @@ def category_state_from_evidence(
     if scored_rule is not None:
         rule_evidence = rule_evidence_payload(scored_rule, rule_category)
         transaction["rule_evidence"] = rule_evidence
-    if (
-        scored_rule is not None
-        and rule_category != unknown_category
-        and scored_rule.confidence >= HIGH_CONFIDENCE_THRESHOLD
-    ):
-        return rule_category_state(conn, scored_rule, rule_category, unknown_category, needs_review=False)
+    if scored_rule is not None and rule_category != unknown_category and scored_rule.confidence >= verify_threshold:
+        return rule_category_state(
+            conn, scored_rule, rule_category, unknown_category, review_threshold, verify_threshold
+        )
 
     historical = retrieve_historical_decision(conn, transaction, unknown_category)
     historical_evidence = historical_evidence_payload(historical)
@@ -171,7 +178,7 @@ def category_state_from_evidence(
     history_category = (
         normalize_category(historical.category, category_options) if historical.category else unknown_category
     )
-    if historical.is_medium_confidence and history_category != unknown_category:
+    if historical.confidence >= review_threshold and history_category != unknown_category:
         confidence: float | None = historical.confidence
         rule_id = None
         agreement_confidences: tuple[object, ...] = ()
@@ -185,6 +192,8 @@ def category_state_from_evidence(
             historical.confidence,
             agreement_confidences=agreement_confidences,
             disagreement_confidences=disagreement_confidences,
+            review_threshold=review_threshold,
+            verify_threshold=verify_threshold,
         )
 
         return historical_category_state(
@@ -194,6 +203,8 @@ def category_state_from_evidence(
             unknown_category,
             confidence=confidence,
             rule_id=rule_id,
+            review_threshold=review_threshold,
+            verify_threshold=verify_threshold,
             metadata=historical_category_metadata(
                 historical,
                 history_category,
@@ -202,14 +213,12 @@ def category_state_from_evidence(
                 unknown_category,
                 scored_rule=scored_rule,
                 rule_category=rule_category,
+                review_threshold=review_threshold,
+                verify_threshold=verify_threshold,
             ),
         )
 
-    if (
-        scored_rule is not None
-        and rule_category != unknown_category
-        and scored_rule.confidence >= MEDIUM_CONFIDENCE_THRESHOLD
-    ):
+    if scored_rule is not None and rule_category != unknown_category and scored_rule.confidence >= review_threshold:
         if prefer_llm_fallback:
             return unknown_category_state(
                 conn,
@@ -221,7 +230,9 @@ def category_state_from_evidence(
                     historical_evidence=historical_evidence,
                 ),
             )
-        return rule_category_state(conn, scored_rule, rule_category, unknown_category, needs_review=True)
+        return rule_category_state(
+            conn, scored_rule, rule_category, unknown_category, review_threshold, verify_threshold
+        )
 
     return unknown_category_state(
         conn,
@@ -240,7 +251,8 @@ def rule_category_state(
     scored_rule: Any,
     category: str,
     unknown_category: str,
-    needs_review: bool,
+    review_threshold: float,
+    verify_threshold: float,
 ) -> TransactionCategoryState:
     """Build a transaction category state from scored rule evidence."""
     decision = apply_review_policy(
@@ -248,14 +260,9 @@ def rule_category_state(
         scored_rule.tags,
         scored_rule.confidence,
         unknown_category,
+        review_threshold=review_threshold,
+        verify_threshold=verify_threshold,
     )
-    if needs_review and decision.needs_review == 0:
-        decision = apply_review_policy(
-            category,
-            scored_rule.tags,
-            min(scored_rule.confidence, HIGH_CONFIDENCE_THRESHOLD - 0.01),
-            unknown_category,
-        )
     return TransactionCategoryState(
         category=decision.category,
         category_id=resolve_category_id(conn, decision.category),
@@ -280,9 +287,11 @@ def historical_category_state(
     confidence: object,
     rule_id: int | None = None,
     metadata: Mapping[str, Any] | None = None,
+    review_threshold: float = settings.default_category_review_threshold,
+    verify_threshold: float = settings.default_verify_threshold,
 ) -> TransactionCategoryState:
     """Build a transaction category state from historical transaction evidence."""
-    decision = apply_review_policy(category, tags, confidence, unknown_category)
+    decision = apply_review_policy(category, tags, confidence, unknown_category, review_threshold, verify_threshold)
     return TransactionCategoryState(
         category=decision.category,
         category_id=resolve_category_id(conn, decision.category),
@@ -376,9 +385,11 @@ def historical_category_metadata(
     unknown_category: str,
     scored_rule: Any = None,
     rule_category: str | None = None,
+    review_threshold: float = settings.default_category_review_threshold,
+    verify_threshold: float = settings.default_verify_threshold,
 ) -> dict[str, Any]:
     """Return persisted audit metadata for a historical categorization."""
-    decision = apply_review_policy(category, tags, confidence, unknown_category)
+    decision = apply_review_policy(category, tags, confidence, unknown_category, review_threshold, verify_threshold)
     metadata = {
         "decision_source": evidence_decision_source(
             rule=scored_rule is not None,

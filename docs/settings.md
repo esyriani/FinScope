@@ -35,8 +35,11 @@ Owners can edit Categorization settings. Optional AI behavior still requires an 
 | Review AI usage | On or off | When on, AI actions show an estimated AI usage summary and ask before sending a request. When off, statement imports can automatically queue AI categorization for remaining unknown rows. |
 | AI acceptance threshold | Number from `0` to `1` | Minimum confidence required before AI can create an automatic rule for a no-review result. Security-flagged AI results stay review-only and never create automatic rules. |
 | AI review threshold | Number from `0` to `1` | Minimum confidence required to keep the best-fit AI category as a review item instead of leaving the transaction as `UNKNOWN`. |
-| Verify threshold | Number from `0` to `1` | Accepted AI categories below this confidence stay marked for review. |
+| Rule and history review threshold | Number from `0` to `1`; default `0.85` | Minimum confidence for retaining a rule or similarity suggestion instead of `UNKNOWN`. |
+| Automatic confidence threshold | Number from `0` to `1`; default `0.95` | Minimum confidence for accepting a rule, similarity, or AI category without review. Security or validation concerns can still require review. |
 | OpenAI model | Model name containing letters, numbers, `.`, `_`, `:`, `/`, `+`, or `-` | Sets the categorization model. The Validate button checks whether the configured API key can see the model through the OpenAI models API. |
+
+The rule/history and AI review thresholds must not exceed the automatic confidence threshold. Thresholds apply when categorizing or explicitly recategorizing transactions; saving Settings does not rewrite existing classifications or clear an explicit Mark for review action. Transaction badges and the Review queue share the persisted review requirement, with human confirmation shown as Approved.
 
 ## Recurrence detection
 

@@ -8,6 +8,7 @@ database history.
 Common processing activity includes:
 
 - statement import
+- transaction backup import
 - AI categorization follow-up
 - applying all rules
 - review-group operations
@@ -16,6 +17,17 @@ Common processing activity includes:
 Statement imports, rules, and review operations use the main background queue.
 AI categorization uses a separate AI queue so model timeouts do not block
 future imports or other local work.
+
+Transaction backup imports run on the main queue after duplicate confirmation
+on Transactions, unless Skip duplicates leaves no transactions to import; that
+case returns without creating a processing item or writing any data.
+Queued imports restore ledger rows, account metadata, tags, and
+reimbursement links in one write transaction. Cancellation and validation
+failures roll back the restore. Progress logs contain counts and processing
+state, rather than uploaded CSV text or transaction details. These imports do
+not register an undo handler. After a restart, upload the backup again and
+review duplicates; the existing startup repair marks interrupted processing
+history as failed.
 
 ## State lifecycle
 

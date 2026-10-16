@@ -67,9 +67,9 @@ def render_pagination(app, page):
         )
 
 
-def test_pagination_macro_marks_current_page_and_disabled_previous(app):
+def test_pagination_macro_marks_current_page_and_disabled_previous(presentation_app):
     """Verify first-page pagination exposes current and disabled states."""
-    document = parse_html(render_pagination(app, 1))
+    document = parse_html(render_pagination(presentation_app, 1))
 
     assert document.has_element("nav", attrs={"aria-label": "Item pages"})
     assert document.has_element(
@@ -90,9 +90,9 @@ def test_pagination_macro_marks_current_page_and_disabled_previous(app):
     )
 
 
-def test_pagination_macro_disables_next_without_invalid_href(app):
+def test_pagination_macro_disables_next_without_invalid_href(presentation_app):
     """Verify last-page pagination disables Next without linking past the end."""
-    document = parse_html(render_pagination(app, 3))
+    document = parse_html(render_pagination(presentation_app, 3))
 
     assert document.has_element(
         "a",

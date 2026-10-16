@@ -246,7 +246,7 @@ For large histories, the `rule_audit_transaction_limit` setting caps the newest 
 Before using AI, FinScope retrieves similar previously categorized transactions from the local database.
 Historical scoring considers merchant similarity, normalized descriptions, amount similarity, account matching, transaction direction, recency, and manually reviewed status.
 
-High-confidence matches require strong agreement across similar transactions before they are applied automatically. Medium-confidence matches remain reviewable, and ambiguous or contradictory historical evidence is passed to AI as context instead of being finalized alone.
+High-confidence matches require strong agreement across similar transactions before they are applied automatically. The owner-configured `category_review_threshold` keeps useful rule/history suggestions, and `verify_threshold` controls automatic acceptance. Medium-confidence matches remain reviewable, and ambiguous or contradictory historical evidence is passed to AI as context instead of being finalized alone. An explicit Mark for review action clears human confirmation and reduces that transaction's authority in historical evidence without changing its category or tags.
 
 ## AI categorization
 
@@ -264,7 +264,7 @@ Returned results are validated conservatively. Invalid JSON, invalid category ID
 AI uses three configurable thresholds with separate responsibilities:
 
 1. `llm_review_threshold` keeps a best-fit AI category as a review-required suggestion instead of falling back to `UNKNOWN`.
-2. `verify_threshold` controls when an AI category can clear review automatically.
+2. `verify_threshold` controls when rule, historical, and AI categories can clear review automatically.
 3. `llm_confidence_threshold` controls when a no-review AI result can create a reusable automatic rule. Security-flagged AI results never create automatic rules, even when confidence is high.
 
 AI categorization is operationally separate from statement import. Imports apply

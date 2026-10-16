@@ -8,15 +8,20 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 import pytest  # noqa: E402
+from flask import Flask  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import finance_app as app_package  # noqa: E402
 from finance_app.core import config as config_module  # noqa: E402
-from finance_app.core.constants import USER_ROLE_EDITOR, USER_ROLE_VIEWER  # noqa: E402
+from finance_app.core.assets import register_asset_helpers, register_static_asset_mimetypes  # noqa: E402
+from finance_app.core.constants import STATIC_DIR, TEMPLATE_DIR, USER_ROLE_EDITOR, USER_ROLE_VIEWER  # noqa: E402
+from finance_app.core.filters import register_filters  # noqa: E402
+from finance_app.core.i18n import gettext  # noqa: E402
 from finance_app.database import connection as connection_module  # noqa: E402
 from finance_app.database import engine as engine_module  # noqa: E402
+from finance_app.modules import register_blueprints  # noqa: E402
 from finance_app.modules.auth import repository as auth_repository  # noqa: E402
 from finance_app.modules.auth.service import bootstrap_owner, hash_password, utc_now  # noqa: E402
 from tests.support.database import TestDataFactory  # noqa: E402
@@ -36,6 +41,7 @@ OPTIONAL_CAPABILITY_MARKERS = {
 DB_FIXTURES = {"core_conn", "data_factory"}
 FLASK_FIXTURES = {
     "app",
+    "presentation_app",
     "owner_client",
     "editor_client",
     "viewer_client",
@@ -187,6 +193,19 @@ def block_network_calls(monkeypatch, request):
         return
 
     install_network_guard(monkeypatch)
+
+
+@pytest.fixture
+def presentation_app():
+    """Provide real routes, Jinja filters and templates without database or auth startup."""
+    register_static_asset_mimetypes()
+    application = Flask("finance_app", template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
+    application.config.update(TESTING=True, SECRET_KEY="presentation-test-secret")
+    register_blueprints(application)
+    register_filters(application)
+    register_asset_helpers(application)
+    application.jinja_env.globals["_"] = gettext
+    return application
 
 
 @pytest.fixture

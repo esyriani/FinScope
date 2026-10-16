@@ -62,10 +62,9 @@ from finance_app.modules.transactions.constants import (
     IGNORED_FILTER_ACTIVE,
     IGNORED_FILTER_IGNORED,
     IGNORED_FILTERS,
+    REVIEW_FILTER_AUTOMATIC,
     REVIEW_FILTER_NEEDS_REVIEW,
-    REVIEW_FILTER_PENDING_APPROVAL,
-    REVIEW_FILTER_PRE_APPROVED,
-    REVIEW_FILTER_VERIFIED,
+    REVIEW_FILTER_REVIEWED,
     REVIEW_FILTERS,
     TRANSACTION_SORT_ACCOUNT,
     TRANSACTION_SORT_AMOUNT,
@@ -76,10 +75,9 @@ from finance_app.modules.transactions.constants import (
     TRANSACTION_SORT_REVIEW,
 )
 from finance_app.modules.transactions.status import (
-    TRANSACTION_STATUS_APPROVED,
+    TRANSACTION_STATUS_AUTOMATIC,
     TRANSACTION_STATUS_NEEDS_REVIEW,
-    TRANSACTION_STATUS_PENDING_APPROVAL,
-    TRANSACTION_STATUS_PRE_APPROVED,
+    TRANSACTION_STATUS_REVIEWED,
     transaction_status_expression,
     transaction_status_rank_expression,
 )
@@ -221,12 +219,10 @@ def build_transaction_core_filters(
 
     if filters["review"] == REVIEW_FILTER_NEEDS_REVIEW:
         core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_NEEDS_REVIEW)
-    elif filters["review"] == REVIEW_FILTER_PENDING_APPROVAL:
-        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_PENDING_APPROVAL)
-    elif filters["review"] == REVIEW_FILTER_PRE_APPROVED:
-        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_PRE_APPROVED)
-    elif filters["review"] == REVIEW_FILTER_VERIFIED:
-        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_APPROVED)
+    elif filters["review"] == REVIEW_FILTER_AUTOMATIC:
+        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_AUTOMATIC)
+    elif filters["review"] == REVIEW_FILTER_REVIEWED:
+        core_filters.add(transaction_status_expression(unknown_category) == TRANSACTION_STATUS_REVIEWED)
 
     if filters["category_source"] == CATEGORY_SOURCE_FILTER_MANUAL_REVIEWED:
         core_filters.add(transactions_table.c.reviewed_at.is_not(None))
@@ -279,9 +275,8 @@ def search_condition(search: object, unknown_category: str) -> Any | None:
     review_status = transaction_status_expression(unknown_category)
     review_state = case(
         (review_status == TRANSACTION_STATUS_NEEDS_REVIEW, "needs review"),
-        (review_status == TRANSACTION_STATUS_PENDING_APPROVAL, "pending approval"),
-        (review_status == TRANSACTION_STATUS_PRE_APPROVED, "pre-approved"),
-        (review_status == TRANSACTION_STATUS_APPROVED, "approved"),
+        (review_status == TRANSACTION_STATUS_AUTOMATIC, "automatic"),
+        (review_status == TRANSACTION_STATUS_REVIEWED, "approved"),
         else_="ignored",
     )
     ignored_state = case(

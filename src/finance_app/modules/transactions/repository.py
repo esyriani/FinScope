@@ -236,6 +236,19 @@ def mark_transactions_verified(conn: Any, transaction_ids: Iterable[object], rev
     return cursor.rowcount
 
 
+def mark_transactions_for_review(conn: Any, transaction_ids: Iterable[object]) -> int:
+    """Reopen active transactions without altering classification, tags, or provenance."""
+    ids = normalized_transaction_ids(transaction_ids)
+    if not ids:
+        return 0
+    result = conn.execute(
+        update(transactions_table)
+        .where(transactions_table.c.id.in_(ids), transactions_table.c.ignored == 0)
+        .values(needs_review=1, reviewed_at=None)
+    )
+    return result.rowcount
+
+
 def set_transaction_ignored(conn: Any, transaction_id: int, ignored: object) -> bool:
     """Set transaction ignored."""
     ignored = 1 if ignored else 0

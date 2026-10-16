@@ -28,6 +28,34 @@ from finance_app.modules.categories.repository import rename_category, resolve_c
 from finance_app.modules.upload import ai_workflow as upload_ai_workflow
 from finance_app.modules.upload import workflow as upload_workflow
 from finance_app.modules.upload.repository import new_statement_import_token, reset_statement_import_state
+from finance_app.modules.upload.service import account_upload_metadata_conflicts
+
+
+def test_account_upload_metadata_conflicts_preserve_existing_funding(core_conn, data_factory):
+    """Compare normalized existing account metadata without creating or changing accounts."""
+    funding = data_factory.account(name="Main checking")
+    data_factory.account(name="Other checking")
+    data_factory.account(name="Travel card", account_type="credit_card", paid_from_account_id=funding)
+    data_factory.account(name="Unfunded card", account_type="credit_card")
+    before = core_conn.execute(select(accounts_table).order_by(accounts_table.c.id)).mappings().all()
+
+    for name, account_type, paid_from, expected in [
+        ("New card", "credit_card", "Main checking", False),
+        ("Main checking", "checking", "", False),
+        ("Travel card", "checking", "", True),
+        ("Travel card", "credit_card", "", False),
+        (" travel CARD ", "credit_card", " MAIN checking ", False),
+        ("Travel card", "credit_card", "Other checking", True),
+        ("Travel card", "credit_card", "Missing checking", True),
+        ("Travel card", "credit_card", " TRAVEL card ", True),
+        ("Unfunded card", "credit_card", " unfunded CARD ", False),
+    ]:
+        assert account_upload_metadata_conflicts(core_conn, name, account_type, paid_from) is expected, (
+            name,
+            paid_from,
+        )
+
+    assert core_conn.execute(select(accounts_table).order_by(accounts_table.c.id)).mappings().all() == before
 
 
 def create_statement(conn, filename="workflow.csv", account_name="Personal"):

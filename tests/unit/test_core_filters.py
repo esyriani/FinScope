@@ -41,9 +41,9 @@ def test_format_datetime_falls_back_to_utc_for_invalid_timezone():
     )
 
 
-def test_format_percent_uses_language_specific_spacing(app):
+def test_format_percent_uses_language_specific_spacing(presentation_app):
     """Format percentages with locale decimal and percent spacing."""
-    with app.test_request_context():
+    with presentation_app.test_request_context():
         assert format_percent("12.34", signed=True) == "+12.3%"
         g.ui_language = "fr"
         assert format_percent("12.34", signed=True) == "+12,3 %"

@@ -70,11 +70,18 @@ from finance_app.modules.transactions.ai_presenter import (
     missing_transaction_apply_result,
     parse_ai_metadata,
 )
+from finance_app.modules.transactions.backup_import import (
+    TransactionBackupImportPreview,
+)
+from finance_app.modules.transactions.backup_import import (
+    preview_transactions_backup_import as build_transactions_backup_import_preview,
+)
 from finance_app.modules.transactions.constants import (
     CATEGORY_SOURCE_FILTER_OPTIONS,
     IGNORED_FILTER_OPTIONS,
     REVIEW_FILTER_OPTIONS,
 )
+from finance_app.modules.transactions.exporter import export_transactions_backup_csv as build_transactions_backup_csv
 from finance_app.modules.transactions.filters import (
     build_transaction_core_filters,
     parse_transaction_filters,
@@ -94,6 +101,7 @@ from finance_app.modules.transactions.repository import (
     get_transaction_tag_ids,
     get_transactions_for_recategorization,
     mark_transaction_verified,
+    mark_transactions_for_review,
     mark_transactions_verified,
     normalized_transaction_ids,
     set_transaction_ignored,
@@ -201,6 +209,18 @@ def build_transactions_context(args: Any) -> dict[str, Any]:
         "run_transaction_ai_enabled": run_transaction_ai_enabled,
         "confirm_ai_token_usage_enabled": confirm_ai_token_usage,
     }
+
+
+def export_transactions_backup_csv() -> str:
+    """Return a canonical CSV backup containing every persisted transaction."""
+    with db_core_transaction() as conn:
+        return build_transactions_backup_csv(conn)
+
+
+def preview_transactions_backup_import(csv_text: str) -> TransactionBackupImportPreview:
+    """Return a read-only transaction backup import preview."""
+    with db_core_transaction() as conn:
+        return build_transactions_backup_import_preview(conn, csv_text)
 
 
 def build_transaction_filter_summary_items(
@@ -326,13 +346,19 @@ def set_transaction_ignored_by_id(transaction_id: int, ignored: int) -> bool:
 
 
 def approve_selected_transactions(transaction_ids: Iterable[object] | None) -> int:
-    """Approve selected transactions and return the number of changed rows."""
+    """Mark selected transactions reviewed and return the number of changed rows."""
     ids = normalized_transaction_ids(transaction_ids)
     if not ids:
         return 0
 
     with db_core_transaction() as conn:
         return mark_transactions_verified(conn, ids)
+
+
+def reopen_selected_transactions_for_review(transaction_ids: Iterable[object] | None) -> int:
+    """Clear human review and explicitly reopen active selected transactions."""
+    with db_core_transaction() as conn:
+        return mark_transactions_for_review(conn, normalized_transaction_ids(transaction_ids))
 
 
 def ignore_selected_transactions(transaction_ids: Iterable[object] | None) -> int:

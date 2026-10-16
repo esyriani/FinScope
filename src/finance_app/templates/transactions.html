@@ -53,6 +53,10 @@
 {% set selected_date_to = selected_date_to | default("") %}
 {% set run_transaction_ai_enabled = run_transaction_ai_enabled | default(false) %}
 {% set transaction_ai_result = transaction_ai_result | default(none) %}
+{% set transaction_backup_import_preview = transaction_backup_import_preview | default(none) %}
+{% set transaction_backup_import_reference = transaction_backup_import_reference | default("") %}
+{% set transaction_backup_import_next_url = transaction_backup_import_next_url | default(request.full_path) %}
+{% set transaction_backup_import_job_id = transaction_backup_import_job_id | default(none) %}
 {% set all_transaction_ids = all_transaction_ids | default([]) %}
 {% set can_edit_transactions = current_user_can('edit_transactions') %}
 {% set transaction_filter_summary = filter_summary(transaction_filter_summary_items | default([])) %}
@@ -77,7 +81,22 @@
         </p>
     </div>
     {% if can_edit_transactions %}
-    <a class="btn btn-outline-primary" href="{{ url_for('review.review') }}"><i class="bi bi-check2-square" aria-hidden="true"></i>{{ _("Review") }}</a>
+    <div class="page-actions">
+        <a class="btn btn-outline-secondary" href="{{ url_for('transactions.export_transactions_backup') }}">
+            <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>{{ _("Export backup") }}
+        </a>
+        <button
+            class="btn btn-outline-secondary"
+            type="button"
+            data-bs-toggle="modal"
+            data-bs-target="#transaction-backup-import-upload-modal"
+        >
+            <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>{{ _("Import backup") }}
+        </button>
+        <a class="btn btn-outline-primary" href="{{ url_for('review.review') }}">
+            <i class="bi bi-check2-square" aria-hidden="true"></i>{{ _("Review") }}
+        </a>
+    </div>
     {% endif %}
 </div>
 
@@ -91,6 +110,9 @@
         {% endfor %}
     {% endif %}
 {% endwith %}
+{% if transaction_backup_import_job_id %}
+<p><a href="{{ url_for('jobs.jobs') }}"><i class="bi bi-list-task" aria-hidden="true"></i>{{ _("View processing") }}</a></p>
+{% endif %}
 
 {% call collapsible_filter_panel("transaction-filters", transaction_filter_summary | trim) %}
 <div data-transactions-page>
@@ -182,7 +204,7 @@
             <div class="col-md-3">
                 <div class="form-label-with-help">
                     <label class="form-label" for="review">{{ _("Status") }}</label>
-                    {{ help_tip("Shows whether a transaction needs review, is pending approval, was pre-approved, or was approved by you.", "Explain transaction status") }}
+                    {{ help_tip("Shows whether a transaction needs review, was categorized automatically, or was approved by you.", "Explain transaction status") }}
                 </div>
                 <select id="review" class="form-select" name="review">
                     {% for review_value, review_text in review_filter_options %}
@@ -250,6 +272,9 @@
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <button class="btn btn-sm btn-outline-secondary" type="submit" name="batch_action" value="approve">
                     <i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve selected") }}
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" type="submit" name="batch_action" value="mark_for_review">
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Mark for review") }}
                 </button>
                 <button class="btn btn-sm btn-outline-secondary" type="submit" name="batch_action" value="ignore">
                     <i class="bi bi-ban" aria-hidden="true"></i>{{ _("Ignore selected") }}
@@ -360,13 +385,13 @@
                         <td class="text-end">
                             {% if can_edit_transactions %}
                             <div class="transaction-row-actions d-flex align-items-center justify-content-end gap-1" data-row-action>
+                                {% if tx["show_mark_reviewed"] %}
                                 <form method="post" action="{{ url_for('transactions.verify_transaction', transaction_id=tx['id']) }}" data-ajax-refresh-form>
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="next" value="{{ request.full_path }}">
-                                    {% if not tx["reviewed_at"] %}
-                                        <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}</button>
-                                    {% endif %}
+                                    <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i>{{ _("Approve") }}</button>
                                 </form>
+                                {% endif %}
 
                                 <div class="dropdown transaction-action-menu">
                                     <button
@@ -383,6 +408,17 @@
                                         <i class="bi bi-three-dots" aria-hidden="true"></i>
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end">
+                                        {% if tx["show_mark_for_review"] %}
+                                        <li>
+                                            <form method="post" action="{{ url_for('transactions.mark_transaction_for_review', transaction_id=tx['id']) }}" data-ajax-refresh-form>
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="next" value="{{ request.full_path }}">
+                                                <button class="dropdown-item" type="submit">
+                                                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>{{ _("Mark for review") }}
+                                                </button>
+                                            </form>
+                                        </li>
+                                        {% endif %}
                                         {% if run_transaction_ai_enabled %}
                                         <li>
                                             <form
@@ -563,6 +599,214 @@
 {% else %}
 <div class="empty-state">
     {{ _("No transactions found.") }}
+</div>
+{% endif %}
+
+{% if can_edit_transactions %}
+<div class="modal fade" id="transaction-backup-import-upload-modal" tabindex="-1" aria-labelledby="transaction-backup-import-upload-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('transactions.preview_transactions_backup_import') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="transaction-backup-import-upload-title">{{ _("Import transaction backup") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">
+                        {{ _("Choose a FinScope transaction backup CSV to review before importing.") }}
+                    </p>
+                    <label class="form-label" for="transaction-backup-file">{{ _("Backup CSV file") }}</label>
+                    <input
+                        id="transaction-backup-file"
+                        class="form-control"
+                        type="file"
+                        name="backup_file"
+                        accept=".csv,text/csv"
+                        required
+                    >
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}
+                    </button>
+                    <button type="submit" class="btn btn-primary" data-busy-overlay data-busy-message="{{ _('Preparing backup preview...') }}">
+                        <i class="bi bi-search" aria-hidden="true"></i>{{ _("Review backup") }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if transaction_backup_import_preview and transaction_backup_import_reference %}
+{% set backup_preview = transaction_backup_import_preview %}
+{% set duplicate_count = backup_preview.duplicate_count %}
+{% set account_existing_count = backup_preview.accounts | selectattr("action", "equalto", "existing") | list | length %}
+{% set account_create_count = backup_preview.accounts | selectattr("action", "equalto", "create") | list | length %}
+{% set account_update_count = backup_preview.accounts | selectattr("action", "equalto", "update") | list | length %}
+{% set category_create_count = backup_preview.categories | selectattr("action", "equalto", "create") | list | length %}
+{% set tag_create_count = backup_preview.tags | selectattr("action", "equalto", "create") | list | length %}
+{% set merchant_create_count = backup_preview.merchants | selectattr("action", "equalto", "create") | list | length %}
+<div class="modal fade" id="transaction-backup-import-preview-modal" tabindex="-1" aria-labelledby="transaction-backup-import-preview-title" aria-hidden="true" data-auto-show-modal>
+    <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-fit-content">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('transactions.confirm_transactions_backup_import') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ transaction_backup_import_next_url }}">
+                <input type="hidden" name="import_reference" value="{{ transaction_backup_import_reference }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="transaction-backup-import-preview-title">{{ _("Backup import preview") }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+                </div>
+                <div class="modal-body transaction-rule-modal">
+                    {% if duplicate_count %}
+                    <div class="alert alert-warning" role="alert">
+                        <p class="fw-semibold mb-1">
+                            {% if duplicate_count == 1 %}
+                                {{ _("{count} potential duplicate transaction found.", count=duplicate_count) }}
+                            {% else %}
+                                {{ _("{count} potential duplicate transactions found.", count=duplicate_count) }}
+                            {% endif %}
+                        </p>
+                        <p class="mb-0">
+                            {{ _("Some rows match existing transactions or earlier rows in this backup.") }}
+                        </p>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success" role="alert">
+                        {{ _("No duplicate transactions were found.") }}
+                    </div>
+                    {% endif %}
+
+                    {% if backup_preview.row_errors %}
+                    <div class="alert alert-warning" role="alert">
+                        <p class="fw-semibold mb-2">{{ _("The backup contains invalid rows or conflicting details. Fix the backup and upload it again.") }}</p>
+                        <ul class="mb-0">
+                            {% for error in backup_preview.row_errors[:5] %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <dl class="rule-summary">
+                        <div>
+                            <dt>{{ _("Rows ready") }}</dt>
+                            <dd>
+                                {% if backup_preview.valid_row_count == 1 %}
+                                    {{ _("{count} row ready to import.", count=backup_preview.valid_row_count) }}
+                                {% else %}
+                                    {{ _("{count} rows ready to import.", count=backup_preview.valid_row_count) }}
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% if duplicate_count %}
+                        <div>
+                            <dt>{{ _("If duplicates are skipped") }}</dt>
+                            <dd>
+                                {% if backup_preview.importable_without_duplicates_count == 1 %}
+                                    {{ _("{count} row will be imported.", count=backup_preview.importable_without_duplicates_count) }}
+                                {% else %}
+                                    {{ _("{count} rows will be imported.", count=backup_preview.importable_without_duplicates_count) }}
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <dt>{{ _("Accounts") }}</dt>
+                            <dd>
+                                {{ _("{existing} existing, {created} new, {updated} updated", existing=account_existing_count, created=account_create_count, updated=account_update_count) }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Categories & tags") }}</dt>
+                            <dd>
+                                {{ _("{categories} new categories, {tags} new tags", categories=category_create_count, tags=tag_create_count) }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>{{ _("Merchants") }}</dt>
+                            <dd>
+                                {{ _("{count} new merchants", count=merchant_create_count) }}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    {% if duplicate_count %}
+                    <section>
+                        <h6>{{ _("Duplicate preview") }}</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>{{ _("Source row") }}</th>
+                                        <th>{{ _("Date") }}</th>
+                                        <th>{{ _("Account") }}</th>
+                                        <th>{{ _("Description") }}</th>
+                                        <th class="text-end">{{ _("Amount") }}</th>
+                                        <th>{{ _("Reason") }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for duplicate in backup_preview.duplicates[:10] %}
+                                    <tr>
+                                        <td>{{ duplicate.line_number }}</td>
+                                        <td>{{ duplicate.tx_date | datefmt }}</td>
+                                        <td>{{ duplicate.account_name or duplicate.existing_account_name or _("Personal") }}</td>
+                                        <td>{{ duplicate.description }}</td>
+                                        <td class="text-end">{{ duplicate.amount | moneyfmt }}</td>
+                                        <td>{{ _(duplicate.reason_label) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if duplicate_count > 10 %}
+                        <p class="text-muted mb-0">
+                            {{ _("Showing the first 10 potential duplicates.") }}
+                        </p>
+                        {% endif %}
+                    </section>
+                    {% endif %}
+                    {% if duplicate_count %}
+                    <p class="text-muted mt-3 mb-0">{{ _("Import all rows creates copies of matching transactions.") }}</p>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i>{{ _("Cancel") }}
+                    </button>
+                    {% if duplicate_count %}
+                    <button
+                        type="submit"
+                          class="btn btn-primary"
+                        name="duplicate_action"
+                        value="skip_duplicates"
+                        data-busy-overlay
+                        data-busy-message="{{ _('Queuing backup import...') }}"
+                        {% if backup_preview.row_errors %}disabled{% endif %}
+                    >
+                        <i class="bi bi-files" aria-hidden="true"></i>{{ _("Skip duplicates") }}
+                    </button>
+                    {% endif %}
+                    <button
+                        type="submit"
+                          class="btn {% if duplicate_count %}btn-outline-primary{% else %}btn-primary{% endif %}"
+                        name="duplicate_action"
+                        value="import_all"
+                        data-busy-overlay
+                        data-busy-message="{{ _('Queuing backup import...') }}"
+                        {% if backup_preview.row_errors %}disabled{% endif %}
+                    >
+                        <i class="bi bi-upload" aria-hidden="true"></i>{{ _("Import all rows") }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endif %}
 

@@ -5,33 +5,12 @@ import logging
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
+from tests.support.jobs import CapturingExecutor, RejectingExecutor
 
 from finance_app.background import repository as job_repository
 from finance_app.background import runner
 from finance_app.database.engine import db_core_transaction
 from finance_app.database.tables import background_job_events, background_jobs
-
-
-class CapturingExecutor:
-    """Capture submitted jobs without executing them on another thread."""
-
-    def __init__(self):
-        """Prepare an empty submission log."""
-        self.submissions = []
-
-    def submit(self, func, *args, **kwargs):
-        """Record a submitted callable and its payload."""
-        self.submissions.append((func, args, kwargs))
-        return None
-
-
-class RejectingExecutor:
-    """Reject submitted jobs like a shut down executor would."""
-
-    def submit(self, func, *args, **kwargs):
-        """Raise instead of accepting work."""
-        del func, args, kwargs
-        raise RuntimeError("executor stopped")
 
 
 def clear_runner_state() -> None:
@@ -51,7 +30,10 @@ def test_runner_persists_completed_job_history(app, monkeypatch):
     monkeypatch.setattr(runner, "_job_history_enabled", True)
     clear_runner_state()
 
-    job_id = runner.submit_background_job("Persisted job", lambda: "placeholder")
+    undo_calls = []
+    job_id = runner.submit_background_job(
+        "Persisted job", lambda: "placeholder", undo_handler=lambda: undo_calls.append("undo")
+    )
     runner.append_background_job_log("Starting batch {start}-{end}.", params={"start": 1, "end": 2}, job_id=job_id)
     runner.run_job(job_id, lambda: "persisted result", (), {})
     clear_runner_state()
@@ -74,6 +56,10 @@ def test_runner_persists_completed_job_history(app, monkeypatch):
         }
     ]
     assert [item["id"] for item in jobs] == [job_id]
+    with pytest.raises(ValueError, match="does not have anything to undo"):
+        runner.undo_background_job(job_id)
+    assert undo_calls == []
+    assert runner.get_background_job(job_id)["status"] == "completed"
 
 
 def test_runner_persists_failed_job_when_executor_rejects(app, monkeypatch):

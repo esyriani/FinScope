@@ -42,11 +42,11 @@ def test_dashboard_context_totals_filters_custom_dates_and_sorting(app, core_con
         ("categorized", True),
         ("all", False),
     ]
-    assert context["total_spending"] == 290.00
+    assert context["total_spending"] == 260.00
     assert context["total_income"] == 1000.00
-    assert context["net_cashflow"] == 710.00
-    assert context["transaction_count"] == 5
-    assert context["uncategorized_count"] == 1
+    assert context["net_cashflow"] == 740.00
+    assert context["transaction_count"] == 4
+    assert context["uncategorized_count"] == 0
     assert context["data_quality"]["transaction_count"] == 5
     assert context["data_quality"]["quality_score"] == 80
     assert context["data_quality"]["unknown_count"] == 1
@@ -89,10 +89,10 @@ def test_dashboard_context_limits_top_driver_previews_from_settings(app, core_co
     }
     for index, (tx_date, merchant_name, amount, category) in enumerate(
         [
-            ("2026-04-02", "Alpha Market", 10.00, "Food"),
+            ("2026-03-31", "Alpha Market", 10.00, "Food"),
             ("2026-04-03", "Beta Bills", 20.00, "Utilities"),
             ("2026-04-04", "Gamma Travel", 30.00, "Travel"),
-            ("2026-05-02", "Alpha Market", 100.00, "Food"),
+            ("2026-05-01", "Alpha Market", 100.00, "Food"),
             ("2026-05-03", "Beta Bills", 90.00, "Utilities"),
             ("2026-05-04", "Gamma Travel", 80.00, "Travel"),
         ]
@@ -123,6 +123,9 @@ def test_dashboard_context_limits_top_driver_previews_from_settings(app, core_co
     assert [row["label"] for row in context["top_driver_previews"]["categories"]] == ["Food", "Utilities"]
     assert [row["label"] for row in context["top_driver_previews"]["merchants"]] == ["Alpha Market", "Beta Bills"]
     assert len(context["top_driver_previews"]["changes"]) == 2
+    assert {(row["current"], row["previous"], row["change"]) for row in context["top_driver_previews"]["changes"]} == {
+        (100.00, 10.00, 90.00)
+    }
 
 
 def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
@@ -183,21 +186,21 @@ def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
         )
 
     assert old_unknown_context["quick_view"] == "categorized"
-    assert old_unknown_context["total_spending"] == 290.00
-    assert old_unknown_context["transaction_count"] == 5
-    assert old_unknown_context["uncategorized_count"] == 1
+    assert old_unknown_context["total_spending"] == 260.00
+    assert old_unknown_context["transaction_count"] == 4
+    assert old_unknown_context["uncategorized_count"] == 0
     assert old_unknown_context["data_quality"]["unknown_count"] == 1
 
     assert categorized_context["quick_view"] == "categorized"
-    assert categorized_context["total_spending"] == 290.00
-    assert categorized_context["transaction_count"] == 5
-    assert categorized_context["uncategorized_count"] == 1
+    assert categorized_context["total_spending"] == 260.00
+    assert categorized_context["transaction_count"] == 4
+    assert categorized_context["uncategorized_count"] == 0
     assert "quick_view=categorized" not in categorized_context["dashboard_links"]["transactions"]
 
     assert "selected_categories" not in ignored_category_context
     assert ignored_category_context["quick_view"] == "categorized"
-    assert ignored_category_context["total_spending"] == 290.00
-    assert ignored_category_context["transaction_count"] == 5
+    assert ignored_category_context["total_spending"] == 260.00
+    assert ignored_category_context["transaction_count"] == 4
     assert ignored_category_context["dashboard_report_links"]["taxonomy"].startswith(
         "/reports/taxonomy?period=custom&quick_view=categorized"
     )
@@ -206,8 +209,8 @@ def test_dashboard_context_quick_views_and_dimension_filters(app, core_conn):
 
     assert "selected_tags" not in tax_context
     assert tax_context["quick_view"] == "categorized"
-    assert tax_context["total_spending"] == 290.00
-    assert tax_context["transaction_count"] == 5
+    assert tax_context["total_spending"] == 260.00
+    assert tax_context["transaction_count"] == 4
     assert tax_context["dashboard_report_links"]["taxonomy"].startswith(
         "/reports/taxonomy?period=custom&quick_view=categorized"
     )
@@ -455,7 +458,7 @@ def test_dashboard_context_handles_zero_income_savings_rate(app, core_conn):
 
 
 def test_dashboard_context_handles_all_unknown_scope(app, core_conn):
-    """Verify all-UNKNOWN views expose quality risk without analysis filters."""
+    """Keep review guidance when the selected categorized scope has no rows."""
     seed_dashboard_unknown_only(core_conn)
     args = MultiDict(
         [
@@ -470,9 +473,10 @@ def test_dashboard_context_handles_all_unknown_scope(app, core_conn):
         context = build_dashboard_context(args)
 
     assert context["quick_view"] == "categorized"
-    assert context["total_spending"] == 60.00
-    assert context["transaction_count"] == 2
-    assert context["uncategorized_count"] == 2
+    assert context["total_spending"] == 0
+    assert context["transaction_count"] == 0
+    assert context["uncategorized_count"] == 0
+    assert context["dashboard_chart_data"]["netMonthTotals"] == []
     assert context["data_quality"]["level"] == "danger"
     assert context["data_quality"]["unknown_count"] == 2
     assert context["data_quality"]["unknown_review_sentence"] == "2 unknown transactions need review."

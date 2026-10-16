@@ -662,6 +662,9 @@ def build_eval_request_context(
             maximum=1,
         ),
         openai_model=openai_model or get_setting(conn, "openai_model") or settings.default_categorization_model,
+        category_review_threshold=get_float_setting(
+            conn, "category_review_threshold", settings.default_category_review_threshold, minimum=0, maximum=1
+        ),
     )
 
 

@@ -134,14 +134,13 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
             scoped_filters.criteria(),
             unknown_category,
         )
-        analysis_filters = scoped_filters.clone()
+        financial_filters = scoped_filters.clone()
         apply_quick_view_core_filter(
-            analysis_filters,
+            financial_filters,
             dashboard_request.quick_view,
             unknown_category,
         )
-        reporting_criteria = scoped_filters.criteria()
-        analysis_criteria = analysis_filters.criteria()
+        financial_criteria = financial_filters.criteria()
         previous_filters = dashboard_previous_period_filters(dashboard_request)
         if previous_filters is not None:
             apply_dashboard_dimension_filters(
@@ -164,22 +163,22 @@ def fetch_dashboard_query_data(dashboard_request: DashboardRequest) -> Dashboard
         )
         summary = fetch_summary(
             conn,
-            reporting_criteria,
+            financial_criteria,
             unknown_category,
         )
         data_quality = build_data_quality(data_quality_summary)
-        monthly_rows = fetch_monthly_preview(conn, reporting_criteria)
+        monthly_rows = fetch_monthly_preview(conn, financial_criteria)
         top_category_rows = fetch_top_spending_categories(
             conn,
-            analysis_criteria,
+            financial_criteria,
             unknown_category,
             limit=top_driver_limit,
         )
-        top_merchant_rows = fetch_top_spending_merchants(conn, analysis_criteria, limit=top_driver_limit)
+        top_merchant_rows = fetch_top_spending_merchants(conn, financial_criteria, limit=top_driver_limit)
         top_change_rows = (
             fetch_top_spending_changes(
                 conn,
-                analysis_criteria,
+                financial_criteria,
                 previous_filters.criteria(),
                 unknown_category,
                 limit=top_driver_limit,

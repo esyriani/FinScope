@@ -22,10 +22,6 @@ from finance_app.core.constants import (
 from finance_app.core.money import MoneyValue, optional_money_to_float
 from finance_app.database.dates import coerce_date
 from finance_app.database.tables import transactions as transactions_table
-from finance_app.modules.categories.decision import (
-    HIGH_CONFIDENCE_THRESHOLD,
-    MEDIUM_CONFIDENCE_THRESHOLD,
-)
 from finance_app.modules.categories.taxonomy import get_transaction_tags_by_id
 from finance_app.modules.merchants.normalization import normalize_merchant
 from finance_app.modules.merchants.sql_filters import (
@@ -87,16 +83,6 @@ class HistoricalDecision:
     evidence_ids: tuple[int, ...]
     candidates: tuple[HistoricalCandidate, ...]
 
-    @property
-    def is_high_confidence(self) -> bool:
-        """Return whether the decision can be applied without review."""
-        return self.confidence >= HIGH_CONFIDENCE_THRESHOLD
-
-    @property
-    def is_medium_confidence(self) -> bool:
-        """Return whether the decision is usable but should be reviewed."""
-        return self.confidence >= MEDIUM_CONFIDENCE_THRESHOLD
-
 
 def retrieve_historical_decision(
     conn: Any, transaction: Mapping[str, Any], unknown_category: str
@@ -154,6 +140,7 @@ def historical_candidate_rows(conn: Any, transaction: Mapping[str, Any], unknown
                 transactions_table.c.category_source,
                 transactions_table.c.category_confidence,
                 transactions_table.c.reviewed_at,
+                transactions_table.c.needs_review,
                 transactions_table.c.transaction_kind,
             )
             .where(*conditions, candidate_filter)
@@ -336,6 +323,8 @@ def date_similarity(left: object, right: object) -> float:
 
 def candidate_authority(row: Mapping[str, Any]) -> float:
     """Return a reliability multiplier for a historical transaction row."""
+    if row.get("needs_review") and not row.get("reviewed_at"):
+        return 0.65
     if row["category_source"] == CATEGORY_SOURCE_MANUAL:
         return 1.15
     if row["reviewed_at"]:

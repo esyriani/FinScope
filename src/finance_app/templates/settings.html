@@ -188,6 +188,22 @@
                 </div>
 
                 <div class="settings-subsection">
+                    <h6 class="settings-subsection-title">{{ _("Category confidence") }}</h6>
+                    <div class="settings-grid settings-grid-mixed">
+                        <div class="settings-field">
+                            <label for="category_review_threshold" class="form-label">{{ _("Rule and history review threshold") }}</label>
+                            <input id="category_review_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="category_review_threshold" value="{{ category_review_threshold }}">
+                            <div class="form-text">{{ _("Minimum confidence to keep a rule or similarity suggestion instead of UNKNOWN.") }}</div>
+                        </div>
+                        <div class="settings-field">
+                            <label for="verify_threshold" class="form-label">{{ _("Automatic confidence threshold") }}</label>
+                            <input id="verify_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="verify_threshold" value="{{ verify_threshold }}">
+                            <div class="form-text">{{ _("Minimum confidence to accept a rule, similarity, or AI category without review. Applies during categorization.") }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-subsection">
                     <h6 class="settings-subsection-title">{{ _("AI settings") }}</h6>
                     <div class="settings-subsection-help">{{ _("Thresholds and model used for automated category suggestions.") }}</div>
                     <div class="settings-grid settings-grid-mixed">
@@ -238,12 +254,6 @@
                             <label for="llm_review_threshold" class="form-label">{{ _("AI review threshold") }}</label>
                             <input id="llm_review_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="llm_review_threshold" value="{{ llm_review_threshold }}">
                             <div class="form-text">{{ _("Minimum confidence required to keep a best-fit AI category as a review item instead of UNKNOWN.") }}</div>
-                        </div>
-
-                        <div class="settings-field">
-                            <label for="verify_threshold" class="form-label">{{ _("Verify threshold") }}</label>
-                            <input id="verify_threshold" class="form-control" type="number" min="0" max="1" step="0.01" name="verify_threshold" value="{{ verify_threshold }}">
-                            <div class="form-text">{{ _("Accepted categories below this confidence stay marked for review.") }}</div>
                         </div>
 
                         <div class="settings-field settings-field-model">
